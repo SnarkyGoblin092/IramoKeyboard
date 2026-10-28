@@ -26,6 +26,47 @@ struct ThemeRGBA: Hashable {
     }
 }
 
+extension ThemeRGBA {
+    /// Parses "#RRGGBB" / "RRGGBB" (optionally "#RRGGBBAA"). Returns nil when invalid.
+    init?(hexString: String) {
+        var text = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("#") { text.removeFirst() }
+        guard text.count == 6 || text.count == 8, let value = UInt64(text, radix: 16) else { return nil }
+        if text.count == 6 {
+            self.init(hex: UInt32(value))
+        } else {
+            self.init(hex: UInt32(value >> 8), alpha: Double(value & 0xFF) / 255)
+        }
+    }
+}
+
+/// The user's own theme (id "custom"). The app writes it as JSON (a String) under
+/// `ThemeCatalog.customThemeKey` in `SharedStore.defaults`; the keyboard reads it.
+/// JSON shape: {"topHex":"#5B2A86","bottomHex":"#FF9A4D","keyHex":"#FFFFFF","functionHex":"#000000",
+///              "textHex":"#FFFFFF","keyOpacity":0.2,"isDark":true,"style":"gradient"}
+struct CustomThemeSpec: Codable, Equatable {
+    var topHex: String
+    var bottomHex: String
+    var keyHex: String
+    var functionHex: String
+    var textHex: String
+    /// 0.2 ... 1 - how solid the keys are.
+    var keyOpacity: Double
+    /// Forces dark or light key styling/text handling.
+    var isDark: Bool
+    /// "gradient" (opaque-ish gradient backdrop) or "glass" (tinted Liquid Glass over a clear backdrop).
+    var style: String
+
+    static let standard = CustomThemeSpec(topHex: "#5B2A86",
+                                          bottomHex: "#FF9A4D",
+                                          keyHex: "#FFFFFF",
+                                          functionHex: "#000000",
+                                          textHex: "#FFFFFF",
+                                          keyOpacity: 0.3,
+                                          isDark: true,
+                                          style: "gradient")
+}
+
 // MARK: - Theme definition
 
 /// One keyboard theme. The keyboard (Keyboard/Theme.swift) and the app's theme picker both read this,
@@ -121,10 +162,72 @@ enum ThemeCatalog {
         aurora, sunset, ocean, forest, midnight, rose, graphite, neon, lavender
     ]
 
-    /// Unknown ids fall back to Native.
+    /// Unknown ids fall back to Native. The id "custom" is built from the user's saved `CustomThemeSpec`.
     static func theme(id: String) -> ThemeDefinition {
+        if id == customID { return custom(from: loadCustomSpec()) }
         for theme in all where theme.id == id { return theme }
         return native
+    }
+
+    // MARK: Custom theme
+
+    static let customID = "custom"
+    /// UserDefaults key (in `SharedStore.defaults`) holding the JSON of a `CustomThemeSpec` (a String).
+    static let customThemeKey = "hunkeys.customTheme"
+
+    static func loadCustomSpec() -> CustomThemeSpec {
+        let defaults = SharedStore.defaults
+        var data: Data? = nil
+        if let text = defaults.string(forKey: customThemeKey) {
+            data = text.data(using: .utf8)
+        } else if let raw = defaults.data(forKey: customThemeKey) {
+            data = raw
+        }
+        if let data = data, let spec = try? JSONDecoder().decode(CustomThemeSpec.self, from: data) {
+            return spec
+        }
+        return CustomThemeSpec.standard
+    }
+
+    static func saveCustomSpec(_ spec: CustomThemeSpec) {
+        if let data = try? JSONEncoder().encode(spec), let text = String(data: data, encoding: .utf8) {
+            SharedStore.defaults.set(text, forKey: customThemeKey)
+        }
+    }
+
+    /// Builds the theme from the user's colours. `style == "glass"` gives a tinted Liquid Glass theme.
+    static func custom(from spec: CustomThemeSpec) -> ThemeDefinition {
+        let dark = spec.isDark
+        let opacity = min(max(spec.keyOpacity, 0.2), 1.0)
+        let top = ThemeRGBA(hexString: spec.topHex) ?? ThemeRGBA(hex: 0x5B2A86)
+        let bottom = ThemeRGBA(hexString: spec.bottomHex) ?? ThemeRGBA(hex: 0xFF9A4D)
+        let keyColor = ThemeRGBA(hexString: spec.keyHex) ?? ThemeRGBA(1, 1, 1, 1)
+        let functionColor = ThemeRGBA(hexString: spec.functionHex) ?? ThemeRGBA(0, 0, 0, 1)
+        let textColor = ThemeRGBA(hexString: spec.textHex) ?? (dark ? ThemeRGBA(1, 1, 1, 1) : ThemeRGBA(0.08, 0.08, 0.10, 1))
+        let isGlass = (spec.style == "glass")
+
+        func alpha(_ color: ThemeRGBA, _ a: Double) -> ThemeRGBA { return ThemeRGBA(color.r, color.g, color.b, a) }
+        let glassFactor = isGlass ? 0.45 : 1.0
+
+        return ThemeDefinition(
+            id: customID,
+            name: "Custom",
+            kind: isGlass ? .liquidGlass : .gradient,
+            isDark: dark,
+            key: alpha(keyColor, opacity * glassFactor),
+            function: alpha(functionColor, min(1, opacity * 0.85) * glassFactor),
+            keyPressed: alpha(keyColor, min(1, opacity * 1.5 + 0.1)),
+            functionPressed: alpha(functionColor, min(1, opacity * 1.3 + 0.1)),
+            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.18) : ThemeRGBA(1, 1, 1, 0.55),
+            text: textColor,
+            secondaryText: alpha(textColor, 0.6),
+            accent: ThemeRGBA(hex: 0x0A84FF),
+            onAccent: ThemeRGBA(1, 1, 1, 1),
+            popup: alpha(dark ? ThemeRGBA(0.12, 0.12, 0.16, 1) : ThemeRGBA(1, 1, 1, 1), 0.96),
+            panel: dark ? ThemeRGBA(1, 1, 1, 0.14) : ThemeRGBA(1, 1, 1, 0.42),
+            gradientStops: [top, bottom],
+            gradientAngle: 90
+        )
     }
 
     // MARK: Helpers

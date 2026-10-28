@@ -201,6 +201,11 @@ final class KeyboardView: UIView {
         return CGSize(width: bounds.width / 10, height: 44)
     }
 
+    /// Touches just outside the keys (screen edges, the very bottom) still count, so edge keys never feel dead.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return bounds.inset(by: UIEdgeInsets(top: 0, left: -10, bottom: -10, right: -10)).contains(point)
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         trailLayer.frame = bounds
@@ -271,7 +276,83 @@ final class KeyboardView: UIView {
             }
         }
         guard let col = bestCol else { return nil }
-        return (row: bestRow, col: col)
+        return refineLetter(at: point, geometric: (row: bestRow, col: col))
+    }
+
+    // MARK: Adaptive hit areas
+
+    private var layoutID: String { return String(Int((bounds.width / 10).rounded())) }
+
+    private func letterID(row: Int, col: Int) -> String? {
+        guard row < rows.count, col < rows[row].count else { return nil }
+        if case .character(let text) = rows[row][col].action, text.count == 1, let first = text.first, first.isLetter {
+            return text.lowercased()
+        }
+        return nil
+    }
+
+    /// Judges a touch near a letter key against the learned (shifted) key centres of the letters around it, so
+    /// a tap between two keys goes to the one the user most likely meant. Falls back to the plain key.
+    private func refineLetter(at point: CGPoint, geometric g: (row: Int, col: Int)) -> (row: Int, col: Int) {
+        guard letterID(row: g.row, col: g.col) != nil else { return g }
+        let layout = layoutID
+        var best = g
+        var bestScore = CGFloat.greatestFiniteMagnitude
+        let firstRow = max(0, g.row - 1)
+        let lastRow = min(rows.count - 1, g.row + 1)
+        for r in firstRow...lastRow {
+            guard r < hitRects.count else { continue }
+            for c in 0..<hitRects[r].count {
+                guard let id = letterID(row: r, col: c) else { continue }
+                let rect = hitRects[r][c]
+                let shift = TouchModel.shared.offset(letter: id, layout: layout)
+                let cx = rect.midX + CGFloat(shift.dx) * rect.width
+                let cy = rect.midY + CGFloat(shift.dy) * rect.height
+                let nx = (point.x - cx) / max(rect.width, 1)
+                let ny = (point.y - cy) / max(rect.height, 1)
+                var score = nx * nx + ny * ny
+                if r == g.row && c == g.col { score *= 0.8 }   // the key under the finger keeps a small edge
+                if score < bestScore {
+                    bestScore = score
+                    best = (row: r, col: c)
+                }
+            }
+        }
+        return best
+    }
+
+    private struct TapRecord {
+        let id: String
+        let point: CGPoint
+        let time: TimeInterval
+    }
+    private var lastTap: TapRecord?
+    private var pendingCorrection: TapRecord?
+
+    /// Learns from a finished plain tap, and from "typed the wrong neighbour, deleted it, typed the right one".
+    private func learnFromTap(_ state: TouchState, key: KeyView) {
+        let now = CACurrentMediaTime()
+        guard Prefs.touchLearning, key === state.startKey, let rect = hitRect(of: key), rect.width > 0, rect.height > 0,
+              case .character(let text) = key.spec.action, text.count == 1, text.first?.isLetter == true else {
+            lastTap = nil
+            return
+        }
+        let id = text.lowercased()
+        let layout = layoutID
+        if let pending = pendingCorrection, pending.id != id, now - pending.time < 3 {
+            let dx = Double((pending.point.x - rect.midX) / rect.width)
+            let dy = Double((pending.point.y - rect.midY) / rect.height)
+            TouchModel.shared.learn(letter: id, layout: layout, dx: dx, dy: dy, weight: 0.5)
+        }
+        pendingCorrection = nil
+        let dx = Double((state.startPoint.x - rect.midX) / rect.width)
+        let dy = Double((state.startPoint.y - rect.midY) / rect.height)
+        TouchModel.shared.learn(letter: id, layout: layout, dx: dx, dy: dy)
+        lastTap = TapRecord(id: id, point: state.startPoint, time: now)
+    }
+
+    func saveTouchModel() {
+        TouchModel.shared.saveNow()
     }
 
     /// The full (gap-free) touch cell of a key.
@@ -378,6 +459,8 @@ final class KeyboardView: UIView {
 
         switch key.spec.action {
         case .backspace:
+            if let last = lastTap, CACurrentMediaTime() - last.time < 1.5 { pendingCorrection = last }
+            lastTap = nil
             delegate?.keyboardView(self, didTap: .backspace)
             startBackspaceRepeat(state)
         case .space:
@@ -528,6 +611,7 @@ final class KeyboardView: UIView {
             if key.spec.action == .emoji { return }
         }
         if key.spec.action != .backspace {          // backspace already fired on touch-down
+            if !cancelled { learnFromTap(state, key: key) }
             delegate?.keyboardView(self, didTap: key.spec.action)
         }
     }

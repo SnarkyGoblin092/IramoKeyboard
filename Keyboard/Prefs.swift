@@ -19,6 +19,7 @@ final class Prefs {
     static var numberRow = SettingDefault.numberRow
     static var keyHints = SettingDefault.keyHints
     static var heightScale = SettingDefault.keyboardHeight
+    static var touchLearning = true
 
     /// 0 = square key corners ... 1 = fully round. Read from the shared defaults directly so this
     /// file works whichever way the Settings class exposes it.
@@ -43,6 +44,7 @@ final class Prefs {
         numberRow = s.numberRow
         keyHints = s.keyHints
         heightScale = s.keyboardHeightScale
+        touchLearning = s.touchLearning
         if let stored = SharedStore.defaults.object(forKey: keyRoundnessKey) as? Double {
             keyRoundness = min(max(stored, 0), 1)
         } else {

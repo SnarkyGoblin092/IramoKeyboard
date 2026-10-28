@@ -86,6 +86,7 @@ final class KeyboardViewController: UIInputViewController {
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
+        TouchModel.shared.reload()
         if settingsSignature() != builtSignature {
             buildInterface()
         }
@@ -112,6 +113,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         for store in stores.values { store.saveNow() }
+        keyboardView.saveTouchModel()
     }
 
     override func didReceiveMemoryWarning() {
@@ -133,7 +135,9 @@ final class KeyboardViewController: UIInputViewController {
         let s = settings
         return [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
-            "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.enabledLanguages.joined(separator: ",")
+            "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.enabledLanguages.joined(separator: ","),
+            SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
+            SharedStore.defaults.string(forKey: ThemeCatalog.customThemeKey) ?? ""
         ].joined(separator: "|")
     }
 

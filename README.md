@@ -15,3 +15,4 @@ and a theme picker (native, transparent, Liquid Glass and gradient themes). All 
 No autocorrect or next-word prediction, no voice typing, cursor control is horizontal only.
 
 - Adjustable key roundness (Appearance), larger touch targets, and a Liquid Glass theme alongside the gradient themes.
+- 12 accent presets plus a colour picker, a fully editable custom theme (backdrop, key and text colours, opacity, gradient/glass), and optional adaptive key areas that learn where you tap (reset in Data).

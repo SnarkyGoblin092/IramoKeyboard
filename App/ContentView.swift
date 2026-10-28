@@ -87,10 +87,11 @@ private struct TypingSection: View {
             SettingToggle("Double space for period", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod)
             SettingToggle("Space-bar cursor control", key: SettingKey.cursorControl, defaultValue: SettingDefault.cursorControl)
             SettingToggle("Slide on delete to remove words", key: SettingKey.deleteSwipe, defaultValue: SettingDefault.deleteSwipe)
+            SettingToggle("Learn my typing (adaptive key areas)", key: SettingKey.touchLearning, defaultValue: SettingDefault.touchLearning)
         } header: {
             Text("Typing")
         } footer: {
-            Text("Hold the space bar and slide to move the cursor. Slide left from the delete key to delete word by word.")
+            Text("Hold the space bar and slide to move the cursor. Slide left from the delete key to delete word by word. Adaptive key areas slowly shift each key's tap area towards where you actually touch; it stays on this iPhone.")
         }
     }
 }
@@ -121,8 +122,9 @@ private struct LanguagesSection: View {
 private struct AppearanceSection: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
-    private var accent: AccentChoice { return AccentChoice(rawValue: accentName) ?? .blue }
+    private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
     var body: some View {
@@ -144,24 +146,7 @@ private struct AppearanceSection: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Accent colour")
-                HStack(spacing: 14) {
-                    ForEach(AccentChoice.allCases, id: \.rawValue) { choice in
-                        Button {
-                            guard accentName != choice.rawValue else { return }
-                            Feedback.tick()
-                            accentName = choice.rawValue
-                        } label: {
-                            Circle()
-                                .fill(Color(accent: choice))
-                                .frame(width: 32, height: 32)
-                                .overlay(Circle()
-                                    .stroke(Color.primary, lineWidth: accentName == choice.rawValue ? 3 : 0)
-                                    .padding(-4))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(choice.displayName)
-                    }
-                }
+                AccentPicker()
                 if theme.kind == .gradient {
                     Text("Gradient themes use their own accent colour.")
                         .font(.footnote).foregroundColor(.secondary)
@@ -183,12 +168,13 @@ private struct AppearanceSection: View {
 
 private struct DataSection: View {
     private enum Action: String {
-        case recents, learned, reset
+        case recents, learned, touch, reset
 
         var title: String {
             switch self {
             case .recents: return "Clear recent emoji?"
             case .learned: return "Forget learned words?"
+            case .touch: return "Reset touch learning?"
             case .reset: return "Reset all settings?"
             }
         }
@@ -197,6 +183,7 @@ private struct DataSection: View {
             switch self {
             case .recents: return "The Recently Used emoji tab will be empty."
             case .learned: return "Words the keyboard picked up while you type will be removed."
+            case .touch: return "The keyboard forgets how you tap and goes back to the standard key areas."
             case .reset: return "Your shortcuts, recent emoji and learned words are kept. Reopen this screen to see the defaults."
             }
         }
@@ -205,6 +192,7 @@ private struct DataSection: View {
             switch self {
             case .recents: return "Clear"
             case .learned: return "Forget"
+            case .touch: return "Reset"
             case .reset: return "Reset"
             }
         }
@@ -217,6 +205,7 @@ private struct DataSection: View {
         Section {
             Button("Clear recent emoji") { pending = .recents }
             Button("Forget learned words") { pending = .learned }
+            Button("Reset touch learning") { pending = .touch }
             Button("Reset all settings", role: .destructive) { pending = .reset }
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
@@ -245,6 +234,9 @@ private struct DataSection: View {
         case .learned:
             Settings.shared.clearLearnedWords()
             note = "Learned words forgotten."
+        case .touch:
+            Settings.shared.resetTouchModel()
+            note = "Touch learning reset."
         case .reset:
             Settings.shared.resetPreferences()
             NotificationCenter.default.post(name: .hunKeysSettingsReset, object: nil)

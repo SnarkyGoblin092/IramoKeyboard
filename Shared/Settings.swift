@@ -21,6 +21,7 @@ enum SettingKey {
     static let keyHints = "hunkeys.keyHints"
     static let theme = "hunkeys.theme"
     static let accent = "hunkeys.accent"
+    static let accentHex = "hunkeys.accentHex"
     static let keyboardHeight = "hunkeys.keyboardHeight"
     static let keyRoundness = "hunkeys.keyRoundness"
     static let oneHanded = "hunkeys.oneHanded"
@@ -29,6 +30,9 @@ enum SettingKey {
     static let enabledLanguages = "hunkeys.enabledLanguages"
     static let recentEmoji = "hunkeys.recentEmoji"
     static let shortcuts = "hunkeys.shortcuts"
+    static let touchLearning = "hunkeys.touchLearning"
+    /// The learned key-offset model (data written by the keyboard; not a preference).
+    static let touchModel = "hunkeys.touchModel"
     static let learnedPrefix = "hunkeys.learned."
     static let bigramPrefix = "hunkeys.bigrams."
     // Written by the keyboard so the app can show its status
@@ -42,7 +46,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, keyboardHeight, keyRoundness, oneHanded, enabledLanguages
+        theme, accent, accentHex, keyboardHeight, keyRoundness, oneHanded, enabledLanguages, touchLearning
     ]
 }
 
@@ -62,6 +66,8 @@ enum SettingDefault {
     static let keyHints = true
     static let theme = "native"
     static let accent = "blue"
+    static let accentHex = ""
+    static let touchLearning = true
     static let keyboardHeight = 1.0
     static let keyRoundness = 0.26
     static let oneHanded = "off"
@@ -70,20 +76,43 @@ enum SettingDefault {
 }
 
 enum AccentChoice: String, CaseIterable {
-    case blue, teal, green, orange, pink, purple
+    case blue, indigo, purple, pink, red, orange, yellow, green, mint, teal, cyan, graphite
 
     var rgb: (red: Double, green: Double, blue: Double) {
         switch self {
         case .blue: return (0.04, 0.52, 1.00)
-        case .teal: return (0.19, 0.69, 0.78)
-        case .green: return (0.19, 0.78, 0.35)
-        case .orange: return (1.00, 0.62, 0.04)
-        case .pink: return (1.00, 0.22, 0.37)
+        case .indigo: return (0.35, 0.34, 0.84)
         case .purple: return (0.75, 0.35, 0.95)
+        case .pink: return (1.00, 0.22, 0.37)
+        case .red: return (1.00, 0.27, 0.23)
+        case .orange: return (1.00, 0.62, 0.04)
+        case .yellow: return (1.00, 0.80, 0.00)
+        case .green: return (0.19, 0.78, 0.35)
+        case .mint: return (0.00, 0.78, 0.70)
+        case .teal: return (0.19, 0.69, 0.78)
+        case .cyan: return (0.20, 0.68, 0.90)
+        case .graphite: return (0.56, 0.56, 0.58)
         }
     }
 
     var displayName: String { return rawValue.capitalized }
+}
+
+/// "#RRGGBB" helpers shared by the app's colour pickers and the keyboard.
+enum HexColor {
+    static func parse(_ text: String) -> (red: Double, green: Double, blue: Double)? {
+        var hex = text.trimmingCharacters(in: .whitespaces)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
+        return (Double((value >> 16) & 0xFF) / 255.0,
+                Double((value >> 8) & 0xFF) / 255.0,
+                Double(value & 0xFF) / 255.0)
+    }
+
+    static func string(red: Double, green: Double, blue: Double) -> String {
+        func byte(_ x: Double) -> Int { return Int((min(max(x, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", byte(red), byte(green), byte(blue))
+    }
 }
 
 /// "omw" -> "On my way!"
@@ -177,6 +206,8 @@ final class Settings {
             SettingKey.theme: SettingDefault.theme,
             SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,
+            SettingKey.accentHex: SettingDefault.accentHex,
+            SettingKey.touchLearning: SettingDefault.touchLearning,
             SettingKey.keyboardHeight: SettingDefault.keyboardHeight,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.oneHanded: SettingDefault.oneHanded,
@@ -250,6 +281,17 @@ final class Settings {
         set { put(newValue, SettingKey.deleteSwipe) }
     }
 
+    /// Adaptive key areas: the keyboard learns where you tend to tap and shifts hit areas accordingly.
+    var touchLearning: Bool {
+        get { return readBool(SettingKey.touchLearning) }
+        set { put(newValue, SettingKey.touchLearning) }
+    }
+
+    /// Forgets everything the keyboard learned about where you tap.
+    func resetTouchModel() {
+        put(nil, SettingKey.touchModel)
+    }
+
     // MARK: Layout and look
 
     var numberRow: Bool {
@@ -278,6 +320,18 @@ final class Settings {
     }
 
     var accent: AccentChoice { return AccentChoice(rawValue: accentName) ?? .blue }
+
+    /// A custom accent colour as "#RRGGBB"; empty means "use the preset in `accentName`".
+    var accentHex: String {
+        get { return readString(SettingKey.accentHex) ?? SettingDefault.accentHex }
+        set { put(newValue, SettingKey.accentHex) }
+    }
+
+    /// The accent actually in use: the custom colour if one is set and valid, else the preset.
+    var accentRGB: (red: Double, green: Double, blue: Double) {
+        if let custom = HexColor.parse(accentHex) { return custom }
+        return accent.rgb
+    }
 
     /// 0 = square keys ... 1 = fully round (pill) keys.
     var keyRoundness: Double {

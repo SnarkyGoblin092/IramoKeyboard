@@ -22,12 +22,24 @@ final class SuggestionBar: UIView {
     weak var delegate: SuggestionBarDelegate?
 
     private let glass = FlatPanel(background: Theme.stripFill)
-    private let dismissButton = HitButton(type: .system)
+    private let dismissIcon = UIImageView()
+    private let dismissHighlight = UIView()
     private let hintLabel = UILabel()
-    private var slotButtons: [HitButton] = []
+    private var slotLabels: [UILabel] = []
+    private var slotHighlights: [UIView] = []
     private var separators: [UIView] = []
     private var suggestions: [Suggestion] = []
     private let slotCount = 3
+
+    /// Layout cache used by the touch handling (the whole strip is one touch surface).
+    private var slotMinX: CGFloat = 0
+    private var slotWidth: CGFloat = 0
+    private var dismissMinX: CGFloat = 0
+
+    /// What the current touch went down on: a slot index, `dismissIndex`, or nil.
+    private let dismissIndex = -1
+    private var pressedIndex: Int?
+    private var touchStart = CGPoint.zero
 
     /// Shown (in place of suggestions) when there is nothing to suggest.
     var emptyHint: String? {
@@ -48,6 +60,7 @@ final class SuggestionBar: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor.clear
+        isMultipleTouchEnabled = false
         addSubview(glass)
 
         hintLabel.font = UIFont.systemFont(ofSize: 13)
@@ -58,16 +71,22 @@ final class SuggestionBar: UIView {
         glass.contentView.addSubview(hintLabel)
 
         for index in 0..<slotCount {
-            let button = HitButton(type: .system)
-            button.tag = index
-            button.setTitleColor(Theme.text, for: .normal)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 17)
-            button.titleLabel?.adjustsFontSizeToFitWidth = true
-            button.titleLabel?.minimumScaleFactor = 0.6
-            button.titleLabel?.lineBreakMode = .byTruncatingTail
-            button.addTarget(self, action: #selector(slotTapped(_:)), for: .touchUpInside)
-            glass.contentView.addSubview(button)
-            slotButtons.append(button)
+            // Highlight (pressed state) below the label; both are purely visual - the bar itself takes the touches.
+            let highlight = UIView()
+            highlight.backgroundColor = Theme.separator
+            highlight.alpha = 0
+            glass.contentView.addSubview(highlight)
+            slotHighlights.append(highlight)
+
+            let label = UILabel()
+            label.textColor = Theme.text
+            label.font = UIFont.systemFont(ofSize: 17)
+            label.textAlignment = .center
+            label.adjustsFontSizeToFitWidth = true
+            label.minimumScaleFactor = 0.6
+            label.lineBreakMode = .byTruncatingTail
+            glass.contentView.addSubview(label)
+            slotLabels.append(label)
 
             if index > 0 {
                 let line = UIView()
@@ -77,12 +96,20 @@ final class SuggestionBar: UIView {
             }
         }
 
-        dismissButton.tintColor = Theme.secondaryText
-        dismissButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
-                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular)),
-                               for: .normal)
-        dismissButton.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
-        glass.contentView.addSubview(dismissButton)
+        dismissHighlight.backgroundColor = Theme.separator
+        dismissHighlight.alpha = 0
+        glass.contentView.addSubview(dismissHighlight)
+
+        dismissIcon.tintColor = Theme.secondaryText
+        dismissIcon.contentMode = .center
+        dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+        glass.contentView.addSubview(dismissIcon)
+
+        // Nothing inside the strip takes touches itself: the bar decides from the x position.
+        for view in [glass as UIView, hintLabel, dismissIcon, dismissHighlight] { view.isUserInteractionEnabled = false }
+        glass.contentView.isUserInteractionEnabled = false
+        for view in slotLabels + slotHighlights + separators { view.isUserInteractionEnabled = false }
 
         refreshVisibility()
     }
@@ -95,17 +122,16 @@ final class SuggestionBar: UIView {
 
     func update(_ newSuggestions: [Suggestion]) {
         suggestions = Array(newSuggestions.prefix(slotCount))
-        for (index, button) in slotButtons.enumerated() {
+        for (index, label) in slotLabels.enumerated() {
             if index < suggestions.count {
                 let item = suggestions[index]
-                button.setTitle(item.text, for: .normal)
-                button.titleLabel?.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17)
-                button.isEnabled = true
+                label.text = item.text
+                label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17)
             } else {
-                button.setTitle(nil, for: .normal)
-                button.isEnabled = false
+                label.text = nil
             }
         }
+        setPressed(nil)
         refreshVisibility()
     }
 
@@ -123,17 +149,26 @@ final class SuggestionBar: UIView {
         glass.frame = bounds.insetBy(dx: 2, dy: 3)
         let area = glass.bounds
         let dismissWidth: CGFloat = 52
-        dismissButton.frame = CGRect(x: area.width - dismissWidth, y: 0, width: dismissWidth, height: area.height)
-
         let contentWidth = max(0, area.width - dismissWidth - 6)
+
+        slotMinX = 6
+        slotWidth = contentWidth / CGFloat(slotCount)
+        dismissMinX = area.width - dismissWidth
+
+        dismissHighlight.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
+        dismissIcon.frame = dismissHighlight.frame
         hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
 
-        let slotWidth = contentWidth / CGFloat(slotCount)
-        for (index, button) in slotButtons.enumerated() {
-            button.frame = CGRect(x: 6 + CGFloat(index) * slotWidth, y: 0, width: slotWidth, height: area.height)
+        let radius = Theme.keyCornerRadius(for: CGSize(width: slotWidth, height: area.height))
+        for index in 0..<slotCount {
+            let frame = CGRect(x: slotMinX + CGFloat(index) * slotWidth, y: 0, width: slotWidth, height: area.height)
+            slotHighlights[index].frame = frame.insetBy(dx: 2, dy: 2)
+            slotHighlights[index].layer.cornerRadius = radius
+            slotLabels[index].frame = frame.insetBy(dx: 6, dy: 0)
         }
+        dismissHighlight.layer.cornerRadius = radius
         for (index, line) in separators.enumerated() {
-            line.frame = CGRect(x: 6 + CGFloat(index + 1) * slotWidth - 0.5,
+            line.frame = CGRect(x: slotMinX + CGFloat(index + 1) * slotWidth - 0.5,
                                 y: area.height * 0.25,
                                 width: 1,
                                 height: area.height * 0.5)
@@ -141,30 +176,66 @@ final class SuggestionBar: UIView {
     }
 
     // MARK: Touch handling
+    //
+    // The whole strip is a single touch surface. Wherever the finger lands (margins and gaps
+    // included) the x position decides: right end = hide keyboard, otherwise the suggestion slot
+    // whose separated area contains it. Nothing depends on touching the word itself.
 
-    /// Every point of the strip (including its margins) belongs to a control: the right end is the hide
-    /// button, everything else goes to the suggestion slot at that x position, so a tap never needs to
-    /// land on the text itself.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
-        let dismissZone = dismissButton.superview?.convert(dismissButton.frame, to: self) ?? .zero
-        if point.x >= dismissZone.minX { return dismissButton }
-        if let slot = HitTesting.nearestByX(point.x, in: slotButtons, relativeTo: self),
-           (slot as? UIControl)?.isEnabled ?? true {
-            return slot
+        return self
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return bounds.insetBy(dx: -4, dy: -4).contains(point)
+    }
+
+    private func index(at point: CGPoint) -> Int? {
+        let x = point.x - glass.frame.minX
+        if x >= dismissMinX { return dismissIndex }
+        guard slotWidth > 0 else { return nil }
+        let raw = Int(floor((x - slotMinX) / slotWidth))
+        let clamped = min(max(raw, 0), slotCount - 1)
+        return clamped < suggestions.count ? clamped : nil
+    }
+
+    private func setPressed(_ index: Int?) {
+        if pressedIndex == index { return }
+        if let old = pressedIndex { highlight(old, on: false) }
+        pressedIndex = index
+        if let new = index { highlight(new, on: true) }
+    }
+
+    private func highlight(_ index: Int, on: Bool) {
+        let view = (index == dismissIndex) ? dismissHighlight : slotHighlights[index]
+        view.alpha = on ? 1 : 0
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        touchStart = touch.location(in: self)
+        setPressed(index(at: touchStart))
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let point = touch.location(in: self)
+        // Keep the press while the finger stays near its start; a long drag cancels it.
+        if hypot(point.x - touchStart.x, point.y - touchStart.y) > 40 { setPressed(nil) }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        defer { setPressed(nil) }
+        guard let pressed = pressedIndex else { return }
+        if pressed == dismissIndex {
+            Haptics.shared.keyPress()
+            delegate?.suggestionBarDidTapDismiss(self)
+        } else if pressed < suggestions.count {
+            delegate?.suggestionBar(self, didSelect: suggestions[pressed])
         }
-        return super.hitTest(point, with: event)
     }
 
-    // MARK: Actions
-
-    @objc private func slotTapped(_ sender: UIButton) {
-        guard sender.tag < suggestions.count else { return }
-        delegate?.suggestionBar(self, didSelect: suggestions[sender.tag])
-    }
-
-    @objc private func dismissTapped() {
-        Haptics.shared.keyPress()
-        delegate?.suggestionBarDidTapDismiss(self)
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        setPressed(nil)
     }
 }

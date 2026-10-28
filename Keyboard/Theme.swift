@@ -126,7 +126,11 @@ enum Theme {
     private static func grey(_ value: CGFloat, _ alpha: CGFloat = 1) -> UIColor { return UIColor(white: value, alpha: alpha) }
 
     private static func makePalette(for theme: ThemeDefinition) -> Palette {
-        let userAccent = Settings.shared.accent.uiColor
+        let rgb = Settings.shared.accentRGB
+        let userAccent = UIColor(red: CGFloat(rgb.red), green: CGFloat(rgb.green), blue: CGFloat(rgb.blue), alpha: 1)
+        // A custom accent (colour picker) wins over a gradient theme's own accent; the "custom" theme has none.
+        let customHex = SharedStore.defaults.string(forKey: "hunkeys.accentHex") ?? ""
+        let gradientAccent = (!customHex.isEmpty || theme.id == ThemeCatalog.customID) ? userAccent : theme.accent.uiColor
 
         switch theme.kind {
         case .native:
@@ -191,7 +195,7 @@ enum Theme {
 
         case .gradient:
             return Palette(
-                accent: theme.accent.uiColor,
+                accent: gradientAccent,
                 onAccent: theme.onAccent.uiColor,
                 text: theme.text.uiColor,
                 secondaryText: theme.secondaryText.uiColor,

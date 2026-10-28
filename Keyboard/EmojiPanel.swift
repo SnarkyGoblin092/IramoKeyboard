@@ -211,9 +211,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         return Theme.kind == .native ? UIColor.clear : Theme.functionKey
     }
 
-    private let searchHeight: CGFloat = 36
-    private let titleHeight: CGFloat = 18
-    private let barHeight: CGFloat = 44
+    // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
+    private var searchHeight: CGFloat = 36
+    private var titleHeight: CGFloat = 18
+    private var barHeight: CGFloat = 44
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -431,19 +432,30 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         super.layoutSubviews()
         let width = bounds.width
 
-        searchGlass.frame = CGRect(x: 10, y: 5, width: width - 20, height: searchHeight)
+        let total = bounds.height
+        let showTitle = total >= 190
+        if total >= 250 {
+            searchHeight = 36; titleHeight = 18; barHeight = 44
+        } else if total >= 190 {
+            searchHeight = 32; titleHeight = 16; barHeight = 40
+        } else {
+            searchHeight = 28; titleHeight = 0; barHeight = 36
+        }
+        titleLabel.isHidden = !showTitle
+
+        searchGlass.frame = CGRect(x: 10, y: 4, width: width - 20, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         searchIcon.frame = CGRect(x: 14, y: (searchHeight - 18) / 2, width: 18, height: 18)
         searchLabel.frame = CGRect(x: 40, y: 0, width: searchGlass.bounds.width - 56, height: searchHeight)
 
-        titleLabel.frame = CGRect(x: 14, y: searchGlass.frame.maxY + 4, width: width - 28, height: titleHeight)
+        titleLabel.frame = CGRect(x: 14, y: searchGlass.frame.maxY + (showTitle ? 2 : 0), width: width - 28, height: titleHeight)
 
-        let gridTop = titleLabel.frame.maxY
+        let gridTop = showTitle ? titleLabel.frame.maxY : searchGlass.frame.maxY + 2
         let gridHeight = max(0, bounds.height - gridTop - barHeight)
         let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
         if collectionView.frame != newGridFrame {
             collectionView.frame = newGridFrame
-            gridLayout.rows = max(3, min(5, Int(gridHeight / 38)))
+            gridLayout.rows = max(2, min(6, Int((gridHeight / 40).rounded())))
             gridLayout.invalidateLayout()
         }
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)

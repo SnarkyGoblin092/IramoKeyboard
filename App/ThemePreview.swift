@@ -3,7 +3,7 @@ import SwiftUI
 /// A miniature keyboard drawn from a `ThemeDefinition`, so the picker shows what the keyboard will look like.
 struct ThemePreview: View {
     let theme: ThemeDefinition
-    let accent: AccentChoice
+    let accent: Color
     var showsStrip = true
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
 
@@ -60,7 +60,7 @@ struct ThemePreview: View {
     }
 
     private var accentColor: Color {
-        return usesThemeColours ? Color(theme.accent) : Color(accent: accent)
+        return usesThemeColours ? Color(theme.accent) : accent
     }
 
     private var onAccent: Color {

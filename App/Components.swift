@@ -41,6 +41,30 @@ extension Color {
     init(accent choice: AccentChoice) {
         self.init(.sRGB, red: choice.rgb.red, green: choice.rgb.green, blue: choice.rgb.blue, opacity: 1)
     }
+
+    /// "#RRGGBB" -> Color (falls back to `fallback` when the text isn't a valid hex colour).
+    init(hex: String, fallback: Color = .gray) {
+        if let rgb = HexColor.parse(hex) {
+            self.init(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue, opacity: 1)
+        } else {
+            self = fallback
+        }
+    }
+
+    /// "#RRGGBB" for this colour (alpha is dropped).
+    var hexString: String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return HexColor.string(red: Double(r), green: Double(g), blue: Double(b))
+    }
+
+    /// The accent colour currently chosen in the app (custom hex if set, else the preset).
+    static func currentAccent(name: String, hex: String) -> Color {
+        if let rgb = HexColor.parse(hex) {
+            return Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue, opacity: 1)
+        }
+        return Color(accent: AccentChoice(rawValue: name) ?? .blue)
+    }
 }
 
 // MARK: - Controls
@@ -186,5 +210,95 @@ struct RoundnessSlider: View {
         .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
             local = SettingDefault.keyRoundness
         }
+    }
+}
+
+
+// MARK: - Accent colour picker
+
+/// Preset swatches plus a "custom" swatch that opens the system colour picker.
+struct AccentPicker: View {
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @State private var custom: Color
+    @State private var pendingSave: DispatchWorkItem?
+
+    private let columns = Array(repeating: GridItem(.flexible(minimum: 30), spacing: 10), count: 7)
+
+    init() {
+        let store = SharedStore.defaults
+        let name = store.string(forKey: SettingKey.accent) ?? SettingDefault.accent
+        let hex = store.string(forKey: SettingKey.accentHex) ?? SettingDefault.accentHex
+        _custom = State(initialValue: Color.currentAccent(name: name, hex: hex))
+    }
+
+    private var isCustom: Bool { return HexColor.parse(accentHex) != nil }
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(AccentChoice.allCases, id: \.rawValue) { choice in
+                Button {
+                    guard isCustom || accentName != choice.rawValue else { return }
+                    Feedback.tick()
+                    accentName = choice.rawValue
+                    accentHex = ""
+                    custom = Color(accent: choice)
+                } label: {
+                    Circle()
+                        .fill(Color(accent: choice))
+                        .frame(width: 32, height: 32)
+                        .overlay(Circle()
+                            .stroke(Color.primary, lineWidth: (!isCustom && accentName == choice.rawValue) ? 3 : 0)
+                            .padding(-4))
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(choice.displayName)
+            }
+            customSwatch
+        }
+        .onChange(of: custom) { newColor in
+            // The system picker reports continuously while dragging: save once it settles.
+            pendingSave?.cancel()
+            let hex = newColor.hexString
+            let work = DispatchWorkItem {
+                guard hex != accentHex else { return }
+                accentHex = hex
+            }
+            pendingSave = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
+            custom = Color(accent: .blue)
+        }
+    }
+
+    private var customSwatch: some View {
+        ZStack {
+            Circle()
+                .fill(AngularGradient(gradient: Gradient(colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red]),
+                                      center: .center))
+            if isCustom {
+                Circle().fill(custom).padding(7)
+            } else {
+                Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundColor(.white)
+            }
+        }
+        .frame(width: 32, height: 32)
+        .overlay(Circle()
+            .stroke(Color.primary, lineWidth: isCustom ? 3 : 0)
+            .padding(-4))
+        .overlay(
+            // The real picker sits invisibly on top, so a tap anywhere on the swatch opens it.
+            ColorPicker("", selection: $custom, supportsOpacity: false)
+                .labelsHidden()
+                .scaleEffect(1.6)
+                .frame(width: 32, height: 32)
+                .clipped()
+                .opacity(0.015)
+        )
+        .frame(maxWidth: .infinity, minHeight: 40)
+        .accessibilityLabel("Custom colour")
     }
 }
