@@ -6,48 +6,78 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
-                StatusSection()
+                HeaderSection()
+                TestFieldSection()
                 FeelSection()
                 TypingSection()
                 LanguagesSection()
                 AppearanceSection()
-                Section {
-                    NavigationLink("Text shortcuts") { ShortcutsView() }
-                } footer: {
-                    Text("Type a short trigger, press space, and it expands to the full phrase.")
-                }
+                ShortcutsSection()
                 DataSection()
-                TestFieldSection()
             }
-            .navigationTitle("HunKeys")
+            .listStyle(.insetGrouped)
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
             .scrollDismissesKeyboard(.interactively)
         }
+        .modifier(AccentTint())
         .onAppear { Feedback.prepare() }
     }
 }
 
 // MARK: - Sections
 
-private struct StatusSection: View {
+/// App name, a few status chips and a hint about what to do next.
+private struct HeaderSection: View {
     @State private var status = KeyboardStatus.read()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
 
     var body: some View {
-        Section("Status") {
-            InfoRow("Keyboard", status.seen ? "Used \(status.lastSeenText)" : "Not seen yet")
-            InfoRow("Full Access", status.seen ? (status.fullAccess ? "On" : "Off") : "-")
-            InfoRow("Emoji", status.emojiText)
-            if !SharedStore.isShared {
-                Text("This install can't share settings with the keyboard (no App Group). Install the IPA with iloader.")
-                    .font(.footnote).foregroundColor(.orange)
-            } else if !status.seen {
-                Text("Add HunKeys in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once.")
-                    .font(.footnote).foregroundColor(.secondary)
-            } else if !status.fullAccess {
-                Text("Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words.")
-                    .font(.footnote).foregroundColor(.orange)
+        Section {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 14) {
+                    Image(systemName: "keyboard.fill")
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 56, height: 56)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(LinearGradient(colors: [accent, accent.opacity(0.65)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("HunKeys").font(.title2.weight(.bold))
+                        Text("Your keyboard, your way")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8, alignment: .leading)],
+                          alignment: .leading, spacing: 8) {
+                    StatusChip(text: status.seen ? "Keyboard added" : "Not set up yet",
+                               symbol: status.seen ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
+                               color: status.seen ? .green : .orange)
+                    if status.seen {
+                        StatusChip(text: status.fullAccess ? "Full Access on" : "Full Access off",
+                                   symbol: status.fullAccess ? "lock.open.fill" : "lock.fill",
+                                   color: status.fullAccess ? .green : .orange)
+                    }
+                    if !SharedStore.isShared {
+                        StatusChip(text: "Not synced", symbol: "arrow.triangle.2.circlepath", color: .red)
+                    }
+                }
+
+                Text(hint)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.vertical, 6)
         }
         // Read when the screen opens or the app comes back to the front - no polling.
         .onAppear { status = KeyboardStatus.read() }
@@ -55,11 +85,36 @@ private struct StatusSection: View {
             if phase == .active { status = KeyboardStatus.read() }
         }
     }
+
+    private var hint: String {
+        if !SharedStore.isShared {
+            return "This install can't share settings with the keyboard (no App Group). Install the IPA with iloader."
+        }
+        if !status.seen {
+            return "Add HunKeys in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
+        }
+        if !status.fullAccess {
+            return "Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words."
+        }
+        return "Last used \(status.lastSeenText). \(status.emojiText)."
+    }
+}
+
+private struct TestFieldSection: View {
+    @State private var text = ""
+
+    var body: some View {
+        Section {
+            TextField("Tap here and type to try it", text: $text)
+        } header: {
+            SectionHeader("Try the keyboard", symbol: "text.cursor", color: .gray)
+        }
+    }
 }
 
 private struct FeelSection: View {
     var body: some View {
-        Section("Feel") {
+        Section {
             SettingSlider("Hold delay",
                           key: SettingKey.holdDelay,
                           defaultValue: SettingDefault.holdDelay,
@@ -73,6 +128,8 @@ private struct FeelSection: View {
                           showsTest: true) { $0 < 0.01 ? "Off" : "\(Int(($0 * 100).rounded()))%" }
             SettingToggle("Key click sound", key: SettingKey.clickSound, defaultValue: SettingDefault.clickSound)
             SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups)
+        } header: {
+            SectionHeader("Feel", symbol: "hand.tap.fill", color: .pink)
         }
     }
 }
@@ -87,9 +144,9 @@ private struct TypingSection: View {
             SettingToggle("Double space for period", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod)
             SettingToggle("Space-bar cursor control", key: SettingKey.cursorControl, defaultValue: SettingDefault.cursorControl)
             SettingToggle("Slide on delete to remove words", key: SettingKey.deleteSwipe, defaultValue: SettingDefault.deleteSwipe)
-            SettingToggle("Learn my typing (adaptive key areas)", key: SettingKey.touchLearning, defaultValue: SettingDefault.touchLearning)
+            SettingToggle("Adaptive key areas", key: SettingKey.touchLearning, defaultValue: SettingDefault.touchLearning)
         } header: {
-            Text("Typing")
+            SectionHeader("Typing", symbol: "keyboard", color: .blue)
         } footer: {
             Text("Hold the space bar and slide to move the cursor. Slide left from the delete key to delete word by word. Adaptive key areas slowly shift each key's tap area towards where you actually touch; it stays on this iPhone.")
         }
@@ -105,8 +162,10 @@ private struct LanguagesSection: View {
                 LanguagesView()
                     .onDisappear { summary = LanguagesSection.currentSummary() }
             } label: {
-                InfoRow("Languages", summary)
+                InfoRow("Enabled languages", summary)
             }
+        } header: {
+            SectionHeader("Languages", symbol: "globe", color: .green)
         } footer: {
             Text("Swipe left or right on the space bar to switch between the enabled languages.")
         }
@@ -128,12 +187,12 @@ private struct AppearanceSection: View {
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
     var body: some View {
-        Section("Appearance") {
+        Section {
             NavigationLink {
                 ThemesView()
             } label: {
                 VStack(alignment: .leading, spacing: 10) {
-                    ThemePreview(theme: theme, accent: accent)
+                    ThemePreview(theme: theme, accent: accent, cornerRadius: 12)
                         .aspectRatio(1.7, contentMode: .fit)
                     HStack {
                         Text("Theme")
@@ -144,15 +203,12 @@ private struct AppearanceSection: View {
                 .padding(.vertical, 4)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Accent colour")
                 AccentPicker()
-                if theme.kind == .gradient {
-                    Text("Gradient themes use their own accent colour.")
-                        .font(.footnote).foregroundColor(.secondary)
-                }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
+            AccentCustomRow()
 
             SettingSlider("Keyboard height",
                           key: SettingKey.keyboardHeight,
@@ -162,6 +218,26 @@ private struct AppearanceSection: View {
             RoundnessSlider()
             SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow)
             SettingToggle("Long-press hints on keys", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints)
+        } header: {
+            SectionHeader("Appearance", symbol: "paintpalette.fill", color: .purple)
+        } footer: {
+            Text("The accent colour is used for the return key and highlights. Gradient themes bring their own accent.")
+        }
+    }
+}
+
+private struct ShortcutsSection: View {
+    var body: some View {
+        Section {
+            NavigationLink {
+                ShortcutsView()
+            } label: {
+                Label("Text shortcuts", systemImage: "text.badge.plus")
+            }
+        } header: {
+            SectionHeader("Shortcuts", symbol: "bolt.fill", color: .orange)
+        } footer: {
+            Text("Type a short trigger, press space, and it expands to the full phrase.")
         }
     }
 }
@@ -184,7 +260,7 @@ private struct DataSection: View {
             case .recents: return "The Recently Used emoji tab will be empty."
             case .learned: return "Words the keyboard picked up while you type will be removed."
             case .touch: return "The keyboard forgets how you tap and goes back to the standard key areas."
-            case .reset: return "Your shortcuts, recent emoji and learned words are kept. Reopen this screen to see the defaults."
+            case .reset: return "Your shortcuts, recent emoji, learned words and custom theme colours are kept."
             }
         }
 
@@ -203,15 +279,15 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
-            Button("Clear recent emoji") { pending = .recents }
-            Button("Forget learned words") { pending = .learned }
-            Button("Reset touch learning") { pending = .touch }
-            Button("Reset all settings", role: .destructive) { pending = .reset }
+            Button { pending = .recents } label: { Label("Clear recent emoji", systemImage: "clock.arrow.circlepath") }
+            Button { pending = .learned } label: { Label("Forget learned words", systemImage: "text.book.closed") }
+            Button { pending = .touch } label: { Label("Reset touch learning", systemImage: "hand.point.up.left") }
+            Button(role: .destructive) { pending = .reset } label: { Label("Reset all settings", systemImage: "arrow.counterclockwise") }
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
             }
         } header: {
-            Text("Data")
+            SectionHeader("Data", symbol: "internaldrive.fill", color: .gray)
         } footer: {
             Text("Everything stays on this iPhone.")
         }
@@ -240,19 +316,9 @@ private struct DataSection: View {
         case .reset:
             Settings.shared.resetPreferences()
             NotificationCenter.default.post(name: .hunKeysSettingsReset, object: nil)
-            note = "Settings reset."
+            note = "Settings reset to defaults."
         }
         Feedback.tick()
-    }
-}
-
-private struct TestFieldSection: View {
-    @State private var text = ""
-
-    var body: some View {
-        Section("Test field") {
-            TextField("Type here to test the keyboard", text: $text)
-        }
     }
 }
 
@@ -304,7 +370,7 @@ struct ShortcutsView: View {
         Form {
             Section("New shortcut") {
                 TextField("Trigger (e.g. omw)", text: $trigger)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
                 TextField("Phrase (e.g. On my way!)", text: $phrase)
                 Button("Add") {

@@ -144,6 +144,8 @@ struct SettingSlider: View {
             Slider(value: $local, in: range, step: step) { editing in
                 if !editing { stored = local }
             }
+            .accessibilityLabel(title)
+            .accessibilityValue(format(local))
             .onChange(of: local) { _ in Feedback.tick() }
         }
         .padding(.vertical, 2)
@@ -204,6 +206,8 @@ struct RoundnessSlider: View {
             Slider(value: $local, in: 0...1, step: 0.02) { editing in
                 if !editing { stored = local }
             }
+            .accessibilityLabel("Key roundness")
+            .accessibilityValue("\(Int((local * 100).rounded())) percent")
             .onChange(of: local) { _ in Feedback.tick() }
         }
         .padding(.vertical, 2)
@@ -214,91 +218,139 @@ struct RoundnessSlider: View {
 }
 
 
-// MARK: - Accent colour picker
+// MARK: - Styling helpers
 
-/// Preset swatches plus a "custom" swatch that opens the system colour picker.
+/// Slight shrink while pressed, so every card and swatch answers the finger at once.
+struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// Section title with an SF Symbol in a coloured rounded square.
+struct SectionHeader: View {
+    let title: String
+    let symbol: String
+    let color: Color
+
+    init(_ title: String, symbol: String, color: Color) {
+        self.title = title
+        self.symbol = symbol
+        self.color = color
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 24, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(color))
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.primary)
+        }
+        .textCase(nil)
+        .padding(.vertical, 2)
+    }
+}
+
+/// Small rounded status pill.
+struct StatusChip: View {
+    let text: String
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).font(.caption.weight(.bold))
+            Text(text).font(.caption.weight(.semibold)).lineLimit(1)
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(color.opacity(0.14)))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Applies the chosen accent colour as the tint of everything inside.
+struct AccentTint: ViewModifier {
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    func body(content: Content) -> some View {
+        content.tint(Color.currentAccent(name: accentName, hex: accentHex))
+    }
+}
+
+// MARK: - Accent colour
+
+/// The preset swatches. Custom colours are chosen in `AccentCustomRow` right below.
 struct AccentPicker: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-    @State private var custom: Color
-    @State private var pendingSave: DispatchWorkItem?
 
-    private let columns = Array(repeating: GridItem(.flexible(minimum: 30), spacing: 10), count: 7)
-
-    init() {
-        let store = SharedStore.defaults
-        let name = store.string(forKey: SettingKey.accent) ?? SettingDefault.accent
-        let hex = store.string(forKey: SettingKey.accentHex) ?? SettingDefault.accentHex
-        _custom = State(initialValue: Color.currentAccent(name: name, hex: hex))
-    }
+    private let columns = Array(repeating: GridItem(.flexible(minimum: 30), spacing: 8), count: 6)
 
     private var isCustom: Bool { return HexColor.parse(accentHex) != nil }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, spacing: 10) {
             ForEach(AccentChoice.allCases, id: \.rawValue) { choice in
+                let selected = !isCustom && accentName == choice.rawValue
                 Button {
                     guard isCustom || accentName != choice.rawValue else { return }
                     Feedback.tick()
                     accentName = choice.rawValue
                     accentHex = ""
-                    custom = Color(accent: choice)
                 } label: {
                     Circle()
                         .fill(Color(accent: choice))
-                        .frame(width: 32, height: 32)
-                        .overlay(Circle()
-                            .stroke(Color.primary, lineWidth: (!isCustom && accentName == choice.rawValue) ? 3 : 0)
-                            .padding(-4))
-                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .frame(width: 34, height: 34)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .opacity(selected ? 1 : 0))
+                        .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.9 : 0), lineWidth: 2).padding(-4))
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
                 .accessibilityLabel(choice.displayName)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
-            customSwatch
         }
-        .onChange(of: custom) { newColor in
-            // The system picker reports continuously while dragging: save once it settles.
-            pendingSave?.cancel()
-            let hex = newColor.hexString
-            let work = DispatchWorkItem {
+        .padding(.vertical, 4)
+    }
+}
+
+/// A normal, visible row with the system colour picker. Choosing a colour sets the custom accent.
+struct AccentCustomRow: View {
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    private var isCustom: Bool { return HexColor.parse(accentHex) != nil }
+
+    var body: some View {
+        ColorPicker(selection: Binding(
+            get: { Color.currentAccent(name: accentName, hex: accentHex) },
+            set: { newColor in
+                let hex = newColor.hexString
                 guard hex != accentHex else { return }
                 accentHex = hex
-            }
-            pendingSave = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
-            custom = Color(accent: .blue)
-        }
-    }
-
-    private var customSwatch: some View {
-        ZStack {
-            Circle()
-                .fill(AngularGradient(gradient: Gradient(colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red]),
-                                      center: .center))
-            if isCustom {
-                Circle().fill(custom).padding(7)
-            } else {
-                Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundColor(.white)
+            }), supportsOpacity: false) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Custom colour")
+                Text(isCustom ? accentHex.uppercased() : "Pick any colour")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
             }
         }
-        .frame(width: 32, height: 32)
-        .overlay(Circle()
-            .stroke(Color.primary, lineWidth: isCustom ? 3 : 0)
-            .padding(-4))
-        .overlay(
-            // The real picker sits invisibly on top, so a tap anywhere on the swatch opens it.
-            ColorPicker("", selection: $custom, supportsOpacity: false)
-                .labelsHidden()
-                .scaleEffect(1.6)
-                .frame(width: 32, height: 32)
-                .clipped()
-                .opacity(0.015)
-        )
-        .frame(maxWidth: .infinity, minHeight: 40)
-        .accessibilityLabel("Custom colour")
     }
 }

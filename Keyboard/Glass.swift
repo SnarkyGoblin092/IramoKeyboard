@@ -113,10 +113,14 @@ final class FlatPanel: UIView {
     private let effectView: UIVisualEffectView?
     private let fixedRadius: CGFloat
     private let followsKeyRoundness: Bool
+    private let drawsKeyBorder: Bool
 
     var contentView: UIView { return effectView?.contentView ?? self }
 
-    init(background: UIColor? = nil, cornerRadius: CGFloat = 0, allowGlass: Bool = true, followsKeyRoundness: Bool = false) {
+    /// Panels are flat by default (one fill, no second outline). `allowGlass` is only for key-like buttons and pop-ups.
+    /// `keyLike` gives the panel the same hairline outline as a key when the theme draws key borders.
+    init(background: UIColor? = nil, cornerRadius: CGFloat = 0, allowGlass: Bool = false, followsKeyRoundness: Bool = false, keyLike: Bool = false) {
+        self.drawsKeyBorder = keyLike && Theme.drawsKeyBorder
         self.fixedRadius = cornerRadius
         self.followsKeyRoundness = followsKeyRoundness
         if allowGlass && Theme.usesRealGlass {
@@ -131,6 +135,18 @@ final class FlatPanel: UIView {
             backgroundColor = background ?? UIColor.clear
             layer.cornerCurve = .continuous
             layer.cornerRadius = cornerRadius
+            if drawsKeyBorder { layer.borderWidth = 0.5 }
+        }
+    }
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        updateBorderColor()
+    }
+
+    private func updateBorderColor() {
+        if drawsKeyBorder && effectView == nil {
+            layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
         }
     }
 
@@ -148,6 +164,7 @@ final class FlatPanel: UIView {
             }
         } else {
             layer.cornerRadius = radius
+            updateBorderColor()
         }
     }
 }

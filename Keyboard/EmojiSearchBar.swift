@@ -10,7 +10,7 @@ protocol EmojiSearchBarDelegate: AnyObject {
 final class EmojiSearchBar: UIView {
     weak var delegate: EmojiSearchBarDelegate?
 
-    private let glass = FlatPanel(background: Theme.searchField, followsKeyRoundness: true)
+    private let glass = FlatPanel(background: Theme.searchField, followsKeyRoundness: true, keyLike: true)
     private let backButton = HitButton(type: .system)
     private let iconView = UIImageView()
     private let queryLabel = UILabel()
@@ -86,7 +86,7 @@ final class EmojiSearchBar: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        glass.frame = bounds.insetBy(dx: 6, dy: 4)
+        glass.frame = bounds.insetBy(dx: 12, dy: 6)
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)

@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// A miniature keyboard drawn from a `ThemeDefinition`, so the picker shows what the keyboard will look like.
+/// Every theme uses the same translucent look (thin border, soft fills); only the colours differ.
 struct ThemePreview: View {
     let theme: ThemeDefinition
     let accent: Color
     var showsStrip = true
+    var cornerRadius: CGFloat = 14
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
 
     @Environment(\.colorScheme) private var systemScheme
@@ -15,79 +17,30 @@ struct ThemePreview: View {
         ["z", "x", "c", "v", "b", "n", "m"]
     ]
 
-    // MARK: Palette
+    // MARK: Palette (straight from the theme)
 
-    private var isDark: Bool {
-        if let forced = theme.isDark { return forced }
-        return systemScheme == .dark
-    }
+    /// Native follows the system, so its dark variant is swapped in here; every other theme is fixed.
+    private var nativeDark: Bool { return theme.kind == .native && systemScheme == .dark }
 
-    private var usesThemeColours: Bool { return theme.kind == .gradient }
+    private var textColor: Color { return nativeDark ? .white : Color(theme.text) }
+    private var keyFill: Color { return nativeDark ? Color(white: 0.42) : Color(theme.key) }
+    private var functionFill: Color { return nativeDark ? Color(white: 0.27) : Color(theme.function) }
+    private var borderColor: Color { return Color(theme.keyBorder) }
+    private var panelFill: Color { return nativeDark ? Color(white: 0.20) : Color(theme.panel) }
 
-    private var textColor: Color {
-        switch theme.kind {
-        case .native: return isDark ? .white : .black
-        case .gradient: return Color(theme.text)
-        case .transparent, .liquidGlass: return isDark ? .white : Color(white: 0.08)
-        }
-    }
-
-    private var keyFill: Color {
-        switch theme.kind {
-        case .native: return isDark ? Color(white: 0.42) : .white
-        case .gradient: return Color(theme.key)
-        case .transparent: return Color.white.opacity(isDark ? 0.18 : 0.30)
-        case .liquidGlass: return Color.white.opacity(0.10)
-        }
-    }
-
-    private var functionFill: Color {
-        switch theme.kind {
-        case .native: return isDark ? Color(white: 0.27) : Color(red: 0.68, green: 0.70, blue: 0.74)
-        case .gradient: return Color(theme.function)
-        case .transparent: return Color.black.opacity(isDark ? 0.30 : 0.12)
-        case .liquidGlass: return Color.white.opacity(0.06)
-        }
-    }
-
-    private var borderColor: Color {
-        switch theme.kind {
-        case .native: return .clear
-        case .gradient: return Color(theme.keyBorder)
-        case .transparent: return Color.white.opacity(0.45)
-        case .liquidGlass: return Color.white.opacity(0.55)
-        }
-    }
-
-    private var accentColor: Color {
-        return usesThemeColours ? Color(theme.accent) : accent
-    }
-
-    private var onAccent: Color {
-        return usesThemeColours ? Color(theme.onAccent) : .white
-    }
-
-    private var panelFill: Color {
-        switch theme.kind {
-        case .native: return isDark ? Color(white: 0.20) : Color.white.opacity(0.70)
-        case .gradient: return Color(theme.panel)
-        case .transparent: return Color.white.opacity(0.28)
-        case .liquidGlass: return Color.white.opacity(0.10)
-        }
-    }
+    /// Gradient themes carry their own accent; the others use the accent chosen in the app.
+    private var accentColor: Color { return theme.kind == .gradient ? Color(theme.accent) : accent }
+    private var onAccent: Color { return theme.kind == .gradient ? Color(theme.onAccent) : .white }
 
     @ViewBuilder private var backdrop: some View {
-        switch theme.kind {
-        case .native:
-            Rectangle().fill(isDark ? Color(white: 0.13) : Color(red: 0.82, green: 0.84, blue: 0.87))
-        case .transparent, .liquidGlass, .gradient:
-            if theme.gradientStops.count > 1 {
-                LinearGradient(colors: theme.gradientStops.map { Color($0) },
-                               startPoint: UnitPoint(x: theme.gradientStart.x, y: theme.gradientStart.y),
-                               endPoint: UnitPoint(x: theme.gradientEnd.x, y: theme.gradientEnd.y))
-            } else {
-                Rectangle().fill(Color(white: 0.6))
-            }
+        if nativeDark {
+            Rectangle().fill(Color(white: 0.13))
+        } else if theme.gradientStops.count > 1 {
+            LinearGradient(colors: theme.gradientStops.map { Color($0) },
+                           startPoint: UnitPoint(x: theme.gradientStart.x, y: theme.gradientStart.y),
+                           endPoint: UnitPoint(x: theme.gradientEnd.x, y: theme.gradientEnd.y))
+        } else {
+            Rectangle().fill(Color(white: 0.6))
         }
     }
 
@@ -100,14 +53,14 @@ struct ThemePreview: View {
             let gap = max(1.5, width * 0.012)
             let stripHeight = showsStrip ? height * 0.15 : 0
             let rowCount: CGFloat = 4
-            let keyHeight = (height - stripHeight - gap * (rowCount + 2) - (showsStrip ? gap : 0)) / rowCount
-            let keyWidth = (width - gap * 11) / 10
+            let keyHeight = max(1, (height - stripHeight - gap * (rowCount + 2) - (showsStrip ? gap : 0)) / rowCount)
+            let keyWidth = max(1, (width - gap * 11) / 10)
             let radius = max(0, roundness * min(keyWidth, keyHeight) / 2)
 
             ZStack {
                 backdrop
                 VStack(spacing: gap) {
-                    if showsStrip { strip(radius: radius, height: stripHeight, gap: gap) }
+                    if showsStrip { strip(radius: radius, height: stripHeight) }
                     ForEach(0..<rows.count, id: \.self) { index in
                         HStack(spacing: gap) {
                             if index == 2 {
@@ -123,7 +76,7 @@ struct ThemePreview: View {
                     }
                     HStack(spacing: gap) {
                         key(text: "123", fill: functionFill, width: keyWidth * 1.3, height: keyHeight, radius: radius)
-                        key(symbol: "face.smiling", fill: functionFill, width: keyWidth * 1.0, height: keyHeight, radius: radius)
+                        key(symbol: "face.smiling", fill: functionFill, width: keyWidth, height: keyHeight, radius: radius)
                         key(text: "", fill: keyFill, width: keyWidth * 4.4, height: keyHeight, radius: radius)
                         key(symbol: "return", fill: accentColor, width: keyWidth * 1.6, height: keyHeight, radius: radius, tint: onAccent)
                     }
@@ -133,13 +86,14 @@ struct ThemePreview: View {
             }
             .frame(width: width, height: height)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     // MARK: Pieces
 
-    private func strip(radius: CGFloat, height: CGFloat, gap: CGFloat) -> some View {
+    private func strip(radius: CGFloat, height: CGFloat) -> some View {
         HStack(spacing: 0) {
             ForEach(["the", "that", "this"], id: \.self) { word in
                 Text(word)
@@ -153,7 +107,7 @@ struct ThemePreview: View {
                 .frame(width: height * 1.5)
         }
         .frame(height: height)
-        .background(shape(radius * 1.3, fill: panelFill, glass: false))
+        .background(shape(radius * 1.3, fill: panelFill))
     }
 
     private func key(text: String = "",
@@ -164,50 +118,24 @@ struct ThemePreview: View {
                      radius: CGFloat,
                      tint: Color? = nil) -> some View {
         ZStack {
-            shape(radius, fill: fill, glass: theme.kind == .liquidGlass)
+            shape(radius, fill: fill)
             if let symbol = symbol {
                 Image(systemName: symbol)
                     .font(.system(size: max(5, height * 0.38)))
                     .foregroundColor(tint ?? textColor)
             } else if !text.isEmpty {
                 Text(text)
-                    .font(.system(size: max(6, height * 0.5), weight: .regular))
+                    .font(.system(size: max(6, height * 0.5)))
                     .foregroundColor(tint ?? textColor)
             }
         }
         .frame(width: width, height: height)
     }
 
-    @ViewBuilder
-    private func shape(_ radius: CGFloat, fill: Color, glass: Bool) -> some View {
+    private func shape(_ radius: CGFloat, fill: Color) -> some View {
         let rounded = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        if glass {
-            GlassFill(radius: radius, border: borderColor)
-        } else {
-            rounded
-                .fill(fill)
-                .overlay(rounded.stroke(borderColor, lineWidth: 0.5))
-                .shadow(color: theme.kind == .native ? Color.black.opacity(isDark ? 0.5 : 0.28) : .clear,
-                        radius: 0, x: 0, y: 0.7)
-        }
-    }
-}
-
-/// A key drawn with Liquid Glass on iOS 26 and with a thin material before that.
-private struct GlassFill: View {
-    let radius: CGFloat
-    let border: Color
-
-    var body: some View {
-        let rounded = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(.regular, in: rounded)
-        } else {
-            rounded.fill(.ultraThinMaterial).overlay(rounded.stroke(border, lineWidth: 0.5))
-        }
-        #else
-        rounded.fill(.ultraThinMaterial).overlay(rounded.stroke(border, lineWidth: 0.5))
-        #endif
+        return rounded
+            .fill(fill)
+            .overlay(rounded.stroke(borderColor, lineWidth: 0.5))
     }
 }

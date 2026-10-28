@@ -75,7 +75,7 @@ enum Theme {
     }
 
     /// Opacity of that gradient.
-    static var backdropOpacity: CGFloat { return 1.0 }
+    static var backdropOpacity: CGFloat { return 0.45 }
 
     /// Dark/light forced by the theme (gradient themes), or `.unspecified` to follow the system.
     static var interfaceStyle: UIUserInterfaceStyle {
@@ -203,14 +203,14 @@ enum Theme {
                 functionKey: theme.function.uiColor,
                 letterKeyPressed: theme.keyPressed.uiColor,
                 functionKeyPressed: theme.functionPressed.uiColor,
-                activeKey: white(0.95),
+                activeKey: white(0.88),
                 keyShadow: UIColor.clear,
                 keyBorder: theme.keyBorder.uiColor,
                 popupFill: theme.popup.uiColor,
                 panelBackground: UIColor.clear,
-                stripFill: theme.panel.uiColor,
+                stripFill: UIColor.clear,
                 searchField: theme.panel.uiColor,
-                separator: theme.text.uiColor.withAlphaComponent(0.18))
+                separator: theme.text.uiColor.withAlphaComponent(0.20))
         }
     }
 

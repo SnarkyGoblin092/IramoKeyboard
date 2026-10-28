@@ -179,7 +179,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
 
-    private let searchGlass = FlatPanel(background: Theme.searchField, followsKeyRoundness: true)
+    private let searchGlass = FlatPanel(background: Theme.searchField, followsKeyRoundness: true, keyLike: true)
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -187,10 +187,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
 
-    private let tabGlass = FlatPanel(background: Theme.stripFill, followsKeyRoundness: true)
+    private let tabGlass = FlatPanel(background: EmojiPanel.tabBarFill, followsKeyRoundness: true, keyLike: true)
     private let tabSelection = FlatPanel(background: EmojiPanel.selectionFill, allowGlass: false, followsKeyRoundness: true)
-    private let abcPanel = FlatPanel(background: EmojiPanel.buttonFill, followsKeyRoundness: true)
-    private let deletePanel = FlatPanel(background: EmojiPanel.buttonFill, followsKeyRoundness: true)
+    private let abcPanel = FlatPanel(background: EmojiPanel.buttonFill, allowGlass: true, followsKeyRoundness: true, keyLike: true)
+    private let deletePanel = FlatPanel(background: EmojiPanel.buttonFill, allowGlass: true, followsKeyRoundness: true, keyLike: true)
     private let abcButton = HitButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [HitButton] = []
@@ -207,6 +207,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     /// Fill behind the ABC and delete buttons: a function-key look in the themed keyboards, nothing in native.
+    /// The tab container: key-coloured with the key outline in themed keyboards, flat in native.
+    private static var tabBarFill: UIColor {
+        return Theme.kind == .native ? UIColor.clear : Theme.letterKey
+    }
+
     private static var buttonFill: UIColor {
         return Theme.kind == .native ? UIColor.clear : Theme.functionKey
     }
@@ -435,7 +440,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let total = bounds.height
         let showTitle = total >= 190
         if total >= 250 {
-            searchHeight = 36; titleHeight = 18; barHeight = 44
+            searchHeight = 34; titleHeight = 18; barHeight = 44
         } else if total >= 190 {
             searchHeight = 32; titleHeight = 16; barHeight = 40
         } else {
@@ -443,14 +448,16 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
         titleLabel.isHidden = !showTitle
 
-        searchGlass.frame = CGRect(x: 10, y: 4, width: width - 20, height: searchHeight)
+        // Margins: never touches the top edge or the sides of the keyboard.
+        let searchTop: CGFloat = total >= 250 ? 10 : (total >= 190 ? 8 : 6)
+        searchGlass.frame = CGRect(x: 12, y: searchTop, width: width - 24, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         searchIcon.frame = CGRect(x: 14, y: (searchHeight - 18) / 2, width: 18, height: 18)
         searchLabel.frame = CGRect(x: 40, y: 0, width: searchGlass.bounds.width - 56, height: searchHeight)
 
-        titleLabel.frame = CGRect(x: 14, y: searchGlass.frame.maxY + (showTitle ? 2 : 0), width: width - 28, height: titleHeight)
+        titleLabel.frame = CGRect(x: 14, y: searchGlass.frame.maxY + (showTitle ? 6 : 0), width: width - 28, height: titleHeight)
 
-        let gridTop = showTitle ? titleLabel.frame.maxY : searchGlass.frame.maxY + 2
+        let gridTop = showTitle ? titleLabel.frame.maxY : searchGlass.frame.maxY + 6
         let gridHeight = max(0, bounds.height - gridTop - barHeight)
         let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
         if collectionView.frame != newGridFrame {

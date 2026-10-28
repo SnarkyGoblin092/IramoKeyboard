@@ -218,13 +218,13 @@ enum ThemeCatalog {
             function: alpha(functionColor, min(1, opacity * 0.85) * glassFactor),
             keyPressed: alpha(keyColor, min(1, opacity * 1.5 + 0.1)),
             functionPressed: alpha(functionColor, min(1, opacity * 1.3 + 0.1)),
-            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.18) : ThemeRGBA(1, 1, 1, 0.55),
+            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.28) : ThemeRGBA(1, 1, 1, 0.70),
             text: textColor,
             secondaryText: alpha(textColor, 0.6),
             accent: ThemeRGBA(hex: 0x0A84FF),
             onAccent: ThemeRGBA(1, 1, 1, 1),
             popup: alpha(dark ? ThemeRGBA(0.12, 0.12, 0.16, 1) : ThemeRGBA(1, 1, 1, 1), 0.96),
-            panel: dark ? ThemeRGBA(1, 1, 1, 0.14) : ThemeRGBA(1, 1, 1, 0.42),
+            panel: dark ? ThemeRGBA(1, 1, 1, 0.16) : ThemeRGBA(0, 0, 0, 0.08),
             gradientStops: [top, bottom],
             gradientAngle: 90
         )
@@ -235,7 +235,7 @@ enum ThemeCatalog {
     private static let clear = ThemeRGBA(0, 0, 0, 0)
     private static let white = ThemeRGBA(1, 1, 1, 1)
 
-    /// Builds a gradient theme with legible translucent keys.
+    /// Builds a tinted translucent theme: keys/borders/panels match the Transparent theme; only the colours (a soft gradient wash) differ.
     /// `dark` themes use light text on dark glassy keys; light themes use dark text on white-ish keys.
     private static func gradient(id: String,
                                  name: String,
@@ -245,8 +245,8 @@ enum ThemeCatalog {
                                  accent: UInt32,
                                  onAccent: UInt32 = 0xFFFFFF) -> ThemeDefinition {
         let text = dark ? ThemeRGBA(1, 1, 1, 1) : ThemeRGBA(0.08, 0.08, 0.10, 1)
-        let key = dark ? ThemeRGBA(1, 1, 1, 0.20) : ThemeRGBA(1, 1, 1, 0.62)
-        let function = dark ? ThemeRGBA(0, 0, 0, 0.28) : ThemeRGBA(1, 1, 1, 0.34)
+        let key = dark ? ThemeRGBA(1, 1, 1, 0.16) : ThemeRGBA(1, 1, 1, 0.34)
+        let function = dark ? ThemeRGBA(0, 0, 0, 0.28) : ThemeRGBA(0, 0, 0, 0.12)
         return ThemeDefinition(
             id: id,
             name: name,
@@ -254,15 +254,15 @@ enum ThemeCatalog {
             isDark: dark,
             key: key,
             function: function,
-            keyPressed: dark ? ThemeRGBA(1, 1, 1, 0.38) : ThemeRGBA(1, 1, 1, 0.90),
-            functionPressed: dark ? ThemeRGBA(1, 1, 1, 0.30) : ThemeRGBA(1, 1, 1, 0.62),
-            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.18) : ThemeRGBA(1, 1, 1, 0.55),
+            keyPressed: dark ? ThemeRGBA(1, 1, 1, 0.32) : ThemeRGBA(1, 1, 1, 0.62),
+            functionPressed: dark ? ThemeRGBA(1, 1, 1, 0.24) : ThemeRGBA(1, 1, 1, 0.50),
+            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.28) : ThemeRGBA(1, 1, 1, 0.70),
             text: text,
             secondaryText: dark ? ThemeRGBA(1, 1, 1, 0.65) : ThemeRGBA(0.08, 0.08, 0.10, 0.55),
             accent: ThemeRGBA(hex: accent),
             onAccent: ThemeRGBA(hex: onAccent),
             popup: dark ? ThemeRGBA(0.12, 0.12, 0.16, 0.96) : ThemeRGBA(1, 1, 1, 0.97),
-            panel: dark ? ThemeRGBA(1, 1, 1, 0.14) : ThemeRGBA(1, 1, 1, 0.42),
+            panel: dark ? ThemeRGBA(1, 1, 1, 0.16) : ThemeRGBA(0, 0, 0, 0.08),
             gradientStops: stops.map { ThemeRGBA(hex: $0) },
             gradientAngle: angle
         )
