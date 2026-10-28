@@ -1,0 +1,63 @@
+# XcodeGen project definition. CI runs `xcodegen generate` to create HunKeys.xcodeproj,
+# so there is no .xcodeproj file in the repository to maintain by hand.
+name: HunKeys
+
+options:
+  bundleIdPrefix: com.hunkeys.k9x4
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"            # Swift 5 language mode (no strict-concurrency errors)
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+
+targets:
+  HunKeys:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - target: HunKeysKeyboard
+    info:
+      path: Config/App-Info.plist
+      properties:
+        CFBundleDisplayName: HunKeys
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hunkeys.k9x4.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  HunKeysKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Keyboard
+    info:
+      path: Config/Keyboard-Info.plist
+      properties:
+        CFBundleDisplayName: HunKeys
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true      # needed for haptics (vibration)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hunkeys.k9x4.app.keyboard
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: true
