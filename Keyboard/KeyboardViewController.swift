@@ -25,6 +25,10 @@ final class KeyboardViewController: UIInputViewController {
     private var builtSignature = ""
 
     private var stores: [Language: WordStore] = [:]
+    private var loadingStores: Set<String> = []
+    private var secondaryStoresAllowed = true
+    private let maxSecondaryStores = 3
+    private let secondaryWordLimit = 12000
     private let decoder = SwipeDecoder()
 
     private var lastSpaceTime = Date.distantPast
@@ -70,7 +74,7 @@ final class KeyboardViewController: UIInputViewController {
         language = Language(rawValue: settings.languageCode) ?? .english
 
         buildInterface()
-        loadStore(for: language)
+        ensureStores()
         EmojiStore.shared.loadIfNeeded()
         Haptics.shared.prepare()
     }
@@ -105,8 +109,15 @@ final class KeyboardViewController: UIInputViewController {
         applyHeight()
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        for store in stores.values { store.saveNow() }
+    }
+
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
+        secondaryStoresAllowed = false
+        for (key, store) in stores where key != language { store.saveNow() }
         stores = stores.filter { $0.key == language }
     }
 
@@ -256,16 +267,42 @@ final class KeyboardViewController: UIInputViewController {
         updateReturnProminence()
     }
 
-    private func loadStore(for target: Language) {
-        if stores[target] != nil { return }
-        let store = WordStore(language: target)
+    /// Loads a dictionary in the background. The active language is loaded in full (swipe index included);
+    /// the other enabled languages only keep their most frequent words, to save memory.
+    private func loadStore(for target: Language, full: Bool) {
+        let tag = "\(target.rawValue)-\(full)"
+        if loadingStores.contains(tag) { return }
+        if let existing = stores[target], existing.isLoaded, existing.isFull || !full { return }
+
+        let store = stores[target] ?? WordStore(language: target)
         stores[target] = store
+        loadingStores.insert(tag)
+        let limit: Int? = full ? nil : secondaryWordLimit
         DispatchQueue.global(qos: .userInitiated).async {
-            let parsed = WordStore.parse(language: target)
+            let parsed = WordStore.parse(language: target, limit: limit, buildEdges: full)
             DispatchQueue.main.async { [weak self] in
-                store.apply(parsed)
+                if parsed.isFull || !store.isFull { store.apply(parsed) }
+                self?.loadingStores.remove(tag)
                 self?.scheduleRefresh()
             }
+        }
+    }
+
+    /// Keeps exactly the dictionaries that are needed: the active language, plus a few other enabled ones
+    /// so words from the language you are really writing in can be suggested.
+    private func ensureStores() {
+        loadStore(for: language, full: true)
+        var wanted: Set<Language> = [language]
+        if secondaryStoresAllowed {
+            let others = enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores)
+            for other in others {
+                wanted.insert(other)
+                loadStore(for: other, full: false)
+            }
+        }
+        for key in Array(stores.keys) where !wanted.contains(key) {
+            stores[key]?.saveNow()
+            stores[key] = nil
         }
     }
 
@@ -280,7 +317,7 @@ final class KeyboardViewController: UIInputViewController {
         if !enabled.contains(language), let first = enabled.first {
             language = first
             settings.languageCode = first.rawValue
-            loadStore(for: first)
+            ensureStores()
         }
     }
 
@@ -299,9 +336,7 @@ final class KeyboardViewController: UIInputViewController {
         settings.languageCode = target.rawValue
         page = .letters
         clearSwipeState()
-        loadStore(for: target)
-        // Words of the other languages are not needed any more.
-        stores = stores.filter { $0.key == target }
+        ensureStores()
         returnTitle = ""
         updateReturnTitle()
         reloadKeyboardLayout()
@@ -544,11 +579,31 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func learnWord(endingAt before: String) {
-        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
-        let prefix = currentPrefix(in: before)
-        if prefix.count >= 3 {
-            stores[language]?.learn(prefix)
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
+        var prefix = TextFolding.normalizeApostrophes(currentPrefix(in: before))
+        while prefix.hasSuffix("'") { prefix.removeLast() }
+        guard !prefix.isEmpty else { return }
+        let key = TextFolding.key(prefix)
+        if prefix.count >= 3, key.count >= 2 {
+            // Only unknown words are learned; known words in any enabled language are left alone.
+            let known = stores.values.contains { $0.isLoaded && $0.contains(key: key) }
+            if !known { stores[language]?.learn(prefix.lowercased()) }
         }
+        recordBigram(contextBefore: before, next: prefix)
+    }
+
+    /// Remembers which word followed which, for next-word suggestions.
+    private func recordBigram(contextBefore: String, next: String) {
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
+        var text = contextBefore
+        let typed = currentPrefix(in: text)
+        if !typed.isEmpty, text.hasSuffix(typed) { text = String(text.dropLast(typed.count)) }
+        guard let last = text.last, last == " " else { return }
+        let words = Predictor.lastWords(in: text, count: 1)
+        guard let previous = words.first, !previous.isEmpty else { return }
+        let following = TextFolding.normalizeApostrophes(next).lowercased()
+        guard !following.isEmpty else { return }
+        stores[language]?.learnBigram(previous: previous, next: following)
     }
 
     private func shortcutExpansion(in before: String) -> String? {
@@ -651,9 +706,23 @@ final class KeyboardViewController: UIInputViewController {
             emojis = EmojiStore.shared.suggestions(for: emojiWord, language: language, limit: 1)
         }
 
+        ensureStores()
         var words: [String] = []
-        if Prefs.suggestions && !prefix.isEmpty, let store = stores[language], store.isLoaded {
-            words = store.completions(for: prefix, limit: 4).map { matchCase(of: prefix, for: $0) }
+        if Prefs.suggestions && stores[language]?.isLoaded == true {
+            if !prefix.isEmpty {
+                words = Predictor.suggest(typed: prefix,
+                                          before: before,
+                                          active: language,
+                                          enabled: enabledLanguages,
+                                          stores: stores,
+                                          limit: 4).map { matchCase(of: prefix, for: $0) }
+            } else if before.hasSuffix(" ") {
+                words = Predictor.nextWords(before: before,
+                                            active: language,
+                                            enabled: enabledLanguages,
+                                            stores: stores,
+                                            limit: 3).map { applyShift(to: $0) }
+            }
         }
 
         var result: [Suggestion] = []
@@ -667,6 +736,10 @@ final class KeyboardViewController: UIInputViewController {
             for word in words where word != prefix && result.count < wordSlots {
                 result.append(Suggestion(text: word, kind: .word))
             }
+        } else {
+            for word in words where result.count < wordSlots {
+                result.append(Suggestion(text: word, kind: .word))
+            }
         }
         for emoji in emojis {
             result.append(Suggestion(text: emoji, kind: .emoji))
@@ -677,6 +750,7 @@ final class KeyboardViewController: UIInputViewController {
     private func replacePrefix(with replacement: String) {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         let prefix = currentPrefix(in: before)
+        recordBigram(contextBefore: before, next: replacement)
         for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
         textDocumentProxy.insertText(replacement + " ")
         lastSpaceTime = Date()
@@ -696,6 +770,7 @@ final class KeyboardViewController: UIInputViewController {
 
         let word = applyShift(to: first)
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        recordBigram(contextBefore: before, next: first)
 
         var leadingSpace = ""
         if let last = before.last, !last.isWhitespace, !"([{\"\u{201C}\u{2018}'".contains(last) {

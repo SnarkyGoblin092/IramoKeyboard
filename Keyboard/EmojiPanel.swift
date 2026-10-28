@@ -179,7 +179,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
 
-    private let searchGlass = FlatPanel(background: Theme.searchField, cornerRadius: 10)
+    private let searchGlass = FlatPanel(background: Theme.searchField, followsKeyRoundness: true)
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -187,7 +187,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
 
-    private let tabGlass = FlatPanel(background: Theme.stripFill)
+    private let tabGlass = FlatPanel(background: Theme.stripFill, followsKeyRoundness: true)
+    private let tabSelection = FlatPanel(background: EmojiPanel.selectionFill, allowGlass: false, followsKeyRoundness: true)
+    private let abcPanel = FlatPanel(background: EmojiPanel.buttonFill, followsKeyRoundness: true)
+    private let deletePanel = FlatPanel(background: EmojiPanel.buttonFill, followsKeyRoundness: true)
     private let abcButton = HitButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [HitButton] = []
@@ -197,13 +200,24 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var isProgrammaticScroll = false
     private var variantPopup: UIView?
 
+    /// Fill behind the selected category tab (the native theme keeps a flat bar and only changes the icon colour).
+    private static var selectionFill: UIColor {
+        if Theme.kind == .native { return UIColor.clear }
+        return Theme.accent.withAlphaComponent(0.28)
+    }
+
+    /// Fill behind the ABC and delete buttons: a function-key look in the themed keyboards, nothing in native.
+    private static var buttonFill: UIColor {
+        return Theme.kind == .native ? UIColor.clear : Theme.functionKey
+    }
+
     private let searchHeight: CGFloat = 36
     private let titleHeight: CGFloat = 18
     private let barHeight: CGFloat = 44
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = Theme.panelBackground   // opaque, so nothing shows through from behind
+        backgroundColor = UIColor.clear   // the keyboard's own backdrop (system / gradient / glass) shows; the key stage is hidden while this is open
 
         // Search field
         addSubview(searchGlass)
@@ -246,7 +260,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         addSubview(emptyLabel)
 
         // Bottom bar
+        addSubview(abcPanel)
+        addSubview(deletePanel)
         addSubview(tabGlass)
+        tabSelection.isUserInteractionEnabled = false
+        tabGlass.contentView.addSubview(tabSelection)
         abcButton.setTitle("ABC", for: .normal)
         abcButton.setTitleColor(Theme.text, for: .normal)
         abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
@@ -372,6 +390,24 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if currentSection < sections.count {
             titleLabel.text = sections[currentSection].title.uppercased()
         }
+        positionTabSelection(animated: true)
+    }
+
+    private func positionTabSelection(animated: Bool) {
+        guard currentSection < tabButtons.count, tabGlass.bounds.height > 0 else {
+            tabSelection.isHidden = true
+            return
+        }
+        tabSelection.isHidden = (Theme.kind == .native)
+        let target = tabButtons[currentSection].frame.insetBy(dx: 2, dy: 2)
+        tabGlass.contentView.sendSubviewToBack(tabSelection)
+        if animated && tabSelection.frame != .zero {
+            UIView.animate(withDuration: 0.16, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.tabSelection.frame = target
+            }
+        } else {
+            tabSelection.frame = target
+        }
     }
 
     private func scrollToSection(_ section: Int, animated: Bool) {
@@ -415,8 +451,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let barTop = bounds.height - barHeight
         abcButton.frame = CGRect(x: 0, y: barTop, width: 64, height: barHeight)
         backspaceButton.frame = CGRect(x: width - 64, y: barTop, width: 64, height: barHeight)
+        abcPanel.frame = CGRect(x: 8, y: barTop + 4, width: 48, height: barHeight - 8)
+        deletePanel.frame = CGRect(x: width - 56, y: barTop + 4, width: 48, height: barHeight - 8)
         tabGlass.frame = CGRect(x: 64, y: barTop + 4, width: max(0, width - 128), height: barHeight - 8)
         layoutTabs()
+        positionTabSelection(animated: false)
         applyInitialScrollIfPossible()
     }
 
@@ -491,7 +530,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         var y = cellFrame.minY - height - 2
         if y < 0 { y = cellFrame.maxY + 2 }
 
-        let container = FlatPanel(background: Theme.popupFill, cornerRadius: 10, allowGlass: false)
+        let container = FlatPanel(background: Theme.popupFill, cornerRadius: 10, allowGlass: true, followsKeyRoundness: true)
         container.layer.shadowColor = UIColor.black.cgColor
         container.layer.shadowOpacity = 0.3
         container.layer.shadowRadius = 3

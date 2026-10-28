@@ -39,6 +39,8 @@ final class KeyboardView: UIView {
 
     private final class TouchState {
         var key: KeyView?
+        /// The key the finger first landed on (kept even if the finger later slides away).
+        var startKey: KeyView?
         let startPoint: CGPoint
         var path: [CGPoint]
         var startedOnLetter = false
@@ -365,6 +367,7 @@ final class KeyboardView: UIView {
 
     private func press(_ state: TouchState, key: KeyView) {
         state.key = key
+        state.startKey = key
         key.isPressed = true
         Haptics.shared.keyPress()
         showPreview(for: key)
@@ -383,8 +386,11 @@ final class KeyboardView: UIView {
                 startHoldTimer(state, delay: max(0.2, Prefs.holdDelay))
             }
         default:
-            if !key.spec.alternates.isEmpty || key.spec.action == .emoji {
+            if !key.spec.alternates.isEmpty {
                 startHoldTimer(state, delay: Prefs.holdDelay)
+            } else if key.spec.action == .emoji {
+                // Holding emoji hands over to the next keyboard; a slow ordinary tap must not do that.
+                startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
             }
         }
     }
@@ -413,8 +419,10 @@ final class KeyboardView: UIView {
         state.key = newKey
         newKey.isPressed = true
         showPreview(for: newKey)
-        if !newKey.spec.alternates.isEmpty || newKey.spec.action == .emoji {
+        if !newKey.spec.alternates.isEmpty {
             startHoldTimer(state, delay: Prefs.holdDelay)
+        } else if newKey.spec.action == .emoji {
+            startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
         }
     }
 
@@ -464,6 +472,17 @@ final class KeyboardView: UIView {
         }
     }
 
+    /// How far the finger travelled in total (points).
+    private func travel(of state: TouchState) -> CGFloat {
+        var total: CGFloat = 0
+        for index in 1..<max(1, state.path.count) {
+            let a = state.path[index - 1]
+            let b = state.path[index]
+            total += hypot(b.x - a.x, b.y - a.y)
+        }
+        return total
+    }
+
     private func finish(_ state: TouchState, cancelled: Bool) {
         state.holdTimer?.invalidate()
         state.repeatTimer?.invalidate()
@@ -472,11 +491,24 @@ final class KeyboardView: UIView {
 
         if state.isCursorMode {
             setCursorAppearance(false)
+            // Held past the hold delay but never slid: it was an ordinary (slow) tap on the space bar.
+            if !state.cursorMoved, !cancelled, let key = state.key, key.spec.action == .space {
+                delegate?.keyboardView(self, didTap: .space)
+            }
             return
         }
         if state.isSwiping {
             fadeTrail()
-            if !cancelled { delegate?.keyboardView(self, didFinishSwipe: state.path) }
+            if cancelled { return }
+            // A short slide is a sloppy tap, not a swipe: type the key the finger went down on.
+            let keyWidth = max(letterKeySize().width, 1)
+            let end = state.path.last ?? state.startPoint
+            let displacement = hypot(end.x - state.startPoint.x, end.y - state.startPoint.y)
+            if travel(of: state) < keyWidth * 2.2 && displacement < keyWidth * 1.4, let key = state.startKey {
+                delegate?.keyboardView(self, didTap: key.spec.action)
+            } else {
+                delegate?.keyboardView(self, didFinishSwipe: state.path)
+            }
             return
         }
         if state.popupActive {
@@ -487,7 +519,14 @@ final class KeyboardView: UIView {
             return
         }
         if state.isWordDeleting { return }
-        guard !cancelled, !state.handledByHold, let key = state.key else { return }
+        guard !state.handledByHold, let key = state.key else { return }
+
+        // The system cancels touches now and then (edge gestures, notifications, app switcher hints).
+        // A press that has not really moved is still a tap, so it must not be lost.
+        if cancelled {
+            if travel(of: state) > 14 { return }
+            if key.spec.action == .emoji { return }
+        }
         if key.spec.action != .backspace {          // backspace already fired on touch-down
             delegate?.keyboardView(self, didTap: key.spec.action)
         }
@@ -570,10 +609,15 @@ final class KeyboardView: UIView {
         guard Prefs.swipe, page == .letters, state.startedOnLetter, states.count == 1 else {
             return false
         }
+        // A swipe needs a clear, deliberate slide: well over one key width away from where the finger
+        // went down, and onto a different key. Anything smaller stays a tap (fast typists drift a lot).
+        let keyWidth = max(letterKeySize().width, 1)
         let dx = point.x - state.startPoint.x
         let dy = point.y - state.startPoint.y
-        let threshold = max(24, bounds.width / 10 * 0.9)
-        return dx * dx + dy * dy > threshold * threshold
+        let threshold = max(40, keyWidth * 1.4)
+        guard dx * dx + dy * dy > threshold * threshold else { return false }
+        if let index = keyIndex(at: point), keyViews[index.row][index.col] === state.startKey { return false }
+        return true
     }
 
     private func beginSwipe(_ state: TouchState) {

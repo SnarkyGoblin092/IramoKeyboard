@@ -187,7 +187,11 @@ final class KeyView: UIView {
             }
         }
         label.frame = bounds.insetBy(dx: 2, dy: 0)
-        hintLabel.frame = CGRect(x: bounds.width - 18, y: 3, width: 14, height: 12)
+        // The hint sits inside the rounded corner: pulled in from the edge by an amount that grows with the
+        // corner radius (and a bit closer to the main character), so round keys never clip it.
+        let hintRight = min(bounds.width - 3 - radius * 0.4, bounds.midX + 16)
+        hintLabel.font = UIFont.systemFont(ofSize: radius > 12 ? 9 : 10, weight: .regular)
+        hintLabel.frame = CGRect(x: hintRight - 14, y: 2 + radius * 0.12, width: 14, height: 11)
         let side: CGFloat = 26
         iconView.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
     }

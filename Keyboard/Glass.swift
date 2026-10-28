@@ -106,16 +106,19 @@ enum GlassSupport {
     }
 }
 
-/// A container with a `contentView`, used for the suggestion strip, the emoji search field and the
-/// tab bar. Flat (a plain coloured rectangle) in most themes; a Liquid Glass capsule in the Liquid Glass theme.
+/// A container with a `contentView`, used for the suggestion strip, the emoji search field, the tab bar
+/// and pop-ups. Flat (a plain coloured rectangle) in most themes; a Liquid Glass shape in the Liquid Glass theme.
+/// With `followsKeyRoundness` the corners track the user's key-roundness setting, so panels match the keys.
 final class FlatPanel: UIView {
     private let effectView: UIVisualEffectView?
-    private let radius: CGFloat   // kept for debugging; flat panels round their own layer
+    private let fixedRadius: CGFloat
+    private let followsKeyRoundness: Bool
 
     var contentView: UIView { return effectView?.contentView ?? self }
 
-    init(background: UIColor? = nil, cornerRadius: CGFloat = 0, allowGlass: Bool = true) {
-        self.radius = cornerRadius
+    init(background: UIColor? = nil, cornerRadius: CGFloat = 0, allowGlass: Bool = true, followsKeyRoundness: Bool = false) {
+        self.fixedRadius = cornerRadius
+        self.followsKeyRoundness = followsKeyRoundness
         if allowGlass && Theme.usesRealGlass {
             effectView = GlassSupport.makeEffectView(clear: false)
         } else {
@@ -126,10 +129,8 @@ final class FlatPanel: UIView {
             addSubview(effectView)
         } else {
             backgroundColor = background ?? UIColor.clear
-            if cornerRadius > 0 {
-                layer.cornerRadius = cornerRadius
-                layer.cornerCurve = .continuous
-            }
+            layer.cornerCurve = .continuous
+            layer.cornerRadius = cornerRadius
         }
     }
 
@@ -139,6 +140,14 @@ final class FlatPanel: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        effectView?.frame = bounds
+        let radius = followsKeyRoundness ? Theme.keyCornerRadius(for: bounds.size) : fixedRadius
+        if let effectView = effectView {
+            effectView.frame = bounds
+            if followsKeyRoundness {
+                GlassSupport.applyShape(effectView, radius: radius, size: bounds.size)
+            }
+        } else {
+            layer.cornerRadius = radius
+        }
     }
 }

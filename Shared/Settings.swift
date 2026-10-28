@@ -30,6 +30,7 @@ enum SettingKey {
     static let recentEmoji = "hunkeys.recentEmoji"
     static let shortcuts = "hunkeys.shortcuts"
     static let learnedPrefix = "hunkeys.learned."
+    static let bigramPrefix = "hunkeys.bigrams."
     // Written by the keyboard so the app can show its status
     static let lastSeen = "hunkeys.status.lastSeen"
     static let fullAccess = "hunkeys.status.fullAccess"
@@ -315,9 +316,19 @@ final class Settings {
         put(words, SettingKey.learnedPrefix + languageCode)
     }
 
+    /// Word pairs ("thank you") the user typed, as "first second" -> count, used for next-word suggestions.
+    func learnedBigrams(for languageCode: String) -> [String: Int] {
+        return value(SettingKey.bigramPrefix + languageCode) as? [String: Int] ?? [:]
+    }
+
+    func setLearnedBigrams(_ pairs: [String: Int], for languageCode: String) {
+        put(pairs, SettingKey.bigramPrefix + languageCode)
+    }
+
     func clearLearnedWords() {
         for language in Language.allCases {
             put(nil, SettingKey.learnedPrefix + language.rawValue)
+            put(nil, SettingKey.bigramPrefix + language.rawValue)
         }
     }
 

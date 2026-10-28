@@ -342,6 +342,34 @@ EN_BLOCK = {"ll", "ve", "re", "didn", "doesn", "isn", "wasn", "weren", "hasn", "
             "hadn", "couldn", "wouldn", "shouldn", "aren", "ain", "mustn", "needn"}
 
 
+# Words with an apostrophe that must always be offered, as a fraction of the most frequent word's count
+# (so they rank next to ordinary common words even when the downloaded list tokenises them differently).
+CONTRACTIONS = {
+    "en": {
+        "i'm": .50, "don't": .55, "it's": .60, "that's": .35, "i'll": .20, "i've": .15, "i'd": .10,
+        "we're": .12, "you're": .25, "they're": .08, "can't": .25, "won't": .10, "didn't": .25,
+        "doesn't": .12, "isn't": .15, "aren't": .05, "wasn't": .12, "weren't": .02, "couldn't": .08,
+        "shouldn't": .04, "wouldn't": .08, "haven't": .05, "hasn't": .03, "hadn't": .03, "let's": .12,
+        "there's": .08, "what's": .12, "he's": .10, "she's": .08, "we'll": .05, "we've": .05,
+        "you'll": .06, "you've": .06, "they'll": .03, "they've": .03, "who's": .03, "here's": .04,
+        "how's": .02, "where's": .02, "ain't": .03, "y'all": .02, "o'clock": .02, "ma'am": .01,
+        "mustn't": .01, "needn't": .005, "that'll": .01, "it'll": .03, "he'll": .03, "she'll": .02,
+        "he'd": .03, "she'd": .02, "we'd": .02, "you'd": .03, "they'd": .01, "when's": .005,
+    },
+    "fr": {
+        "c'est": .40, "j'ai": .30, "qu'il": .20, "qu'elle": .10, "qu'on": .10, "qu'un": .08, "qu'une": .05,
+        "n'est": .10, "n'a": .08, "n'y": .03, "s'il": .05, "s'est": .12, "d'accord": .08, "aujourd'hui": .15,
+        "jusqu'à": .05, "jusqu'au": .03, "c'était": .10, "j'étais": .03, "j'en": .03, "l'on": .02,
+        "m'a": .03, "t'a": .02, "n'était": .03, "qu'est": .04, "quelqu'un": .05, "presqu'île": .002,
+    },
+    "it": {
+        "c'è": .30, "un'altra": .05, "po'": .02, "quest'anno": .02, "dov'è": .05, "cos'è": .06,
+        "com'è": .04, "all'inizio": .02, "dell'altro": .02, "l'altro": .05, "un'ora": .02, "nient'altro": .01,
+        "sant'anna": .002, "d'accordo": .03, "quand'è": .01, "tutt'altro": .01,
+    },
+}
+
+
 def word_pattern(lang: str):
     alpha = ALPHABETS[lang]
     if lang in APOSTROPHE:
@@ -359,7 +387,7 @@ def build_words(path: Path, lang: str, limit: int = 40000):
         parts = line.strip().split()
         if len(parts) != 2 or not parts[1].isdigit():
             continue
-        word, count = parts[0].lower().replace("\u2019", "'"), int(parts[1])
+        word, count = parts[0].lower().replace("\u2019", "'").replace("\u02bc", "'"), int(parts[1])
         if not word_re.match(word) or word in blocked:
             continue
         if len(word) == 1 and word not in singles:
@@ -369,8 +397,13 @@ def build_words(path: Path, lang: str, limit: int = 40000):
         if re.search(r"(.)\1\1", word):
             continue
         counts[word] = counts.get(word, 0) + count
+    if counts:
+        reference = max(counts.values())
+        for word, weight in CONTRACTIONS.get(lang, {}).items():
+            counts[word] = max(counts.get(word, 0), int(weight * reference))
     ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
-    return [(word, fold(word), count) for word, count in ranked]
+    # The folded column has no apostrophes, so "were" can find "we're" (the keyboard matches on it).
+    return [(word, fold(word).replace("'", ""), count) for word, count in ranked]
 
 
 # ----------------------------------------------------------------------------
@@ -404,7 +437,8 @@ def build_language(lang: str, groups) -> None:
         word_file = fetch(f"{lang}_50k.txt", optional=not required)
         if word_file is None:
             raise RuntimeError("word list not available")
-        words = build_words(word_file, lang, 40000 if required else 30000)
+        limit = 50000 if lang in {"hu", "tr"} else (40000 if required else 30000)   # suffix-rich languages need more forms
+        words = build_words(word_file, lang, limit)
         if not words and not required:
             raise RuntimeError("word list was empty after filtering")
         print(f"  {len(words)} words")
