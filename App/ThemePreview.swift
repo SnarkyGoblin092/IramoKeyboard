@@ -5,6 +5,7 @@ struct ThemePreview: View {
     let theme: ThemeDefinition
     let accent: AccentChoice
     var showsStrip = true
+    @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
 
     @Environment(\.colorScheme) private var systemScheme
 
@@ -101,7 +102,7 @@ struct ThemePreview: View {
             let rowCount: CGFloat = 4
             let keyHeight = (height - stripHeight - gap * (rowCount + 2) - (showsStrip ? gap : 0)) / rowCount
             let keyWidth = (width - gap * 11) / 10
-            let radius = max(2.5, keyWidth * 0.2)
+            let radius = max(0, roundness * min(keyWidth, keyHeight) / 2)
 
             ZStack {
                 backdrop

@@ -148,3 +148,43 @@ struct InfoRow: View {
         }
     }
 }
+
+
+/// Key-roundness slider with a live preview of a few sample keys.
+struct RoundnessSlider: View {
+    @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var stored = SettingDefault.keyRoundness
+    @State private var local: Double
+
+    init() {
+        let current = SharedStore.defaults.object(forKey: SettingKey.keyRoundness) as? Double ?? SettingDefault.keyRoundness
+        _local = State(initialValue: min(max(current, 0), 1))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Key roundness")
+                Spacer()
+                Text("\(Int((local * 100).rounded()))%")
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+            HStack(spacing: 6) {
+                ForEach(["Q", "A", "Z", "\u{23CE}"], id: \.self) { label in
+                    RoundedRectangle(cornerRadius: local * 22, style: .continuous)
+                        .fill(Color(.systemGray4))
+                        .frame(height: 44)
+                        .overlay(Text(label).font(.system(size: 20)).foregroundColor(.primary))
+                }
+            }
+            Slider(value: $local, in: 0...1, step: 0.02) { editing in
+                if !editing { stored = local }
+            }
+            .onChange(of: local) { _ in Feedback.tick() }
+        }
+        .padding(.vertical, 2)
+        .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
+            local = SettingDefault.keyRoundness
+        }
+    }
+}

@@ -20,6 +20,12 @@ final class Prefs {
     static var keyHints = SettingDefault.keyHints
     static var heightScale = SettingDefault.keyboardHeight
 
+    /// 0 = square key corners ... 1 = fully round. Read from the shared defaults directly so this
+    /// file works whichever way the Settings class exposes it.
+    static let keyRoundnessKey = "hunkeys.keyRoundness"
+    static let keyRoundnessDefault = 0.26
+    static var keyRoundness = keyRoundnessDefault
+
     /// Re-reads everything from the shared settings.
     static func refresh() {
         let s = Settings.shared
@@ -37,5 +43,10 @@ final class Prefs {
         numberRow = s.numberRow
         keyHints = s.keyHints
         heightScale = s.keyboardHeightScale
+        if let stored = SharedStore.defaults.object(forKey: keyRoundnessKey) as? Double {
+            keyRoundness = min(max(stored, 0), 1)
+        } else {
+            keyRoundness = keyRoundnessDefault
+        }
     }
 }

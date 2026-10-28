@@ -68,13 +68,14 @@ enum Theme {
     /// Keys are blurred / see-through rather than solid.
     static var wantsClearBackdrop: Bool { return kind != .native }
 
-    /// Whether the keyboard draws its own gradient behind everything.
+    /// Whether the keyboard draws its own gradient behind everything. Only the gradient themes do:
+    /// Liquid Glass must stay see-through, so nothing is painted behind it.
     static var drawsBackdrop: Bool {
-        return (isGradient || isLiquidGlass) && !definition.gradientStops.isEmpty
+        return isGradient && !definition.gradientStops.isEmpty
     }
 
-    /// Opacity of that gradient: solid for gradient themes, a soft wash behind Liquid Glass.
-    static var backdropOpacity: CGFloat { return isGradient ? 1.0 : 0.40 }
+    /// Opacity of that gradient.
+    static var backdropOpacity: CGFloat { return 1.0 }
 
     /// Dark/light forced by the theme (gradient themes), or `.unspecified` to follow the system.
     static var interfaceStyle: UIUserInterfaceStyle {
@@ -82,13 +83,12 @@ enum Theme {
         return dark ? .dark : .light
     }
 
-    static var keyCornerRadius: CGFloat {
-        switch kind {
-        case .native: return 5.5
-        case .transparent: return 7
-        case .gradient: return 8
-        case .liquidGlass: return 10
-        }
+    /// Corner radius of a key of this size: the user's roundness (0...1) times half the shorter side.
+    /// 0.26 gives about the native 5.5pt on a phone-sized key; 1 is a full capsule.
+    static func keyCornerRadius(for size: CGSize) -> CGFloat {
+        let half = min(size.width, size.height) / 2
+        guard half > 0 else { return 0 }
+        return min(half, CGFloat(Prefs.keyRoundness) * half)
     }
 
     /// Native keys carry the 1pt shadow line under them.

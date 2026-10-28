@@ -8,7 +8,7 @@ protocol EmojiPanelDelegate: AnyObject {
 }
 
 /// A button that fires once on touch-down and then repeats while held (used for backspace).
-final class RepeatingButton: UIButton {
+final class RepeatingButton: HitButton {
     var onFire: (() -> Void)?
     private var holdTimer: Timer?
     private var repeatTimer: Timer?
@@ -180,7 +180,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var collectionView: UICollectionView!
 
     private let searchGlass = FlatPanel(background: Theme.searchField, cornerRadius: 10)
-    private let searchButton = UIButton(type: .system)
+    private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
 
@@ -188,9 +188,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let emptyLabel = UILabel()
 
     private let tabGlass = FlatPanel(background: Theme.stripFill)
-    private let abcButton = UIButton(type: .system)
+    private let abcButton = HitButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
-    private var tabButtons: [UIButton] = []
+    private var tabButtons: [HitButton] = []
     private var currentSection = 0
     private var startSection = 0
     private var needsInitialScroll = false
@@ -346,7 +346,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         for button in tabButtons { button.removeFromSuperview() }
         tabButtons = []
         for (index, section) in sections.enumerated() {
-            let button = UIButton(type: .system)
+            let button = HitButton(type: .system)
             if let image = UIImage(systemName: section.symbol,
                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)) {
                 button.setImage(image, for: .normal)
@@ -413,8 +413,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
 
         let barTop = bounds.height - barHeight
-        abcButton.frame = CGRect(x: 8, y: barTop + 4, width: 52, height: barHeight - 8)
-        backspaceButton.frame = CGRect(x: width - 60, y: barTop + 4, width: 52, height: barHeight - 8)
+        abcButton.frame = CGRect(x: 0, y: barTop, width: 64, height: barHeight)
+        backspaceButton.frame = CGRect(x: width - 64, y: barTop, width: 64, height: barHeight)
         tabGlass.frame = CGRect(x: 64, y: barTop + 4, width: max(0, width - 128), height: barHeight - 8)
         layoutTabs()
         applyInitialScrollIfPossible()
@@ -427,6 +427,25 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         for (index, button) in tabButtons.enumerated() {
             button.frame = CGRect(x: CGFloat(index) * width, y: 0, width: width, height: area.height)
         }
+    }
+
+    // MARK: Touch handling
+
+    /// Generous targets: the whole top band is the search field, and the whole bottom band belongs to
+    /// ABC / the category tabs / delete (by x position), so taps never have to hit an icon exactly.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, alpha > 0.01, bounds.contains(point) else { return nil }
+        if let popup = variantPopup, popup.frame.insetBy(dx: -4, dy: -4).contains(point) {
+            return super.hitTest(point, with: event)
+        }
+        if point.y < searchGlass.frame.maxY + 4 { return searchButton }
+        let barTop = bounds.height - barHeight
+        if point.y >= barTop - 4 {
+            if point.x < 64 { return abcButton }
+            if point.x > bounds.width - 64 { return backspaceButton }
+            if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
+        }
+        return super.hitTest(point, with: event)
     }
 
     // MARK: Actions
@@ -483,7 +502,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         scroll.showsHorizontalScrollIndicator = false
         scroll.contentSize = CGSize(width: itemWidth * CGFloat(options.count), height: height)
         for (index, emoji) in options.enumerated() {
-            let button = UIButton(type: .custom)
+            let button = HitButton(type: .custom)
             button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 4, width: itemWidth, height: height - 8)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 30)
             button.setTitle(emoji, for: .normal)

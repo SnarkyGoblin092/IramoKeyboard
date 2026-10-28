@@ -39,10 +39,19 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: Lifecycle
 
-    /// The root view is a keyboard-style input view, so the system draws its native keyboard backdrop.
+    /// True when the root view uses the system keyboard backdrop. The Liquid Glass theme asks for a plain
+    /// (see-through) root instead, so the glass shows what is behind it rather than a flat material.
+    private var rootIsKeyboardStyle = true
+
+    /// The root view is an input view: keyboard style (the system's native backdrop) for most themes, default
+    /// (no backdrop of its own) for Liquid Glass.
     override func loadView() {
-        let inputView = UIInputView(frame: CGRect(x: 0, y: 0, width: 320, height: 260), inputViewStyle: .keyboard)
+        Theme.reload()
+        rootIsKeyboardStyle = !Theme.isLiquidGlass
+        let inputView = UIInputView(frame: CGRect(x: 0, y: 0, width: 320, height: 260),
+                                    inputViewStyle: rootIsKeyboardStyle ? .keyboard : .default)
         inputView.allowsSelfSizing = true
+        inputView.backgroundColor = UIColor.clear
         view = inputView
     }
 
@@ -81,6 +90,16 @@ final class KeyboardViewController: UIInputViewController {
         scheduleRefresh()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Touches near the screen edges and the bottom are normally held back for a moment by the system's
+        // own gestures, which makes edge keys feel dead. Ask the window's recognisers not to delay touches.
+        view.window?.gestureRecognizers?.forEach {
+            $0.delaysTouchesBegan = false
+            $0.delaysTouchesEnded = false
+        }
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
@@ -103,7 +122,7 @@ final class KeyboardViewController: UIInputViewController {
         let s = settings
         return [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
-            "\(s.keyboardHeightScale)", "\(s.keyPopups)", s.enabledLanguages.joined(separator: ",")
+            "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.enabledLanguages.joined(separator: ",")
         ].joined(separator: "|")
     }
 
@@ -128,6 +147,21 @@ final class KeyboardViewController: UIInputViewController {
                 backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
                 backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                 backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        }
+        else if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
+            // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
+            // normal keyboard background, so paint one.
+            let solid = UIView()
+            solid.isUserInteractionEnabled = false
+            solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
+            solid.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(solid)
+            NSLayoutConstraint.activate([
+                solid.topAnchor.constraint(equalTo: container.topAnchor),
+                solid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                solid.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                solid.trailingAnchor.constraint(equalTo: container.trailingAnchor)
             ])
         }
         totalHeight = nil

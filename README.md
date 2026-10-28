@@ -13,3 +13,5 @@ and a theme picker (native, transparent, Liquid Glass and gradient themes). All 
 
 ## Limits
 No autocorrect or next-word prediction, no voice typing, cursor control is horizontal only.
+
+- Adjustable key roundness (Appearance), larger touch targets, and a Liquid Glass theme alongside the gradient themes.

@@ -6,7 +6,8 @@ import UIKit
 /// Looks (see `Theme`):
 ///  * native       - the iOS key cap (opaque, 5pt corners, 1pt shadow line)
 ///  * transparent / gradient - translucent fills with a thin outline, no shadow
-///  * liquid glass - a real `UIGlassEffect` capsule (iOS 26), tinted a little for function keys
+///  * liquid glass - a real `UIGlassEffect` piece (iOS 26) inside the keyboard's shared glass container,
+///                   tinted a little for function keys, with a springy press
 final class KeyView: UIView {
     private(set) var spec: KeySpec
     let label = UILabel()
@@ -15,8 +16,7 @@ final class KeyView: UIView {
 
     /// Real-glass background, only in the Liquid Glass theme on iOS 26.
     private let glassView: UIVisualEffectView?
-    /// The view that carries the key's fill colour (the key itself, or a tint layer inside the glass).
-    private let fillView: UIView
+    private var lastGlassState = ""
     private let drawsBorder: Bool
     private let drawsShadow: Bool
 
@@ -33,25 +33,16 @@ final class KeyView: UIView {
         self.spec = spec
         self.drawsBorder = Theme.drawsKeyBorder
         self.drawsShadow = Theme.drawsKeyShadow
-        if Theme.usesRealGlass {
-            let effect = GlassSupport.makeEffectView(clear: false)
-            self.glassView = effect
-            self.fillView = UIView()
-        } else {
-            self.glassView = nil
-            self.fillView = UIView()   // unused without glass (the key itself carries the fill)
-        }
+        self.glassView = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
         super.init(frame: .zero)
         isUserInteractionEnabled = false
 
         let host: UIView
         if let glassView = glassView {
             addSubview(glassView)
-            glassView.contentView.addSubview(fillView)
             host = glassView.contentView
         } else {
             host = self
-            layer.cornerRadius = Theme.keyCornerRadius
             layer.cornerCurve = .continuous
             if drawsBorder {
                 layer.borderWidth = 0.5
@@ -145,25 +136,55 @@ final class KeyView: UIView {
         } else {
             fill = spec.isFunction ? Theme.functionKey : Theme.letterKey
         }
-        if glassView != nil {
-            fillView.backgroundColor = fill
+        if let glassView = glassView {
+            applyGlass(glassView, fill: fill)
         } else {
             backgroundColor = fill
         }
     }
 
+    /// Tints the glass for the key's state (plain letter keys stay untinted) and gives it the springy press.
+    private func applyGlass(_ glassView: UIVisualEffectView, fill: UIColor) {
+        let tint: UIColor?
+        if isProminent {
+            tint = Theme.accent.withAlphaComponent(isPressed ? 0.55 : 0.85)
+        } else if isActive {
+            tint = Theme.activeKey.withAlphaComponent(0.75)
+        } else if isPressed {
+            tint = Theme.letterKeyPressed
+        } else if spec.isFunction {
+            tint = Theme.functionKey
+        } else {
+            tint = nil
+        }
+        let state = "\(isProminent)|\(isActive)|\(isPressed)|\(spec.isFunction)"
+        if state != lastGlassState {
+            lastGlassState = state
+            GlassSupport.setTint(glassView, clear: false, tint: tint)
+        }
+        let scale: CGFloat = isPressed ? 0.94 : 1.0
+        UIView.animate(withDuration: 0.22, delay: 0,
+                       usingSpringWithDamping: 0.62, initialSpringVelocity: 0.8,
+                       options: [.allowUserInteraction, .beginFromCurrentState]) {
+            glassView.transform = CGAffineTransform(scaleX: scale, y: scale)
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        let radius = Theme.keyCornerRadius(for: bounds.size)
         if let glassView = glassView {
-            glassView.frame = bounds
-            fillView.frame = bounds
-            fillView.layer.cornerRadius = min(bounds.width, bounds.height) / 2
-            fillView.layer.cornerCurve = .continuous
-        } else if drawsBorder {
-            layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
-        } else if drawsShadow {
-            layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
-            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+            let wasScaled = glassView.transform != .identity
+            if !wasScaled { glassView.frame = bounds }
+            GlassSupport.applyShape(glassView, radius: radius, size: bounds.size)
+        } else {
+            layer.cornerRadius = radius
+            if drawsBorder {
+                layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
+            } else if drawsShadow {
+                layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
+                layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
+            }
         }
         label.frame = bounds.insetBy(dx: 2, dy: 0)
         hintLabel.frame = CGRect(x: bounds.width - 18, y: 3, width: 14, height: 12)

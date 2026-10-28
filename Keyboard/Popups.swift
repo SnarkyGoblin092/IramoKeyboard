@@ -5,11 +5,17 @@ import UIKit
 final class KeyPreviewView: UIView {
     private let shape = CAShapeLayer()
     private let label = UILabel()
+    /// Liquid Glass theme: the preview is a floating glass pill instead of the opaque balloon.
+    private let glassView: UIVisualEffectView? = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
 
     init() {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
         backgroundColor = UIColor.clear
+        if let glassView = glassView {
+            glassView.isUserInteractionEnabled = false
+            addSubview(glassView)
+        }
 
         shape.shadowOpacity = 0.35
         shape.shadowRadius = 2
@@ -20,7 +26,11 @@ final class KeyPreviewView: UIView {
         label.textAlignment = .center
         label.font = UIFont.systemFont(ofSize: 38, weight: .light)
         label.textColor = Theme.text
-        addSubview(label)
+        if let glassView = glassView {
+            glassView.contentView.addSubview(label)
+        } else {
+            addSubview(label)
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -30,6 +40,18 @@ final class KeyPreviewView: UIView {
     /// `keyFrame` and `hostBounds` are both in the coordinate space of the view this preview lives in.
     func show(text: String, keyFrame: CGRect, hostBounds: CGRect) {
         label.text = text
+
+        if let glassView = glassView {
+            let width = keyFrame.width + 24
+            let height = keyFrame.height * 1.1
+            var x = keyFrame.midX - width / 2
+            x = max(2, min(x, hostBounds.width - width - 2))
+            frame = CGRect(x: x, y: keyFrame.minY - height - 6, width: width, height: height)
+            glassView.frame = bounds
+            GlassSupport.applyShape(glassView, radius: max(10, Theme.keyCornerRadius(for: keyFrame.size) * 1.5), size: bounds.size)
+            label.frame = glassView.bounds
+            return
+        }
 
         let balloonWidth = keyFrame.width + 28
         let topHeight = keyFrame.height * 1.2
@@ -45,8 +67,9 @@ final class KeyPreviewView: UIView {
         let topRect = CGRect(x: 0, y: 0, width: balloonWidth, height: topHeight)
         let keyRect = CGRect(x: keyX, y: topHeight + neck, width: keyFrame.width, height: keyFrame.height)
 
-        let path = UIBezierPath(roundedRect: topRect, cornerRadius: 10)
-        path.append(UIBezierPath(roundedRect: keyRect, cornerRadius: 6))
+        let keyRadius = Theme.keyCornerRadius(for: keyFrame.size)
+        let path = UIBezierPath(roundedRect: topRect, cornerRadius: max(10, keyRadius * 1.6))
+        path.append(UIBezierPath(roundedRect: keyRect, cornerRadius: keyRadius))
         let neckPath = UIBezierPath()
         neckPath.move(to: CGPoint(x: 2, y: topHeight - 8))
         neckPath.addLine(to: CGPoint(x: balloonWidth - 2, y: topHeight - 8))
@@ -70,11 +93,13 @@ final class KeyPreviewView: UIView {
 /// The strip of alternative characters (accents, punctuation) shown while a key is held.
 final class AlternatesPopupView: UIView {
     private let highlight = UIView()
+    private let glassView: UIVisualEffectView? = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
     private var labels: [UILabel] = []
     private let displayItems: [String]
     private let itemWidth: CGFloat
     private let inset: CGFloat = 5
     private(set) var highlightedIndex = 0
+    private var popupRadius: CGFloat = 8
 
     /// The character that will be inserted if the finger lifts now.
     var selectedItem: String { return displayItems[highlightedIndex] }
@@ -92,13 +117,16 @@ final class AlternatesPopupView: UIView {
         super.init(frame: .zero)
 
         isUserInteractionEnabled = false
-        backgroundColor = Theme.popupFill
-        layer.cornerRadius = 8
-        layer.cornerCurve = .continuous
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.35
-        layer.shadowRadius = 2
-        layer.shadowOffset = CGSize(width: 0, height: 1)
+        popupRadius = max(8, Theme.keyCornerRadius(for: keyFrame.size) * 1.4)
+        if glassView == nil {
+            backgroundColor = Theme.popupFill
+            layer.cornerRadius = popupRadius
+            layer.cornerCurve = .continuous
+            layer.shadowColor = UIColor.black.cgColor
+            layer.shadowOpacity = 0.35
+            layer.shadowRadius = 2
+            layer.shadowOffset = CGSize(width: 0, height: 1)
+        }
 
         let count = CGFloat(displayItems.count)
         let width = itemWidth * count + inset * 2
@@ -109,7 +137,17 @@ final class AlternatesPopupView: UIView {
         frame = CGRect(x: x, y: y, width: width, height: height)
 
         highlight.layer.cornerCurve = .continuous
-        addSubview(highlight)
+        let host: UIView
+        if let glassView = glassView {
+            glassView.isUserInteractionEnabled = false
+            glassView.frame = bounds
+            addSubview(glassView)
+            GlassSupport.applyShape(glassView, radius: popupRadius, size: bounds.size)
+            host = glassView.contentView
+        } else {
+            host = self
+        }
+        host.addSubview(highlight)
 
         for (index, item) in displayItems.enumerated() {
             let label = UILabel(frame: CGRect(x: inset + CGFloat(index) * itemWidth,
@@ -121,7 +159,7 @@ final class AlternatesPopupView: UIView {
             label.font = UIFont.systemFont(ofSize: 24, weight: .regular)
             label.adjustsFontSizeToFitWidth = true
             label.minimumScaleFactor = 0.6
-            addSubview(label)
+            host.addSubview(label)
             labels.append(label)
         }
 
@@ -148,7 +186,7 @@ final class AlternatesPopupView: UIView {
         guard highlightedIndex < labels.count else { return }
         let frame = labels[highlightedIndex].frame
         highlight.frame = frame
-        highlight.layer.cornerRadius = 6
+        highlight.layer.cornerRadius = max(4, popupRadius - 3)
         highlight.backgroundColor = Theme.accent
         for (index, label) in labels.enumerated() {
             label.textColor = (index == highlightedIndex) ? Theme.onAccent : Theme.text

@@ -34,6 +34,8 @@ final class KeyboardView: UIView {
     private let preview = KeyPreviewView()
     private var alternatesPopup: AlternatesPopupView?
     private let trailLayer = CAShapeLayer()
+    /// Liquid Glass theme: every key's glass lives inside this shared container (see GlassSupport.makeContainer).
+    private var glassContainer: UIVisualEffectView?
 
     private final class TouchState {
         var key: KeyView?
@@ -69,6 +71,14 @@ final class KeyboardView: UIView {
         isMultipleTouchEnabled = true
         backgroundColor = UIColor.clear
 
+        if Theme.usesRealGlass {
+            // Spacing just under the gap between keys: neighbouring keys share sampling but do not melt together.
+            let container = GlassSupport.makeContainer(spacing: 2)
+            container.isUserInteractionEnabled = false
+            addSubview(container)
+            glassContainer = container
+        }
+
         trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
         trailLayer.fillColor = nil
         trailLayer.lineWidth = 7
@@ -96,7 +106,7 @@ final class KeyboardView: UIView {
             var builtRow: [KeyView] = []
             for spec in row {
                 let key = KeyView(spec: spec)
-                if !spec.isSpacer { addSubview(key) }
+                if !spec.isSpacer { (glassContainer?.contentView ?? self).addSubview(key) }
                 builtRow.append(key)
             }
             built.append(builtRow)
@@ -192,6 +202,7 @@ final class KeyboardView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         trailLayer.frame = bounds
+        glassContainer?.frame = bounds
         guard !rows.isEmpty else { return }
 
         let sidePadding: CGFloat = 1
@@ -259,6 +270,17 @@ final class KeyboardView: UIView {
         }
         guard let col = bestCol else { return nil }
         return (row: bestRow, col: col)
+    }
+
+    /// The full (gap-free) touch cell of a key.
+    private func hitRect(of key: KeyView) -> CGRect? {
+        guard hitRects.count == keyViews.count else { return nil }
+        for (r, row) in keyViews.enumerated() {
+            if let c = row.firstIndex(where: { $0 === key }), c < hitRects[r].count {
+                return hitRects[r][c]
+            }
+        }
+        return nil
     }
 
     // MARK: Touches
@@ -371,6 +393,13 @@ final class KeyboardView: UIView {
         guard let index = keyIndex(at: point) else { return }
         let newKey = keyViews[index.row][index.col]
         guard newKey !== state.key else { return }
+
+        // Hysteresis: a finger that wobbles a little past the edge of the key it went down on stays on that
+        // key, so taps are not stolen by the neighbour. Only a clear move onto another key switches.
+        if let current = state.key, let rect = hitRect(of: current) {
+            let margin = min(rect.width, rect.height) * 0.22
+            if rect.insetBy(dx: -margin, dy: -margin).contains(point) { return }
+        }
 
         state.holdTimer?.invalidate()
         state.holdTimer = nil

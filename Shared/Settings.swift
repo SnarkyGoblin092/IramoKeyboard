@@ -22,6 +22,7 @@ enum SettingKey {
     static let theme = "hunkeys.theme"
     static let accent = "hunkeys.accent"
     static let keyboardHeight = "hunkeys.keyboardHeight"
+    static let keyRoundness = "hunkeys.keyRoundness"
     static let oneHanded = "hunkeys.oneHanded"
     // Data
     static let language = "hunkeys.language"
@@ -40,7 +41,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, keyboardHeight, oneHanded, enabledLanguages
+        theme, accent, keyboardHeight, keyRoundness, oneHanded, enabledLanguages
     ]
 }
 
@@ -61,6 +62,7 @@ enum SettingDefault {
     static let theme = "native"
     static let accent = "blue"
     static let keyboardHeight = 1.0
+    static let keyRoundness = 0.26
     static let oneHanded = "off"
     static let language = "en"
     static let enabledLanguages = ["en", "hu"]
@@ -175,6 +177,7 @@ final class Settings {
             SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,
             SettingKey.keyboardHeight: SettingDefault.keyboardHeight,
+            SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.oneHanded: SettingDefault.oneHanded,
             SettingKey.language: SettingDefault.language
         ])
@@ -274,6 +277,12 @@ final class Settings {
     }
 
     var accent: AccentChoice { return AccentChoice(rawValue: accentName) ?? .blue }
+
+    /// 0 = square keys ... 1 = fully round (pill) keys.
+    var keyRoundness: Double {
+        get { return clamp(readDouble(SettingKey.keyRoundness), 0...1) }
+        set { put(clamp(newValue, 0...1), SettingKey.keyRoundness) }
+    }
 
     var keyboardHeightScale: Double {
         get { return clamp(readDouble(SettingKey.keyboardHeight), Settings.heightScaleRange) }

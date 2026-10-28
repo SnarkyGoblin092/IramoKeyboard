@@ -174,6 +174,7 @@ private struct AppearanceSection: View {
                           defaultValue: SettingDefault.keyboardHeight,
                           range: Settings.heightScaleRange,
                           step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+            RoundnessSlider()
             SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow)
             SettingToggle("Long-press hints on keys", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints)
         }

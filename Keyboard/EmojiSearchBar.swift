@@ -11,12 +11,12 @@ final class EmojiSearchBar: UIView {
     weak var delegate: EmojiSearchBarDelegate?
 
     private let glass = FlatPanel(background: Theme.searchField, cornerRadius: 10)
-    private let backButton = UIButton(type: .system)
+    private let backButton = HitButton(type: .system)
     private let iconView = UIImageView()
     private let queryLabel = UILabel()
     private let divider = UIView()
     private let scroll = UIScrollView()
-    private var resultButtons: [UIButton] = []
+    private var resultButtons: [HitButton] = []
     private var results: [String] = []
     private var placeholder = "Search Emoji"
     private var query = ""
@@ -72,7 +72,7 @@ final class EmojiSearchBar: UIView {
         for button in resultButtons { button.removeFromSuperview() }
         resultButtons = []
         for (index, emoji) in emojis.enumerated() {
-            let button = UIButton(type: .custom)
+            let button = HitButton(type: .custom)
             button.tag = index
             button.setTitle(emoji, for: .normal)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 28)
@@ -89,7 +89,7 @@ final class EmojiSearchBar: UIView {
         glass.frame = bounds.insetBy(dx: 6, dy: 4)
         let area = glass.bounds
 
-        backButton.frame = CGRect(x: 2, y: 0, width: 40, height: area.height)
+        backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
         iconView.frame = CGRect(x: 44, y: (area.height - 16) / 2, width: 16, height: 16)
@@ -104,6 +104,19 @@ final class EmojiSearchBar: UIView {
             button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 0, width: itemWidth, height: area.height)
         }
         scroll.contentSize = CGSize(width: itemWidth * CGFloat(resultButtons.count), height: area.height)
+    }
+
+    /// The whole strip belongs to a control: the left end is the back button, the query area is dead
+    /// (nothing to press), and the results strip takes the rest, so taps near an emoji still hit it.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
+        if point.x < 58 { return backButton }
+        let local = convert(point, to: scroll)
+        if scroll.bounds.insetBy(dx: -6, dy: -20).contains(local) {
+            let nearest = HitTesting.nearestByX(local.x, in: resultButtons, relativeTo: scroll)
+            return nearest ?? scroll
+        }
+        return super.hitTest(point, with: event)
     }
 
     @objc private func backTapped() {

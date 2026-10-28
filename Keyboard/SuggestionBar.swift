@@ -22,9 +22,9 @@ final class SuggestionBar: UIView {
     weak var delegate: SuggestionBarDelegate?
 
     private let glass = FlatPanel(background: Theme.stripFill)
-    private let dismissButton = UIButton(type: .system)
+    private let dismissButton = HitButton(type: .system)
     private let hintLabel = UILabel()
-    private var slotButtons: [UIButton] = []
+    private var slotButtons: [HitButton] = []
     private var separators: [UIView] = []
     private var suggestions: [Suggestion] = []
     private let slotCount = 3
@@ -58,7 +58,7 @@ final class SuggestionBar: UIView {
         glass.contentView.addSubview(hintLabel)
 
         for index in 0..<slotCount {
-            let button = UIButton(type: .system)
+            let button = HitButton(type: .system)
             button.tag = index
             button.setTitleColor(Theme.text, for: .normal)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 17)
@@ -79,7 +79,7 @@ final class SuggestionBar: UIView {
 
         dismissButton.tintColor = Theme.secondaryText
         dismissButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
-                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
+                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular)),
                                for: .normal)
         dismissButton.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
         glass.contentView.addSubview(dismissButton)
@@ -122,7 +122,7 @@ final class SuggestionBar: UIView {
         super.layoutSubviews()
         glass.frame = bounds.insetBy(dx: 2, dy: 3)
         let area = glass.bounds
-        let dismissWidth: CGFloat = 48
+        let dismissWidth: CGFloat = 52
         dismissButton.frame = CGRect(x: area.width - dismissWidth, y: 0, width: dismissWidth, height: area.height)
 
         let contentWidth = max(0, area.width - dismissWidth - 6)
@@ -138,6 +138,21 @@ final class SuggestionBar: UIView {
                                 width: 1,
                                 height: area.height * 0.5)
         }
+    }
+
+    // MARK: Touch handling
+
+    /// Every point of the strip (including its margins) belongs to a control: the right end is the hide
+    /// button, everything else goes to the suggestion slot at that x position, so a tap never needs to
+    /// land on the text itself.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
+        let dismissZone = dismissButton.superview?.convert(dismissButton.frame, to: self) ?? .zero
+        if point.x >= dismissZone.minX { return dismissButton }
+        if let slot = HitTesting.nearestByX(point.x, in: slotButtons, relativeTo: self), slot.isEnabled {
+            return slot
+        }
+        return super.hitTest(point, with: event)
     }
 
     // MARK: Actions
