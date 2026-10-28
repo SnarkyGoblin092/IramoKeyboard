@@ -73,6 +73,7 @@ final class KeyboardViewController: UIInputViewController {
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
+        Prefs.refresh()
         if settingsSignature() != builtSignature {
             buildInterface()
         }
@@ -102,19 +103,35 @@ final class KeyboardViewController: UIInputViewController {
     private func settingsSignature() -> String {
         let s = settings
         return [
-            "\(s.numberRow)", "\(s.keyHints)", s.theme, s.accentName,
+            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
             "\(s.keyboardHeightScale)", "\(s.keyPopups)", s.enabledLanguages.joined(separator: ",")
         ].joined(separator: "|")
     }
 
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
     private func buildInterface() {
+        Prefs.refresh()
+        Theme.reload()
+        view.overrideUserInterfaceStyle = Theme.interfaceStyle   // gradient themes force light/dark
         validateLanguage()
         hideEmojiPanel(refresh: false)
         hideSettingsPanel(refresh: false)
         isSearchingEmoji = false
         searchQuery = ""
         for sub in container.subviews { sub.removeFromSuperview() }
+
+        // Gradient backdrop (gradient themes, and a soft wash behind Liquid Glass) covers the system backdrop.
+        if Theme.drawsBackdrop {
+            let backdrop = BackdropView(theme: Theme.definition, opacity: Theme.backdropOpacity)
+            backdrop.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(backdrop)
+            NSLayoutConstraint.activate([
+                backdrop.topAnchor.constraint(equalTo: container.topAnchor),
+                backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        }
         totalHeight = nil
         suggestionHeight = nil
 
@@ -177,8 +194,8 @@ final class KeyboardViewController: UIInputViewController {
         let isPad = traitCollection.userInterfaceIdiom == .pad
         let isLandscape = !isPad && view.bounds.width > 500
         var total: CGFloat = isPad ? 340 : (isLandscape ? 208 : 276)
-        if settings.numberRow { total += isLandscape ? 26 : 40 }
-        total *= CGFloat(settings.keyboardHeightScale)
+        if Prefs.numberRow { total += isLandscape ? 26 : 40 }
+        total *= CGFloat(Prefs.heightScale)
         let suggestions: CGFloat = isLandscape ? 36 : 44
 
         if let constraint = totalHeight {
@@ -200,8 +217,8 @@ final class KeyboardViewController: UIInputViewController {
         let rows = LayoutBuilder.rows(language: language,
                                       page: page,
                                       returnTitle: returnTitle,
-                                      numberRow: settings.numberRow,
-                                      showHints: settings.keyHints)
+                                      numberRow: Prefs.numberRow,
+                                      showHints: Prefs.keyHints)
         keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()
@@ -314,7 +331,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func shouldAutoCapitalize() -> Bool {
-        guard settings.autoCapitalize else { return false }
+        guard Prefs.autoCapitalize else { return false }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         let type = textDocumentProxy.autocapitalizationType ?? .sentences
 
@@ -383,7 +400,7 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
         // Double space -> ". "
-        if settings.doubleSpacePeriod,
+        if Prefs.doubleSpacePeriod,
            Date().timeIntervalSince(lastSpaceTime) < 0.4, before.hasSuffix(" "), before.count >= 2 {
             let characters = Array(before)
             let previous = characters[characters.count - 2]
@@ -495,7 +512,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func learnWord(endingAt before: String) {
-        guard settings.suggestionsEnabled, textDocumentProxy.isSecureTextEntry != true else { return }
+        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
         let prefix = currentPrefix(in: before)
         if prefix.count >= 3 {
             stores[language]?.learn(prefix)
@@ -580,7 +597,7 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
         if textDocumentProxy.isSecureTextEntry == true
-            || (!settings.suggestionsEnabled && !settings.emojiSuggestionsEnabled) {
+            || (!Prefs.suggestions && !Prefs.emojiSuggestions) {
             suggestionBar.update([])
             return
         }
@@ -598,12 +615,12 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         var emojis: [String] = []
-        if settings.emojiSuggestionsEnabled && !emojiWord.isEmpty && EmojiStore.shared.isReady {
+        if Prefs.emojiSuggestions && !emojiWord.isEmpty && EmojiStore.shared.isReady {
             emojis = EmojiStore.shared.suggestions(for: emojiWord, language: language, limit: 1)
         }
 
         var words: [String] = []
-        if settings.suggestionsEnabled && !prefix.isEmpty, let store = stores[language], store.isLoaded {
+        if Prefs.suggestions && !prefix.isEmpty, let store = stores[language], store.isLoaded {
             words = store.completions(for: prefix, limit: 4).map { matchCase(of: prefix, for: $0) }
         }
 

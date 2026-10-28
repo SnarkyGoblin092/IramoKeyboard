@@ -1,102 +1,43 @@
 import SwiftUI
 import UIKit
 
-/// The keyboard's settings. (No tutorial - just options.)
+/// The keyboard's settings. Every section is its own small view, so changing one control only redraws that section.
 struct ContentView: View {
-    @AppStorage(SettingKey.holdDelay, store: SharedStore.defaults) private var holdDelay = SettingDefault.holdDelay
-    @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
-    @AppStorage(SettingKey.clickSound, store: SharedStore.defaults) private var clickSound = SettingDefault.clickSound
-    @AppStorage(SettingKey.keyPopups, store: SharedStore.defaults) private var keyPopups = SettingDefault.keyPopups
-
-    @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
-    @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var suggestions = SettingDefault.suggestions
-    @AppStorage(SettingKey.emojiSuggestions, store: SharedStore.defaults) private var emojiSuggestions = SettingDefault.emojiSuggestions
-    @AppStorage(SettingKey.autoCapitalize, store: SharedStore.defaults) private var autoCapitalize = SettingDefault.autoCapitalize
-    @AppStorage(SettingKey.doubleSpacePeriod, store: SharedStore.defaults) private var doubleSpacePeriod = SettingDefault.doubleSpacePeriod
-    @AppStorage(SettingKey.cursorControl, store: SharedStore.defaults) private var cursorControl = SettingDefault.cursorControl
-    @AppStorage(SettingKey.deleteSwipe, store: SharedStore.defaults) private var deleteSwipe = SettingDefault.deleteSwipe
-
-    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
-    @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
-    @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var theme = SettingDefault.theme
-    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accent = SettingDefault.accent
-    @AppStorage(SettingKey.keyboardHeight, store: SharedStore.defaults) private var keyboardHeight = SettingDefault.keyboardHeight
-
-    @State private var status = KeyboardStatus.read()
-    @State private var confirm: Confirmation?
-    @State private var testText = ""
-    @State private var cleared: String?
-    @Environment(\.scenePhase) private var scenePhase
-
-    private enum Confirmation: String, Identifiable {
-        case recents, learned, reset
-        var id: String { rawValue }
-    }
-
     var body: some View {
-        NavigationView {
-            Form {
-                statusSection
-                feelSection
-                typingSection
-                appearanceSection
-                Section {
-                    NavigationLink("Languages") { LanguagesView() }
-                } footer: {
-                    Text("Choose which languages the keyboard offers. Hold the space bar to switch between them.")
-                }
+        NavigationStack {
+            List {
+                StatusSection()
+                FeelSection()
+                TypingSection()
+                LanguagesSection()
+                AppearanceSection()
                 Section {
                     NavigationLink("Text shortcuts") { ShortcutsView() }
                 } footer: {
                     Text("Type a short trigger, press space, and it expands to the full phrase.")
                 }
-                dataSection
-                trySection
+                DataSection()
+                TestFieldSection()
             }
             .navigationTitle("HunKeys")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
+            .scrollDismissesKeyboard(.interactively)
         }
-        .navigationViewStyle(.stack)
-        .onAppear { status = KeyboardStatus.read() }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active { status = KeyboardStatus.read() }
-        }
-        .alert(item: $confirm) { item in
-            switch item {
-            case .recents:
-                return Alert(title: Text("Clear recent emoji?"),
-                             primaryButton: .destructive(Text("Clear")) {
-                                 Settings.shared.clearRecentEmoji()
-                                 cleared = "Recent emoji cleared."
-                             },
-                             secondaryButton: .cancel())
-            case .learned:
-                return Alert(title: Text("Forget learned words?"),
-                             message: Text("Words the keyboard picked up while you type will be removed."),
-                             primaryButton: .destructive(Text("Forget")) {
-                                 Settings.shared.clearLearnedWords()
-                                 cleared = "Learned words forgotten."
-                             },
-                             secondaryButton: .cancel())
-            case .reset:
-                return Alert(title: Text("Reset all settings?"),
-                             message: Text("Your shortcuts, recent emoji and learned words are kept."),
-                             primaryButton: .destructive(Text("Reset")) {
-                                 Settings.shared.resetPreferences()
-                                 cleared = "Settings reset - reopen this screen to see the defaults."
-                             },
-                             secondaryButton: .cancel())
-            }
-        }
+        .onAppear { Feedback.prepare() }
     }
+}
 
-    // MARK: Sections
+// MARK: - Sections
 
-    private var statusSection: some View {
-        Section {
-            row("Keyboard", status.seen ? "Used \(status.lastSeenText)" : "Not seen yet")
-            row("Full Access", status.seen ? (status.fullAccess ? "On" : "Off") : "-")
-            row("Emoji", status.emojiText)
+private struct StatusSection: View {
+    @State private var status = KeyboardStatus.read()
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        Section("Status") {
+            InfoRow("Keyboard", status.seen ? "Used \(status.lastSeenText)" : "Not seen yet")
+            InfoRow("Full Access", status.seen ? (status.fullAccess ? "On" : "Off") : "-")
+            InfoRow("Emoji", status.emojiText)
             if !SharedStore.isShared {
                 Text("This install can't share settings with the keyboard (no App Group). Install the IPA with iloader.")
                     .font(.footnote).foregroundColor(.orange)
@@ -107,121 +48,217 @@ struct ContentView: View {
                 Text("Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words.")
                     .font(.footnote).foregroundColor(.orange)
             }
-        } header: {
-            Text("Status")
+        }
+        // Read when the screen opens or the app comes back to the front - no polling.
+        .onAppear { status = KeyboardStatus.read() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { status = KeyboardStatus.read() }
         }
     }
+}
 
-    private var feelSection: some View {
+private struct FeelSection: View {
+    var body: some View {
         Section("Feel") {
-            VStack(alignment: .leading) {
-                HStack {
-                    Text("Hold delay")
-                    Spacer()
-                    Text(String(format: "%.2f s", holdDelay)).foregroundColor(.secondary)
-                }
-                Slider(value: $holdDelay, in: Settings.holdDelayRange, step: 0.05)
-            }
-            VStack(alignment: .leading) {
-                HStack {
-                    Text("Vibration strength")
-                    Spacer()
-                    Text(vibration < 0.01 ? "Off" : "\(Int((vibration * 100).rounded()))%").foregroundColor(.secondary)
-                    Button("Test") {
-                        guard vibration > 0.01 else { return }
-                        let generator = UIImpactFeedbackGenerator(style: .rigid)
-                        generator.prepare()
-                        generator.impactOccurred(intensity: CGFloat(vibration))
-                    }
-                    .buttonStyle(.bordered)
-                }
-                Slider(value: $vibration, in: 0...1, step: 0.05)
-            }
-            Toggle("Key click sound", isOn: $clickSound)
-            Toggle("Key pop-ups", isOn: $keyPopups)
+            SettingSlider("Hold delay",
+                          key: SettingKey.holdDelay,
+                          defaultValue: SettingDefault.holdDelay,
+                          range: Settings.holdDelayRange,
+                          step: 0.05) { String(format: "%.2f s", $0) }
+            SettingSlider("Vibration strength",
+                          key: SettingKey.vibration,
+                          defaultValue: SettingDefault.vibration,
+                          range: 0...1,
+                          step: 0.05,
+                          showsTest: true) { $0 < 0.01 ? "Off" : "\(Int(($0 * 100).rounded()))%" }
+            SettingToggle("Key click sound", key: SettingKey.clickSound, defaultValue: SettingDefault.clickSound)
+            SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups)
         }
     }
+}
 
-    private var typingSection: some View {
+private struct TypingSection: View {
+    var body: some View {
         Section {
-            Toggle("Swipe typing", isOn: $swipe)
-            Toggle("Word suggestions", isOn: $suggestions)
-            Toggle("Emoji suggestions", isOn: $emojiSuggestions)
-            Toggle("Auto-capitalize", isOn: $autoCapitalize)
-            Toggle("Double space for period", isOn: $doubleSpacePeriod)
-            Toggle("Space-bar cursor control", isOn: $cursorControl)
-            Toggle("Slide on delete to remove words", isOn: $deleteSwipe)
+            SettingToggle("Swipe typing", key: SettingKey.swipe, defaultValue: SettingDefault.swipe)
+            SettingToggle("Word suggestions", key: SettingKey.suggestions, defaultValue: SettingDefault.suggestions)
+            SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions)
+            SettingToggle("Auto-capitalize", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize)
+            SettingToggle("Double space for period", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod)
+            SettingToggle("Space-bar cursor control", key: SettingKey.cursorControl, defaultValue: SettingDefault.cursorControl)
+            SettingToggle("Slide on delete to remove words", key: SettingKey.deleteSwipe, defaultValue: SettingDefault.deleteSwipe)
         } header: {
             Text("Typing")
         } footer: {
-            Text("Hold the space bar and slide left or right to move the cursor. Slide left from the delete key to delete word by word.")
+            Text("Hold the space bar and slide to move the cursor. Slide left from the delete key to delete word by word.")
+        }
+    }
+}
+
+private struct LanguagesSection: View {
+    @State private var summary = LanguagesSection.currentSummary()
+
+    var body: some View {
+        Section {
+            NavigationLink {
+                LanguagesView()
+                    .onDisappear { summary = LanguagesSection.currentSummary() }
+            } label: {
+                InfoRow("Languages", summary)
+            }
+        } footer: {
+            Text("Swipe left or right on the space bar to switch between the enabled languages.")
         }
     }
 
-    private var appearanceSection: some View {
+    private static func currentSummary() -> String {
+        return Settings.shared.enabledLanguages
+            .compactMap { Language(rawValue: $0)?.shortCode }
+            .joined(separator: ", ")
+    }
+}
+
+private struct AppearanceSection: View {
+    @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+
+    private var accent: AccentChoice { return AccentChoice(rawValue: accentName) ?? .blue }
+    private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
+
+    var body: some View {
         Section("Appearance") {
-            Picker("Theme", selection: $theme) {
-                Text("Native").tag("native")
-                Text("Transparent").tag("transparent")
+            NavigationLink {
+                ThemesView()
+            } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    ThemePreview(theme: theme, accent: accent)
+                        .aspectRatio(1.7, contentMode: .fit)
+                    HStack {
+                        Text("Theme")
+                        Spacer()
+                        Text(theme.name).foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
             }
-            .pickerStyle(.segmented)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Accent colour")
                 HStack(spacing: 14) {
                     ForEach(AccentChoice.allCases, id: \.rawValue) { choice in
-                        Circle()
-                            .fill(Color(red: choice.rgb.red, green: choice.rgb.green, blue: choice.rgb.blue))
-                            .frame(width: 32, height: 32)
-                            .overlay(Circle().stroke(Color.primary, lineWidth: accent == choice.rawValue ? 3 : 0).padding(-4))
-                            .onTapGesture { accent = choice.rawValue }
-                            .accessibilityLabel(choice.displayName)
+                        Button {
+                            guard accentName != choice.rawValue else { return }
+                            Feedback.tick()
+                            accentName = choice.rawValue
+                        } label: {
+                            Circle()
+                                .fill(Color(accent: choice))
+                                .frame(width: 32, height: 32)
+                                .overlay(Circle()
+                                    .stroke(Color.primary, lineWidth: accentName == choice.rawValue ? 3 : 0)
+                                    .padding(-4))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(choice.displayName)
                     }
+                }
+                if theme.kind == .gradient {
+                    Text("Gradient themes use their own accent colour.")
+                        .font(.footnote).foregroundColor(.secondary)
                 }
             }
             .padding(.vertical, 4)
 
-            VStack(alignment: .leading) {
-                HStack {
-                    Text("Keyboard height")
-                    Spacer()
-                    Text("\(Int((keyboardHeight * 100).rounded()))%").foregroundColor(.secondary)
-                }
-                Slider(value: $keyboardHeight, in: Settings.heightScaleRange, step: 0.05)
+            SettingSlider("Keyboard height",
+                          key: SettingKey.keyboardHeight,
+                          defaultValue: SettingDefault.keyboardHeight,
+                          range: Settings.heightScaleRange,
+                          step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+            SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow)
+            SettingToggle("Long-press hints on keys", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints)
+        }
+    }
+}
+
+private struct DataSection: View {
+    private enum Action: String {
+        case recents, learned, reset
+
+        var title: String {
+            switch self {
+            case .recents: return "Clear recent emoji?"
+            case .learned: return "Forget learned words?"
+            case .reset: return "Reset all settings?"
             }
-            Toggle("Number row", isOn: $numberRow)
-            Toggle("Long-press hints on keys", isOn: $keyHints)
+        }
+
+        var message: String {
+            switch self {
+            case .recents: return "The Recently Used emoji tab will be empty."
+            case .learned: return "Words the keyboard picked up while you type will be removed."
+            case .reset: return "Your shortcuts, recent emoji and learned words are kept. Reopen this screen to see the defaults."
+            }
+        }
+
+        var button: String {
+            switch self {
+            case .recents: return "Clear"
+            case .learned: return "Forget"
+            case .reset: return "Reset"
+            }
         }
     }
 
-    private var dataSection: some View {
+    @State private var pending: Action?
+    @State private var note: String?
+
+    var body: some View {
         Section {
-            Button("Clear recent emoji") { confirm = .recents }
-            Button("Forget learned words") { confirm = .learned }
-            Button("Reset all settings", role: .destructive) { confirm = .reset }
-            if let cleared = cleared {
-                Text(cleared).font(.footnote).foregroundColor(.secondary)
+            Button("Clear recent emoji") { pending = .recents }
+            Button("Forget learned words") { pending = .learned }
+            Button("Reset all settings", role: .destructive) { pending = .reset }
+            if let note = note {
+                Text(note).font(.footnote).foregroundColor(.secondary)
             }
         } header: {
             Text("Data")
         } footer: {
             Text("Everything stays on this iPhone.")
         }
-    }
-
-    private var trySection: some View {
-        Section {
-            TextField("Type here to test the keyboard", text: $testText)
-        } header: {
-            Text("Test field")
+        .confirmationDialog(pending?.title ?? "",
+                            isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+                            titleVisibility: .visible,
+                            presenting: pending) { action in
+            Button(action.button, role: .destructive) { perform(action) }
+            Button("Cancel", role: .cancel) {}
+        } message: { action in
+            Text(action.message)
         }
     }
 
-    private func row(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value).foregroundColor(.secondary).multilineTextAlignment(.trailing)
+    private func perform(_ action: Action) {
+        switch action {
+        case .recents:
+            Settings.shared.clearRecentEmoji()
+            note = "Recent emoji cleared."
+        case .learned:
+            Settings.shared.clearLearnedWords()
+            note = "Learned words forgotten."
+        case .reset:
+            Settings.shared.resetPreferences()
+            NotificationCenter.default.post(name: .hunKeysSettingsReset, object: nil)
+            note = "Settings reset."
+        }
+        Feedback.tick()
+    }
+}
+
+private struct TestFieldSection: View {
+    @State private var text = ""
+
+    var body: some View {
+        Section("Test field") {
+            TextField("Type here to test the keyboard", text: $text)
         }
     }
 }
@@ -321,13 +358,13 @@ struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
 
     var body: some View {
-        Form {
+        List {
             Section {
                 ForEach(Language.allCases, id: \.rawValue) { language in
                     Toggle(language.displayName, isOn: binding(for: language))
                 }
             } footer: {
-                Text("At least one language stays on. Words, accents and layouts follow the active language.")
+                Text("At least one language stays on. Swipe left or right on the space bar to switch between the enabled languages.")
             }
         }
         .navigationTitle("Languages")
@@ -344,8 +381,9 @@ struct LanguagesView: View {
                 } else if list.count > 1 {
                     list.removeAll { $0 == language.rawValue }
                 }
-                // Keep the same order as the list above.
                 let ordered = Language.allCases.map { $0.rawValue }.filter { list.contains($0) }
+                guard ordered != enabled else { return }
+                Feedback.tick()
                 enabled = ordered
                 Settings.shared.enabledLanguages = ordered
             }

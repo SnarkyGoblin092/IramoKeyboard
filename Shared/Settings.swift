@@ -92,8 +92,9 @@ struct TextShortcut: Codable, Identifiable, Hashable {
 
 // MARK: - Settings
 
-/// Reads and writes every option. Values are read on demand (never cached) so a change made in the
-/// app shows up the next time the keyboard asks.
+/// Reads and writes every option. Reads come from a snapshot of the shared defaults that is refreshed
+/// at most every half second (hot paths in the keyboard read settings constantly), so a change made in
+/// the app shows up within ~0.5 s. Writes update the snapshot immediately. Call `refresh()` to force a re-read.
 final class Settings {
     static let shared = Settings()
 
@@ -101,6 +102,59 @@ final class Settings {
     static let heightScaleRange: ClosedRange<Double> = 0.85...1.20
 
     private var store: UserDefaults { return SharedStore.defaults }
+
+    // MARK: Snapshot cache
+
+    private let lock = NSLock()
+    private var snapshot: [String: Any] = [:]
+    private var snapshotTime: CFAbsoluteTime = 0
+    private let cacheLifetime: CFAbsoluteTime = 0.5
+
+    /// Forces the next read to go back to the shared defaults.
+    func refresh() {
+        lock.lock()
+        snapshotTime = 0
+        lock.unlock()
+    }
+
+    private func value(_ key: String) -> Any? {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = CFAbsoluteTimeGetCurrent()
+        if snapshot.isEmpty || now - snapshotTime > cacheLifetime || now < snapshotTime {
+            snapshot = store.dictionaryRepresentation()
+            snapshotTime = now
+        }
+        return snapshot[key]
+    }
+
+    private func put(_ newValue: Any?, _ key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        if let newValue = newValue {
+            store.set(newValue, forKey: key)
+            snapshot[key] = newValue
+        } else {
+            store.removeObject(forKey: key)
+            snapshot.removeValue(forKey: key)
+        }
+    }
+
+    private func readDouble(_ key: String) -> Double {
+        if let number = value(key) as? NSNumber { return number.doubleValue }
+        if let number = value(key) as? Double { return number }
+        return 0
+    }
+
+    private func readBool(_ key: String) -> Bool {
+        if let number = value(key) as? NSNumber { return number.boolValue }
+        if let flag = value(key) as? Bool { return flag }
+        return false
+    }
+
+    private func readString(_ key: String) -> String? { return value(key) as? String }
+    private func readStringArray(_ key: String) -> [String]? { return value(key) as? [String] }
+    private func readData(_ key: String) -> Data? { return value(key) as? Data }
 
     private init() {
         SharedStore.defaults.register(defaults: [
@@ -135,137 +189,136 @@ final class Settings {
     /// Seconds a key must be held before accents (or cursor control) start; also the delay before
     /// backspace begins repeating.
     var holdDelay: Double {
-        get { return clamp(store.double(forKey: SettingKey.holdDelay), Settings.holdDelayRange) }
-        set { store.set(clamp(newValue, Settings.holdDelayRange), forKey: SettingKey.holdDelay) }
+        get { return clamp(readDouble(SettingKey.holdDelay), Settings.holdDelayRange) }
+        set { put(clamp(newValue, Settings.holdDelayRange), SettingKey.holdDelay) }
     }
 
     /// 0 = no vibration, 1 = strongest.
     var vibrationStrength: Double {
-        get { return clamp(store.double(forKey: SettingKey.vibration), 0...1) }
-        set { store.set(clamp(newValue, 0...1), forKey: SettingKey.vibration) }
+        get { return clamp(readDouble(SettingKey.vibration), 0...1) }
+        set { put(clamp(newValue, 0...1), SettingKey.vibration) }
     }
 
     var clickSound: Bool {
-        get { return store.bool(forKey: SettingKey.clickSound) }
-        set { store.set(newValue, forKey: SettingKey.clickSound) }
+        get { return readBool(SettingKey.clickSound) }
+        set { put(newValue, SettingKey.clickSound) }
     }
 
     var keyPopups: Bool {
-        get { return store.bool(forKey: SettingKey.keyPopups) }
-        set { store.set(newValue, forKey: SettingKey.keyPopups) }
+        get { return readBool(SettingKey.keyPopups) }
+        set { put(newValue, SettingKey.keyPopups) }
     }
 
     // MARK: Typing
 
     var swipeEnabled: Bool {
-        get { return store.bool(forKey: SettingKey.swipe) }
-        set { store.set(newValue, forKey: SettingKey.swipe) }
+        get { return readBool(SettingKey.swipe) }
+        set { put(newValue, SettingKey.swipe) }
     }
 
     var suggestionsEnabled: Bool {
-        get { return store.bool(forKey: SettingKey.suggestions) }
-        set { store.set(newValue, forKey: SettingKey.suggestions) }
+        get { return readBool(SettingKey.suggestions) }
+        set { put(newValue, SettingKey.suggestions) }
     }
 
     var emojiSuggestionsEnabled: Bool {
-        get { return store.bool(forKey: SettingKey.emojiSuggestions) }
-        set { store.set(newValue, forKey: SettingKey.emojiSuggestions) }
+        get { return readBool(SettingKey.emojiSuggestions) }
+        set { put(newValue, SettingKey.emojiSuggestions) }
     }
 
     var autoCapitalize: Bool {
-        get { return store.bool(forKey: SettingKey.autoCapitalize) }
-        set { store.set(newValue, forKey: SettingKey.autoCapitalize) }
+        get { return readBool(SettingKey.autoCapitalize) }
+        set { put(newValue, SettingKey.autoCapitalize) }
     }
 
     var doubleSpacePeriod: Bool {
-        get { return store.bool(forKey: SettingKey.doubleSpacePeriod) }
-        set { store.set(newValue, forKey: SettingKey.doubleSpacePeriod) }
+        get { return readBool(SettingKey.doubleSpacePeriod) }
+        set { put(newValue, SettingKey.doubleSpacePeriod) }
     }
 
     var cursorControl: Bool {
-        get { return store.bool(forKey: SettingKey.cursorControl) }
-        set { store.set(newValue, forKey: SettingKey.cursorControl) }
+        get { return readBool(SettingKey.cursorControl) }
+        set { put(newValue, SettingKey.cursorControl) }
     }
 
     var deleteSwipe: Bool {
-        get { return store.bool(forKey: SettingKey.deleteSwipe) }
-        set { store.set(newValue, forKey: SettingKey.deleteSwipe) }
+        get { return readBool(SettingKey.deleteSwipe) }
+        set { put(newValue, SettingKey.deleteSwipe) }
     }
 
     // MARK: Layout and look
 
     var numberRow: Bool {
-        get { return store.bool(forKey: SettingKey.numberRow) }
-        set { store.set(newValue, forKey: SettingKey.numberRow) }
+        get { return readBool(SettingKey.numberRow) }
+        set { put(newValue, SettingKey.numberRow) }
     }
 
     var keyHints: Bool {
-        get { return store.bool(forKey: SettingKey.keyHints) }
-        set { store.set(newValue, forKey: SettingKey.keyHints) }
+        get { return readBool(SettingKey.keyHints) }
+        set { put(newValue, SettingKey.keyHints) }
     }
 
-    /// "native" (iOS look) or "transparent" (see-through keys).
+    /// A theme id from `ThemeCatalog` ("native" by default; unknown ids fall back to native).
     var theme: String {
-        get {
-            let value = store.string(forKey: SettingKey.theme) ?? SettingDefault.theme
-            return value == "transparent" ? "transparent" : "native"
-        }
-        set { store.set(newValue, forKey: SettingKey.theme) }
+        get { return ThemeCatalog.theme(id: readString(SettingKey.theme) ?? SettingDefault.theme).id }
+        set { put(newValue, SettingKey.theme) }
     }
 
     var isTransparentTheme: Bool { return theme == "transparent" }
 
+    var themeDefinition: ThemeDefinition { return ThemeCatalog.theme(id: theme) }
+
     var accentName: String {
-        get { return store.string(forKey: SettingKey.accent) ?? SettingDefault.accent }
-        set { store.set(newValue, forKey: SettingKey.accent) }
+        get { return readString(SettingKey.accent) ?? SettingDefault.accent }
+        set { put(newValue, SettingKey.accent) }
     }
 
     var accent: AccentChoice { return AccentChoice(rawValue: accentName) ?? .blue }
 
     var keyboardHeightScale: Double {
-        get { return clamp(store.double(forKey: SettingKey.keyboardHeight), Settings.heightScaleRange) }
-        set { store.set(clamp(newValue, Settings.heightScaleRange), forKey: SettingKey.keyboardHeight) }
+        get { return clamp(readDouble(SettingKey.keyboardHeight), Settings.heightScaleRange) }
+        set { put(clamp(newValue, Settings.heightScaleRange), SettingKey.keyboardHeight) }
     }
 
     /// "off", "left" or "right".
     var oneHanded: String {
-        get { return store.string(forKey: SettingKey.oneHanded) ?? SettingDefault.oneHanded }
-        set { store.set(newValue, forKey: SettingKey.oneHanded) }
+        get { return readString(SettingKey.oneHanded) ?? SettingDefault.oneHanded }
+        set { put(newValue, SettingKey.oneHanded) }
     }
 
     // MARK: Data
 
     var languageCode: String {
-        get { return store.string(forKey: SettingKey.language) ?? SettingDefault.language }
-        set { store.set(newValue, forKey: SettingKey.language) }
+        get { return readString(SettingKey.language) ?? SettingDefault.language }
+        set { put(newValue, SettingKey.language) }
     }
 
     var recentEmoji: [String] {
-        get { return store.stringArray(forKey: SettingKey.recentEmoji) ?? [] }
-        set { store.set(newValue, forKey: SettingKey.recentEmoji) }
+        get { return readStringArray(SettingKey.recentEmoji) ?? [] }
+        set { put(newValue, SettingKey.recentEmoji) }
     }
 
     func learnedWords(for languageCode: String) -> [String: Int] {
-        return store.dictionary(forKey: SettingKey.learnedPrefix + languageCode) as? [String: Int] ?? [:]
+        return value(SettingKey.learnedPrefix + languageCode) as? [String: Int] ?? [:]
     }
 
     func setLearnedWords(_ words: [String: Int], for languageCode: String) {
-        store.set(words, forKey: SettingKey.learnedPrefix + languageCode)
+        put(words, SettingKey.learnedPrefix + languageCode)
     }
 
     func clearLearnedWords() {
         for language in Language.allCases {
-            store.removeObject(forKey: SettingKey.learnedPrefix + language.rawValue)
+            put(nil, SettingKey.learnedPrefix + language.rawValue)
         }
     }
 
     func clearRecentEmoji() {
-        store.removeObject(forKey: SettingKey.recentEmoji)
+        put(nil, SettingKey.recentEmoji)
     }
 
     var shortcuts: [TextShortcut] {
         get {
-            guard let data = store.data(forKey: SettingKey.shortcuts),
+            guard let data = readData(SettingKey.shortcuts),
                   let list = try? JSONDecoder().decode([TextShortcut].self, from: data) else {
                 return []
             }
@@ -273,7 +326,7 @@ final class Settings {
         }
         set {
             if let data = try? JSONEncoder().encode(newValue) {
-                store.set(data, forKey: SettingKey.shortcuts)
+                put(data, SettingKey.shortcuts)
             }
         }
     }
@@ -290,21 +343,21 @@ final class Settings {
 
     func resetPreferences() {
         for key in SettingKey.preferenceKeys {
-            store.removeObject(forKey: key)
+            put(nil, key)
         }
     }
 
     // MARK: Status (keyboard writes, app reads)
 
     func markKeyboardSeen(hasFullAccess: Bool) {
-        store.set(Date().timeIntervalSince1970, forKey: SettingKey.lastSeen)
-        store.set(hasFullAccess, forKey: SettingKey.fullAccess)
+        put(Date().timeIntervalSince1970, SettingKey.lastSeen)
+        put(hasFullAccess, SettingKey.fullAccess)
     }
 
     func recordEmojiStats(version: String, total: Int, shown: Int) {
-        store.set(version, forKey: SettingKey.emojiVersion)
-        store.set(total, forKey: SettingKey.emojiTotal)
-        store.set(shown, forKey: SettingKey.emojiShown)
+        put(version, SettingKey.emojiVersion)
+        put(total, SettingKey.emojiTotal)
+        put(shown, SettingKey.emojiShown)
     }
 
     // MARK: Languages
@@ -312,12 +365,12 @@ final class Settings {
     /// ISO codes of the languages shown in the keyboard's language switcher. Never empty.
     var enabledLanguages: [String] {
         get {
-            let stored = store.stringArray(forKey: SettingKey.enabledLanguages) ?? SettingDefault.enabledLanguages
+            let stored = readStringArray(SettingKey.enabledLanguages) ?? SettingDefault.enabledLanguages
             return Language.list(from: stored, fallback: .english).map { $0.rawValue }
         }
         set {
-            store.set(Language.list(from: newValue, fallback: .english).map { $0.rawValue },
-                      forKey: SettingKey.enabledLanguages)
+            put(Language.list(from: newValue, fallback: .english).map { $0.rawValue },
+                SettingKey.enabledLanguages)
         }
     }
 }

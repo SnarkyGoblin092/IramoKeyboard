@@ -27,7 +27,7 @@ final class RepeatingButton: UIButton {
         Haptics.shared.keyPress()
         onFire?()
         stopTimers()
-        let timer = Timer(timeInterval: Settings.shared.holdDelay, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: Prefs.holdDelay, repeats: false) { [weak self] _ in
             self?.startRepeating()
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -187,7 +187,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
 
-    private let tabGlass = FlatPanel()
+    private let tabGlass = FlatPanel(background: Theme.stripFill)
     private let abcButton = UIButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [UIButton] = []
@@ -208,10 +208,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // Search field
         addSubview(searchGlass)
         searchIcon.image = UIImage(systemName: "magnifyingglass")
-        searchIcon.tintColor = UIColor.secondaryLabel
+        searchIcon.tintColor = Theme.secondaryText
         searchIcon.contentMode = .scaleAspectFit
         searchLabel.font = UIFont.systemFont(ofSize: 16)
-        searchLabel.textColor = UIColor.secondaryLabel
+        searchLabel.textColor = Theme.secondaryText
         searchGlass.contentView.addSubview(searchIcon)
         searchGlass.contentView.addSubview(searchLabel)
         searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
@@ -219,7 +219,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
         // Section title
         titleLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
-        titleLabel.textColor = UIColor.secondaryLabel
+        titleLabel.textColor = Theme.secondaryText
         addSubview(titleLabel)
 
         // Grid
@@ -234,11 +234,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         addSubview(collectionView)
 
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-        longPress.minimumPressDuration = max(0.25, Settings.shared.holdDelay)
+        longPress.minimumPressDuration = max(0.25, Prefs.holdDelay)
         collectionView.addGestureRecognizer(longPress)
 
         emptyLabel.textAlignment = .center
-        emptyLabel.textColor = UIColor.secondaryLabel
+        emptyLabel.textColor = Theme.secondaryText
         emptyLabel.font = UIFont.systemFont(ofSize: 15)
         emptyLabel.numberOfLines = 0
         emptyLabel.isHidden = true
@@ -248,13 +248,13 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // Bottom bar
         addSubview(tabGlass)
         abcButton.setTitle("ABC", for: .normal)
-        abcButton.setTitleColor(UIColor.label, for: .normal)
+        abcButton.setTitleColor(Theme.text, for: .normal)
         abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         abcButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         addSubview(abcButton)
 
         backspaceButton.setImage(UIImage(systemName: "delete.left"), for: .normal)
-        backspaceButton.tintColor = UIColor.label
+        backspaceButton.tintColor = Theme.text
         backspaceButton.onFire = { [weak self] in
             guard let self = self else { return }
             self.delegate?.emojiPanelDidTapBackspace(self)
@@ -366,7 +366,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func refreshTabHighlight() {
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == currentSection)
-            button.tintColor = selected ? UIColor.label : UIColor.tertiaryLabel
+            button.tintColor = selected ? Theme.text : Theme.secondaryText.withAlphaComponent(0.55)
             button.alpha = selected ? 1.0 : 0.85
         }
         if currentSection < sections.count {
@@ -472,7 +472,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         var y = cellFrame.minY - height - 2
         if y < 0 { y = cellFrame.maxY + 2 }
 
-        let container = FlatPanel(background: Theme.letterKey, cornerRadius: 10)
+        let container = FlatPanel(background: Theme.popupFill, cornerRadius: 10, allowGlass: false)
         container.layer.shadowColor = UIColor.black.cgColor
         container.layer.shadowOpacity = 0.3
         container.layer.shadowRadius = 3

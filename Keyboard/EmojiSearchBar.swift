@@ -29,12 +29,12 @@ final class EmojiSearchBar: UIView {
         backButton.setImage(UIImage(systemName: "chevron.left",
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)),
                             for: .normal)
-        backButton.tintColor = UIColor.label
+        backButton.tintColor = Theme.text
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         glass.contentView.addSubview(backButton)
 
         iconView.image = UIImage(systemName: "magnifyingglass")
-        iconView.tintColor = UIColor.secondaryLabel
+        iconView.tintColor = Theme.secondaryText
         iconView.contentMode = .scaleAspectFit
         glass.contentView.addSubview(iconView)
 
@@ -60,10 +60,10 @@ final class EmojiSearchBar: UIView {
         placeholder = newPlaceholder
         if text.isEmpty {
             queryLabel.text = placeholder
-            queryLabel.textColor = UIColor.secondaryLabel
+            queryLabel.textColor = Theme.secondaryText
         } else {
             queryLabel.text = text
-            queryLabel.textColor = UIColor.label
+            queryLabel.textColor = Theme.text
         }
     }
 

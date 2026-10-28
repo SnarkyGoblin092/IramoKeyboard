@@ -2,7 +2,7 @@
 
 A custom iPhone keyboard: multiple languages (English and Hungarian plus popular European ones), swipe typing,
 word and emoji suggestions, an iOS-style emoji picker with history and search, space-bar cursor control,
-and a native or transparent look. All settings live in the **HunKeys app**.
+and a theme picker (native, transparent, Liquid Glass and gradient themes). All settings live in the **HunKeys app**.
 
 ## Build and install (no Mac needed)
 1. Push this repo to GitHub. The **Build HunKeys IPA** workflow runs on a `macos-26` runner.

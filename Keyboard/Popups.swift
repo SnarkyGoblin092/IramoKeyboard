@@ -19,7 +19,7 @@ final class KeyPreviewView: UIView {
 
         label.textAlignment = .center
         label.font = UIFont.systemFont(ofSize: 38, weight: .light)
-        label.textColor = UIColor.label
+        label.textColor = Theme.text
         addSubview(label)
     }
 
@@ -151,7 +151,7 @@ final class AlternatesPopupView: UIView {
         highlight.layer.cornerRadius = 6
         highlight.backgroundColor = Theme.accent
         for (index, label) in labels.enumerated() {
-            label.textColor = (index == highlightedIndex) ? UIColor.white : UIColor.label
+            label.textColor = (index == highlightedIndex) ? Theme.onAccent : Theme.text
         }
     }
 }

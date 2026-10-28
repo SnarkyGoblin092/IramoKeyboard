@@ -21,7 +21,7 @@ protocol SuggestionBarDelegate: AnyObject {
 final class SuggestionBar: UIView {
     weak var delegate: SuggestionBarDelegate?
 
-    private let glass = FlatPanel()
+    private let glass = FlatPanel(background: Theme.stripFill)
     private let dismissButton = UIButton(type: .system)
     private let hintLabel = UILabel()
     private var slotButtons: [UIButton] = []
@@ -51,7 +51,7 @@ final class SuggestionBar: UIView {
         addSubview(glass)
 
         hintLabel.font = UIFont.systemFont(ofSize: 13)
-        hintLabel.textColor = UIColor.secondaryLabel
+        hintLabel.textColor = Theme.secondaryText
         hintLabel.textAlignment = .center
         hintLabel.adjustsFontSizeToFitWidth = true
         hintLabel.minimumScaleFactor = 0.7
@@ -60,7 +60,7 @@ final class SuggestionBar: UIView {
         for index in 0..<slotCount {
             let button = UIButton(type: .system)
             button.tag = index
-            button.setTitleColor(UIColor.label, for: .normal)
+            button.setTitleColor(Theme.text, for: .normal)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 17)
             button.titleLabel?.adjustsFontSizeToFitWidth = true
             button.titleLabel?.minimumScaleFactor = 0.6
@@ -77,7 +77,7 @@ final class SuggestionBar: UIView {
             }
         }
 
-        dismissButton.tintColor = UIColor.secondaryLabel
+        dismissButton.tintColor = Theme.secondaryText
         dismissButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
                                        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
                                for: .normal)

@@ -20,19 +20,19 @@ final class Haptics {
 
     /// A key went down (also used for popups opening and similar).
     func keyPress() {
-        let strength = Settings.shared.vibrationStrength
+        let strength = Prefs.vibration
         if strength > 0.01 {
             pressGenerator.impactOccurred(intensity: CGFloat(strength))
             pressGenerator.prepare()
         }
-        if Settings.shared.clickSound {
+        if Prefs.clickSound {
             UIDevice.current.playInputClick()
         }
     }
 
     /// A lighter, rate-limited tick for continuous gestures (moving the cursor, deleting words).
     func tick() {
-        let strength = Settings.shared.vibrationStrength
+        let strength = Prefs.vibration
         guard strength > 0.01 else { return }
         let now = Date()
         guard now.timeIntervalSince(lastTick) > 0.035 else { return }

@@ -357,12 +357,12 @@ final class KeyboardView: UIView {
             startBackspaceRepeat(state)
         case .space:
             state.startedOnSpace = true
-            if Settings.shared.cursorControl {
-                startHoldTimer(state, delay: max(0.2, Settings.shared.holdDelay))
+            if Prefs.cursorControl {
+                startHoldTimer(state, delay: max(0.2, Prefs.holdDelay))
             }
         default:
             if !key.spec.alternates.isEmpty || key.spec.action == .emoji {
-                startHoldTimer(state, delay: Settings.shared.holdDelay)
+                startHoldTimer(state, delay: Prefs.holdDelay)
             }
         }
     }
@@ -385,7 +385,7 @@ final class KeyboardView: UIView {
         newKey.isPressed = true
         showPreview(for: newKey)
         if !newKey.spec.alternates.isEmpty || newKey.spec.action == .emoji {
-            startHoldTimer(state, delay: Settings.shared.holdDelay)
+            startHoldTimer(state, delay: Prefs.holdDelay)
         }
     }
 
@@ -405,7 +405,7 @@ final class KeyboardView: UIView {
 
     private func startBackspaceRepeat(_ state: TouchState) {
         state.holdTimer?.invalidate()
-        state.holdTimer = makeTimer(after: Settings.shared.holdDelay, repeats: false) { [weak self, weak state] in
+        state.holdTimer = makeTimer(after: Prefs.holdDelay, repeats: false) { [weak self, weak state] in
             guard let self = self, let state = state else { return }
             state.repeatTimer?.invalidate()
             state.repeatTimer = self.makeTimer(after: 0.06, repeats: true) { [weak self] in
@@ -420,7 +420,7 @@ final class KeyboardView: UIView {
         guard let key = state.key, !state.isSwiping else { return }
         switch key.spec.action {
         case .space:
-            if Settings.shared.cursorControl && !state.languageSwiped {
+            if Prefs.cursorControl && !state.languageSwiped {
                 beginCursorMode(state, at: state.path.last ?? state.startPoint)
             }
         case .emoji:
@@ -517,7 +517,7 @@ final class KeyboardView: UIView {
     // MARK: Delete words (slide left from backspace)
 
     private func slideFromBackspace(_ state: TouchState, to point: CGPoint) {
-        guard Settings.shared.deleteSwipe else { return }
+        guard Prefs.deleteSwipe else { return }
         let dx = point.x - state.startPoint.x
         let activation: CGFloat = 26
         guard dx < -activation else { return }
@@ -538,7 +538,7 @@ final class KeyboardView: UIView {
     // MARK: Swipe typing
 
     private func shouldStartSwipe(_ state: TouchState, at point: CGPoint) -> Bool {
-        guard Settings.shared.swipeEnabled, page == .letters, state.startedOnLetter, states.count == 1 else {
+        guard Prefs.swipe, page == .letters, state.startedOnLetter, states.count == 1 else {
             return false
         }
         let dx = point.x - state.startPoint.x
@@ -579,7 +579,7 @@ final class KeyboardView: UIView {
     // MARK: Popups
 
     private func showPreview(for key: KeyView) {
-        guard Settings.shared.keyPopups else {
+        guard Prefs.keyPopups else {
             hidePreview()
             return
         }
