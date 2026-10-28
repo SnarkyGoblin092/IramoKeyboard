@@ -30,12 +30,12 @@ protocol SuggestionBarDelegate: AnyObject {
     func suggestionBar(_ bar: SuggestionBar, didTapTool tool: ToolID)
 }
 
-/// A glass capsule above the keys. Normally it shows four suggestion slots (words and emoji);
+/// A flat strip above the keys, like the native one. Normally it shows three suggestion slots (words and emoji);
 /// the arrow on its left swaps them for a row of quick tools.
 final class SuggestionBar: UIView {
     weak var delegate: SuggestionBarDelegate?
 
-    private let glass = GlassView()
+    private let glass = FlatPanel()
     private let toggleButton = UIButton(type: .system)
     private let hintLabel = UILabel()
     private var slotButtons: [UIButton] = []
@@ -43,7 +43,7 @@ final class SuggestionBar: UIView {
     private var toolButtons: [UIButton] = []
     private var tools: [ToolItem] = []
     private var suggestions: [Suggestion] = []
-    private let slotCount = 4
+    private let slotCount = 3
 
     private(set) var showingTools = false
 
@@ -159,7 +159,7 @@ final class SuggestionBar: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        glass.frame = bounds.insetBy(dx: 6, dy: 4)
+        glass.frame = bounds.insetBy(dx: 2, dy: 3)
         let area = glass.bounds
         let toggleWidth: CGFloat = 40
         toggleButton.frame = CGRect(x: 2, y: 0, width: toggleWidth, height: area.height)

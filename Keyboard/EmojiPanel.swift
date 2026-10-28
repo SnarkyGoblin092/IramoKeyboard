@@ -170,7 +170,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
 
-    private let searchGlass = GlassView()
+    private let searchGlass = FlatPanel(background: Theme.searchField, cornerRadius: 10)
     private let searchButton = UIButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -178,7 +178,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
 
-    private let tabGlass = GlassView()
+    private let tabGlass = FlatPanel()
     private let abcButton = UIButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [UIButton] = []
@@ -191,7 +191,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor.clear
+        backgroundColor = Theme.panelBackground   // opaque, so nothing shows through from behind
 
         // Search field
         addSubview(searchGlass)
@@ -336,7 +336,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func refreshTabHighlight() {
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == currentSection)
-            button.tintColor = selected ? Theme.accent : UIColor.secondaryLabel
+            button.tintColor = selected ? UIColor.label : UIColor.tertiaryLabel
             button.alpha = selected ? 1.0 : 0.85
         }
         if currentSection < sections.count {
@@ -437,7 +437,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         var y = cellFrame.minY - height - 2
         if y < 0 { y = cellFrame.maxY + 2 }
 
-        let container = GlassView()
+        let container = FlatPanel(background: Theme.letterKey, cornerRadius: 10)
+        container.layer.shadowColor = UIColor.black.cgColor
+        container.layer.shadowOpacity = 0.3
+        container.layer.shadowRadius = 3
+        container.layer.shadowOffset = CGSize(width: 0, height: 1)
         container.frame = CGRect(x: x, y: y, width: width, height: height)
 
         let scroll = UIScrollView(frame: CGRect(x: 6, y: 0, width: width - 12, height: height))

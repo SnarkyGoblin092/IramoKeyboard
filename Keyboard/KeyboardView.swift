@@ -41,6 +41,7 @@ final class KeyboardView: UIView {
         var popupActive = false
         var handledByHold = false
         var isCursorMode = false
+        var cursorMoved = false
         var cursorLastX: CGFloat = 0
         var cursorRemainder: CGFloat = 0
         var isWordDeleting = false
@@ -188,8 +189,8 @@ final class KeyboardView: UIView {
         trailLayer.frame = bounds
         guard !rows.isEmpty else { return }
 
-        let sidePadding: CGFloat = 3
-        let verticalPadding: CGFloat = 6
+        let sidePadding: CGFloat = 1
+        let verticalPadding: CGFloat = 4
         let rowHeight = (bounds.height - verticalPadding * 2) / CGFloat(rows.count)
 
         hitRects = []
@@ -205,7 +206,7 @@ final class KeyboardView: UIView {
                 rects.append(hit)
                 let key = keyViews[r][c]
                 if key.transform == .identity {
-                    key.frame = hit.insetBy(dx: 3, dy: 4)
+                    key.frame = hit.insetBy(dx: 3, dy: 5.5)
                 }
                 x += width
             }
@@ -293,6 +294,7 @@ final class KeyboardView: UIView {
             if state.startedOnSpace,
                Settings.shared.cursorControl,
                abs(point.x - state.startPoint.x) > 14 {
+                state.cursorMoved = true
                 beginCursorMode(state, at: point)    // sliding right away also works
                 continue
             }
@@ -342,7 +344,7 @@ final class KeyboardView: UIView {
                 startHoldTimer(state, delay: max(0.2, Settings.shared.holdDelay))
             }
         default:
-            if !key.spec.alternates.isEmpty || key.spec.action == .nextLanguage {
+            if !key.spec.alternates.isEmpty || key.spec.action == .emoji {
                 startHoldTimer(state, delay: Settings.shared.holdDelay)
             }
         }
@@ -365,7 +367,7 @@ final class KeyboardView: UIView {
         state.key = newKey
         newKey.isPressed = true
         showPreview(for: newKey)
-        if !newKey.spec.alternates.isEmpty || newKey.spec.action == .nextLanguage {
+        if !newKey.spec.alternates.isEmpty || newKey.spec.action == .emoji {
             startHoldTimer(state, delay: Settings.shared.holdDelay)
         }
     }
@@ -403,8 +405,14 @@ final class KeyboardView: UIView {
         case .space:
             if Settings.shared.cursorControl {
                 beginCursorMode(state, at: state.path.last ?? state.startPoint)
+            } else {
+                // Without cursor control, holding the space bar switches the language.
+                state.handledByHold = true
+                Haptics.shared.keyPress()
+                delegate?.keyboardView(self, didTap: .nextLanguage)
             }
-        case .nextLanguage:
+        case .emoji:
+            // Holding the emoji key hands over to the next installed keyboard.
             state.handledByHold = true
             Haptics.shared.keyPress()
             delegate?.keyboardViewDidHoldGlobe(self)
@@ -423,6 +431,10 @@ final class KeyboardView: UIView {
 
         if state.isCursorMode {
             setCursorAppearance(false)
+            // Hold the space bar and let go without sliding: switch language.
+            if !cancelled && !state.cursorMoved {
+                delegate?.keyboardView(self, didTap: .nextLanguage)
+            }
             return
         }
         if state.isSwiping {
@@ -475,6 +487,7 @@ final class KeyboardView: UIView {
         state.cursorLastX = point.x
         let steps = Int(state.cursorRemainder / step)       // rounds toward zero
         if steps != 0 {
+            state.cursorMoved = true
             state.cursorRemainder -= CGFloat(steps) * step
             delegate?.keyboardView(self, didMoveCursorBy: steps)
             Haptics.shared.tick()

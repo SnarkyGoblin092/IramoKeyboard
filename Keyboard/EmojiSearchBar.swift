@@ -10,7 +10,7 @@ protocol EmojiSearchBarDelegate: AnyObject {
 final class EmojiSearchBar: UIView {
     weak var delegate: EmojiSearchBarDelegate?
 
-    private let glass = GlassView()
+    private let glass = FlatPanel(background: Theme.searchField, cornerRadius: 10)
     private let backButton = UIButton(type: .system)
     private let iconView = UIImageView()
     private let queryLabel = UILabel()

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Combine
 
 /// The keyboard's settings. (No tutorial - just options.)
 struct ContentView: View {
@@ -30,6 +31,9 @@ struct ContentView: View {
     @State private var confirm: Confirmation?
     @State private var testText = ""
     @State private var cleared: String?
+    @State private var testNonce: String?
+    @State private var syncResult: String?
+    @State private var copied = false
     @Environment(\.scenePhase) private var scenePhase
 
     private enum Confirmation: String, Identifiable {
@@ -56,16 +60,27 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .navigationViewStyle(.stack)
-        .onAppear { status = KeyboardStatus.read() }
+        .onAppear {
+            status = KeyboardStatus.read()
+            SharedStore.publishPreferences()
+        }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { status = KeyboardStatus.read() }
+            SharedStore.publishPreferences()
+            if phase == .active { refreshStatus() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .debounce(for: .seconds(0.4), scheduler: DispatchQueue.main)) { _ in
+            SharedStore.publishPreferences()
+        }
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            if testNonce != nil { refreshStatus() }
         }
         .alert(item: $confirm) { item in
             switch item {
             case .recents:
                 return Alert(title: Text("Clear recent emoji?"),
                              primaryButton: .destructive(Text("Clear")) {
-                                 Settings.shared.recentEmoji = []
+                                 Settings.shared.requestClearRecentEmoji()
                                  cleared = "Recent emoji cleared."
                              },
                              secondaryButton: .cancel())
@@ -92,23 +107,60 @@ struct ContentView: View {
     // MARK: Sections
 
     private var statusSection: some View {
-        Section("Status") {
-            if !SharedStore.isShared {
-                Label {
-                    Text("This install can't share settings with the keyboard (no App Group). Changes here won't reach it - install the \"HunKeys-AppGroup.ipa\" build, or use the gear on the keyboard's tool strip.")
-                        .font(.footnote)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-                }
-            }
-            row("Keyboard", status.seen ? "Used \(status.lastSeenText)" : "Not used yet")
-            row("Full Access", status.seen ? (status.fullAccess ? "On" : "Off - no vibration or paste") : "-")
+        Section {
+            row("Keyboard", status.seen ? "Used \(status.lastSeenText)" : "Not seen yet")
+            row("Full Access", status.seen ? (status.fullAccess ? "On" : "Off") : "-")
+            row("Sync channel", SharedStore.transportLabel)
             row("Emoji", status.emojiText)
-            if !status.seen {
-                Text("Add it in Settings > General > Keyboard > Keyboards > Add New Keyboard > HunKeys, then turn on Allow Full Access for vibration and paste.")
-                    .font(.footnote).foregroundColor(.secondary)
+
+            Text(diagnosis.text)
+                .font(.footnote)
+                .foregroundColor(diagnosis.ok ? .secondary : .orange)
+
+            Button("Test sync") { startSyncTest() }
+            if let result = syncResult {
+                Text(result).font(.footnote).foregroundColor(.secondary)
             }
+            Button(copied ? "Copied - now paste on the keyboard" : "Copy settings for the keyboard") {
+                UIPasteboard.general.string = SharedStore.exportString()
+                copied = true
+            }
+        } header: {
+            Text("Status")
+        } footer: {
+            Text("Manual sync: tap Copy, open any text field with HunKeys, tap the arrow at the left of the suggestion bar, then the clipboard icon. The keyboard recognises the text and imports it instead of typing it.")
         }
+    }
+
+    private var diagnosis: (text: String, ok: Bool) {
+        if !SharedStore.isShared {
+            var text = "This install cannot share storage with the keyboard automatically, so changes here won't reach it by themselves (Sideloadly with a free Apple ID usually strips App Group and Keychain sharing). Use \"Copy settings for the keyboard\" below."
+            if !SharedStore.keychainDiagnosis.isEmpty { text += " Keychain: \(SharedStore.keychainDiagnosis)" }
+            return (text, false)
+        }
+        if !status.seen {
+            return ("Add HunKeys in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once. iOS only lets a keyboard read shared storage when Full Access is on.", false)
+        }
+        if !status.fullAccess {
+            return ("Allow Full Access is off. Turn it on in Settings > General > Keyboard > Keyboards > HunKeys - without it the keyboard can't read these settings (or vibrate).", false)
+        }
+        return ("Sync channel available. Tap Test sync to confirm the keyboard really receives changes.", true)
+    }
+
+    private func refreshStatus() {
+        status = KeyboardStatus.read()
+        if let nonce = testNonce, status.echoNonce == nonce {
+            syncResult = "Sync works: the keyboard saw test code \(nonce)."
+            testNonce = nil
+        }
+    }
+
+    private func startSyncTest() {
+        let nonce = String(Int(Date().timeIntervalSince1970) % 100000) + String(Int.random(in: 10...99))
+        SharedStore.defaults.set(nonce, forKey: SyncKey.nonce)
+        SharedStore.publishPreferences()
+        testNonce = nonce
+        syncResult = "Test code \(nonce) sent. Now open a text field with HunKeys, then come back here."
     }
 
     private var feelSection: some View {
@@ -240,16 +292,18 @@ struct KeyboardStatus {
     var emojiVersion: String
     var emojiTotal: Int
     var emojiShown: Int
+    var echoNonce: String
 
     static func read() -> KeyboardStatus {
-        let store = SharedStore.defaults
-        let stamp = store.double(forKey: SettingKey.lastSeen)
+        let values = SharedStore.readStatus()
+        let stamp = values[SettingKey.lastSeen] as? Double ?? 0
         return KeyboardStatus(seen: stamp > 0,
                               lastSeen: Date(timeIntervalSince1970: stamp),
-                              fullAccess: store.bool(forKey: SettingKey.fullAccess),
-                              emojiVersion: store.string(forKey: SettingKey.emojiVersion) ?? "",
-                              emojiTotal: store.integer(forKey: SettingKey.emojiTotal),
-                              emojiShown: store.integer(forKey: SettingKey.emojiShown))
+                              fullAccess: values[SettingKey.fullAccess] as? Bool ?? false,
+                              emojiVersion: values[SettingKey.emojiVersion] as? String ?? "",
+                              emojiTotal: values[SettingKey.emojiTotal] as? Int ?? 0,
+                              emojiShown: values[SettingKey.emojiShown] as? Int ?? 0,
+                              echoNonce: values[SyncKey.echoNonce] as? String ?? "")
     }
 
     var lastSeenText: String {

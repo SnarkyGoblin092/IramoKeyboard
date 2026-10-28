@@ -5,6 +5,7 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: UI
 
+    private let container = UIView()
     private var stage = UIView()
     private var suggestionBar = SuggestionBar()
     private var searchBar = EmojiSearchBar()
@@ -42,9 +43,25 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: Lifecycle
 
+    /// The root view is a keyboard-style input view, so the system draws its native keyboard backdrop.
+    override func loadView() {
+        let inputView = UIInputView(frame: CGRect(x: 0, y: 0, width: 320, height: 260), inputViewStyle: .keyboard)
+        inputView.allowsSelfSizing = true
+        view = inputView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor.clear
+
+        // Everything we draw lives in `container`, so the system's own backdrop views stay untouched.
+        container.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(container)
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: view.topAnchor),
+            container.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
         language = Language(rawValue: settings.languageCode) ?? .english
 
         buildInterface()
@@ -100,7 +117,7 @@ final class KeyboardViewController: UIInputViewController {
         hideSettingsPanel(refresh: false)
         isSearchingEmoji = false
         searchQuery = ""
-        for sub in view.subviews { sub.removeFromSuperview() }
+        for sub in container.subviews { sub.removeFromSuperview() }
         totalHeight = nil
         suggestionHeight = nil
 
@@ -112,27 +129,27 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar.delegate = self
         searchBar.delegate = self
         keyboardView.delegate = self
-        keyboardView.popupHost = view
+        keyboardView.popupHost = container
         searchBar.isHidden = true
 
         for item in [stage, suggestionBar, searchBar, keyboardView] as [UIView] {
             item.translatesAutoresizingMaskIntoConstraints = false
         }
-        view.addSubview(stage)
+        container.addSubview(stage)
         stage.addSubview(suggestionBar)
         stage.addSubview(searchBar)
         stage.addSubview(keyboardView)
 
-        let leading = stage.leadingAnchor.constraint(equalTo: view.leadingAnchor)
-        let trailing = stage.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        let leading = stage.leadingAnchor.constraint(equalTo: container.leadingAnchor)
+        let trailing = stage.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         stageLeading = leading
         stageTrailing = trailing
         let barHeight = suggestionBar.heightAnchor.constraint(equalToConstant: 44)
         suggestionHeight = barHeight
 
         NSLayoutConstraint.activate([
-            stage.topAnchor.constraint(equalTo: view.topAnchor),
-            stage.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stage.topAnchor.constraint(equalTo: container.topAnchor),
+            stage.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             leading, trailing,
 
             suggestionBar.topAnchor.constraint(equalTo: stage.topAnchor),
@@ -164,12 +181,12 @@ final class KeyboardViewController: UIInputViewController {
             self?.applyHeight()
         }, for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(button)
+        container.addSubview(button)
         NSLayoutConstraint.activate([
-            button.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            button.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             button.widthAnchor.constraint(equalToConstant: 44),
             button.heightAnchor.constraint(equalToConstant: 44),
-            button.centerXAnchor.constraint(equalTo: view.leadingAnchor, constant: 0)   // positioned in applyOneHandedInsets
+            button.centerXAnchor.constraint(equalTo: container.leadingAnchor, constant: 0)   // positioned in applyOneHandedInsets
         ])
         expandButton = button
 
@@ -239,7 +256,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func moveExpandButton(centerX: CGFloat) {
         guard let button = expandButton else { return }
-        for constraint in view.constraints where constraint.firstItem === button && constraint.firstAttribute == .centerX {
+        for constraint in container.constraints where constraint.firstItem === button && constraint.firstAttribute == .centerX {
             constraint.constant = centerX
         }
     }
@@ -620,7 +637,7 @@ final class KeyboardViewController: UIInputViewController {
 
         var emojis: [String] = []
         if settings.emojiSuggestionsEnabled && !emojiWord.isEmpty && EmojiStore.shared.isReady {
-            emojis = EmojiStore.shared.suggestions(for: emojiWord, language: language, limit: 2)
+            emojis = EmojiStore.shared.suggestions(for: emojiWord, language: language, limit: 1)
         }
 
         var words: [String] = []
@@ -629,7 +646,7 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         var result: [Suggestion] = []
-        let wordSlots = 4 - emojis.count
+        let wordSlots = 3 - emojis.count
         if !prefix.isEmpty {
             // Slot 1 is always exactly what was typed, so it can never be auto-"corrected" away.
             result.append(Suggestion(text: prefix, kind: .literal))
@@ -713,14 +730,17 @@ final class KeyboardViewController: UIInputViewController {
         panel.delegate = self
         panel.language = language
         panel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(panel)
+        container.addSubview(panel)
         NSLayoutConstraint.activate([
-            panel.topAnchor.constraint(equalTo: view.topAnchor),
-            panel.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            panel.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            panel.topAnchor.constraint(equalTo: container.topAnchor),
+            panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
         emojiPanel = panel
+        // The picker replaces the keyboard completely: nothing may show through from behind it.
+        stage.isHidden = true
+        expandButton?.isHidden = true
         panel.reload()
         EmojiStore.shared.loadIfNeeded { [weak panel] in
             panel?.reload()
@@ -730,6 +750,8 @@ final class KeyboardViewController: UIInputViewController {
     private func hideEmojiPanel(refresh: Bool = true) {
         emojiPanel?.removeFromSuperview()
         emojiPanel = nil
+        stage.isHidden = false
+        applyOneHandedInsets()
         if refresh { scheduleRefresh() }
     }
 
@@ -778,19 +800,23 @@ final class KeyboardViewController: UIInputViewController {
         let panel = SettingsPanel(hasFullAccess: hasFullAccess)
         panel.delegate = self
         panel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(panel)
+        container.addSubview(panel)
         NSLayoutConstraint.activate([
-            panel.topAnchor.constraint(equalTo: view.topAnchor),
-            panel.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            panel.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            panel.topAnchor.constraint(equalTo: container.topAnchor),
+            panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
         settingsPanel = panel
+        stage.isHidden = true
+        expandButton?.isHidden = true
     }
 
     private func hideSettingsPanel(refresh: Bool = true) {
         settingsPanel?.removeFromSuperview()
         settingsPanel = nil
+        stage.isHidden = false
+        applyOneHandedInsets()
         if refresh { scheduleRefresh() }
     }
 
@@ -817,6 +843,11 @@ final class KeyboardViewController: UIInputViewController {
 
     private func pasteFromClipboard() {
         guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
+        if SharedStore.isSettingsPayload(text) {
+            _ = SharedStore.importSettings(from: text)
+            buildInterface()
+            return
+        }
         if isSearchingEmoji {
             searchQuery += text
             refreshEmojiSearch()

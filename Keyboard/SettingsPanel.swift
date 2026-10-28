@@ -16,7 +16,7 @@ final class SettingsPanel: UIView {
     init(hasFullAccess: Bool) {
         self.hasFullAccess = hasFullAccess
         super.init(frame: .zero)
-        backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+        backgroundColor = Theme.panelBackground
         build()
     }
 

@@ -56,3 +56,23 @@ final class GlassView: UIView {
         return UIBlurEffect(style: .systemUltraThinMaterial)
     }
 }
+
+
+/// A plain (non-glass) container with the same `contentView` API as `GlassView`, used for the
+/// native-looking flat parts of the keyboard.
+final class FlatPanel: UIView {
+    var contentView: UIView { return self }
+
+    init(background: UIColor? = nil, cornerRadius: CGFloat = 0) {
+        super.init(frame: .zero)
+        backgroundColor = background ?? UIColor.clear
+        if cornerRadius > 0 {
+            layer.cornerRadius = cornerRadius
+            layer.cornerCurve = .continuous
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+}

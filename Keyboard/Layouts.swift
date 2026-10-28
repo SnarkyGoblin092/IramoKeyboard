@@ -153,14 +153,23 @@ enum LayoutBuilder {
 
         result.append([
             KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true),
-            KeySpec(action: .nextLanguage, symbol: "globe", weight: 1.0, isFunction: true),
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
+            KeySpec(action: .character(","), title: ",", weight: 1.0, alternates: commaAlternates(language)),
             KeySpec(action: .space, title: language.displayName, weight: 3.9),
             KeySpec(action: .character("."), title: ".", weight: 1.0,
                     alternates: [",", "?", "!", "'", "\"", ":", ";", "-"]),
             KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
         ])
         return result
+    }
+
+    /// Long-press options of the comma key.
+    private static func commaAlternates(_ language: Language) -> [String] {
+        var items = [";", ":", "!", "?", "'", "\"", "-", "_", "(", ")", "@", "#", "&", "/"]
+        if language == .hungarian {
+            items.append(contentsOf: ["\u{201E}", "\u{201D}", "\u{00BB}", "\u{00AB}"])
+        }
+        return items
     }
 
     // MARK: Numbers
@@ -209,9 +218,8 @@ enum LayoutBuilder {
     private static func bottomRow(language: Language, pageKeyTitle: String, returnTitle: String) -> [KeySpec] {
         return [
             KeySpec(action: .showLetters, title: pageKeyTitle, weight: 1.3, isFunction: true),
-            KeySpec(action: .nextLanguage, symbol: "globe", weight: 1.0, isFunction: true),
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
-            KeySpec(action: .space, title: language.displayName, weight: 4.9),
+            KeySpec(action: .space, title: language.displayName, weight: 5.9),
             KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
         ]
     }

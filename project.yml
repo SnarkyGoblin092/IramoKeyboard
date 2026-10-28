@@ -45,6 +45,8 @@ targets:
     platform: iOS
     sources:
       - path: Keyboard
+        excludes:
+          - Settings.swift     # leftover from v1 (same name as Shared/Settings.swift)
       - path: Shared
     info:
       path: Config/Keyboard-Info.plist

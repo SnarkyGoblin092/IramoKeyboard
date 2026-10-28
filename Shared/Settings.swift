@@ -100,7 +100,10 @@ final class Settings {
     static let holdDelayRange: ClosedRange<Double> = 0.10...1.00
     static let heightScaleRange: ClosedRange<Double> = 0.85...1.20
 
-    private var store: UserDefaults { return SharedStore.defaults }
+    private var store: UserDefaults {
+        SharedStore.refreshIfNeeded()   // keyboard: picks up changes the app sent (throttled)
+        return SharedStore.defaults
+    }
 
     private init() {
         SharedStore.defaults.register(defaults: [
@@ -259,6 +262,12 @@ final class Settings {
         for code in ["en", "hu"] {
             store.removeObject(forKey: SettingKey.learnedPrefix + code)
         }
+        store.set(Date().timeIntervalSince1970, forKey: SyncKey.clearLearned)   // tells the keyboard too
+    }
+
+    func requestClearRecentEmoji() {
+        store.removeObject(forKey: SettingKey.recentEmoji)
+        store.set(Date().timeIntervalSince1970, forKey: SyncKey.clearRecents)
     }
 
     var shortcuts: [TextShortcut] {
@@ -295,13 +304,20 @@ final class Settings {
     // MARK: Status (keyboard writes, app reads)
 
     func markKeyboardSeen(hasFullAccess: Bool) {
-        store.set(Date().timeIntervalSince1970, forKey: SettingKey.lastSeen)
-        store.set(hasFullAccess, forKey: SettingKey.fullAccess)
+        SharedStore.pullPreferences()   // fresh settings first
+        let target = SharedStore.defaults
+        target.set(Date().timeIntervalSince1970, forKey: SettingKey.lastSeen)
+        target.set(hasFullAccess, forKey: SettingKey.fullAccess)
+        // Echo the app's "Test sync" code so the app can tell the keyboard received it.
+        target.set(target.string(forKey: SyncKey.nonce) ?? "", forKey: SyncKey.echoNonce)
+        SharedStore.publishStatus()
     }
 
     func recordEmojiStats(version: String, total: Int, shown: Int) {
-        store.set(version, forKey: SettingKey.emojiVersion)
-        store.set(total, forKey: SettingKey.emojiTotal)
-        store.set(shown, forKey: SettingKey.emojiShown)
+        let target = SharedStore.defaults
+        target.set(version, forKey: SettingKey.emojiVersion)
+        target.set(total, forKey: SettingKey.emojiTotal)
+        target.set(shown, forKey: SettingKey.emojiShown)
+        SharedStore.publishStatus()
     }
 }

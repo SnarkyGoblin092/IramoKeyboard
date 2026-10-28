@@ -4,7 +4,7 @@ import UIKit
 /// multi-touch typing, long-press accents, cursor control and swiping work across key boundaries.
 ///
 /// Two looks:
-///  * default       - a translucent, glass-styled cap (cheap to draw, keeps typing instant)
+///  * default       - the native iOS key cap (opaque, 5pt corners, 1pt shadow line)
 ///  * glass keys    - every cap is a real Liquid Glass view (opt-in; heavier)
 final class KeyView: UIView {
     private(set) var spec: KeySpec
@@ -18,8 +18,10 @@ final class KeyView: UIView {
         didSet {
             guard oldValue != isPressed else { return }
             refreshAppearance()
-            UIView.animate(withDuration: 0.07, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-                self.transform = self.isPressed ? CGAffineTransform(scaleX: 0.95, y: 0.95) : .identity
+            if useGlass {
+                UIView.animate(withDuration: 0.07, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                    self.transform = self.isPressed ? CGAffineTransform(scaleX: 0.95, y: 0.95) : .identity
+                }
             }
         }
     }
@@ -32,7 +34,7 @@ final class KeyView: UIView {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
 
-        layer.cornerRadius = 9
+        layer.cornerRadius = useGlass ? 9 : 5.5
         layer.cornerCurve = .continuous
 
         if useGlass {
@@ -40,10 +42,8 @@ final class KeyView: UIView {
             addSubview(glassView)
             glass = glassView
         } else {
-            layer.borderWidth = 0.5
-            layer.shadowColor = UIColor.black.cgColor
-            layer.shadowOpacity = 0.16
-            layer.shadowRadius = 0.5
+            layer.shadowOpacity = 1
+            layer.shadowRadius = 0
             layer.shadowOffset = CGSize(width: 0, height: 1)
         }
 
@@ -54,7 +54,7 @@ final class KeyView: UIView {
         addSubview(label)
 
         hintLabel.textAlignment = .right
-        hintLabel.font = UIFont.systemFont(ofSize: 10, weight: .medium)
+        hintLabel.font = UIFont.systemFont(ofSize: 10, weight: .regular)
         hintLabel.textColor = UIColor.secondaryLabel
         hintLabel.text = spec.hint
         addSubview(hintLabel)
@@ -73,15 +73,15 @@ final class KeyView: UIView {
     private func configureContent() {
         if let symbol = spec.symbol {
             iconView.image = UIImage(systemName: symbol,
-                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular))
             iconView.isHidden = false
             label.isHidden = true
         } else {
             label.text = spec.title
             if spec.action == .space {
-                label.font = UIFont.systemFont(ofSize: 15)
+                label.font = UIFont.systemFont(ofSize: 16)
             } else if spec.title.count == 1 {
-                label.font = UIFont.systemFont(ofSize: 25)
+                label.font = UIFont.systemFont(ofSize: 23, weight: .light)
             } else {
                 label.font = UIFont.systemFont(ofSize: 16)
             }
@@ -92,7 +92,7 @@ final class KeyView: UIView {
 
     func setIcon(_ symbolName: String) {
         iconView.image = UIImage(systemName: symbolName,
-                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular))
     }
 
     func setTitle(_ title: String) {
@@ -113,6 +113,8 @@ final class KeyView: UIView {
             textColor = UIColor.white
         } else if isActive {
             textColor = UIColor.black
+        } else if spec.isFunction && isPressed && !useGlass {
+            textColor = UIColor.label
         } else {
             textColor = UIColor.label
         }
@@ -150,7 +152,8 @@ final class KeyView: UIView {
         super.layoutSubviews()
         glass?.frame = bounds
         if !useGlass {
-            layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
+            layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
+            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
         }
         label.frame = bounds.insetBy(dx: 2, dy: 0)
         hintLabel.frame = CGRect(x: bounds.width - 18, y: 3, width: 14, height: 12)
