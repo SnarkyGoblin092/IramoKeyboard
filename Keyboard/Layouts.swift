@@ -91,6 +91,7 @@ struct KeySpec {
     var weight: CGFloat = 1
     var alternates: [String] = []
     var isFunction: Bool = false
+    var hint: String? = nil          // small character in the key's corner (first long-press option)
 
     var isSpacer: Bool { return action == .spacer }
 }
@@ -99,35 +100,58 @@ struct KeySpec {
 
 enum LayoutBuilder {
 
-    static func rows(language: Language, page: KeyboardPage, returnTitle: String) -> [[KeySpec]] {
+    static func rows(language: Language,
+                     page: KeyboardPage,
+                     returnTitle: String,
+                     numberRow: Bool,
+                     showHints: Bool) -> [[KeySpec]] {
         switch page {
-        case .letters: return letterPage(language: language, returnTitle: returnTitle)
-        case .numbers: return numberPage(language: language, returnTitle: returnTitle)
-        case .symbols: return symbolPage(language: language, returnTitle: returnTitle)
+        case .letters:
+            return letterPage(language: language, returnTitle: returnTitle, numberRow: numberRow, showHints: showHints)
+        case .numbers:
+            return numberPage(language: language, returnTitle: returnTitle)
+        case .symbols:
+            return symbolPage(language: language, returnTitle: returnTitle)
         }
     }
 
     // MARK: Letters
 
-    private static func letterPage(language: Language, returnTitle: String) -> [[KeySpec]] {
+    private static func letterPage(language: Language,
+                                   returnTitle: String,
+                                   numberRow: Bool,
+                                   showHints: Bool) -> [[KeySpec]] {
         let letters = language.letterRows
         let accents = language.accents
 
         func letterKey(_ letter: String) -> KeySpec {
-            return KeySpec(action: .character(letter), title: letter, alternates: accents[letter] ?? [])
+            let alternates = accents[letter] ?? []
+            return KeySpec(action: .character(letter),
+                           title: letter,
+                           alternates: alternates,
+                           hint: showHints ? alternates.first : nil)
         }
 
-        let row1: [KeySpec] = letters[0].map(letterKey)
+        var result: [[KeySpec]] = []
+
+        if numberRow {
+            let digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+            result.append(digits.map { KeySpec(action: .character($0), title: $0) })
+        }
+
+        result.append(letters[0].map(letterKey))
 
         var row2: [KeySpec] = [KeySpec(action: .spacer, weight: 0.5)]
         row2.append(contentsOf: letters[1].map(letterKey))
         row2.append(KeySpec(action: .spacer, weight: 0.5))
+        result.append(row2)
 
         var row3: [KeySpec] = [KeySpec(action: .shift, symbol: "shift", weight: 1.5, isFunction: true)]
         row3.append(contentsOf: letters[2].map(letterKey))
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))
+        result.append(row3)
 
-        let row4: [KeySpec] = [
+        result.append([
             KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true),
             KeySpec(action: .nextLanguage, symbol: "globe", weight: 1.0, isFunction: true),
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
@@ -135,9 +159,8 @@ enum LayoutBuilder {
             KeySpec(action: .character("."), title: ".", weight: 1.0,
                     alternates: [",", "?", "!", "'", "\"", ":", ";", "-"]),
             KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
-        ]
-
-        return [row1, row2, row3, row4]
+        ])
+        return result
     }
 
     // MARK: Numbers

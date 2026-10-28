@@ -11,8 +11,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"            # Swift 5 language mode (no strict-concurrency errors)
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1"
+    CURRENT_PROJECT_VERSION: "2"
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
 
 targets:
@@ -21,6 +21,7 @@ targets:
     platform: iOS
     sources:
       - path: App
+      - path: Shared
     dependencies:
       - target: HunKeysKeyboard
     info:
@@ -44,6 +45,7 @@ targets:
     platform: iOS
     sources:
       - path: Keyboard
+      - path: Shared
     info:
       path: Config/Keyboard-Info.plist
       properties:
@@ -55,7 +57,7 @@ targets:
             IsASCIICapable: false
             PrefersRightToLeft: false
             PrimaryLanguage: en-US
-            RequestsOpenAccess: true      # needed for haptics (vibration)
+            RequestsOpenAccess: true      # needed for haptics (vibration) and paste
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hunkeys.k9x4.app.keyboard

@@ -7,8 +7,9 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
-    timeout-minutes: 40
+    # macOS 26 runners carry Xcode 26+, which has the Liquid Glass APIs (UIGlassEffect).
+    runs-on: macos-26
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +33,8 @@ jobs:
           test -s Keyboard/Resources/emoji.json
           test -s Keyboard/Resources/words_en.tsv
           test -s Keyboard/Resources/words_hu.tsv
+          test -s Keyboard/Resources/emoji_search_en.json
+          test -s Keyboard/Resources/emoji_search_hu.json
           python3 - <<'PY'
           import json
           data = json.load(open("Keyboard/Resources/emoji.json"))
@@ -40,9 +43,10 @@ jobs:
           assert total > 1500, "emoji list looks too small"
           for lang in ("en", "hu"):
               n = len(json.load(open(f"Keyboard/Resources/emoji_keywords_{lang}.json")))
-              print(lang, "emoji keywords:", n)
-              if n < 300:
-                  print(f"::warning::only {n} emoji keywords for {lang}; emoji suggestions will be weak")
+              s = len(json.load(open(f"Keyboard/Resources/emoji_search_{lang}.json")))
+              print(lang, "emoji keywords:", n, "| searchable emoji:", s)
+              if n < 300 or s < 800:
+                  print(f"::warning::emoji keyword data for {lang} looks thin; emoji search will be weak")
           PY
 
       - name: Install XcodeGen
@@ -66,20 +70,42 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log
 
-      - name: Package IPA
+      # HunKeys.ipa            plain build. Works with any signing tool, but the app and the keyboard
+      #                        cannot share settings (the keyboard then shows its own gear button).
+      # HunKeys-AppGroup.ipa   same build with the App Group entitlement attached, so the app's
+      #                        settings reach the keyboard. Needs a signing tool that supports app
+      #                        groups (AltStore / SideStore / a paid developer account).
+      - name: Package plain IPA
         run: |
           rm -rf Payload HunKeys.ipa
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/HunKeys.app Payload/
           zip -qry HunKeys.ipa Payload
-          echo "IPA contents (top level):"
-          unzip -l HunKeys.ipa | grep -E "Info.plist|PlugIns|\.appex" | head -20
+          unzip -l HunKeys.ipa | grep -E "\.appex/Info.plist|HunKeys.app/Info.plist" | head
 
-      - name: Upload IPA
+      - name: Package App Group IPA
+        continue-on-error: true
+        run: |
+          brew install ldid
+          command -v ldid
+          rm -rf group-build HunKeys-AppGroup.ipa
+          mkdir -p group-build/Payload
+          cp -R build/Build/Products/Release-iphoneos/HunKeys.app group-build/Payload/
+          APP=group-build/Payload/HunKeys.app
+          ldid -SConfig/AppGroup.entitlements "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard"
+          ldid -SConfig/AppGroup.entitlements "$APP/HunKeys"
+          echo "Entitlements now attached to the keyboard:"
+          ldid -e "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard"
+          (cd group-build && zip -qry ../HunKeys-AppGroup.ipa Payload)
+          ls -la HunKeys-AppGroup.ipa
+
+      - name: Upload IPAs
         uses: actions/upload-artifact@v4
         with:
-          name: HunKeys-unsigned-ipa
-          path: HunKeys.ipa
+          name: HunKeys-ipa
+          path: |
+            HunKeys.ipa
+            HunKeys-AppGroup.ipa
           if-no-files-found: error
 
       - name: Show compiler errors (only if something failed)

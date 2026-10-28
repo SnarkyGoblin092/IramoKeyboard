@@ -2,11 +2,10 @@ import UIKit
 
 protocol SettingsPanelDelegate: AnyObject {
     func settingsPanelDidClose(_ panel: SettingsPanel)
-    func settingsPanelDidChange(_ panel: SettingsPanel)
-    func settingsPanelDidRequestForgetWords(_ panel: SettingsPanel)
 }
 
-/// Settings that can be changed without leaving the keyboard (opened from the gear button).
+/// A small fallback panel, only reachable (gear tool) when the app's settings cannot reach the
+/// keyboard because no App Group is available. The full settings live in the HunKeys app.
 final class SettingsPanel: UIView {
     weak var delegate: SettingsPanelDelegate?
 
@@ -17,7 +16,7 @@ final class SettingsPanel: UIView {
     init(hasFullAccess: Bool) {
         self.hasFullAccess = hasFullAccess
         super.init(frame: .zero)
-        backgroundColor = Theme.panelBackground
+        backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
         build()
     }
 
@@ -48,9 +47,8 @@ final class SettingsPanel: UIView {
 
         let settings = Settings.shared
 
-        // Header
         let title = UILabel()
-        title.text = "HunKeys settings"
+        title.text = "HunKeys quick settings"
         title.font = UIFont.boldSystemFont(ofSize: 17)
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
@@ -64,61 +62,43 @@ final class SettingsPanel: UIView {
         header.alignment = .center
         stack.addArrangedSubview(header)
 
-        // Hold delay
+        let note = UILabel()
+        note.numberOfLines = 0
+        note.font = UIFont.systemFont(ofSize: 12)
+        note.textColor = UIColor.systemOrange
+        note.text = "The HunKeys app can't reach this keyboard on this install (no App Group), so the essentials are here. Try the \"App Group\" IPA to use the full settings in the app."
+        stack.addArrangedSubview(note)
+
         addSlider(title: "Hold delay",
                   lower: Float(Settings.holdDelayRange.lowerBound),
                   upper: Float(Settings.holdDelayRange.upperBound),
                   value: Float(settings.holdDelay),
                   format: { String(format: "%.2f s", Double($0)) },
-                  onChange: { value in Settings.shared.holdDelay = Double(value) })
+                  onChange: { Settings.shared.holdDelay = Double($0) })
 
-        // Vibration strength
         addSlider(title: "Vibration strength",
                   lower: 0,
                   upper: 1,
                   value: Float(settings.vibrationStrength),
                   format: { $0 < 0.01 ? "Off" : "\(Int((Double($0) * 100).rounded()))%" },
-                  onChange: { value in Settings.shared.vibrationStrength = Double(value) },
+                  onChange: { Settings.shared.vibrationStrength = Double($0) },
                   onRelease: { Haptics.shared.keyPress() })
 
         if !hasFullAccess {
-            let note = UILabel()
-            note.numberOfLines = 0
-            note.font = UIFont.systemFont(ofSize: 13)
-            note.textColor = UIColor.systemOrange
-            note.text = "Vibration only works when \"Allow Full Access\" is on: Settings > General > Keyboard > Keyboards > HunKeys."
-            stack.addArrangedSubview(note)
+            let access = UILabel()
+            access.numberOfLines = 0
+            access.font = UIFont.systemFont(ofSize: 12)
+            access.textColor = UIColor.systemOrange
+            access.text = "Vibration needs \"Allow Full Access\": Settings > General > Keyboard > Keyboards > HunKeys."
+            stack.addArrangedSubview(access)
         }
 
-        // Switches
         addSwitch(title: "Swipe typing", isOn: settings.swipeEnabled) { Settings.shared.swipeEnabled = $0 }
-        addSwitch(title: "Word suggestions", isOn: settings.suggestionsEnabled) { [weak self] on in
-            Settings.shared.suggestionsEnabled = on
-            self?.notifyChange()
-        }
-        addSwitch(title: "Emoji suggestions", isOn: settings.emojiSuggestionsEnabled) { [weak self] on in
-            Settings.shared.emojiSuggestionsEnabled = on
-            self?.notifyChange()
-        }
-        addSwitch(title: "Auto-capitalize", isOn: settings.autoCapitalize) { [weak self] on in
-            Settings.shared.autoCapitalize = on
-            self?.notifyChange()
-        }
-
-        // Privacy
-        let forget = UIButton(type: .system)
-        forget.setTitle("Forget learned words", for: .normal)
-        forget.contentHorizontalAlignment = .leading
-        forget.addAction(UIAction { [weak self, weak forget] _ in
-            guard let self = self else { return }
-            self.delegate?.settingsPanelDidRequestForgetWords(self)
-            forget?.setTitle("Learned words cleared", for: .normal)
-        }, for: .touchUpInside)
-        stack.addArrangedSubview(forget)
-    }
-
-    private func notifyChange() {
-        delegate?.settingsPanelDidChange(self)
+        addSwitch(title: "Word suggestions", isOn: settings.suggestionsEnabled) { Settings.shared.suggestionsEnabled = $0 }
+        addSwitch(title: "Emoji suggestions", isOn: settings.emojiSuggestionsEnabled) { Settings.shared.emojiSuggestionsEnabled = $0 }
+        addSwitch(title: "Auto-capitalize", isOn: settings.autoCapitalize) { Settings.shared.autoCapitalize = $0 }
+        addSwitch(title: "Space-bar cursor control", isOn: settings.cursorControl) { Settings.shared.cursorControl = $0 }
+        addSwitch(title: "Click sound", isOn: settings.clickSound) { Settings.shared.clickSound = $0 }
     }
 
     private func addSlider(title: String,

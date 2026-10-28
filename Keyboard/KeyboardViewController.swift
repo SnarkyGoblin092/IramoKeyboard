@@ -5,12 +5,18 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: UI
 
-    private let suggestionBar = SuggestionBar()
-    private let keyboardView = KeyboardView()
+    private var stage = UIView()
+    private var suggestionBar = SuggestionBar()
+    private var searchBar = EmojiSearchBar()
+    private var keyboardView = KeyboardView()
+    private var expandButton: UIButton?
     private var emojiPanel: EmojiPanel?
     private var settingsPanel: SettingsPanel?
+
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
+    private var stageLeading: NSLayoutConstraint?
+    private var stageTrailing: NSLayoutConstraint?
 
     // MARK: State
 
@@ -19,6 +25,7 @@ final class KeyboardViewController: UIInputViewController {
     private var page: KeyboardPage = .letters
     private var shift: ShiftState = .off
     private var returnTitle = "return"
+    private var builtSignature = ""
 
     private var stores: [Language: WordStore] = [:]
     private let decoder = SwipeDecoder()
@@ -29,39 +36,18 @@ final class KeyboardViewController: UIInputViewController {
     private var swipeAlternatives: [String] = []
     private var refreshScheduled = false
 
+    // Emoji search (typing on the normal keys while the picker's search field is "active")
+    private var isSearchingEmoji = false
+    private var searchQuery = ""
+
     // MARK: Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor.clear
-
         language = Language(rawValue: settings.languageCode) ?? .english
 
-        suggestionBar.delegate = self
-        keyboardView.delegate = self
-        keyboardView.popupHost = view
-
-        suggestionBar.translatesAutoresizingMaskIntoConstraints = false
-        keyboardView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(suggestionBar)
-        view.addSubview(keyboardView)
-
-        let suggestionHeightConstraint = suggestionBar.heightAnchor.constraint(equalToConstant: 44)
-        suggestionHeight = suggestionHeightConstraint
-        NSLayoutConstraint.activate([
-            suggestionBar.topAnchor.constraint(equalTo: view.topAnchor),
-            suggestionBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            suggestionBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            suggestionHeightConstraint,
-
-            keyboardView.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
-            keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-
-        updateReturnTitle()
-        reloadKeyboardLayout()
+        buildInterface()
         loadStore(for: language)
         EmojiStore.shared.loadIfNeeded()
         Haptics.shared.prepare()
@@ -70,6 +56,12 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         Haptics.shared.prepare()
+        settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
+
+        // Settings changed in the app while the keyboard was away: rebuild the look.
+        if settingsSignature() != builtSignature {
+            buildInterface()
+        }
         applyHeight()
         updateAutoShift()
         scheduleRefresh()
@@ -78,24 +70,137 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
+        applyOneHandedInsets()
     }
 
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
-        // Keep only the active dictionary in memory.
         stores = stores.filter { $0.key == language }
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
         updateReturnTitle()
-        updateAutoShift()
+        if !isSearchingEmoji { updateAutoShift() }
         scheduleRefresh()
+    }
+
+    // MARK: Building the interface
+
+    private func settingsSignature() -> String {
+        let s = settings
+        return [
+            "\(s.numberRow)", "\(s.keyHints)", s.glassStyle, "\(s.glassKeys)", s.accentName,
+            s.oneHanded, "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(SharedStore.isShared)"
+        ].joined(separator: "|")
+    }
+
+    /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
+    private func buildInterface() {
+        hideEmojiPanel(refresh: false)
+        hideSettingsPanel(refresh: false)
+        isSearchingEmoji = false
+        searchQuery = ""
+        for sub in view.subviews { sub.removeFromSuperview() }
+        totalHeight = nil
+        suggestionHeight = nil
+
+        stage = UIView()
+        suggestionBar = SuggestionBar()
+        searchBar = EmojiSearchBar()
+        keyboardView = KeyboardView()
+
+        suggestionBar.delegate = self
+        searchBar.delegate = self
+        keyboardView.delegate = self
+        keyboardView.popupHost = view
+        searchBar.isHidden = true
+
+        for item in [stage, suggestionBar, searchBar, keyboardView] as [UIView] {
+            item.translatesAutoresizingMaskIntoConstraints = false
+        }
+        view.addSubview(stage)
+        stage.addSubview(suggestionBar)
+        stage.addSubview(searchBar)
+        stage.addSubview(keyboardView)
+
+        let leading = stage.leadingAnchor.constraint(equalTo: view.leadingAnchor)
+        let trailing = stage.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        stageLeading = leading
+        stageTrailing = trailing
+        let barHeight = suggestionBar.heightAnchor.constraint(equalToConstant: 44)
+        suggestionHeight = barHeight
+
+        NSLayoutConstraint.activate([
+            stage.topAnchor.constraint(equalTo: view.topAnchor),
+            stage.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            leading, trailing,
+
+            suggestionBar.topAnchor.constraint(equalTo: stage.topAnchor),
+            suggestionBar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
+            suggestionBar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
+            barHeight,
+
+            searchBar.topAnchor.constraint(equalTo: suggestionBar.topAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: suggestionBar.leadingAnchor),
+            searchBar.trailingAnchor.constraint(equalTo: suggestionBar.trailingAnchor),
+            searchBar.bottomAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
+
+            keyboardView.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
+            keyboardView.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
+            keyboardView.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
+            keyboardView.bottomAnchor.constraint(equalTo: stage.bottomAnchor)
+        ])
+
+        // One-handed mode: a button in the free strip brings the full width back.
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "arrow.left.and.right",
+                                withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)),
+                        for: .normal)
+        button.tintColor = Theme.accent
+        button.addAction(UIAction { [weak self] _ in
+            Haptics.shared.keyPress()
+            self?.settings.oneHanded = "off"
+            self?.buildInterface()
+            self?.applyHeight()
+        }, for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            button.widthAnchor.constraint(equalToConstant: 44),
+            button.heightAnchor.constraint(equalToConstant: 44),
+            button.centerXAnchor.constraint(equalTo: view.leadingAnchor, constant: 0)   // positioned in applyOneHandedInsets
+        ])
+        expandButton = button
+
+        configureTools()
+        suggestionBar.emptyHint = SharedStore.isShared ? nil : "Settings aren't synced - tap the arrow, then the gear"
+        updateReturnTitle()
+        reloadKeyboardLayout()
+        builtSignature = settingsSignature()
+        applyHeight()
+        applyOneHandedInsets()
+    }
+
+    private func configureTools() {
+        var items: [ToolItem] = [
+            ToolItem(id: .paste, symbol: "doc.on.clipboard"),
+            ToolItem(id: .oneHanded, symbol: "hand.point.right", isActive: settings.oneHanded != "off"),
+            ToolItem(id: .numberRow, symbol: "textformat.123", isActive: settings.numberRow)
+        ]
+        if !SharedStore.isShared {
+            items.append(ToolItem(id: .settings, symbol: "gearshape"))
+        }
+        items.append(ToolItem(id: .dismiss, symbol: "keyboard.chevron.compact.down"))
+        suggestionBar.setTools(items)
     }
 
     private func applyHeight() {
         let isPad = traitCollection.userInterfaceIdiom == .pad
         let isLandscape = !isPad && view.bounds.width > 500
-        let total: CGFloat = isPad ? 340 : (isLandscape ? 204 : 268)
+        var total: CGFloat = isPad ? 340 : (isLandscape ? 208 : 276)
+        if settings.numberRow { total += isLandscape ? 26 : 40 }
+        total *= CGFloat(settings.keyboardHeightScale)
         let suggestions: CGFloat = isLandscape ? 36 : 44
 
         if let constraint = totalHeight {
@@ -111,11 +216,44 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    private func applyOneHandedInsets() {
+        let mode = settings.oneHanded
+        let strip = view.bounds.width * 0.2
+        switch mode {
+        case "right":      // keys hug the right edge, free strip on the left
+            stageLeading?.constant = strip
+            stageTrailing?.constant = 0
+            expandButton?.isHidden = false
+            moveExpandButton(centerX: strip / 2)
+        case "left":
+            stageLeading?.constant = 0
+            stageTrailing?.constant = -strip
+            expandButton?.isHidden = false
+            moveExpandButton(centerX: view.bounds.width - strip / 2)
+        default:
+            stageLeading?.constant = 0
+            stageTrailing?.constant = 0
+            expandButton?.isHidden = true
+        }
+    }
+
+    private func moveExpandButton(centerX: CGFloat) {
+        guard let button = expandButton else { return }
+        for constraint in view.constraints where constraint.firstItem === button && constraint.firstAttribute == .centerX {
+            constraint.constant = centerX
+        }
+    }
+
     // MARK: Layout & language
 
     private func reloadKeyboardLayout() {
-        let rows = LayoutBuilder.rows(language: language, page: page, returnTitle: returnTitle)
+        let rows = LayoutBuilder.rows(language: language,
+                                      page: page,
+                                      returnTitle: returnTitle,
+                                      numberRow: settings.numberRow,
+                                      showHints: settings.keyHints)
         keyboardView.configure(rows: rows, page: page, shift: shift)
+        updateReturnProminence()
     }
 
     private func loadStore(for target: Language) {
@@ -158,6 +296,17 @@ final class KeyboardViewController: UIInputViewController {
             returnTitle = title
             keyboardView.setReturnTitle(title)
         }
+        updateReturnProminence()
+    }
+
+    private func updateReturnProminence() {
+        let type = textDocumentProxy.returnKeyType ?? .default
+        let prominent: Bool
+        switch type {
+        case .go, .search, .send, .done: prominent = true
+        default: prominent = false
+        }
+        keyboardView.setReturnProminent(prominent)
     }
 
     // MARK: Shift / auto-capitalisation
@@ -177,7 +326,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func updateAutoShift() {
-        guard page == .letters, shift != .locked else { return }   // caps lock is the user's choice
+        guard page == .letters, shift != .locked, !isSearchingEmoji else { return }
         let newState: ShiftState = shouldAutoCapitalize() ? .once : .off
         if newState != shift {
             shift = newState
@@ -232,16 +381,31 @@ final class KeyboardViewController: UIInputViewController {
             case .once, .locked: output = text.uppercased()
             }
         }
+        if isSearchingEmoji {
+            searchQuery += output
+            if shift == .once {
+                shift = .off
+                keyboardView.setShift(shift)
+            }
+            refreshEmojiSearch()
+            return
+        }
         textDocumentProxy.insertText(output)
         lastSpaceTime = Date.distantPast
         afterTyping()
     }
 
     private func handleSpace() {
+        if isSearchingEmoji {
+            if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
+            refreshEmojiSearch()
+            return
+        }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
         // Double space -> ". "
-        if Date().timeIntervalSince(lastSpaceTime) < 0.4, before.hasSuffix(" "), before.count >= 2 {
+        if settings.doubleSpacePeriod,
+           Date().timeIntervalSince(lastSpaceTime) < 0.4, before.hasSuffix(" "), before.count >= 2 {
             let characters = Array(before)
             let previous = characters[characters.count - 2]
             if previous.isLetter || previous.isNumber {
@@ -254,6 +418,14 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
+        // A text shortcut ("omw" -> "On my way!") expands when space is pressed.
+        if let phrase = shortcutExpansion(in: before) {
+            replacePrefix(with: phrase)
+            clearSwipeState()
+            afterTyping()
+            return
+        }
+
         learnWord(endingAt: before)
         clearSwipeState()
         textDocumentProxy.insertText(" ")
@@ -262,8 +434,21 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleEnter() {
+        if isSearchingEmoji {
+            // Enter picks the first match, like pressing search in the system keyboard.
+            if let first = EmojiStore.shared.search(searchQuery, limit: 1).first {
+                pickEmoji(first)
+            }
+            return
+        }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
-        learnWord(endingAt: before)
+        if let phrase = shortcutExpansion(in: before) {
+            let prefix = currentPrefix(in: before)
+            for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
+            textDocumentProxy.insertText(phrase)
+        } else {
+            learnWord(endingAt: before)
+        }
         clearSwipeState()
         textDocumentProxy.insertText("\n")
         lastSpaceTime = Date.distantPast
@@ -271,6 +456,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleBackspace() {
+        if isSearchingEmoji {
+            if !searchQuery.isEmpty { searchQuery.removeLast() }
+            refreshEmojiSearch()
+            return
+        }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         if let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
             // Right after a swipe, backspace removes the whole swiped word.
@@ -285,12 +475,58 @@ final class KeyboardViewController: UIInputViewController {
         scheduleRefresh()
     }
 
+    /// Deletes one word to the left (sliding left from the backspace key).
+    private func deleteWordBackward() {
+        if isSearchingEmoji {
+            var characters = Array(searchQuery)
+            while let last = characters.last, last == " " { characters.removeLast() }
+            while let last = characters.last, last != " " { characters.removeLast() }
+            searchQuery = String(characters)
+            refreshEmojiSearch()
+            return
+        }
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        guard !before.isEmpty else { return }
+        var count = 0
+        var characters = Array(before)
+        while let last = characters.last, last.isWhitespace {
+            characters.removeLast()
+            count += 1
+        }
+        if let last = characters.last {
+            if isWordCharacter(last) {
+                while let current = characters.last, isWordCharacter(current) {
+                    characters.removeLast()
+                    count += 1
+                }
+            } else {
+                characters.removeLast()
+                count += 1
+            }
+        }
+        for _ in 0..<max(1, count) { textDocumentProxy.deleteBackward() }
+        clearSwipeState()
+        lastSpaceTime = Date.distantPast
+        updateAutoShift()
+        scheduleRefresh()
+    }
+
+    private func isWordCharacter(_ character: Character) -> Bool {
+        return character.isLetter || character.isNumber || character == "'" || character == "\u{2019}"
+    }
+
     private func learnWord(endingAt before: String) {
         guard settings.suggestionsEnabled, textDocumentProxy.isSecureTextEntry != true else { return }
         let prefix = currentPrefix(in: before)
         if prefix.count >= 3 {
             stores[language]?.learn(prefix)
         }
+    }
+
+    private func shortcutExpansion(in before: String) -> String? {
+        let prefix = currentPrefix(in: before)
+        guard !prefix.isEmpty else { return nil }
+        return settings.shortcutPhrase(for: prefix)
     }
 
     // MARK: Words
@@ -361,6 +597,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshSuggestions() {
+        if isSearchingEmoji { return }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
         if textDocumentProxy.isSecureTextEntry == true
@@ -369,8 +606,7 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        // Right after a swipe the bar offers other readings of the swiped word. Every typing action
-        // clears this state, and replacing a word re-checks the text before touching it.
+        // Right after a swipe the bar offers other readings of the swiped word.
         if lastSwipeInserted != nil && swipeAlternatives.count > 1 {
             suggestionBar.update(swipeAlternatives.map { Suggestion(text: $0, kind: .swipeAlternative) })
             return
@@ -393,10 +629,13 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         var result: [Suggestion] = []
-        let wordSlots = emojis.isEmpty ? 4 : 4 - emojis.count
+        let wordSlots = 4 - emojis.count
         if !prefix.isEmpty {
             // Slot 1 is always exactly what was typed, so it can never be auto-"corrected" away.
             result.append(Suggestion(text: prefix, kind: .literal))
+            if let phrase = settings.shortcutPhrase(for: prefix) {
+                result.append(Suggestion(text: phrase, kind: .word))
+            }
             for word in words where word != prefix && result.count < wordSlots {
                 result.append(Suggestion(text: word, kind: .word))
             }
@@ -419,6 +658,14 @@ final class KeyboardViewController: UIInputViewController {
 
     private func commitSwipe(_ words: [String]) {
         guard let first = words.first else { return }
+
+        if isSearchingEmoji {
+            if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
+            searchQuery += first
+            refreshEmojiSearch()
+            return
+        }
+
         let word = applyShift(to: first)
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
@@ -449,12 +696,22 @@ final class KeyboardViewController: UIInputViewController {
         lastSwipeInserted = newText
     }
 
-    // MARK: Panels
+    // MARK: Emoji
+
+    private func pickEmoji(_ emoji: String) {
+        textDocumentProxy.insertText(emoji)
+        var recents = settings.recentEmoji.filter { $0 != emoji }
+        recents.insert(emoji, at: 0)
+        settings.recentEmoji = Array(recents.prefix(48))
+        lastSpaceTime = Date.distantPast
+        clearSwipeState()
+    }
 
     private func showEmojiPanel() {
         guard emojiPanel == nil else { return }
         let panel = EmojiPanel()
         panel.delegate = self
+        panel.language = language
         panel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(panel)
         NSLayoutConstraint.activate([
@@ -470,11 +727,51 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func hideEmojiPanel() {
+    private func hideEmojiPanel(refresh: Bool = true) {
         emojiPanel?.removeFromSuperview()
         emojiPanel = nil
-        scheduleRefresh()
+        if refresh { scheduleRefresh() }
     }
+
+    private func beginEmojiSearch() {
+        hideEmojiPanel(refresh: false)
+        isSearchingEmoji = true
+        searchQuery = ""
+        page = .letters
+        shift = .off
+        reloadKeyboardLayout()
+        suggestionBar.isHidden = true
+        searchBar.isHidden = false
+        refreshEmojiSearch()
+        EmojiStore.shared.loadSearchIfNeeded { [weak self] in
+            self?.refreshEmojiSearch()
+        }
+    }
+
+    private func endEmojiSearch(returnToPicker: Bool) {
+        isSearchingEmoji = false
+        searchQuery = ""
+        searchBar.isHidden = true
+        suggestionBar.isHidden = false
+        updateAutoShift()
+        if returnToPicker {
+            showEmojiPanel()
+        } else {
+            scheduleRefresh()
+        }
+    }
+
+    private func refreshEmojiSearch() {
+        let placeholder = language == .hungarian ? "Emoji keresése" : "Search Emoji"
+        searchBar.setQuery(searchQuery, placeholder: placeholder)
+        if searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+            searchBar.setResults(settings.recentEmoji)
+        } else {
+            searchBar.setResults(EmojiStore.shared.search(searchQuery, limit: 60))
+        }
+    }
+
+    // MARK: Panels
 
     private func showSettingsPanel() {
         guard settingsPanel == nil else { return }
@@ -491,10 +788,44 @@ final class KeyboardViewController: UIInputViewController {
         settingsPanel = panel
     }
 
-    private func hideSettingsPanel() {
+    private func hideSettingsPanel(refresh: Bool = true) {
         settingsPanel?.removeFromSuperview()
         settingsPanel = nil
-        scheduleRefresh()
+        if refresh { scheduleRefresh() }
+    }
+
+    // MARK: Tools
+
+    private func cycleOneHanded() {
+        let next: String
+        switch settings.oneHanded {
+        case "off": next = "right"
+        case "right": next = "left"
+        default: next = "off"
+        }
+        settings.oneHanded = next
+        suggestionBar.setToolActive(.oneHanded, active: next != "off")
+        builtSignature = settingsSignature()
+        applyOneHandedInsets()
+        view.setNeedsLayout()
+    }
+
+    private func toggleNumberRow() {
+        settings.numberRow.toggle()
+        buildInterface()
+    }
+
+    private func pasteFromClipboard() {
+        guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
+        if isSearchingEmoji {
+            searchQuery += text
+            refreshEmojiSearch()
+            return
+        }
+        clearSwipeState()
+        textDocumentProxy.insertText(text)
+        lastSpaceTime = Date.distantPast
+        afterTyping()
     }
 }
 
@@ -519,13 +850,28 @@ extension KeyboardViewController: KeyboardViewDelegate {
             page = .symbols
             reloadKeyboardLayout()
         case .nextLanguage: switchLanguage()
-        case .emoji: showEmojiPanel()
+        case .emoji:
+            if isSearchingEmoji { endEmojiSearch(returnToPicker: true) } else { showEmojiPanel() }
         case .spacer: break
         }
     }
 
     func keyboardView(_ view: KeyboardView, didSelectAlternate text: String) {
         insert(text)
+    }
+
+    func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {
+        guard offset != 0, !isSearchingEmoji else { return }
+        textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
+        Haptics.shared.tick()
+        clearSwipeState()
+        lastSpaceTime = Date.distantPast
+        scheduleRefresh()
+    }
+
+    func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
+        Haptics.shared.tick()
+        deleteWordBackward()
     }
 
     func keyboardViewDidHoldGlobe(_ view: KeyboardView) {
@@ -564,15 +910,24 @@ extension KeyboardViewController: SuggestionBarDelegate {
             let before = textDocumentProxy.documentContextBeforeInput ?? ""
             let needsSpace = (before.last?.isWhitespace == false)
             textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
+            var recents = settings.recentEmoji.filter { $0 != suggestion.text }
+            recents.insert(suggestion.text, at: 0)
+            settings.recentEmoji = Array(recents.prefix(48))
             lastSpaceTime = Date.distantPast
             clearSwipeState()
             afterTyping()
         }
     }
 
-    func suggestionBarDidTapSettings(_ bar: SuggestionBar) {
+    func suggestionBar(_ bar: SuggestionBar, didTapTool tool: ToolID) {
         Haptics.shared.keyPress()
-        showSettingsPanel()
+        switch tool {
+        case .paste: pasteFromClipboard()
+        case .oneHanded: cycleOneHanded()
+        case .numberRow: toggleNumberRow()
+        case .dismiss: dismissKeyboard()
+        case .settings: showSettingsPanel()
+        }
     }
 }
 
@@ -580,20 +935,32 @@ extension KeyboardViewController: SuggestionBarDelegate {
 
 extension KeyboardViewController: EmojiPanelDelegate {
     func emojiPanel(_ panel: EmojiPanel, didSelect emoji: String) {
-        textDocumentProxy.insertText(emoji)
-        var recents = settings.recentEmoji.filter { $0 != emoji }
-        recents.insert(emoji, at: 0)
-        settings.recentEmoji = Array(recents.prefix(32))
-        lastSpaceTime = Date.distantPast
-        clearSwipeState()
+        pickEmoji(emoji)
     }
 
     func emojiPanelDidTapBackspace(_ panel: EmojiPanel) {
         textDocumentProxy.deleteBackward()
     }
 
+    func emojiPanelDidTapSearch(_ panel: EmojiPanel) {
+        beginEmojiSearch()
+    }
+
     func emojiPanelDidClose(_ panel: EmojiPanel) {
         hideEmojiPanel()
+    }
+}
+
+// MARK: - EmojiSearchBarDelegate
+
+extension KeyboardViewController: EmojiSearchBarDelegate {
+    func emojiSearchBar(_ bar: EmojiSearchBar, didSelect emoji: String) {
+        pickEmoji(emoji)
+        refreshEmojiSearch()
+    }
+
+    func emojiSearchBarDidTapBack(_ bar: EmojiSearchBar) {
+        endEmojiSearch(returnToPicker: true)
     }
 }
 
@@ -602,14 +969,6 @@ extension KeyboardViewController: EmojiPanelDelegate {
 extension KeyboardViewController: SettingsPanelDelegate {
     func settingsPanelDidClose(_ panel: SettingsPanel) {
         hideSettingsPanel()
-    }
-
-    func settingsPanelDidChange(_ panel: SettingsPanel) {
-        updateAutoShift()
-    }
-
-    func settingsPanelDidRequestForgetWords(_ panel: SettingsPanel) {
-        settings.clearLearnedWords()
-        for store in stores.values { store.forgetLearnedWords() }
+        if settingsSignature() != builtSignature { buildInterface() }
     }
 }

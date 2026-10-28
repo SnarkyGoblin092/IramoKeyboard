@@ -3,6 +3,8 @@ import UIKit
 protocol KeyboardViewDelegate: AnyObject {
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction)
     func keyboardView(_ view: KeyboardView, didSelectAlternate text: String)
+    func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int)
+    func keyboardViewDidRequestDeleteWord(_ view: KeyboardView)
     func keyboardViewDidHoldGlobe(_ view: KeyboardView)
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint])
 }
@@ -10,6 +12,8 @@ protocol KeyboardViewDelegate: AnyObject {
 /// Draws the keys and owns ALL touch handling, so that
 ///  - several fingers can type at once,
 ///  - holding a key shows its accents / alternatives (after the user's hold delay),
+///  - holding the space bar and sliding moves the text cursor,
+///  - sliding left from backspace deletes word by word,
 ///  - dragging across the letter keys is recognised as swipe typing.
 final class KeyboardView: UIView {
     weak var delegate: KeyboardViewDelegate?
@@ -21,6 +25,7 @@ final class KeyboardView: UIView {
     private var hitRects: [[CGRect]] = []
     private var page: KeyboardPage = .letters
     private var shift: ShiftState = .off
+    private var returnProminent = false
 
     private let preview = KeyPreviewView()
     private var alternatesPopup: AlternatesPopupView?
@@ -31,9 +36,15 @@ final class KeyboardView: UIView {
         let startPoint: CGPoint
         var path: [CGPoint]
         var startedOnLetter = false
+        var startedOnSpace = false
         var isSwiping = false
         var popupActive = false
         var handledByHold = false
+        var isCursorMode = false
+        var cursorLastX: CGFloat = 0
+        var cursorRemainder: CGFloat = 0
+        var isWordDeleting = false
+        var wordSteps = 0
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
@@ -52,7 +63,7 @@ final class KeyboardView: UIView {
         isMultipleTouchEnabled = true
         backgroundColor = UIColor.clear
 
-        trailLayer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.5).cgColor
+        trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
         trailLayer.fillColor = nil
         trailLayer.lineWidth = 7
         trailLayer.lineCap = .round
@@ -73,6 +84,7 @@ final class KeyboardView: UIView {
         rows = newRows
         page = newPage
         shift = newShift
+
         var built: [[KeyView]] = []
         for row in newRows {
             var builtRow: [KeyView] = []
@@ -86,6 +98,7 @@ final class KeyboardView: UIView {
         keyViews = built
         hitRects = []
         applyShift()
+        applyReturnProminence()
         setNeedsLayout()
         layoutIfNeeded()   // hit areas must match the new rows before the next touch
     }
@@ -99,6 +112,20 @@ final class KeyboardView: UIView {
         for row in keyViews {
             for key in row where key.spec.action == .enter {
                 key.setTitle(title)
+            }
+        }
+    }
+
+    /// The return key turns accent-coloured for actions like Go / Search / Send.
+    func setReturnProminent(_ prominent: Bool) {
+        returnProminent = prominent
+        applyReturnProminence()
+    }
+
+    private func applyReturnProminence() {
+        for row in keyViews {
+            for key in row where key.spec.action == .enter {
+                key.isProminent = returnProminent
             }
         }
     }
@@ -176,7 +203,10 @@ final class KeyboardView: UIView {
                 let width = spec.weight * unit
                 let hit = CGRect(x: x, y: y, width: width, height: rowHeight)
                 rects.append(hit)
-                keyViews[r][c].frame = hit.insetBy(dx: 3, dy: 4)
+                let key = keyViews[r][c]
+                if key.transform == .identity {
+                    key.frame = hit.insetBy(dx: 3, dy: 4)
+                }
                 x += width
             }
             hitRects.append(rects)
@@ -243,6 +273,10 @@ final class KeyboardView: UIView {
             let point = touch.location(in: self)
             state.path.append(point)
 
+            if state.isCursorMode {
+                moveCursor(state, to: point)
+                continue
+            }
             if state.isSwiping {
                 updateTrail(state.path)
                 continue
@@ -250,6 +284,16 @@ final class KeyboardView: UIView {
             if state.popupActive, let popup = alternatesPopup {
                 let hostPoint = touch.location(in: popup.superview)
                 popup.updateHighlight(hostX: hostPoint.x)
+                continue
+            }
+            if let key = state.key, key.spec.action == .backspace {
+                slideFromBackspace(state, to: point)
+                continue
+            }
+            if state.startedOnSpace,
+               Settings.shared.cursorControl,
+               abs(point.x - state.startPoint.x) > 14 {
+                beginCursorMode(state, at: point)    // sliding right away also works
                 continue
             }
             if shouldStartSwipe(state, at: point) {
@@ -292,9 +336,14 @@ final class KeyboardView: UIView {
         case .backspace:
             delegate?.keyboardView(self, didTap: .backspace)
             startBackspaceRepeat(state)
+        case .space:
+            state.startedOnSpace = true
+            if Settings.shared.cursorControl {
+                startHoldTimer(state, delay: max(0.2, Settings.shared.holdDelay))
+            }
         default:
             if !key.spec.alternates.isEmpty || key.spec.action == .nextLanguage {
-                startHoldTimer(state)
+                startHoldTimer(state, delay: Settings.shared.holdDelay)
             }
         }
     }
@@ -303,7 +352,6 @@ final class KeyboardView: UIView {
         guard let index = keyIndex(at: point) else { return }
         let newKey = keyViews[index.row][index.col]
         guard newKey !== state.key else { return }
-        if state.key?.spec.action == .backspace { return }   // already deleting; don't change key
 
         state.holdTimer?.invalidate()
         state.holdTimer = nil
@@ -318,7 +366,7 @@ final class KeyboardView: UIView {
         newKey.isPressed = true
         showPreview(for: newKey)
         if !newKey.spec.alternates.isEmpty || newKey.spec.action == .nextLanguage {
-            startHoldTimer(state)
+            startHoldTimer(state, delay: Settings.shared.holdDelay)
         }
     }
 
@@ -328,9 +376,9 @@ final class KeyboardView: UIView {
         return timer
     }
 
-    private func startHoldTimer(_ state: TouchState) {
+    private func startHoldTimer(_ state: TouchState, delay: TimeInterval) {
         state.holdTimer?.invalidate()
-        state.holdTimer = makeTimer(after: Settings.shared.holdDelay, repeats: false) { [weak self, weak state] in
+        state.holdTimer = makeTimer(after: delay, repeats: false) { [weak self, weak state] in
             guard let self = self, let state = state else { return }
             self.holdFired(state)
         }
@@ -351,14 +399,19 @@ final class KeyboardView: UIView {
 
     private func holdFired(_ state: TouchState) {
         guard let key = state.key, !state.isSwiping else { return }
-        if key.spec.action == .nextLanguage {
+        switch key.spec.action {
+        case .space:
+            if Settings.shared.cursorControl {
+                beginCursorMode(state, at: state.path.last ?? state.startPoint)
+            }
+        case .nextLanguage:
             state.handledByHold = true
             Haptics.shared.keyPress()
             delegate?.keyboardViewDidHoldGlobe(self)
-            return
-        }
-        if !key.spec.alternates.isEmpty {
-            showAlternates(for: key, state: state)
+        default:
+            if !key.spec.alternates.isEmpty {
+                showAlternates(for: key, state: state)
+            }
         }
     }
 
@@ -368,6 +421,10 @@ final class KeyboardView: UIView {
         state.key?.isPressed = false
         hidePreview()
 
+        if state.isCursorMode {
+            setCursorAppearance(false)
+            return
+        }
         if state.isSwiping {
             fadeTrail()
             if !cancelled { delegate?.keyboardView(self, didFinishSwipe: state.path) }
@@ -380,6 +437,7 @@ final class KeyboardView: UIView {
             hideAlternates()
             return
         }
+        if state.isWordDeleting { return }
         guard !cancelled, !state.handledByHold, let key = state.key else { return }
         if key.spec.action != .backspace {          // backspace already fired on touch-down
             delegate?.keyboardView(self, didTap: key.spec.action)
@@ -394,7 +452,66 @@ final class KeyboardView: UIView {
         states.removeAll()
         hidePreview()
         hideAlternates()
+        setCursorAppearance(false)
         trailLayer.path = nil
+    }
+
+    // MARK: Cursor control (hold + slide on the space bar)
+
+    private func beginCursorMode(_ state: TouchState, at point: CGPoint) {
+        state.isCursorMode = true
+        state.holdTimer?.invalidate()
+        state.holdTimer = nil
+        state.cursorLastX = point.x
+        state.cursorRemainder = 0
+        hidePreview()
+        setCursorAppearance(true)
+        Haptics.shared.keyPress()
+    }
+
+    private func moveCursor(_ state: TouchState, to point: CGPoint) {
+        let step = max(6, bounds.width / 40)
+        state.cursorRemainder += point.x - state.cursorLastX
+        state.cursorLastX = point.x
+        let steps = Int(state.cursorRemainder / step)       // rounds toward zero
+        if steps != 0 {
+            state.cursorRemainder -= CGFloat(steps) * step
+            delegate?.keyboardView(self, didMoveCursorBy: steps)
+            Haptics.shared.tick()
+        }
+    }
+
+    /// While the space bar is a trackpad the letters fade out, like the system keyboard.
+    private func setCursorAppearance(_ on: Bool) {
+        let alpha: CGFloat = on ? 0.12 : 1.0
+        UIView.animate(withDuration: 0.12) {
+            for row in self.keyViews {
+                for key in row {
+                    key.setContentAlpha(alpha)
+                }
+            }
+        }
+    }
+
+    // MARK: Delete words (slide left from backspace)
+
+    private func slideFromBackspace(_ state: TouchState, to point: CGPoint) {
+        guard Settings.shared.deleteSwipe else { return }
+        let dx = point.x - state.startPoint.x
+        let activation: CGFloat = 26
+        guard dx < -activation else { return }
+
+        if !state.isWordDeleting {
+            state.isWordDeleting = true
+            state.holdTimer?.invalidate()
+            state.repeatTimer?.invalidate()
+        }
+        let steps = Int((-dx - activation) / 38) + 1
+        while state.wordSteps < steps {
+            state.wordSteps += 1
+            delegate?.keyboardViewDidRequestDeleteWord(self)
+            Haptics.shared.tick()
+        }
     }
 
     // MARK: Swipe typing
@@ -415,6 +532,7 @@ final class KeyboardView: UIView {
         state.holdTimer = nil
         state.key?.isPressed = false
         hidePreview()
+        trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
@@ -440,6 +558,10 @@ final class KeyboardView: UIView {
     // MARK: Popups
 
     private func showPreview(for key: KeyView) {
+        guard Settings.shared.keyPopups else {
+            hidePreview()
+            return
+        }
         guard case .character = key.spec.action else {
             hidePreview()
             return

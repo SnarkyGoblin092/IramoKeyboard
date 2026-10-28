@@ -3,6 +3,7 @@ import UIKit
 protocol EmojiPanelDelegate: AnyObject {
     func emojiPanel(_ panel: EmojiPanel, didSelect emoji: String)
     func emojiPanelDidTapBackspace(_ panel: EmojiPanel)
+    func emojiPanelDidTapSearch(_ panel: EmojiPanel)
     func emojiPanelDidClose(_ panel: EmojiPanel)
 }
 
@@ -58,6 +59,77 @@ final class RepeatingButton: UIButton {
     }
 }
 
+// MARK: - Grid layout
+
+/// Emoji are laid out in pages (rows x columns, filled row by row), and every category starts on a
+/// fresh page - the same arrangement as the system emoji keyboard.
+private final class EmojiGridLayout: UICollectionViewLayout {
+    var rows = 4
+    var edgeInset: CGFloat = 8
+
+    private(set) var columns = 8
+    private(set) var cellSize = CGSize(width: 44, height: 40)
+    private(set) var sectionStartX: [CGFloat] = []
+    private(set) var pageWidth: CGFloat = 0
+
+    private var cache: [UICollectionViewLayoutAttributes] = []
+    private var contentWidth: CGFloat = 0
+
+    override func prepare() {
+        super.prepare()
+        cache = []
+        sectionStartX = []
+        guard let collectionView = collectionView else { return }
+
+        pageWidth = collectionView.bounds.width
+        let usableWidth = pageWidth - edgeInset * 2
+        let height = collectionView.bounds.height
+        guard pageWidth > 0, height > 0 else { return }
+
+        columns = max(4, Int(usableWidth / 42))
+        cellSize = CGSize(width: usableWidth / CGFloat(columns), height: height / CGFloat(rows))
+        let perPage = rows * columns
+
+        var pageStart: CGFloat = 0
+        for section in 0..<collectionView.numberOfSections {
+            sectionStartX.append(pageStart)
+            let count = collectionView.numberOfItems(inSection: section)
+            for item in 0..<count {
+                let page = item / perPage
+                let slot = item % perPage
+                let row = slot / columns
+                let column = slot % columns
+                let attributes = UICollectionViewLayoutAttributes(forCellWith: IndexPath(item: item, section: section))
+                attributes.frame = CGRect(x: pageStart + CGFloat(page) * pageWidth + edgeInset + CGFloat(column) * cellSize.width,
+                                          y: CGFloat(row) * cellSize.height,
+                                          width: cellSize.width,
+                                          height: cellSize.height)
+                cache.append(attributes)
+            }
+            let pages = max(1, (count + perPage - 1) / perPage)
+            pageStart += CGFloat(pages) * pageWidth
+        }
+        contentWidth = pageStart
+    }
+
+    override var collectionViewContentSize: CGSize {
+        return CGSize(width: contentWidth, height: collectionView?.bounds.height ?? 0)
+    }
+
+    override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
+        return cache.filter { $0.frame.intersects(rect) }
+    }
+
+    override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
+        return cache.first { $0.indexPath == indexPath }
+    }
+
+    override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
+        guard let collectionView = collectionView else { return false }
+        return newBounds.size != collectionView.bounds.size
+    }
+}
+
 private final class EmojiCell: UICollectionViewCell {
     static let reuseID = "EmojiCell"
     let label = UILabel()
@@ -65,8 +137,6 @@ private final class EmojiCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         label.textAlignment = .center
-        label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.5
         contentView.addSubview(label)
     }
 
@@ -80,39 +150,73 @@ private final class EmojiCell: UICollectionViewCell {
     }
 }
 
-/// Full emoji picker: recents plus every group, horizontal paging, long-press for skin tones.
+// MARK: - Panel
+
+/// The emoji keyboard: search field on top, a horizontally paged grid with the category name,
+/// and a bottom bar with ABC, the category tabs (including Recently Used) and delete.
 final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDelegate {
     weak var delegate: EmojiPanelDelegate?
+    var language: Language = .english
 
     private struct Section {
-        let icon: String
+        let key: String
+        let symbol: String
+        let fallback: String
+        let title: String
         let items: [EmojiItem]
     }
 
     private var sections: [Section] = []
-    private let flowLayout = UICollectionViewFlowLayout()
+    private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
-    private let bottomBar = UIView()
+
+    private let searchGlass = GlassView()
+    private let searchButton = UIButton(type: .system)
+    private let searchIcon = UIImageView()
+    private let searchLabel = UILabel()
+
+    private let titleLabel = UILabel()
+    private let emptyLabel = UILabel()
+
+    private let tabGlass = GlassView()
     private let abcButton = UIButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
-    private let tabStack = UIStackView()
     private var tabButtons: [UIButton] = []
-    private let statusLabel = UILabel()
+    private var currentSection = 0
     private var variantPopup: UIView?
+
+    private let searchHeight: CGFloat = 36
+    private let titleHeight: CGFloat = 18
+    private let barHeight: CGFloat = 44
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = Theme.panelBackground
+        backgroundColor = UIColor.clear
 
-        flowLayout.scrollDirection = .horizontal
-        flowLayout.minimumInteritemSpacing = 0
-        flowLayout.minimumLineSpacing = 0
-        flowLayout.sectionInset = UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
-        flowLayout.itemSize = CGSize(width: 44, height: 44)
+        // Search field
+        addSubview(searchGlass)
+        searchIcon.image = UIImage(systemName: "magnifyingglass")
+        searchIcon.tintColor = UIColor.secondaryLabel
+        searchIcon.contentMode = .scaleAspectFit
+        searchLabel.font = UIFont.systemFont(ofSize: 16)
+        searchLabel.textColor = UIColor.secondaryLabel
+        searchGlass.contentView.addSubview(searchIcon)
+        searchGlass.contentView.addSubview(searchLabel)
+        searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
+        searchGlass.contentView.addSubview(searchButton)
 
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
+        // Section title
+        titleLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
+        titleLabel.textColor = UIColor.secondaryLabel
+        addSubview(titleLabel)
+
+        // Grid
+        gridLayout.rows = 4
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: gridLayout)
         collectionView.backgroundColor = UIColor.clear
         collectionView.showsHorizontalScrollIndicator = false
+        collectionView.alwaysBounceHorizontal = true
+        collectionView.decelerationRate = .fast
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiCell.reuseID)
@@ -122,18 +226,20 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         longPress.minimumPressDuration = max(0.25, Settings.shared.holdDelay)
         collectionView.addGestureRecognizer(longPress)
 
-        statusLabel.textAlignment = .center
-        statusLabel.textColor = UIColor.secondaryLabel
-        statusLabel.font = UIFont.systemFont(ofSize: 15)
-        statusLabel.numberOfLines = 0
-        addSubview(statusLabel)
+        emptyLabel.textAlignment = .center
+        emptyLabel.textColor = UIColor.secondaryLabel
+        emptyLabel.font = UIFont.systemFont(ofSize: 15)
+        emptyLabel.numberOfLines = 0
+        emptyLabel.isHidden = true
+        addSubview(emptyLabel)
 
-        addSubview(bottomBar)
-
+        // Bottom bar
+        addSubview(tabGlass)
         abcButton.setTitle("ABC", for: .normal)
+        abcButton.setTitleColor(UIColor.label, for: .normal)
         abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         abcButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        bottomBar.addSubview(abcButton)
+        addSubview(abcButton)
 
         backspaceButton.setImage(UIImage(systemName: "delete.left"), for: .normal)
         backspaceButton.tintColor = UIColor.label
@@ -141,11 +247,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             guard let self = self else { return }
             self.delegate?.emojiPanelDidTapBackspace(self)
         }
-        bottomBar.addSubview(backspaceButton)
-
-        tabStack.axis = .horizontal
-        tabStack.distribution = .fillEqually
-        bottomBar.addSubview(tabStack)
+        addSubview(backspaceButton)
     }
 
     required init?(coder: NSCoder) {
@@ -154,101 +256,160 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     // MARK: Content
 
-    /// Rebuilds the sections (recents first). Safe to call before the emoji data has loaded.
+    /// Rebuilds the tabs (Recently Used always comes first, even when empty).
+    /// Safe to call before the emoji data has loaded.
     func reload() {
         dismissVariantPopup()
+        searchLabel.text = language == .hungarian ? "Emoji keresése" : "Search Emoji"
+
         let store = EmojiStore.shared
-
-        guard store.isReady else {
-            sections = []
-            statusLabel.text = "Loading emoji…"
-            statusLabel.isHidden = false
-            rebuildTabs()
-            collectionView.reloadData()
-            return
-        }
-
         var built: [Section] = []
-        let recents = Settings.shared.recentEmoji
-        if !recents.isEmpty {
-            built.append(Section(icon: "🕘", items: recents.map { EmojiItem(base: $0, variants: []) }))
-        }
-        for group in store.groups {
-            built.append(Section(icon: group.icon, items: group.items))
+
+        let recents = Settings.shared.recentEmoji.map { EmojiItem(base: $0, variants: []) }
+        built.append(Section(key: "recent",
+                             symbol: EmojiCategory.recentSymbol,
+                             fallback: EmojiCategory.recentFallback,
+                             title: recentTitle(),
+                             items: recents))
+
+        for category in store.categories {
+            built.append(Section(key: category.key,
+                                 symbol: category.symbol,
+                                 fallback: category.fallbackIcon,
+                                 title: category.title(for: language),
+                                 items: category.items))
         }
         sections = built
-
-        if built.isEmpty {
-            statusLabel.text = "No emoji data found in this build."
-            statusLabel.isHidden = false
-        } else {
-            statusLabel.isHidden = true
-        }
         rebuildTabs()
         collectionView.reloadData()
-        collectionView.setContentOffset(.zero, animated: false)
-        updateSelectedTab()
+        collectionView.collectionViewLayout.invalidateLayout()
+
+        // Start on Recently Used when there is history, otherwise on the first real category.
+        let startSection = (recents.isEmpty && built.count > 1) ? 1 : 0
+        scrollToSection(startSection, animated: false)
+        updateEmptyState()
+    }
+
+    private func recentTitle() -> String {
+        return language == .hungarian ? "Legutóbb használt" : "Recently Used"
+    }
+
+    private func updateEmptyState() {
+        let store = EmojiStore.shared
+        if !store.isReady {
+            emptyLabel.text = language == .hungarian ? "Emoji betöltése…" : "Loading emoji…"
+            emptyLabel.isHidden = false
+        } else if store.categories.isEmpty {
+            emptyLabel.text = "No emoji data found in this build."
+            emptyLabel.isHidden = false
+        } else if currentSection == 0, let first = sections.first, first.items.isEmpty {
+            emptyLabel.text = language == .hungarian
+                ? "A legutóbb használt emojik itt jelennek meg."
+                : "Emoji you use will show up here."
+            emptyLabel.isHidden = false
+        } else {
+            emptyLabel.isHidden = true
+        }
     }
 
     private func rebuildTabs() {
         for button in tabButtons { button.removeFromSuperview() }
         tabButtons = []
         for (index, section) in sections.enumerated() {
-            let button = UIButton(type: .custom)
-            button.setTitle(section.icon, for: .normal)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 20)
+            let button = UIButton(type: .system)
+            if let image = UIImage(systemName: section.symbol,
+                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)) {
+                button.setImage(image, for: .normal)
+            } else {
+                button.setTitle(section.fallback, for: .normal)
+                button.titleLabel?.font = UIFont.systemFont(ofSize: 17)
+            }
             button.tag = index
             button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
-            tabStack.addArrangedSubview(button)
+            tabGlass.contentView.addSubview(button)
             tabButtons.append(button)
+        }
+        layoutTabs()
+        refreshTabHighlight()
+    }
+
+    private func refreshTabHighlight() {
+        for (index, button) in tabButtons.enumerated() {
+            let selected = (index == currentSection)
+            button.tintColor = selected ? Theme.accent : UIColor.secondaryLabel
+            button.alpha = selected ? 1.0 : 0.85
+        }
+        if currentSection < sections.count {
+            titleLabel.text = sections[currentSection].title.uppercased()
         }
     }
 
-    private func updateSelectedTab() {
-        let visible = collectionView.indexPathsForVisibleItems.map { $0.section }
-        let current = visible.min() ?? 0
-        for (index, button) in tabButtons.enumerated() {
-            button.alpha = (index == current) ? 1.0 : 0.4
+    private func scrollToSection(_ section: Int, animated: Bool) {
+        guard section < sections.count else { return }
+        currentSection = section
+        collectionView.layoutIfNeeded()
+        if section < gridLayout.sectionStartX.count {
+            collectionView.setContentOffset(CGPoint(x: gridLayout.sectionStartX[section], y: 0), animated: animated)
         }
+        refreshTabHighlight()
+        updateEmptyState()
     }
 
     // MARK: Layout
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let barHeight: CGFloat = 42
-        bottomBar.frame = CGRect(x: 0, y: bounds.height - barHeight, width: bounds.width, height: barHeight)
-        collectionView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height - barHeight)
-        statusLabel.frame = collectionView.frame.insetBy(dx: 20, dy: 0)
+        let width = bounds.width
 
-        abcButton.frame = CGRect(x: 6, y: 4, width: 54, height: barHeight - 8)
-        backspaceButton.frame = CGRect(x: bounds.width - 60, y: 4, width: 54, height: barHeight - 8)
-        tabStack.frame = CGRect(x: 64, y: 0, width: max(0, bounds.width - 128), height: barHeight)
+        searchGlass.frame = CGRect(x: 10, y: 5, width: width - 20, height: searchHeight)
+        searchButton.frame = searchGlass.bounds
+        searchIcon.frame = CGRect(x: 14, y: (searchHeight - 18) / 2, width: 18, height: 18)
+        searchLabel.frame = CGRect(x: 40, y: 0, width: searchGlass.bounds.width - 56, height: searchHeight)
 
-        let height = collectionView.bounds.height
-        guard height > 0 else { return }
-        let rows = max(2, Int(height / 44))
-        let side = floor(height / CGFloat(rows))
-        if abs(flowLayout.itemSize.height - side) > 0.5 {
-            flowLayout.itemSize = CGSize(width: side, height: side)
-            flowLayout.invalidateLayout()
+        titleLabel.frame = CGRect(x: 14, y: searchGlass.frame.maxY + 4, width: width - 28, height: titleHeight)
+
+        let gridTop = titleLabel.frame.maxY
+        let gridHeight = max(0, bounds.height - gridTop - barHeight)
+        let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
+        if collectionView.frame != newGridFrame {
+            collectionView.frame = newGridFrame
+            gridLayout.rows = gridHeight >= 150 ? 4 : 3
+            gridLayout.invalidateLayout()
+        }
+        emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
+
+        let barTop = bounds.height - barHeight
+        abcButton.frame = CGRect(x: 8, y: barTop + 4, width: 52, height: barHeight - 8)
+        backspaceButton.frame = CGRect(x: width - 60, y: barTop + 4, width: 52, height: barHeight - 8)
+        tabGlass.frame = CGRect(x: 64, y: barTop + 4, width: max(0, width - 128), height: barHeight - 8)
+        layoutTabs()
+    }
+
+    private func layoutTabs() {
+        guard !tabButtons.isEmpty else { return }
+        let area = tabGlass.bounds
+        let width = area.width / CGFloat(tabButtons.count)
+        for (index, button) in tabButtons.enumerated() {
+            button.frame = CGRect(x: CGFloat(index) * width, y: 0, width: width, height: area.height)
         }
     }
 
     // MARK: Actions
 
     @objc private func closeTapped() {
+        Haptics.shared.keyPress()
         delegate?.emojiPanelDidClose(self)
     }
 
+    @objc private func searchTapped() {
+        Haptics.shared.keyPress()
+        delegate?.emojiPanelDidTapSearch(self)
+    }
+
     @objc private func tabTapped(_ sender: UIButton) {
+        Haptics.shared.keyPress()
         dismissVariantPopup()
-        let section = sender.tag
-        guard section < sections.count else { return }
-        if collectionView.numberOfItems(inSection: section) > 0 {
-            collectionView.scrollToItem(at: IndexPath(item: 0, section: section), at: .left, animated: false)
-        }
-        updateSelectedTab()
+        scrollToSection(sender.tag, animated: true)
     }
 
     @objc private func handleLongPress(_ recognizer: UILongPressGestureRecognizer) {
@@ -265,10 +426,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func showVariants(_ options: [String], above cell: UICollectionViewCell) {
         dismissVariantPopup()
         let cellFrame = collectionView.convert(cell.frame, to: self)
-        let itemWidth: CGFloat = 46
+        let itemWidth: CGFloat = 44
         let fitting = max(1, Int((bounds.width - 16) / itemWidth))
         let visibleCount = min(options.count, fitting)
-        let width = CGFloat(visibleCount) * itemWidth + 8
+        let width = CGFloat(visibleCount) * itemWidth + 12
         let height: CGFloat = 54
 
         var x = cellFrame.midX - width / 2
@@ -276,30 +437,26 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         var y = cellFrame.minY - height - 2
         if y < 0 { y = cellFrame.maxY + 2 }
 
-        let container = UIView(frame: CGRect(x: x, y: y, width: width, height: height))
-        container.backgroundColor = Theme.letterKey
-        container.layer.cornerRadius = 10
-        container.layer.shadowColor = UIColor.black.cgColor
-        container.layer.shadowOpacity = 0.3
-        container.layer.shadowRadius = 4
-        container.layer.shadowOffset = CGSize(width: 0, height: 1)
+        let container = GlassView()
+        container.frame = CGRect(x: x, y: y, width: width, height: height)
 
-        let scroll = UIScrollView(frame: container.bounds.insetBy(dx: 4, dy: 0))
+        let scroll = UIScrollView(frame: CGRect(x: 6, y: 0, width: width - 12, height: height))
         scroll.showsHorizontalScrollIndicator = false
         scroll.contentSize = CGSize(width: itemWidth * CGFloat(options.count), height: height)
         for (index, emoji) in options.enumerated() {
             let button = UIButton(type: .custom)
             button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 4, width: itemWidth, height: height - 8)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 32)
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 30)
             button.setTitle(emoji, for: .normal)
             button.addAction(UIAction { [weak self] _ in
                 guard let self = self else { return }
                 self.dismissVariantPopup()
+                Haptics.shared.keyPress()
                 self.delegate?.emojiPanel(self, didSelect: emoji)
             }, for: .touchUpInside)
             scroll.addSubview(button)
         }
-        container.addSubview(scroll)
+        container.contentView.addSubview(scroll)
         addSubview(container)
         variantPopup = container
     }
@@ -322,7 +479,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiCell.reuseID, for: indexPath)
         if let emojiCell = cell as? EmojiCell {
-            emojiCell.label.font = UIFont.systemFont(ofSize: flowLayout.itemSize.height * 0.66)
+            let side = min(gridLayout.cellSize.width, gridLayout.cellSize.height)
+            emojiCell.label.font = UIFont.systemFont(ofSize: side * 0.72)
             emojiCell.label.text = sections[indexPath.section].items[indexPath.item].base
         }
         return cell
@@ -335,9 +493,28 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        if scrollView === collectionView {
-            dismissVariantPopup()
-            updateSelectedTab()
+        guard scrollView === collectionView else { return }
+        dismissVariantPopup()
+
+        // The current category is the last one whose first page has started to scroll into view.
+        let probe = scrollView.contentOffset.x + gridLayout.pageWidth * 0.5
+        var section = 0
+        for (index, start) in gridLayout.sectionStartX.enumerated() where start <= probe {
+            section = index
         }
+        if section != currentSection {
+            currentSection = section
+            refreshTabHighlight()
+            updateEmptyState()
+        }
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView,
+                                   withVelocity velocity: CGPoint,
+                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        // Settle on a page boundary, like flicking between pages.
+        guard scrollView === collectionView, gridLayout.pageWidth > 0 else { return }
+        let page = (targetContentOffset.pointee.x / gridLayout.pageWidth).rounded()
+        targetContentOffset.pointee.x = page * gridLayout.pageWidth
     }
 }
