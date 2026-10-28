@@ -11,7 +11,6 @@ final class KeyboardViewController: UIInputViewController {
     private var searchBar = EmojiSearchBar()
     private var keyboardView = KeyboardView()
     private var emojiPanel: EmojiPanel?
-    private var settingsPanel: SettingsPanel?
 
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
@@ -115,7 +114,6 @@ final class KeyboardViewController: UIInputViewController {
         view.overrideUserInterfaceStyle = Theme.interfaceStyle   // gradient themes force light/dark
         validateLanguage()
         hideEmojiPanel(refresh: false)
-        hideSettingsPanel(refresh: false)
         isSearchingEmoji = false
         searchQuery = ""
         for sub in container.subviews { sub.removeFromSuperview() }
@@ -771,30 +769,6 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     // MARK: Panels
-
-    private func showSettingsPanel() {
-        guard settingsPanel == nil else { return }
-        let panel = SettingsPanel(hasFullAccess: hasFullAccess)
-        panel.delegate = self
-        panel.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(panel)
-        NSLayoutConstraint.activate([
-            panel.topAnchor.constraint(equalTo: container.topAnchor),
-            panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-        ])
-        settingsPanel = panel
-        stage.isHidden = true
-    }
-
-    private func hideSettingsPanel(refresh: Bool = true) {
-        settingsPanel?.removeFromSuperview()
-        settingsPanel = nil
-        stage.isHidden = false
-        if refresh { scheduleRefresh() }
-    }
-
 }
 
 // MARK: - KeyboardViewDelegate
@@ -925,14 +899,5 @@ extension KeyboardViewController: EmojiSearchBarDelegate {
 
     func emojiSearchBarDidTapBack(_ bar: EmojiSearchBar) {
         endEmojiSearch(returnToPicker: true)
-    }
-}
-
-// MARK: - SettingsPanelDelegate
-
-extension KeyboardViewController: SettingsPanelDelegate {
-    func settingsPanelDidClose(_ panel: SettingsPanel) {
-        hideSettingsPanel()
-        if settingsSignature() != builtSignature { buildInterface() }
     }
 }
