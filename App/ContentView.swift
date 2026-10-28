@@ -21,7 +21,6 @@ struct ContentView: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var theme = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accent = SettingDefault.accent
     @AppStorage(SettingKey.keyboardHeight, store: SharedStore.defaults) private var keyboardHeight = SettingDefault.keyboardHeight
-    @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
 
     @State private var status = KeyboardStatus.read()
     @State private var confirm: Confirmation?
@@ -189,11 +188,6 @@ struct ContentView: View {
                     Text("\(Int((keyboardHeight * 100).rounded()))%").foregroundColor(.secondary)
                 }
                 Slider(value: $keyboardHeight, in: Settings.heightScaleRange, step: 0.05)
-            }
-            Picker("One-handed mode", selection: $oneHanded) {
-                Text("Off").tag("off")
-                Text("Right").tag("right")
-                Text("Left").tag("left")
             }
             Toggle("Number row", isOn: $numberRow)
             Toggle("Long-press hints on keys", isOn: $keyHints)

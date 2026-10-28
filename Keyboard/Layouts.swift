@@ -145,7 +145,6 @@ enum KeyAction: Equatable {
     case showLetters
     case showNumbers
     case showSymbols
-    case nextLanguage
     case emoji
     case spacer
 }

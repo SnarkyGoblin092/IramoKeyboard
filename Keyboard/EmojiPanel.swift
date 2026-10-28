@@ -61,56 +61,64 @@ final class RepeatingButton: UIButton {
 
 // MARK: - Grid layout
 
-/// Emoji are laid out in pages (rows x columns, filled row by row), and every category starts on a
-/// fresh page - the same arrangement as the system emoji keyboard.
+/// Emoji flow in columns (top to bottom, then left to right) like the system emoji keyboard, in one
+/// continuous strip that scrolls freely. Categories follow each other with a small gap.
 private final class EmojiGridLayout: UICollectionViewLayout {
     var rows = 4
     var edgeInset: CGFloat = 8
+    var sectionGap: CGFloat = 14
 
-    private(set) var columns = 8
-    private(set) var cellSize = CGSize(width: 44, height: 40)
+    private(set) var cellSize = CGSize(width: 40, height: 40)
+    /// The content offset that puts each category's first column at the left edge.
     private(set) var sectionStartX: [CGFloat] = []
-    private(set) var pageWidth: CGFloat = 0
+    private(set) var viewWidth: CGFloat = 0
 
     private var cache: [UICollectionViewLayoutAttributes] = []
+    private var byPath: [IndexPath: UICollectionViewLayoutAttributes] = [:]
     private var contentWidth: CGFloat = 0
 
     override func prepare() {
         super.prepare()
         cache = []
+        byPath = [:]
         sectionStartX = []
+        contentWidth = 0
         guard let collectionView = collectionView else { return }
 
-        pageWidth = collectionView.bounds.width
-        let usableWidth = pageWidth - edgeInset * 2
+        viewWidth = collectionView.bounds.width
         let height = collectionView.bounds.height
-        contentWidth = 0
-        guard pageWidth > 0, height > 0 else { return }
+        guard viewWidth > 0, height > 0, rows > 0 else { return }
 
-        columns = max(4, Int(usableWidth / 42))
-        cellSize = CGSize(width: usableWidth / CGFloat(columns), height: height / CGFloat(rows))
-        let perPage = rows * columns
+        let side = height / CGFloat(rows)
+        cellSize = CGSize(width: max(side, 36), height: side)
 
-        var pageStart: CGFloat = 0
+        var x = edgeInset
         for section in 0..<collectionView.numberOfSections {
-            sectionStartX.append(pageStart)
+            sectionStartX.append(x - edgeInset)
             let count = collectionView.numberOfItems(inSection: section)
             for item in 0..<count {
-                let page = item / perPage
-                let slot = item % perPage
-                let row = slot / columns
-                let column = slot % columns
-                let attributes = UICollectionViewLayoutAttributes(forCellWith: IndexPath(item: item, section: section))
-                attributes.frame = CGRect(x: pageStart + CGFloat(page) * pageWidth + edgeInset + CGFloat(column) * cellSize.width,
+                let column = item / rows
+                let row = item % rows
+                let path = IndexPath(item: item, section: section)
+                let attributes = UICollectionViewLayoutAttributes(forCellWith: path)
+                attributes.frame = CGRect(x: x + CGFloat(column) * cellSize.width,
                                           y: CGFloat(row) * cellSize.height,
                                           width: cellSize.width,
                                           height: cellSize.height)
                 cache.append(attributes)
+                byPath[path] = attributes
             }
-            let pages = max(1, (count + perPage - 1) / perPage)
-            pageStart += CGFloat(pages) * pageWidth
+            if count == 0 {
+                x += viewWidth - edgeInset * 2          // an empty tab (Recently Used) still owns one screen
+            } else {
+                let columns = (count + rows - 1) / rows
+                x += CGFloat(columns) * cellSize.width
+            }
+            x += sectionGap
         }
-        contentWidth = pageStart
+        // Room so that even the last category can be scrolled to the left edge.
+        let lastStart = (sectionStartX.last ?? 0)
+        contentWidth = max(x + edgeInset, lastStart + viewWidth)
     }
 
     override var collectionViewContentSize: CGSize {
@@ -122,7 +130,7 @@ private final class EmojiGridLayout: UICollectionViewLayout {
     }
 
     override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
-        return cache.first { $0.indexPath == indexPath }
+        return byPath[indexPath]
     }
 
     override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
@@ -153,7 +161,7 @@ private final class EmojiCell: UICollectionViewCell {
 
 // MARK: - Panel
 
-/// The emoji keyboard: search field on top, a horizontally paged grid with the category name,
+/// The emoji keyboard: search field on top, a smoothly scrolling emoji strip with the category name,
 /// and a bottom bar with ABC, the category tabs (including Recently Used) and delete.
 final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDelegate {
     weak var delegate: EmojiPanelDelegate?
@@ -186,6 +194,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var currentSection = 0
     private var startSection = 0
     private var needsInitialScroll = false
+    private var isProgrammaticScroll = false
     private var variantPopup: UIView?
 
     private let searchHeight: CGFloat = 36
@@ -219,7 +228,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         collectionView.backgroundColor = UIColor.clear
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.alwaysBounceHorizontal = true
-        collectionView.decelerationRate = .fast
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiCell.reuseID)
@@ -288,10 +296,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         collectionView.reloadData()
         collectionView.collectionViewLayout.invalidateLayout()
 
-        // Start on Recently Used when there is history, otherwise on the first real category.
+        // Always start on Recently Used (its hint is shown while it is empty).
         // The grid can only scroll once it has a real size, so the scroll is done in layoutSubviews
         // (this was the "empty until I tap a tab" bug: reload() ran while the panel still had zero size).
-        startSection = (recents.isEmpty && built.count > 1) ? 1 : 0
+        startSection = 0
         currentSection = startSection
         needsInitialScroll = true
         refreshTabHighlight()
@@ -371,7 +379,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         currentSection = section
         collectionView.layoutIfNeeded()
         if section < gridLayout.sectionStartX.count {
-            collectionView.setContentOffset(CGPoint(x: gridLayout.sectionStartX[section], y: 0), animated: animated)
+            // Smooth scroll; the highlight stays on the tapped tab until the scroll settles.
+            let maxOffset = max(0, collectionView.contentSize.width - collectionView.bounds.width)
+            let target = min(gridLayout.sectionStartX[section], maxOffset)
+            isProgrammaticScroll = animated
+            collectionView.setContentOffset(CGPoint(x: target, y: 0), animated: animated)
         }
         refreshTabHighlight()
         updateEmptyState()
@@ -395,7 +407,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
         if collectionView.frame != newGridFrame {
             collectionView.frame = newGridFrame
-            gridLayout.rows = gridHeight >= 150 ? 4 : 3
+            gridLayout.rows = max(3, min(5, Int(gridHeight / 38)))
             gridLayout.invalidateLayout()
         }
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
@@ -520,11 +532,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView, !needsInitialScroll else { return }
+        guard scrollView === collectionView, !needsInitialScroll, !isProgrammaticScroll else { return }
         dismissVariantPopup()
 
-        // The current category is the last one whose first page has started to scroll into view.
-        let probe = scrollView.contentOffset.x + gridLayout.pageWidth * 0.5
+        // The current category is the last one whose first column has reached the left edge.
+        let probe = scrollView.contentOffset.x + gridLayout.cellSize.width * 0.6
         var section = 0
         for (index, start) in gridLayout.sectionStartX.enumerated() where start <= probe {
             section = index
@@ -536,12 +548,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
     }
 
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView,
-                                   withVelocity velocity: CGPoint,
-                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-        // Settle on a page boundary, like flicking between pages.
-        guard scrollView === collectionView, gridLayout.pageWidth > 0 else { return }
-        let page = (targetContentOffset.pointee.x / gridLayout.pageWidth).rounded()
-        targetContentOffset.pointee.x = page * gridLayout.pageWidth
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        isProgrammaticScroll = false
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        isProgrammaticScroll = false
     }
 }

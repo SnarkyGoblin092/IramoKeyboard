@@ -10,15 +10,11 @@ final class KeyboardViewController: UIInputViewController {
     private var suggestionBar = SuggestionBar()
     private var searchBar = EmojiSearchBar()
     private var keyboardView = KeyboardView()
-    private var expandButton: UIButton?
     private var emojiPanel: EmojiPanel?
     private var settingsPanel: SettingsPanel?
-    private var languagePicker: LanguagePicker?
 
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
-    private var stageLeading: NSLayoutConstraint?
-    private var stageTrailing: NSLayoutConstraint?
 
     // MARK: State
 
@@ -88,7 +84,6 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
-        applyOneHandedInsets()
     }
 
     override func didReceiveMemoryWarning() {
@@ -108,7 +103,7 @@ final class KeyboardViewController: UIInputViewController {
         let s = settings
         return [
             "\(s.numberRow)", "\(s.keyHints)", s.theme, s.accentName,
-            s.oneHanded, "\(s.keyboardHeightScale)", "\(s.keyPopups)", s.enabledLanguages.joined(separator: ",")
+            "\(s.keyboardHeightScale)", "\(s.keyPopups)", s.enabledLanguages.joined(separator: ",")
         ].joined(separator: "|")
     }
 
@@ -117,7 +112,6 @@ final class KeyboardViewController: UIInputViewController {
         validateLanguage()
         hideEmojiPanel(refresh: false)
         hideSettingsPanel(refresh: false)
-        hideLanguagePicker(refresh: false)
         isSearchingEmoji = false
         searchQuery = ""
         for sub in container.subviews { sub.removeFromSuperview() }
@@ -143,17 +137,14 @@ final class KeyboardViewController: UIInputViewController {
         stage.addSubview(searchBar)
         stage.addSubview(keyboardView)
 
-        let leading = stage.leadingAnchor.constraint(equalTo: container.leadingAnchor)
-        let trailing = stage.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-        stageLeading = leading
-        stageTrailing = trailing
         let barHeight = suggestionBar.heightAnchor.constraint(equalToConstant: 44)
         suggestionHeight = barHeight
 
         NSLayoutConstraint.activate([
             stage.topAnchor.constraint(equalTo: container.topAnchor),
             stage.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            leading, trailing,
+            stage.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stage.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 
             suggestionBar.topAnchor.constraint(equalTo: stage.topAnchor),
             suggestionBar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
@@ -171,31 +162,8 @@ final class KeyboardViewController: UIInputViewController {
             keyboardView.bottomAnchor.constraint(equalTo: stage.bottomAnchor)
         ])
 
-        // One-handed mode: a button in the free strip brings the full width back.
-        let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "arrow.left.and.right",
-                                withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)),
-                        for: .normal)
-        button.tintColor = Theme.accent
-        button.addAction(UIAction { [weak self] _ in
-            Haptics.shared.keyPress()
-            self?.settings.oneHanded = "off"
-            self?.buildInterface()
-            self?.applyHeight()
-        }, for: .touchUpInside)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            button.widthAnchor.constraint(equalToConstant: 44),
-            button.heightAnchor.constraint(equalToConstant: 44),
-            button.centerXAnchor.constraint(equalTo: container.leadingAnchor, constant: 0)   // positioned in applyOneHandedInsets
-        ])
-        expandButton = button
-
-        configureTools()
         if !hasFullAccess {
-            suggestionBar.emptyHint = "Allow Full Access for vibration, paste and saving"
+            suggestionBar.emptyHint = "Allow Full Access for vibration and saving settings"
         } else {
             suggestionBar.emptyHint = nil
         }
@@ -203,19 +171,6 @@ final class KeyboardViewController: UIInputViewController {
         reloadKeyboardLayout()
         builtSignature = settingsSignature()
         applyHeight()
-        applyOneHandedInsets()
-    }
-
-    private func configureTools() {
-        var items: [ToolItem] = []
-        if enabledLanguages.count > 1 {
-            items.append(ToolItem(id: .language, symbol: "globe", label: language.shortCode))
-        }
-        items.append(ToolItem(id: .paste, symbol: "doc.on.clipboard"))
-        items.append(ToolItem(id: .oneHanded, symbol: "hand.point.right", isActive: settings.oneHanded != "off"))
-        items.append(ToolItem(id: .numberRow, symbol: "textformat.123", isActive: settings.numberRow))
-        items.append(ToolItem(id: .dismiss, symbol: "keyboard.chevron.compact.down"))
-        suggestionBar.setTools(items)
     }
 
     private func applyHeight() {
@@ -236,34 +191,6 @@ final class KeyboardViewController: UIInputViewController {
         }
         if let constraint = suggestionHeight, constraint.constant != suggestions {
             constraint.constant = suggestions
-        }
-    }
-
-    private func applyOneHandedInsets() {
-        let mode = settings.oneHanded
-        let strip = view.bounds.width * 0.2
-        switch mode {
-        case "right":      // keys hug the right edge, free strip on the left
-            stageLeading?.constant = strip
-            stageTrailing?.constant = 0
-            expandButton?.isHidden = false
-            moveExpandButton(centerX: strip / 2)
-        case "left":
-            stageLeading?.constant = 0
-            stageTrailing?.constant = -strip
-            expandButton?.isHidden = false
-            moveExpandButton(centerX: view.bounds.width - strip / 2)
-        default:
-            stageLeading?.constant = 0
-            stageTrailing?.constant = 0
-            expandButton?.isHidden = true
-        }
-    }
-
-    private func moveExpandButton(centerX: CGFloat) {
-        guard let button = expandButton else { return }
-        for constraint in container.constraints where constraint.firstItem === button && constraint.firstAttribute == .centerX {
-            constraint.constant = centerX
         }
     }
 
@@ -308,11 +235,13 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func switchLanguage() {
+    /// +1 = next enabled language, -1 = previous (wraps around).
+    private func switchLanguage(by direction: Int) {
         let enabled = enabledLanguages
         guard enabled.count > 1 else { return }
-        let index = enabled.firstIndex(of: language) ?? -1
-        selectLanguage(enabled[(index + 1) % enabled.count])
+        let index = enabled.firstIndex(of: language) ?? 0
+        let count = enabled.count
+        selectLanguage(enabled[((index + direction) % count + count) % count])
     }
 
     private func selectLanguage(_ target: Language) {
@@ -324,7 +253,6 @@ final class KeyboardViewController: UIInputViewController {
         loadStore(for: target)
         // Words of the other languages are not needed any more.
         stores = stores.filter { $0.key == target }
-        configureTools()
         returnTitle = ""
         updateReturnTitle()
         reloadKeyboardLayout()
@@ -774,7 +702,6 @@ final class KeyboardViewController: UIInputViewController {
         emojiPanel = panel
         // The picker replaces the keyboard completely: nothing may show through from behind it.
         stage.isHidden = true
-        expandButton?.isHidden = true
         panel.reload()
         EmojiStore.shared.loadIfNeeded { [weak panel] in
             panel?.reload()
@@ -785,7 +712,6 @@ final class KeyboardViewController: UIInputViewController {
         emojiPanel?.removeFromSuperview()
         emojiPanel = nil
         stage.isHidden = false
-        applyOneHandedInsets()
         if refresh { scheduleRefresh() }
     }
 
@@ -843,84 +769,15 @@ final class KeyboardViewController: UIInputViewController {
         ])
         settingsPanel = panel
         stage.isHidden = true
-        expandButton?.isHidden = true
     }
 
     private func hideSettingsPanel(refresh: Bool = true) {
         settingsPanel?.removeFromSuperview()
         settingsPanel = nil
         stage.isHidden = false
-        applyOneHandedInsets()
         if refresh { scheduleRefresh() }
     }
 
-    // MARK: Language picker
-
-    private func showLanguagePicker() {
-        guard languagePicker == nil else { return }
-        let picker = LanguagePicker(languages: enabledLanguages, current: language)
-        picker.delegate = self
-        picker.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(picker)
-        NSLayoutConstraint.activate([
-            picker.topAnchor.constraint(equalTo: container.topAnchor),
-            picker.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-        ])
-        languagePicker = picker
-        stage.isHidden = true
-        expandButton?.isHidden = true
-    }
-
-    private func hideLanguagePicker(refresh: Bool = true) {
-        languagePicker?.removeFromSuperview()
-        languagePicker = nil
-        stage.isHidden = false
-        applyOneHandedInsets()
-        if refresh { scheduleRefresh() }
-    }
-
-    // MARK: Tools
-
-    private func cycleOneHanded() {
-        let next: String
-        switch settings.oneHanded {
-        case "off": next = "right"
-        case "right": next = "left"
-        default: next = "off"
-        }
-        settings.oneHanded = next
-        suggestionBar.setToolActive(.oneHanded, active: next != "off")
-        builtSignature = settingsSignature()
-        applyOneHandedInsets()
-        view.setNeedsLayout()
-    }
-
-    private func toggleNumberRow() {
-        settings.numberRow.toggle()
-        buildInterface()
-    }
-
-    private func pasteFromClipboard() {
-        guard hasFullAccess else {
-            suggestionBar.flash("Turn on Allow Full Access to paste")
-            return
-        }
-        guard let text = UIPasteboard.general.string, !text.isEmpty else {
-            suggestionBar.flash("Clipboard is empty")
-            return
-        }
-        if isSearchingEmoji {
-            searchQuery += text
-            refreshEmojiSearch()
-            return
-        }
-        clearSwipeState()
-        textDocumentProxy.insertText(text)
-        lastSpaceTime = Date.distantPast
-        afterTyping()
-    }
 }
 
 // MARK: - KeyboardViewDelegate
@@ -943,7 +800,6 @@ extension KeyboardViewController: KeyboardViewDelegate {
         case .showSymbols:
             page = .symbols
             reloadKeyboardLayout()
-        case .nextLanguage: switchLanguage()
         case .emoji:
             if isSearchingEmoji { endEmojiSearch(returnToPicker: true) } else { showEmojiPanel() }
         case .spacer: break
@@ -966,6 +822,10 @@ extension KeyboardViewController: KeyboardViewDelegate {
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
         Haptics.shared.tick()
         deleteWordBackward()
+    }
+
+    func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {
+        switchLanguage(by: direction)
     }
 
     func keyboardViewDidHoldGlobe(_ view: KeyboardView) {
@@ -1013,16 +873,8 @@ extension KeyboardViewController: SuggestionBarDelegate {
         }
     }
 
-    func suggestionBar(_ bar: SuggestionBar, didTapTool tool: ToolID) {
-        Haptics.shared.keyPress()
-        switch tool {
-        case .paste: pasteFromClipboard()
-        case .oneHanded: cycleOneHanded()
-        case .numberRow: toggleNumberRow()
-        case .dismiss: dismissKeyboard()
-        case .settings: showSettingsPanel()
-        case .language: showLanguagePicker()
-        }
+    func suggestionBarDidTapDismiss(_ bar: SuggestionBar) {
+        dismissKeyboard()
     }
 }
 
@@ -1065,18 +917,5 @@ extension KeyboardViewController: SettingsPanelDelegate {
     func settingsPanelDidClose(_ panel: SettingsPanel) {
         hideSettingsPanel()
         if settingsSignature() != builtSignature { buildInterface() }
-    }
-}
-
-// MARK: - LanguagePickerDelegate
-
-extension KeyboardViewController: LanguagePickerDelegate {
-    func languagePicker(_ picker: LanguagePicker, didSelect language: Language) {
-        hideLanguagePicker(refresh: false)
-        selectLanguage(language)
-    }
-
-    func languagePickerDidClose(_ picker: LanguagePicker) {
-        hideLanguagePicker()
     }
 }

@@ -6,6 +6,8 @@ protocol KeyboardViewDelegate: AnyObject {
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int)
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView)
     func keyboardViewDidHoldGlobe(_ view: KeyboardView)
+    /// A quick horizontal swipe on the space bar: +1 = next language, -1 = previous.
+    func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int)
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint])
 }
 
@@ -43,6 +45,7 @@ final class KeyboardView: UIView {
         var popupActive = false
         var handledByHold = false
         var isCursorMode = false
+        var languageSwiped = false
         var cursorMoved = false
         var cursorLastX: CGFloat = 0
         var cursorRemainder: CGFloat = 0
@@ -293,12 +296,24 @@ final class KeyboardView: UIView {
                 slideFromBackspace(state, to: point)
                 continue
             }
-            if state.startedOnSpace,
-               Settings.shared.cursorControl,
-               abs(point.x - state.startPoint.x) > 14 {
-                state.cursorMoved = true
-                beginCursorMode(state, at: point)    // sliding right away also works
-                continue
+            if state.startedOnSpace {
+                // A quick sideways swipe (before the hold delay turns the bar into a trackpad)
+                // switches the language: swipe left = next, swipe right = previous.
+                if state.languageSwiped { continue }
+                let dx = point.x - state.startPoint.x
+                let dy = point.y - state.startPoint.y
+                if abs(dx) > 28 && abs(dx) > abs(dy) {
+                    state.languageSwiped = true
+                    state.handledByHold = true
+                    state.holdTimer?.invalidate()
+                    state.holdTimer = nil
+                    state.key?.isPressed = false
+                    hidePreview()
+                    Haptics.shared.keyPress()
+                    delegate?.keyboardView(self, didSwipeSpaceBy: dx < 0 ? 1 : -1)
+                    continue
+                }
+                if abs(dx) > 10 || abs(dy) > 10 { continue }   // stay on the space bar, no key slide
             }
             if shouldStartSwipe(state, at: point) {
                 beginSwipe(state)
@@ -405,13 +420,8 @@ final class KeyboardView: UIView {
         guard let key = state.key, !state.isSwiping else { return }
         switch key.spec.action {
         case .space:
-            if Settings.shared.cursorControl {
+            if Settings.shared.cursorControl && !state.languageSwiped {
                 beginCursorMode(state, at: state.path.last ?? state.startPoint)
-            } else {
-                // Without cursor control, holding the space bar switches the language.
-                state.handledByHold = true
-                Haptics.shared.keyPress()
-                delegate?.keyboardView(self, didTap: .nextLanguage)
             }
         case .emoji:
             // Holding the emoji key hands over to the next installed keyboard.
@@ -433,10 +443,6 @@ final class KeyboardView: UIView {
 
         if state.isCursorMode {
             setCursorAppearance(false)
-            // Hold the space bar and let go without sliding: switch language.
-            if !cancelled && !state.cursorMoved {
-                delegate?.keyboardView(self, didTap: .nextLanguage)
-            }
             return
         }
         if state.isSwiping {

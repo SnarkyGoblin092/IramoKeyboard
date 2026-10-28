@@ -11,49 +11,32 @@ struct Suggestion {
     let kind: Kind
 }
 
-enum ToolID {
-    case paste
-    case oneHanded
-    case numberRow
-    case dismiss
-    case settings          // fallback quick-settings panel (not offered any more)
-    case language          // opens the language picker
-}
-
-struct ToolItem {
-    let id: ToolID
-    let symbol: String
-    var isActive = false
-    var label: String? = nil     // text shown instead of the symbol (e.g. the language code)
-}
-
 protocol SuggestionBarDelegate: AnyObject {
     func suggestionBar(_ bar: SuggestionBar, didSelect suggestion: Suggestion)
-    func suggestionBar(_ bar: SuggestionBar, didTapTool tool: ToolID)
+    func suggestionBarDidTapDismiss(_ bar: SuggestionBar)
 }
 
-/// A flat strip above the keys, like the native one. Normally it shows three suggestion slots (words and emoji);
-/// the arrow on its left swaps them for a row of quick tools.
+/// A flat strip above the keys, like the native one: three suggestion slots (words and emoji)
+/// and a permanent "hide keyboard" button on the right.
 final class SuggestionBar: UIView {
     weak var delegate: SuggestionBarDelegate?
 
     private let glass = FlatPanel()
-    private let toggleButton = UIButton(type: .system)
+    private let dismissButton = UIButton(type: .system)
     private let hintLabel = UILabel()
     private var slotButtons: [UIButton] = []
     private var separators: [UIView] = []
-    private var toolButtons: [UIButton] = []
-    private var tools: [ToolItem] = []
     private var suggestions: [Suggestion] = []
     private let slotCount = 3
 
-    private(set) var showingTools = false
+    /// Shown (in place of suggestions) when there is nothing to suggest.
+    var emptyHint: String? {
+        didSet { refreshVisibility() }
+    }
 
-    /// Flashes a short message in place of the suggestions (closes the tool row if it is open).
+    /// Flashes a short message in place of the suggestions.
     func flash(_ message: String, duration: TimeInterval = 2.5) {
         let previousHint = emptyHint
-        showingTools = false
-        updateToggleIcon()
         update([])
         emptyHint = message
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
@@ -62,20 +45,10 @@ final class SuggestionBar: UIView {
         }
     }
 
-    /// Shown (in place of suggestions) when there is nothing to suggest.
-    var emptyHint: String? {
-        didSet { refreshVisibility() }
-    }
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor.clear
         addSubview(glass)
-
-        toggleButton.tintColor = UIColor.secondaryLabel
-        toggleButton.addTarget(self, action: #selector(toggleTapped), for: .touchUpInside)
-        glass.contentView.addSubview(toggleButton)
-        updateToggleIcon()
 
         hintLabel.font = UIFont.systemFont(ofSize: 13)
         hintLabel.textColor = UIColor.secondaryLabel
@@ -103,6 +76,14 @@ final class SuggestionBar: UIView {
                 separators.append(line)
             }
         }
+
+        dismissButton.tintColor = UIColor.secondaryLabel
+        dismissButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
+                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
+                               for: .normal)
+        dismissButton.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
+        glass.contentView.addSubview(dismissButton)
+
         refreshVisibility()
     }
 
@@ -128,101 +109,46 @@ final class SuggestionBar: UIView {
         refreshVisibility()
     }
 
-    func setTools(_ items: [ToolItem]) {
-        tools = items
-        for button in toolButtons { button.removeFromSuperview() }
-        toolButtons = []
-        for (index, item) in items.enumerated() {
-            let button = UIButton(type: .system)
-            button.tag = index
-            if let label = item.label {
-                button.setTitle(label, for: .normal)
-                button.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-            } else {
-                button.setImage(UIImage(systemName: item.symbol,
-                                        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
-                                for: .normal)
-            }
-            button.tintColor = item.isActive ? Theme.accent : UIColor.label
-            button.addTarget(self, action: #selector(toolTapped(_:)), for: .touchUpInside)
-            glass.contentView.addSubview(button)
-            toolButtons.append(button)
-        }
-        refreshVisibility()
-        setNeedsLayout()
-    }
-
-    func setToolActive(_ id: ToolID, active: Bool) {
-        for (index, item) in tools.enumerated() where item.id == id {
-            tools[index].isActive = active
-            toolButtons[index].tintColor = active ? Theme.accent : UIColor.label
-        }
+    private func refreshVisibility() {
+        let hasSuggestions = !suggestions.isEmpty
+        for line in separators { line.isHidden = !hasSuggestions }
+        hintLabel.text = emptyHint
+        hintLabel.isHidden = hasSuggestions || emptyHint == nil
     }
 
     // MARK: Layout
-
-    private func updateToggleIcon() {
-        let name = showingTools ? "chevron.left" : "chevron.right"
-        toggleButton.setImage(UIImage(systemName: name,
-                                      withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)),
-                              for: .normal)
-    }
-
-    private func refreshVisibility() {
-        let hasSuggestions = !suggestions.isEmpty
-        for button in slotButtons { button.isHidden = showingTools }
-        for line in separators { line.isHidden = showingTools || !hasSuggestions }
-        for button in toolButtons { button.isHidden = !showingTools }
-        hintLabel.text = emptyHint
-        hintLabel.isHidden = showingTools || hasSuggestions || emptyHint == nil
-    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         glass.frame = bounds.insetBy(dx: 2, dy: 3)
         let area = glass.bounds
-        let toggleWidth: CGFloat = 40
-        toggleButton.frame = CGRect(x: 2, y: 0, width: toggleWidth, height: area.height)
+        let dismissWidth: CGFloat = 48
+        dismissButton.frame = CGRect(x: area.width - dismissWidth, y: 0, width: dismissWidth, height: area.height)
 
-        let contentX = toggleWidth + 2
-        let contentWidth = max(0, area.width - contentX - 12)
-        hintLabel.frame = CGRect(x: contentX, y: 0, width: contentWidth, height: area.height)
+        let contentWidth = max(0, area.width - dismissWidth - 6)
+        hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
 
         let slotWidth = contentWidth / CGFloat(slotCount)
         for (index, button) in slotButtons.enumerated() {
-            button.frame = CGRect(x: contentX + CGFloat(index) * slotWidth, y: 0, width: slotWidth, height: area.height)
+            button.frame = CGRect(x: 6 + CGFloat(index) * slotWidth, y: 0, width: slotWidth, height: area.height)
         }
         for (index, line) in separators.enumerated() {
-            line.frame = CGRect(x: contentX + CGFloat(index + 1) * slotWidth - 0.5,
+            line.frame = CGRect(x: 6 + CGFloat(index + 1) * slotWidth - 0.5,
                                 y: area.height * 0.25,
                                 width: 1,
                                 height: area.height * 0.5)
         }
-
-        if !toolButtons.isEmpty {
-            let toolWidth = contentWidth / CGFloat(toolButtons.count)
-            for (index, button) in toolButtons.enumerated() {
-                button.frame = CGRect(x: contentX + CGFloat(index) * toolWidth, y: 0, width: toolWidth, height: area.height)
-            }
-        }
     }
 
     // MARK: Actions
-
-    @objc private func toggleTapped() {
-        showingTools.toggle()
-        updateToggleIcon()
-        refreshVisibility()
-        Haptics.shared.keyPress()
-    }
 
     @objc private func slotTapped(_ sender: UIButton) {
         guard sender.tag < suggestions.count else { return }
         delegate?.suggestionBar(self, didSelect: suggestions[sender.tag])
     }
 
-    @objc private func toolTapped(_ sender: UIButton) {
-        guard sender.tag < tools.count else { return }
-        delegate?.suggestionBar(self, didTapTool: tools[sender.tag].id)
+    @objc private func dismissTapped() {
+        Haptics.shared.keyPress()
+        delegate?.suggestionBarDidTapDismiss(self)
     }
 }
