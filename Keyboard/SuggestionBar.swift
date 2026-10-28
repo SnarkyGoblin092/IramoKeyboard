@@ -149,7 +149,8 @@ final class SuggestionBar: UIView {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
         let dismissZone = dismissButton.superview?.convert(dismissButton.frame, to: self) ?? .zero
         if point.x >= dismissZone.minX { return dismissButton }
-        if let slot = HitTesting.nearestByX(point.x, in: slotButtons, relativeTo: self), slot.isEnabled {
+        if let slot = HitTesting.nearestByX(point.x, in: slotButtons, relativeTo: self),
+           (slot as? UIControl)?.isEnabled ?? true {
             return slot
         }
         return super.hitTest(point, with: event)
