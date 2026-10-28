@@ -117,32 +117,44 @@ struct ContentView: View {
                 .font(.footnote)
                 .foregroundColor(diagnosis.ok ? .secondary : .orange)
 
+            DisclosureGroup("Sync details") {
+                ForEach(Array(syncDetails.enumerated()), id: \.offset) { _, line in
+                    Text(line).font(.caption).foregroundColor(.secondary)
+                }
+            }
+
             Button("Test sync") { startSyncTest() }
             if let result = syncResult {
                 Text(result).font(.footnote).foregroundColor(.secondary)
             }
-            Button(copied ? "Copied - now paste on the keyboard" : "Copy settings for the keyboard") {
+            Button(copied ? "Copied - now open a text field with HunKeys" : "Send settings to keyboard") {
                 UIPasteboard.general.string = SharedStore.exportString()
                 copied = true
             }
         } header: {
             Text("Status")
         } footer: {
-            Text("Manual sync: tap Copy, open any text field with HunKeys, tap the arrow at the left of the suggestion bar, then the clipboard icon. The keyboard recognises the text and imports it instead of typing it.")
+            Text("Without shared storage: tap Send after changing settings, then open any text field and switch to HunKeys. If it doesn't import by itself (it needs Allow Full Access), tap the arrow at the left of the suggestion bar and then the clipboard icon.")
         }
+    }
+
+    private var syncDetails: [String] {
+        _ = SharedStore.keychainGroup      // make sure both checks have run
+        var lines = SharedStore.groupDiagnostics
+        lines.append("Keychain: " + (SharedStore.keychainDiagnosis.isEmpty ? "not tried" : SharedStore.keychainDiagnosis))
+        lines.append("Active: " + SharedStore.transportLabel)
+        return lines
     }
 
     private var diagnosis: (text: String, ok: Bool) {
         if !SharedStore.isShared {
-            var text = "This install cannot share storage with the keyboard automatically, so changes here won't reach it by themselves (Sideloadly with a free Apple ID usually strips App Group and Keychain sharing). Use \"Copy settings for the keyboard\" below."
-            if !SharedStore.keychainDiagnosis.isEmpty { text += " Keychain: \(SharedStore.keychainDiagnosis)" }
-            return (text, false)
+            return (SharedStore.syncExplanation, false)
         }
         if !status.seen {
-            return ("Add HunKeys in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once. iOS only lets a keyboard read shared storage when Full Access is on.", false)
+            return ("Add HunKeys in Settings > General > Keyboard > Keyboards, then open the keyboard in any text field once. Also turn on Allow Full Access (needed for vibration, paste and saving recents).", false)
         }
         if !status.fullAccess {
-            return ("Allow Full Access is off. Turn it on in Settings > General > Keyboard > Keyboards > HunKeys - without it the keyboard can't read these settings (or vibrate).", false)
+            return ("Allow Full Access is off. Per Apple, a keyboard without it can only read the shared storage, not write to it - so it can't save recents, learned words or status, and has no vibration or paste. Turn it on in Settings > General > Keyboard > Keyboards > HunKeys.", false)
         }
         return ("Sync channel available. Tap Test sync to confirm the keyboard really receives changes.", true)
     }

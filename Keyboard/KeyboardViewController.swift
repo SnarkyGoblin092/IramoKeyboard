@@ -75,10 +75,14 @@ final class KeyboardViewController: UIInputViewController {
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
 
+        // Settings sent from the app through the clipboard (installs without shared storage).
+        let imported = SharedStore.importFromClipboardIfNeeded(hasFullAccess: hasFullAccess)
+
         // Settings changed in the app while the keyboard was away: rebuild the look.
         if settingsSignature() != builtSignature {
             buildInterface()
         }
+        if imported { suggestionBar.flash("Settings imported from the app") }
         applyHeight()
         updateAutoShift()
         scheduleRefresh()
@@ -191,7 +195,11 @@ final class KeyboardViewController: UIInputViewController {
         expandButton = button
 
         configureTools()
-        suggestionBar.emptyHint = SharedStore.isShared ? nil : "Settings aren't synced - tap the arrow, then the gear"
+        if !hasFullAccess {
+            suggestionBar.emptyHint = "Allow Full Access for vibration, paste and saving"
+        } else {
+            suggestionBar.emptyHint = nil
+        }
         updateReturnTitle()
         reloadKeyboardLayout()
         builtSignature = settingsSignature()
@@ -842,10 +850,21 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func pasteFromClipboard() {
-        guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
+        guard hasFullAccess else {
+            suggestionBar.flash("Turn on Allow Full Access to paste")
+            return
+        }
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            suggestionBar.flash("Clipboard is empty")
+            return
+        }
         if SharedStore.isSettingsPayload(text) {
-            _ = SharedStore.importSettings(from: text)
-            buildInterface()
+            if SharedStore.importSettings(from: text) {
+                buildInterface()
+                suggestionBar.flash("Settings imported")
+            } else {
+                suggestionBar.flash("Settings text is damaged - copy again")
+            }
             return
         }
         if isSearchingEmoji {

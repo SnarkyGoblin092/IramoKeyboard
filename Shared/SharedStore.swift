@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import UIKit
 
 // MARK: - Sync keys
 
@@ -120,6 +121,15 @@ enum SharedStore {
     /// True inside the keyboard extension, false in the app.
     static let isExtension: Bool = Bundle.main.bundlePath.hasSuffix(".appex")
 
+    /// Why the App Group could not be used (nil when it works). Drives the messages in the app and keyboard.
+    enum GroupFailure {
+        case notGranted                       // the installer never registered an App Group
+        case containerUnavailable(String)     // a group was registered but iOS gives no container
+    }
+    private(set) static var groupFailure: GroupFailure? = nil
+    /// One line per candidate, e.g. "group.x.TEAM (from ALTAppGroups): no container". Shown in the app.
+    private(set) static var groupDiagnostics: [String] = []
+
     /// The App Group that has a container on this device, or nil.
     static let groupID: String? = resolveGroupID()
 
@@ -154,44 +164,98 @@ enum SharedStore {
     // MARK: App group lookup
 
     private static func resolveGroupID() -> String? {
-        var candidates: [String] = []
-        if let listed = Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] {
-            candidates.append(contentsOf: listed)
-        }
-        candidates.append(contentsOf: provisionedGroups())
-        candidates.append(requestedGroupID)
-
-        var unique: [String] = []
-        for candidate in candidates where !unique.contains(candidate) {
-            unique.append(candidate)
+        var log: [String] = []
+        var candidates: [(id: String, source: String)] = []
+        func add(_ id: String, _ source: String) {
+            if !candidates.contains(where: { $0.id == id }) { candidates.append((id, source)) }
         }
 
-        let usable = unique.filter {
-            FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) != nil
+        // AltStore / SideStore rewrite the group (group.x -> group.x.<TeamID>) and list it here.
+        // The key is written separately into the app's and the keyboard's Info.plist.
+        let listed = Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] ?? []
+        if listed.isEmpty {
+            log.append("Info.plist: no ALTAppGroups key (AltStore/SideStore didn't register a group).")
         }
+        for id in listed { add(id, "ALTAppGroups") }
+
+        // A provisioning profile embedded in the bundle names the groups the signing really granted.
+        let profile = provisionedGroups()
+        switch profile.state {
+        case .missing:
+            log.append("No embedded.mobileprovision in this bundle.")
+        case .unreadable:
+            log.append("embedded.mobileprovision could not be read.")
+        case .read:
+            if profile.groups.isEmpty {
+                log.append("embedded.mobileprovision: the profile contains no App Groups.")
+            }
+        }
+        for id in profile.groups { add(id, "provisioning profile") }
+
+        // The name built into HunKeys (works when it was signed with a profile that grants it as-is).
+        add(requestedGroupID, "built-in name")
+
+        var usable: [String] = []
+        for candidate in candidates {
+            if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: candidate.id),
+               FileManager.default.isReadableFile(atPath: url.path) {
+                usable.append(candidate.id)
+                log.append("\(candidate.id) (\(candidate.source)): container OK.")
+            } else {
+                log.append("\(candidate.id) (\(candidate.source)): iOS gives no container (group not granted to this signature).")
+            }
+        }
+
         // App and keyboard must pick the same group, so the choice has to be deterministic.
         let preferred = usable.filter { $0.hasPrefix(requestedGroupID) }.sorted()
-        if let first = preferred.first { return first }
-        return usable.sorted().first
+        let chosen = preferred.first ?? usable.sorted().first
+
+        if chosen == nil {
+            let registered = listed.first ?? profile.groups.first
+            if let registered = registered {
+                groupFailure = .containerUnavailable(registered)
+            } else {
+                groupFailure = .notGranted
+            }
+        }
+        groupDiagnostics = log
+        return chosen
     }
 
+    private enum ProfileState { case missing, unreadable, read }
+
     /// App groups named in this bundle's provisioning profile (present when signed for a device).
-    private static func provisionedGroups() -> [String] {
-        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let data = try? Data(contentsOf: url),
+    private static func provisionedGroups() -> (state: ProfileState, groups: [String]) {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision") else {
+            return (.missing, [])
+        }
+        guard let data = try? Data(contentsOf: url),
               let start = data.range(of: Data("<?xml".utf8)),
               let end = data.range(of: Data("</plist>".utf8)),
               start.lowerBound < end.upperBound else {
-            return []
+            return (.unreadable, [])
         }
         let xml = data.subdata(in: start.lowerBound..<end.upperBound)
         guard let plist = try? PropertyListSerialization.propertyList(from: xml, options: [], format: nil),
               let dictionary = plist as? [String: Any],
-              let entitlements = dictionary["Entitlements"] as? [String: Any],
-              let groups = entitlements["com.apple.security.application-groups"] as? [String] else {
-            return []
+              let entitlements = dictionary["Entitlements"] as? [String: Any] else {
+            return (.unreadable, [])
         }
-        return groups
+        let groups = entitlements["com.apple.security.application-groups"] as? [String] ?? []
+        return (.read, groups)
+    }
+
+    // MARK: Explanations (shown in the app and, shortened, in the keyboard)
+
+    /// What is going on and what to do about it. Empty when an automatic channel works.
+    static var syncExplanation: String {
+        if isShared { return "" }
+        switch groupFailure {
+        case .containerUnavailable(let id)?:
+            return "The installer registered the App Group \(id), but iOS gives this build no access to it. Delete the app and reinstall HunKeys-AppGroup.ipa with AltStore or SideStore, or use \"Send settings to keyboard\" below."
+        default:
+            return "This install has no shared storage between the app and the keyboard. That is normal with Sideloadly and a free Apple ID: iOS only lets apps share storage through an App Group or a shared Keychain, and a free account can't be granted those. Settings still work - after changing something, tap \"Send settings to keyboard\" below, then switch to HunKeys in any text field and they import automatically."
+        }
     }
 
     // MARK: Keychain lookup
@@ -264,6 +328,27 @@ enum SharedStore {
     static func exportString() -> String {
         let data = encode(stamp: Date().timeIntervalSince1970, values: currentValues()) ?? Data()
         return exportPrefix + data.base64EncodedString()
+    }
+
+    // MARK: Keyboard side: automatic import from the clipboard
+
+    /// For installs without shared storage (Sideloadly + free Apple ID). The app copies its settings as
+    /// text; when the keyboard appears it checks, at most once per clipboard change, whether the
+    /// clipboard holds HunKeys settings. If so it imports them and clears the clipboard.
+    /// Needs "Allow Full Access" (iOS blocks clipboard access for keyboards without it).
+    static func importFromClipboardIfNeeded(hasFullAccess: Bool) -> Bool {
+        guard isExtension, hasFullAccess else { return false }
+        let board = UIPasteboard.general
+        let local = UserDefaults.standard
+        let key = "hunkeys.local.pasteboardCount"
+        let count = board.changeCount
+        guard count != local.integer(forKey: key) else { return false }
+        local.set(count, forKey: key)
+        guard board.hasStrings, let text = board.string, isSettingsPayload(text) else { return false }
+        guard importSettings(from: text) else { return false }
+        board.string = ""
+        local.set(board.changeCount, forKey: key)
+        return true
     }
 
     // MARK: Keyboard side: receive settings

@@ -47,6 +47,19 @@ final class SuggestionBar: UIView {
 
     private(set) var showingTools = false
 
+    /// Flashes a short message in place of the suggestions (closes the tool row if it is open).
+    func flash(_ message: String, duration: TimeInterval = 2.5) {
+        let previousHint = emptyHint
+        showingTools = false
+        updateToggleIcon()
+        update([])
+        emptyHint = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            guard let self = self, self.emptyHint == message else { return }
+            self.emptyHint = previousHint
+        }
+    }
+
     /// Shown (in place of suggestions) when there is nothing to suggest.
     var emptyHint: String? {
         didSet { refreshVisibility() }

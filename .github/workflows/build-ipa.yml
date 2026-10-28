@@ -70,11 +70,16 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log
 
-      # HunKeys.ipa            plain build. Works with any signing tool, but the app and the keyboard
-      #                        cannot share settings (the keyboard then shows its own gear button).
-      # HunKeys-AppGroup.ipa   same build with the App Group entitlement attached, so the app's
-      #                        settings reach the keyboard. Needs a signing tool that supports app
-      #                        groups (AltStore / SideStore / a paid developer account).
+      # Two IPAs, because installers treat App Groups differently:
+      #
+      # HunKeys-AppGroup.ipa   The App Group entitlement is written into the signature of BOTH the app and
+      #                        the keyboard (ldid). AltStore / SideStore read it from there, register
+      #                        "group.com.hunkeys.k9x4.shared.<TeamID>" for you and add ALTAppGroups to both
+      #                        Info.plists, which HunKeys reads at runtime. Use this one with AltStore,
+      #                        SideStore, or a signer with a PAID developer account.
+      # HunKeys.ipa            No entitlements at all. Use it with Sideloadly + a FREE Apple ID, which cannot
+      #                        grant App Groups (an unmatched entitlement can even get the keyboard killed).
+      #                        Settings then travel by shared Keychain or the manual copy/paste in the app.
       - name: Package plain IPA
         run: |
           rm -rf Payload HunKeys.ipa
@@ -95,7 +100,12 @@ jobs:
           ldid -SConfig/AppGroup.entitlements "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard"
           ldid -SConfig/AppGroup.entitlements "$APP/HunKeys"
           echo "Entitlements now attached to the keyboard:"
-          ldid -e "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard"
+          ldid -e "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard" | tee appex-ent.txt
+          echo "Entitlements now attached to the app:"
+          ldid -e "$APP/HunKeys" | tee app-ent.txt
+          # Fail loudly if either signature lacks the group (AltStore would then register nothing).
+          grep -q "group.com.hunkeys.k9x4.shared" appex-ent.txt
+          grep -q "group.com.hunkeys.k9x4.shared" app-ent.txt
           (cd group-build && zip -qry ../HunKeys-AppGroup.ipa Payload)
           ls -la HunKeys-AppGroup.ipa
 
