@@ -66,7 +66,7 @@ final class SettingsPanel: UIView {
         note.numberOfLines = 0
         note.font = UIFont.systemFont(ofSize: 12)
         note.textColor = UIColor.systemOrange
-        note.text = "The HunKeys app can't reach this keyboard on this install (no App Group), so the essentials are here. Try the \"App Group\" IPA to use the full settings in the app."
+        note.text = "The HunKeys app can't reach this keyboard on this install (no App Group), so the essentials are here. Reinstall the IPA with iloader to use the full settings in the app."
         stack.addArrangedSubview(note)
 
         addSlider(title: "Hold delay",

@@ -84,6 +84,7 @@ private final class EmojiGridLayout: UICollectionViewLayout {
         pageWidth = collectionView.bounds.width
         let usableWidth = pageWidth - edgeInset * 2
         let height = collectionView.bounds.height
+        contentWidth = 0
         guard pageWidth > 0, height > 0 else { return }
 
         columns = max(4, Int(usableWidth / 42))
@@ -183,6 +184,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [UIButton] = []
     private var currentSection = 0
+    private var startSection = 0
+    private var needsInitialScroll = false
     private var variantPopup: UIView?
 
     private let searchHeight: CGFloat = 36
@@ -231,6 +234,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         emptyLabel.font = UIFont.systemFont(ofSize: 15)
         emptyLabel.numberOfLines = 0
         emptyLabel.isHidden = true
+        emptyLabel.isUserInteractionEnabled = false
         addSubview(emptyLabel)
 
         // Bottom bar
@@ -260,7 +264,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     /// Safe to call before the emoji data has loaded.
     func reload() {
         dismissVariantPopup()
-        searchLabel.text = language == .hungarian ? "Emoji keresése" : "Search Emoji"
+        searchLabel.text = language.strings.searchEmoji
 
         let store = EmojiStore.shared
         var built: [Section] = []
@@ -285,30 +289,48 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         collectionView.collectionViewLayout.invalidateLayout()
 
         // Start on Recently Used when there is history, otherwise on the first real category.
-        let startSection = (recents.isEmpty && built.count > 1) ? 1 : 0
-        scrollToSection(startSection, animated: false)
+        // The grid can only scroll once it has a real size, so the scroll is done in layoutSubviews
+        // (this was the "empty until I tap a tab" bug: reload() ran while the panel still had zero size).
+        startSection = (recents.isEmpty && built.count > 1) ? 1 : 0
+        currentSection = startSection
+        needsInitialScroll = true
+        refreshTabHighlight()
+        updateEmptyState()
+        setNeedsLayout()
+        applyInitialScrollIfPossible()
+    }
+
+    private func applyInitialScrollIfPossible() {
+        guard needsInitialScroll,
+              collectionView.bounds.width > 0, collectionView.bounds.height > 0,
+              !sections.isEmpty else { return }
+        collectionView.layoutIfNeeded()          // computes the grid with the real size
+        guard gridLayout.sectionStartX.count == sections.count else { return }
+        let target = min(startSection, sections.count - 1)
+        collectionView.setContentOffset(CGPoint(x: gridLayout.sectionStartX[target], y: 0), animated: false)
+        needsInitialScroll = false
+        currentSection = target
+        refreshTabHighlight()
         updateEmptyState()
     }
 
     private func recentTitle() -> String {
-        return language == .hungarian ? "Legutóbb használt" : "Recently Used"
+        return language.strings.recentlyUsed
     }
 
     private func updateEmptyState() {
         let store = EmojiStore.shared
         if !store.isReady {
-            emptyLabel.text = language == .hungarian ? "Emoji betöltése…" : "Loading emoji…"
+            emptyLabel.text = language.strings.loadingEmoji
             emptyLabel.isHidden = false
         } else if store.categories.isEmpty {
             emptyLabel.text = "No emoji data found in this build."
             emptyLabel.isHidden = false
         } else if currentSection == 0, let first = sections.first, first.items.isEmpty {
-            emptyLabel.text = language == .hungarian
-                ? "A legutóbb használt emojik itt jelennek meg."
-                : "Emoji you use will show up here."
+            emptyLabel.text = language.strings.emptyRecents
             emptyLabel.isHidden = false
         } else {
-            emptyLabel.isHidden = true
+            emptyLabel.isHidden = true     // never covers emoji that are on screen
         }
     }
 
@@ -383,6 +405,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         backspaceButton.frame = CGRect(x: width - 60, y: barTop + 4, width: 52, height: barHeight - 8)
         tabGlass.frame = CGRect(x: 64, y: barTop + 4, width: max(0, width - 128), height: barHeight - 8)
         layoutTabs()
+        applyInitialScrollIfPossible()
     }
 
     private func layoutTabs() {
@@ -497,7 +520,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView else { return }
+        guard scrollView === collectionView, !needsInitialScroll else { return }
         dismissVariantPopup()
 
         // The current category is the last one whose first page has started to scroll into view.

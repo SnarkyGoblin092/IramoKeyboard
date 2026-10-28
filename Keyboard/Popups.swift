@@ -57,13 +57,13 @@ final class KeyPreviewView: UIView {
 
         shape.path = path.cgPath
         shape.shadowPath = path.cgPath
-        shape.fillColor = Theme.letterKey.resolvedColor(with: traitCollection).cgColor
+        shape.fillColor = Theme.popupFill.resolvedColor(with: traitCollection).cgColor
         label.frame = CGRect(x: 0, y: 2, width: balloonWidth, height: topHeight - 4)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        shape.fillColor = Theme.letterKey.resolvedColor(with: traitCollection).cgColor
+        shape.fillColor = Theme.popupFill.resolvedColor(with: traitCollection).cgColor
     }
 }
 
@@ -92,7 +92,7 @@ final class AlternatesPopupView: UIView {
         super.init(frame: .zero)
 
         isUserInteractionEnabled = false
-        backgroundColor = Theme.letterKey
+        backgroundColor = Theme.popupFill
         layer.cornerRadius = 8
         layer.cornerCurve = .continuous
         layer.shadowColor = UIColor.black.cgColor

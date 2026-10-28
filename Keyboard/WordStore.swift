@@ -7,9 +7,25 @@ struct WordEntry {
 }
 
 enum TextFolding {
-    /// Lower-case and strip accents. Mirrors `fold()` in scripts/build_data.py.
+    /// Letters that do not decompose into base + accent. Must match SPECIAL_FOLDS in scripts/build_data.py.
+    private static let special: [Character: String] = [
+        "ł": "l", "đ": "d", "ø": "o", "ß": "ss", "æ": "ae", "œ": "oe", "ı": "i", "ð": "d", "þ": "th"
+    ]
+
+    /// Lower-case and strip accents ("Szép" -> "szep", "Й" -> "и"). Mirrors `fold()` in scripts/build_data.py.
     static func fold(_ text: String) -> String {
-        return text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        var result = ""
+        result.reserveCapacity(text.count)
+        for scalar in text.lowercased().decomposedStringWithCanonicalMapping.unicodeScalars {
+            if scalar.properties.generalCategory == .nonspacingMark { continue }
+            let character = Character(scalar)
+            if let replacement = special[character] {
+                result += replacement
+            } else {
+                result.unicodeScalars.append(scalar)
+            }
+        }
+        return result
     }
 }
 
@@ -26,9 +42,11 @@ final class WordStore {
 
     private var edgeIndex: [String: [Int]] = [:]
     private var learned: [String: Int]
+    private let keyLetters: Set<Character>
 
     init(language: Language) {
         self.language = language
+        self.keyLetters = language.keyLetterSet
         self.learned = Settings.shared.learnedWords(for: language.rawValue)
     }
 
@@ -38,6 +56,17 @@ final class WordStore {
         let entries: [WordEntry]
         let edges: [String: [Int]]
         let maxLogFreq: Double
+    }
+
+    /// The layout key a word's letter is typed on ("é" -> "e" in Hungarian, but "ö" stays "ö" in German).
+    static func keyLetter(for character: Character, in keys: Set<Character>) -> Character? {
+        if keys.contains(character) { return character }
+        if let first = TextFolding.fold(String(character)).first, keys.contains(first) { return first }
+        return nil
+    }
+
+    func keyLetter(for character: Character) -> Character? {
+        return WordStore.keyLetter(for: character, in: keyLetters)
     }
 
     static func parse(language: Language) -> Parsed {
@@ -56,11 +85,12 @@ final class WordStore {
         list.sort { $0.folded < $1.folded }
 
         // Index by first + last letter so the swipe decoder only looks at plausible words.
+        let keys = language.keyLetterSet
         var edges: [String: [Int]] = [:]
         var maxFreq = 1
         for (index, entry) in list.enumerated() {
             maxFreq = max(maxFreq, entry.freq)
-            let letters = entry.folded.filter { $0 >= "a" && $0 <= "z" }
+            let letters = entry.word.compactMap { keyLetter(for: $0, in: keys) }
             guard letters.count >= 2, let first = letters.first, let last = letters.last else { continue }
             edges[String([first, last]), default: []].append(index)
         }

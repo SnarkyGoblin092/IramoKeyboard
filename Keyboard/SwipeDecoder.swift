@@ -39,10 +39,14 @@ final class SwipeDecoder {
             var template: [CGPoint] = []
             var previous: Character? = nil
             var knownKeys = true
-            for letter in entry.folded where letter >= "a" && letter <= "z" {
-                if letter == previous { continue }
-                previous = letter
-                guard let center = keyCenters[letter] else {
+            for character in entry.word where character.isLetter {
+                guard let key = store.keyLetter(for: character) else {
+                    knownKeys = false
+                    break
+                }
+                if key == previous { continue }
+                previous = key
+                guard let center = keyCenters[key] else {
                     knownKeys = false
                     break
                 }

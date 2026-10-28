@@ -16,13 +16,15 @@ enum ToolID {
     case oneHanded
     case numberRow
     case dismiss
-    case settings          // only offered when the app's settings cannot reach the keyboard
+    case settings          // fallback quick-settings panel (not offered any more)
+    case language          // opens the language picker
 }
 
 struct ToolItem {
     let id: ToolID
     let symbol: String
     var isActive = false
+    var label: String? = nil     // text shown instead of the symbol (e.g. the language code)
 }
 
 protocol SuggestionBarDelegate: AnyObject {
@@ -133,9 +135,14 @@ final class SuggestionBar: UIView {
         for (index, item) in items.enumerated() {
             let button = UIButton(type: .system)
             button.tag = index
-            button.setImage(UIImage(systemName: item.symbol,
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
-                            for: .normal)
+            if let label = item.label {
+                button.setTitle(label, for: .normal)
+                button.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+            } else {
+                button.setImage(UIImage(systemName: item.symbol,
+                                        withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
+                                for: .normal)
+            }
             button.tintColor = item.isActive ? Theme.accent : UIColor.label
             button.addTarget(self, action: #selector(toolTapped(_:)), for: .touchUpInside)
             glass.contentView.addSubview(button)

@@ -1,57 +1,123 @@
 import Foundation
 import CoreGraphics
 
-// MARK: - Languages
+// MARK: - Language layouts
+//
+// `Language` itself lives in Shared/Language.swift. The keyboard-only data (rows, accents) is here.
 
-enum Language: String, CaseIterable {
-    case english = "en"
-    case hungarian = "hu"
+extension Language {
 
-    var displayName: String {
-        switch self {
-        case .english: return "English"
-        case .hungarian: return "Magyar"
-        }
-    }
-
-    var next: Language {
-        let all = Language.allCases
-        guard let index = all.firstIndex(of: self) else { return self }
-        return all[(index + 1) % all.count]
-    }
-
-    /// The three letter rows. English is QWERTY, Hungarian is QWERTZ (y and z swapped).
+    /// The letter rows. Rows may have different lengths (e.g. Russian 12/11/9); the key view scales each row to the full width.
     var letterRows: [[String]] {
+        func split(_ rows: String...) -> [[String]] {
+            return rows.map { $0.map { String($0) } }
+        }
         switch self {
-        case .english:
-            return [
-                ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-                ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-                ["z", "x", "c", "v", "b", "n", "m"]
-            ]
-        case .hungarian:
-            return [
-                ["q", "w", "e", "r", "t", "z", "u", "i", "o", "p"],
-                ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-                ["y", "x", "c", "v", "b", "n", "m"]
-            ]
+        case .english, .italian:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .hungarian, .czech:
+            return split("qwertzuiop", "asdfghjkl", "yxcvbnm")
+        case .spanish:
+            return split("qwertyuiop", "asdfghjklñ", "zxcvbnm")
+        case .french:
+            return split("azertyuiop", "qsdfghjklm", "wxcvbn")
+        case .german:
+            return split("qwertzuiopü", "asdfghjklöä", "yxcvbnm")
+        case .portuguese:
+            return split("qwertyuiop", "asdfghjklç", "zxcvbnm")
+        case .dutch, .polish, .romanian:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .turkish:
+            return split("qwertyuıopğü", "asdfghjklşi", "zxcvbnmöç")
+        case .russian:
+            return split("йцукенгшщзхъ", "фывапролджэ", "ячсмитьбю")
+        case .ukrainian:
+            return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
+        case .swedish:
+            return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
         }
     }
 
-    /// Accented characters offered on long-press. Only the ACTIVE language contributes,
-    /// so English shows none and Hungarian shows exactly its own accents.
+    /// Accented / alternative characters offered on long-press. Only the ACTIVE language contributes.
     var accents: [String: [String]] {
         switch self {
         case .english:
             return [:]
         case .hungarian:
-            return [
-                "a": ["á"],
-                "e": ["é"],
-                "i": ["í"],
-                "o": ["ó", "ö", "ő"],
-                "u": ["ú", "ü", "ű"]
-            ]
+            return ["a": ["á"], "e": ["é"], "i": ["í"], "o": ["ó", "ö", "ő"], "u": ["ú", "ü", "ű"]]
+        case .spanish:
+            return ["a": ["á"], "e": ["é"], "i": ["í"], "o": ["ó"], "u": ["ú", "ü"]]
+        case .french:
+            return ["a": ["à", "â", "æ"], "e": ["é", "è", "ê", "ë"], "i": ["î", "ï"], "o": ["ô", "œ"],
+                    "u": ["ù", "û", "ü"], "y": ["ÿ"], "c": ["ç"]]
+        case .german:
+            return ["s": ["ß"], "e": ["é"]]
+        case .italian:
+            return ["a": ["à"], "e": ["è", "é"], "i": ["ì", "í"], "o": ["ò", "ó"], "u": ["ù", "ú"]]
+        case .portuguese:
+            return ["a": ["á", "à", "â", "ã", "ä"], "e": ["é", "ê"], "i": ["í"], "o": ["ó", "ô", "õ"], "u": ["ú", "ü"]]
+        case .dutch:
+            return ["a": ["á", "ä"], "e": ["é", "ë"], "i": ["í", "ï"], "o": ["ó", "ö"], "u": ["ú", "ü"]]
+        case .polish:
+            return ["a": ["ą"], "c": ["ć"], "e": ["ę"], "l": ["ł"], "n": ["ń"], "o": ["ó"], "s": ["ś"], "z": ["ż", "ź"]]
+        case .czech:
+            return ["a": ["á"], "c": ["č"], "d": ["ď"], "e": ["é", "ě"], "i": ["í"], "n": ["ň"], "o": ["ó"],
+                    "r": ["ř"], "s": ["š"], "t": ["ť"], "u": ["ú", "ů"], "y": ["ý"], "z": ["ž"]]
+        case .romanian:
+            return ["a": ["ă", "â"], "i": ["î"], "s": ["ș"], "t": ["ț"]]
+        case .turkish:
+            return ["a": ["â"], "i": ["î"], "u": ["û"]]
+        case .russian:
+            return ["е": ["ё"]]
+        case .ukrainian:
+            return [:]
+        case .swedish:
+            return ["e": ["é"], "u": ["ü"]]
+        }
+    }
+
+    /// Characters typed by the letter keys (lower case).
+    var keyLetterSet: Set<Character> {
+        var set = Set<Character>()
+        for row in letterRows {
+            for key in row {
+                if let character = key.first { set.insert(character) }
+            }
+        }
+        return set
+    }
+
+    /// Upper-case a string the way this language does it (Turkish i -> İ).
+    func uppercase(_ text: String) -> String {
+        if self == .turkish { return text.uppercased(with: Locale(identifier: "tr")) }
+        return text.uppercased()
+    }
+
+    /// Extra options on the comma key's long-press (besides the common punctuation).
+    var commaExtras: [String] {
+        switch self {
+        case .spanish: return ["¿", "¡"]
+        case .hungarian, .polish, .romanian, .czech: return ["\u{201E}", "\u{201D}", "\u{00BB}", "\u{00AB}"]
+        case .german: return ["\u{201E}", "\u{201C}", "\u{00BB}", "\u{00AB}"]
+        case .french, .russian: return ["\u{00AB}", "\u{00BB}"]
+        case .ukrainian: return ["\u{00AB}", "\u{00BB}", "\u{02BC}"]
+        case .swedish: return ["\u{201D}"]
+        default: return []
+        }
+    }
+
+    /// Currency symbols offered on the "$" key of the numbers page.
+    var currencyOptions: [String] {
+        switch self {
+        case .hungarian: return ["Ft", "€", "£", "¥"]
+        case .polish: return ["zł", "€", "£", "¥"]
+        case .czech: return ["Kč", "€", "£", "¥"]
+        case .romanian: return ["lei", "€", "£", "¥"]
+        case .turkish: return ["₺", "€", "£", "¥"]
+        case .swedish: return ["kr", "€", "£", "¥"]
+        case .russian: return ["₽", "€", "£", "¥"]
+        case .ukrainian: return ["₴", "€", "£", "¥"]
+        default: return ["€", "£", "¥", "¢"]
         }
     }
 }
@@ -139,16 +205,20 @@ enum LayoutBuilder {
             result.append(digits.map { KeySpec(action: .character($0), title: $0) })
         }
 
+        let topCount = letters[0].count
         result.append(letters[0].map(letterKey))
 
-        var row2: [KeySpec] = [KeySpec(action: .spacer, weight: 0.5)]
+        var row2: [KeySpec] = []
+        let sidePad = CGFloat(max(0, topCount - letters[1].count)) / 2
+        if sidePad > 0 { row2.append(KeySpec(action: .spacer, weight: sidePad)) }
         row2.append(contentsOf: letters[1].map(letterKey))
-        row2.append(KeySpec(action: .spacer, weight: 0.5))
+        if sidePad > 0 { row2.append(KeySpec(action: .spacer, weight: sidePad)) }
         result.append(row2)
 
-        var row3: [KeySpec] = [KeySpec(action: .shift, symbol: "shift", weight: 1.5, isFunction: true)]
+        let edgeWeight = min(1.8, max(1.0, CGFloat(topCount - letters[2].count) / 2))
+        var row3: [KeySpec] = [KeySpec(action: .shift, symbol: "shift", weight: edgeWeight, isFunction: true)]
         row3.append(contentsOf: letters[2].map(letterKey))
-        row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))
+        row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: edgeWeight, isFunction: true))
         result.append(row3)
 
         result.append([
@@ -165,17 +235,14 @@ enum LayoutBuilder {
 
     /// Long-press options of the comma key.
     private static func commaAlternates(_ language: Language) -> [String] {
-        var items = [";", ":", "!", "?", "'", "\"", "-", "_", "(", ")", "@", "#", "&", "/"]
-        if language == .hungarian {
-            items.append(contentsOf: ["\u{201E}", "\u{201D}", "\u{00BB}", "\u{00AB}"])
-        }
-        return items
+        let common = [";", ":", "!", "?", "'", "\"", "-", "_", "(", ")", "@", "#", "&", "/"]
+        return common + language.commaExtras
     }
 
     // MARK: Numbers
 
     private static func numberPage(language: Language, returnTitle: String) -> [[KeySpec]] {
-        let currency: [String] = (language == .hungarian) ? ["Ft", "€", "£", "¥"] : ["€", "£", "¥", "¢"]
+        let currency = language.currencyOptions
 
         let row1 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map {
             KeySpec(action: .character($0), title: $0)

@@ -13,6 +13,7 @@ final class KeyboardViewController: UIInputViewController {
     private var expandButton: UIButton?
     private var emojiPanel: EmojiPanel?
     private var settingsPanel: SettingsPanel?
+    private var languagePicker: LanguagePicker?
 
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
@@ -75,14 +76,10 @@ final class KeyboardViewController: UIInputViewController {
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
 
-        // Settings sent from the app through the clipboard (installs without shared storage).
-        let imported = SharedStore.importFromClipboardIfNeeded(hasFullAccess: hasFullAccess)
-
         // Settings changed in the app while the keyboard was away: rebuild the look.
         if settingsSignature() != builtSignature {
             buildInterface()
         }
-        if imported { suggestionBar.flash("Settings imported from the app") }
         applyHeight()
         updateAutoShift()
         scheduleRefresh()
@@ -110,15 +107,17 @@ final class KeyboardViewController: UIInputViewController {
     private func settingsSignature() -> String {
         let s = settings
         return [
-            "\(s.numberRow)", "\(s.keyHints)", s.glassStyle, "\(s.glassKeys)", s.accentName,
-            s.oneHanded, "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(SharedStore.isShared)"
+            "\(s.numberRow)", "\(s.keyHints)", s.theme, s.accentName,
+            s.oneHanded, "\(s.keyboardHeightScale)", "\(s.keyPopups)", s.enabledLanguages.joined(separator: ",")
         ].joined(separator: "|")
     }
 
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
     private func buildInterface() {
+        validateLanguage()
         hideEmojiPanel(refresh: false)
         hideSettingsPanel(refresh: false)
+        hideLanguagePicker(refresh: false)
         isSearchingEmoji = false
         searchQuery = ""
         for sub in container.subviews { sub.removeFromSuperview() }
@@ -208,14 +207,13 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func configureTools() {
-        var items: [ToolItem] = [
-            ToolItem(id: .paste, symbol: "doc.on.clipboard"),
-            ToolItem(id: .oneHanded, symbol: "hand.point.right", isActive: settings.oneHanded != "off"),
-            ToolItem(id: .numberRow, symbol: "textformat.123", isActive: settings.numberRow)
-        ]
-        if !SharedStore.isShared {
-            items.append(ToolItem(id: .settings, symbol: "gearshape"))
+        var items: [ToolItem] = []
+        if enabledLanguages.count > 1 {
+            items.append(ToolItem(id: .language, symbol: "globe", label: language.shortCode))
         }
+        items.append(ToolItem(id: .paste, symbol: "doc.on.clipboard"))
+        items.append(ToolItem(id: .oneHanded, symbol: "hand.point.right", isActive: settings.oneHanded != "off"))
+        items.append(ToolItem(id: .numberRow, symbol: "textformat.123", isActive: settings.numberRow))
         items.append(ToolItem(id: .dismiss, symbol: "keyboard.chevron.compact.down"))
         suggestionBar.setTools(items)
     }
@@ -277,6 +275,7 @@ final class KeyboardViewController: UIInputViewController {
                                       returnTitle: returnTitle,
                                       numberRow: settings.numberRow,
                                       showHints: settings.keyHints)
+        keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()
     }
@@ -294,12 +293,39 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    /// The languages the user switched on in the app (always at least one).
+    private var enabledLanguages: [Language] {
+        return Language.list(from: settings.enabledLanguages, fallback: language)
+    }
+
+    /// Makes sure the active language is one of the enabled ones.
+    private func validateLanguage() {
+        let enabled = enabledLanguages
+        if !enabled.contains(language), let first = enabled.first {
+            language = first
+            settings.languageCode = first.rawValue
+            loadStore(for: first)
+        }
+    }
+
     private func switchLanguage() {
-        language = language.next
-        settings.languageCode = language.rawValue
+        let enabled = enabledLanguages
+        guard enabled.count > 1 else { return }
+        let index = enabled.firstIndex(of: language) ?? -1
+        selectLanguage(enabled[(index + 1) % enabled.count])
+    }
+
+    private func selectLanguage(_ target: Language) {
+        guard target != language else { return }
+        language = target
+        settings.languageCode = target.rawValue
         page = .letters
         clearSwipeState()
-        loadStore(for: language)
+        loadStore(for: target)
+        // Words of the other languages are not needed any more.
+        stores = stores.filter { $0.key == target }
+        configureTools()
+        returnTitle = ""
         updateReturnTitle()
         reloadKeyboardLayout()
         scheduleRefresh()
@@ -307,15 +333,15 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateReturnTitle() {
         let type = textDocumentProxy.returnKeyType ?? .default
-        let hungarian = (language == .hungarian)
+        let texts = language.strings
         let title: String
         switch type {
-        case .go: title = hungarian ? "Mehet" : "Go"
-        case .search: title = hungarian ? "Keresés" : "Search"
-        case .send: title = hungarian ? "Küldés" : "Send"
-        case .done: title = hungarian ? "Kész" : "Done"
-        case .next: title = hungarian ? "Tovább" : "Next"
-        default: title = hungarian ? "Enter" : "return"
+        case .go: title = texts.go
+        case .search: title = texts.search
+        case .send: title = texts.send
+        case .done: title = texts.done
+        case .next: title = texts.next
+        default: title = texts.returnKey
         }
         if title != returnTitle {
             returnTitle = title
@@ -403,7 +429,7 @@ final class KeyboardViewController: UIInputViewController {
         if page == .letters && text.count == 1 && text.first?.isLetter == true {
             switch shift {
             case .off: break
-            case .once, .locked: output = text.uppercased()
+            case .once, .locked: output = language.uppercase(text)
             }
         }
         if isSearchingEmoji {
@@ -575,13 +601,13 @@ final class KeyboardViewController: UIInputViewController {
 
     private func capitalizedFirst(_ text: String) -> String {
         guard let first = text.first else { return text }
-        return String(first).uppercased() + text.dropFirst()
+        return language.uppercase(String(first)) + text.dropFirst()
     }
 
     /// Makes a dictionary word match the capitalisation the user is typing with.
     private func matchCase(of typed: String, for word: String) -> String {
         if typed.count > 1 && typed == typed.uppercased() && typed != typed.lowercased() {
-            return word.uppercased()
+            return language.uppercase(word)
         }
         if let first = typed.first, first.isUppercase {
             return capitalizedFirst(word)
@@ -594,7 +620,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func applyShift(to word: String) -> String {
         switch shift {
-        case .locked: return word.uppercased()
+        case .locked: return language.uppercase(word)
         case .once: return capitalizedFirst(word)
         case .off:
             if language == .english && (word == "i" || word.hasPrefix("i'")) { return capitalizedFirst(word) }
@@ -773,7 +799,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar.isHidden = true
         searchBar.isHidden = false
         refreshEmojiSearch()
-        EmojiStore.shared.loadSearchIfNeeded { [weak self] in
+        EmojiStore.shared.loadSearchIfNeeded(languages: [language, .english]) { [weak self] in
             self?.refreshEmojiSearch()
         }
     }
@@ -792,7 +818,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshEmojiSearch() {
-        let placeholder = language == .hungarian ? "Emoji keresése" : "Search Emoji"
+        let placeholder = language.strings.searchEmoji
         searchBar.setQuery(searchQuery, placeholder: placeholder)
         if searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
             searchBar.setResults(settings.recentEmoji)
@@ -828,6 +854,33 @@ final class KeyboardViewController: UIInputViewController {
         if refresh { scheduleRefresh() }
     }
 
+    // MARK: Language picker
+
+    private func showLanguagePicker() {
+        guard languagePicker == nil else { return }
+        let picker = LanguagePicker(languages: enabledLanguages, current: language)
+        picker.delegate = self
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(picker)
+        NSLayoutConstraint.activate([
+            picker.topAnchor.constraint(equalTo: container.topAnchor),
+            picker.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+        ])
+        languagePicker = picker
+        stage.isHidden = true
+        expandButton?.isHidden = true
+    }
+
+    private func hideLanguagePicker(refresh: Bool = true) {
+        languagePicker?.removeFromSuperview()
+        languagePicker = nil
+        stage.isHidden = false
+        applyOneHandedInsets()
+        if refresh { scheduleRefresh() }
+    }
+
     // MARK: Tools
 
     private func cycleOneHanded() {
@@ -856,15 +909,6 @@ final class KeyboardViewController: UIInputViewController {
         }
         guard let text = UIPasteboard.general.string, !text.isEmpty else {
             suggestionBar.flash("Clipboard is empty")
-            return
-        }
-        if SharedStore.isSettingsPayload(text) {
-            if SharedStore.importSettings(from: text) {
-                buildInterface()
-                suggestionBar.flash("Settings imported")
-            } else {
-                suggestionBar.flash("Settings text is damaged - copy again")
-            }
             return
         }
         if isSearchingEmoji {
@@ -977,6 +1021,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
         case .numberRow: toggleNumberRow()
         case .dismiss: dismissKeyboard()
         case .settings: showSettingsPanel()
+        case .language: showLanguagePicker()
         }
     }
 }
@@ -1020,5 +1065,18 @@ extension KeyboardViewController: SettingsPanelDelegate {
     func settingsPanelDidClose(_ panel: SettingsPanel) {
         hideSettingsPanel()
         if settingsSignature() != builtSignature { buildInterface() }
+    }
+}
+
+// MARK: - LanguagePickerDelegate
+
+extension KeyboardViewController: LanguagePickerDelegate {
+    func languagePicker(_ picker: LanguagePicker, didSelect language: Language) {
+        hideLanguagePicker(refresh: false)
+        selectLanguage(language)
+    }
+
+    func languagePickerDidClose(_ picker: LanguagePicker) {
+        hideLanguagePicker()
     }
 }

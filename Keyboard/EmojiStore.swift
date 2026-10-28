@@ -13,21 +13,8 @@ struct EmojiCategory {
     let fallbackIcon: String   // used if the symbol does not exist on this iOS version
     let items: [EmojiItem]
 
-    private static let titles: [String: (en: String, hu: String)] = [
-        "recent": ("Recently Used", "Legutóbbi"),
-        "smileys": ("Smileys & People", "Mosolygók és emberek"),
-        "animals": ("Animals & Nature", "Állatok és természet"),
-        "food": ("Food & Drink", "Étel és ital"),
-        "activity": ("Activity", "Tevékenység"),
-        "travel": ("Travel & Places", "Utazás és helyek"),
-        "objects": ("Objects", "Tárgyak"),
-        "symbols": ("Symbols", "Szimbólumok"),
-        "flags": ("Flags", "Zászlók")
-    ]
-
     func title(for language: Language) -> String {
-        guard let pair = EmojiCategory.titles[key] else { return key }
-        return language == .hungarian ? pair.hu : pair.en
+        return language.strings.categoryTitle(key) ?? key
     }
 
     /// Display order, names, and tab icons - the same order as the system emoji keyboard.
@@ -66,26 +53,28 @@ enum EmojiSupport {
     private static let ctFont: CTFont = CTFontCreateWithName(font.fontName as CFString, 24, nil)
     private static let referenceWidth: Double = lineWidth("😀")
 
+    /// Errs on the side of SHOWING an emoji. It is hidden only when there is strong evidence that the phone
+    /// would draw a box or several loose pieces instead of one picture:
+    ///  - a single-character emoji that the system emoji font has no glyph for, or
+    ///  - a multi-part sequence (ZWJ / modifier) that the phone draws side by side (twice as wide as one emoji).
+    /// Flags, keycaps and tag sequences are always kept.
     static func isSupported(_ emoji: String) -> Bool {
-        let scalars = Array(emoji.unicodeScalars)
+        let scalars = Array(emoji.unicodeScalars).filter { $0.value != 0xFE0F }
+        guard let first = scalars.first else { return false }
 
-        // 1. Every "real" emoji component must have a glyph in the system emoji font.
-        for scalar in scalars {
-            let value = scalar.value
-            if value == 0x200D || value == 0xFE0F || value == 0x20E3 { continue }   // joiner, selector, keycap
-            if value >= 0x1F3FB && value <= 0x1F3FF { continue }                    // skin tones
-            if value >= 0x1F1E6 && value <= 0x1F1FF { continue }                    // regional indicators
-            if value >= 0xE0000 && value <= 0xE007F { continue }                    // tag characters
-            if value >= 0x1F000 && !hasGlyph(scalar) { return false }
+        // Flags (regional indicator pairs), keycaps and tag-sequence flags: always kept.
+        if (0x1F1E6...0x1F1FF).contains(first.value) { return true }
+        if scalars.contains(where: { $0.value == 0x20E3 }) { return true }
+        if scalars.contains(where: { (0xE0020...0xE007F).contains($0.value) }) { return true }
+
+        if scalars.count == 1 {
+            // Characters below U+1F000 (©, ™, ☺, ⭐ ...) exist in every iOS version's emoji font.
+            if first.value < 0x1F000 { return true }
+            return hasGlyph(first)
         }
 
-        // 2. A multi-part sequence must collapse into ONE glyph. If the phone does not know the
-        //    combination it draws the parts side by side, which makes the line much wider.
-        let parts = scalars.filter { $0.value != 0xFE0F }.count
-        if parts > 1 && lineWidth(emoji) > referenceWidth * 1.45 {
-            return false
-        }
-        return true
+        // A sequence: if the phone does not know the combination it draws the parts next to each other.
+        return lineWidth(emoji) <= referenceWidth * 1.7
     }
 
     private static func hasGlyph(_ scalar: Unicode.Scalar) -> Bool {
@@ -112,7 +101,7 @@ final class EmojiStore {
     private(set) var totalCount = 0
     private(set) var shownCount = 0
 
-    private var keywords: [Language: [String: [String]]] = [:]
+    private var keywords: [Language: [String: [String]]] = [:]   // loaded on demand, one language at a time
     private var isLoading = false
     private var waiting: [() -> Void] = []
 
@@ -120,6 +109,7 @@ final class EmojiStore {
     private var searchIndex: [(emoji: String, keywords: [String], order: Int)] = []
     private var orderIndex: [String: Int] = [:]
     private(set) var searchReady = false
+    private var searchLanguages: Set<Language> = []
     private var searchLoading = false
     private var searchWaiting: [() -> Void] = []
 
@@ -139,16 +129,11 @@ final class EmojiStore {
 
         DispatchQueue.global(qos: .utility).async {
             let loaded = EmojiStore.loadCategories()
-            var words: [Language: [String: [String]]] = [:]
-            for language in Language.allCases {
-                words[language] = EmojiStore.loadKeywords(language)
-            }
             DispatchQueue.main.async {
                 self.categories = loaded.categories
                 self.unicodeVersion = loaded.version
                 self.totalCount = loaded.total
                 self.shownCount = loaded.shown
-                self.keywords = words
 
                 var order = 0
                 for category in loaded.categories {
@@ -170,21 +155,24 @@ final class EmojiStore {
         }
     }
 
-    /// Loads the search words (both languages are searched at once). Calls back on the main thread.
-    func loadSearchIfNeeded(completion: @escaping () -> Void) {
-        if searchReady {
+    /// Loads the search words for the given languages (the typing language and English, so the memory use stays small).
+    /// Calls back on the main thread.
+    func loadSearchIfNeeded(languages: [Language], completion: @escaping () -> Void) {
+        let wanted = Set(languages)
+        if searchReady && searchLanguages == wanted {
             completion()
             return
         }
         searchWaiting.append(completion)
         if searchLoading { return }
         searchLoading = true
+        searchReady = false
 
         loadIfNeeded { [weak self] in
             guard let self = self else { return }
             DispatchQueue.global(qos: .userInitiated).async {
                 var merged: [String: [String]] = [:]
-                for language in Language.allCases {
+                for language in wanted {
                     let table = EmojiStore.loadSearchWords(language)
                     for (emoji, words) in table {
                         var list = merged[emoji] ?? []
@@ -199,6 +187,7 @@ final class EmojiStore {
                         index.append((emoji: emoji, keywords: words, order: self.orderIndex[emoji] ?? Int.max))
                     }
                     self.searchIndex = index
+                    self.searchLanguages = wanted
                     self.searchReady = true
                     self.searchLoading = false
                     let callbacks = self.searchWaiting
@@ -214,7 +203,11 @@ final class EmojiStore {
     /// Up to `limit` emoji that match a complete word, e.g. "smile" -> 😀.
     func suggestions(for word: String, language: Language, limit: Int) -> [String] {
         let key = TextFolding.fold(word)
-        guard key.count >= 2, let matches = keywords[language]?[key] else { return [] }
+        guard key.count >= 2 else { return [] }
+        if keywords[language] == nil {
+            keywords[language] = EmojiStore.loadKeywords(language)   // small file, loaded once per language
+        }
+        guard let matches = keywords[language]?[key] else { return [] }
         var result: [String] = []
         for emoji in matches where EmojiSupport.isSupported(emoji) {
             result.append(emoji)

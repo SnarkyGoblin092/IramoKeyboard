@@ -31,22 +31,22 @@ jobs:
         run: |
           ls -la Keyboard/Resources
           test -s Keyboard/Resources/emoji.json
-          test -s Keyboard/Resources/words_en.tsv
-          test -s Keyboard/Resources/words_hu.tsv
-          test -s Keyboard/Resources/emoji_search_en.json
-          test -s Keyboard/Resources/emoji_search_hu.json
+          for f in en hu; do test -s Keyboard/Resources/words_$f.tsv; done
+          for f in Keyboard/Resources/words_*.tsv; do
+            test -s "$f" || { echo "::error::$f is empty"; exit 1; }
+          done
+          ls Keyboard/Resources/words_*.tsv | wc -l
           python3 - <<'PY'
-          import json
+          import glob, json
           data = json.load(open("Keyboard/Resources/emoji.json"))
           total = sum(len(g["items"]) for g in data["groups"])
           print("Unicode emoji", data["version"], "->", total, "emoji")
           assert total > 1500, "emoji list looks too small"
-          for lang in ("en", "hu"):
-              n = len(json.load(open(f"Keyboard/Resources/emoji_keywords_{lang}.json")))
-              s = len(json.load(open(f"Keyboard/Resources/emoji_search_{lang}.json")))
-              print(lang, "emoji keywords:", n, "| searchable emoji:", s)
-              if n < 300 or s < 800:
-                  print(f"::warning::emoji keyword data for {lang} looks thin; emoji search will be weak")
+          for path in sorted(glob.glob("Keyboard/Resources/emoji_search_*.json")):
+              n = len(json.load(open(path)))
+              print(path, "searchable emoji:", n)
+              if n < 800:
+                  print(f"::warning::{path} looks thin; emoji search will be weak")
           PY
 
       - name: Install XcodeGen
@@ -70,52 +70,31 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log
 
-      # Two IPAs, because installers treat App Groups differently:
-      #
-      # HunKeys-AppGroup.ipa   The App Group entitlement is written into the signature of BOTH the app and
-      #                        the keyboard (ldid). AltStore / SideStore read it from there, register
-      #                        "group.com.hunkeys.k9x4.shared.<TeamID>" for you and add ALTAppGroups to both
-      #                        Info.plists, which HunKeys reads at runtime. Use this one with AltStore,
-      #                        SideStore, or a signer with a PAID developer account.
-      # HunKeys.ipa            No entitlements at all. Use it with Sideloadly + a FREE Apple ID, which cannot
-      #                        grant App Groups (an unmatched entitlement can even get the keyboard killed).
-      #                        Settings then travel by shared Keychain or the manual copy/paste in the app.
-      - name: Package plain IPA
-        run: |
-          rm -rf Payload HunKeys.ipa
-          mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/HunKeys.app Payload/
-          zip -qry HunKeys.ipa Payload
-          unzip -l HunKeys.ipa | grep -E "\.appex/Info.plist|HunKeys.app/Info.plist" | head
-
-      - name: Package App Group IPA
-        continue-on-error: true
+      # One IPA. The App Group entitlement is written into the signature of BOTH the app and the keyboard
+      # (ldid), so iloader / AltStore / SideStore can keep it when they re-sign, and the app's settings
+      # reach the keyboard.
+      - name: Package IPA
         run: |
           brew install ldid
           command -v ldid
-          rm -rf group-build HunKeys-AppGroup.ipa
-          mkdir -p group-build/Payload
-          cp -R build/Build/Products/Release-iphoneos/HunKeys.app group-build/Payload/
-          APP=group-build/Payload/HunKeys.app
+          rm -rf Payload HunKeys.ipa
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/HunKeys.app Payload/
+          APP=Payload/HunKeys.app
           ldid -SConfig/AppGroup.entitlements "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard"
           ldid -SConfig/AppGroup.entitlements "$APP/HunKeys"
-          echo "Entitlements now attached to the keyboard:"
           ldid -e "$APP/PlugIns/HunKeysKeyboard.appex/HunKeysKeyboard" | tee appex-ent.txt
-          echo "Entitlements now attached to the app:"
           ldid -e "$APP/HunKeys" | tee app-ent.txt
-          # Fail loudly if either signature lacks the group (AltStore would then register nothing).
           grep -q "group.com.hunkeys.k9x4.shared" appex-ent.txt
           grep -q "group.com.hunkeys.k9x4.shared" app-ent.txt
-          (cd group-build && zip -qry ../HunKeys-AppGroup.ipa Payload)
-          ls -la HunKeys-AppGroup.ipa
+          zip -qry HunKeys.ipa Payload
+          ls -la HunKeys.ipa
 
-      - name: Upload IPAs
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: HunKeys-ipa
-          path: |
-            HunKeys.ipa
-            HunKeys-AppGroup.ipa
+          path: HunKeys.ipa
           if-no-files-found: error
 
       - name: Show compiler errors (only if something failed)

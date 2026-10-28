@@ -19,13 +19,13 @@ enum SettingKey {
     // Layout and look
     static let numberRow = "hunkeys.numberRow"
     static let keyHints = "hunkeys.keyHints"
-    static let glassKeys = "hunkeys.glassKeys"
-    static let glassStyle = "hunkeys.glassStyle"
+    static let theme = "hunkeys.theme"
     static let accent = "hunkeys.accent"
     static let keyboardHeight = "hunkeys.keyboardHeight"
     static let oneHanded = "hunkeys.oneHanded"
     // Data
     static let language = "hunkeys.language"
+    static let enabledLanguages = "hunkeys.enabledLanguages"
     static let recentEmoji = "hunkeys.recentEmoji"
     static let shortcuts = "hunkeys.shortcuts"
     static let learnedPrefix = "hunkeys.learned."
@@ -40,7 +40,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, cursorControl, deleteSwipe, numberRow, keyHints,
-        glassKeys, glassStyle, accent, keyboardHeight, oneHanded
+        theme, accent, keyboardHeight, oneHanded, enabledLanguages
     ]
 }
 
@@ -58,12 +58,12 @@ enum SettingDefault {
     static let deleteSwipe = true
     static let numberRow = false
     static let keyHints = true
-    static let glassKeys = false
-    static let glassStyle = "regular"
+    static let theme = "native"
     static let accent = "blue"
     static let keyboardHeight = 1.0
     static let oneHanded = "off"
     static let language = "en"
+    static let enabledLanguages = ["en", "hu"]
 }
 
 enum AccentChoice: String, CaseIterable {
@@ -100,10 +100,7 @@ final class Settings {
     static let holdDelayRange: ClosedRange<Double> = 0.10...1.00
     static let heightScaleRange: ClosedRange<Double> = 0.85...1.20
 
-    private var store: UserDefaults {
-        SharedStore.refreshIfNeeded()   // keyboard: picks up changes the app sent (throttled)
-        return SharedStore.defaults
-    }
+    private var store: UserDefaults { return SharedStore.defaults }
 
     private init() {
         SharedStore.defaults.register(defaults: [
@@ -120,8 +117,8 @@ final class Settings {
             SettingKey.deleteSwipe: SettingDefault.deleteSwipe,
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
-            SettingKey.glassKeys: SettingDefault.glassKeys,
-            SettingKey.glassStyle: SettingDefault.glassStyle,
+            SettingKey.theme: SettingDefault.theme,
+            SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,
             SettingKey.keyboardHeight: SettingDefault.keyboardHeight,
             SettingKey.oneHanded: SettingDefault.oneHanded,
@@ -207,18 +204,16 @@ final class Settings {
         set { store.set(newValue, forKey: SettingKey.keyHints) }
     }
 
-    var glassKeys: Bool {
-        get { return store.bool(forKey: SettingKey.glassKeys) }
-        set { store.set(newValue, forKey: SettingKey.glassKeys) }
+    /// "native" (iOS look) or "transparent" (see-through keys).
+    var theme: String {
+        get {
+            let value = store.string(forKey: SettingKey.theme) ?? SettingDefault.theme
+            return value == "transparent" ? "transparent" : "native"
+        }
+        set { store.set(newValue, forKey: SettingKey.theme) }
     }
 
-    /// "regular" or "clear".
-    var glassStyle: String {
-        get { return store.string(forKey: SettingKey.glassStyle) ?? SettingDefault.glassStyle }
-        set { store.set(newValue, forKey: SettingKey.glassStyle) }
-    }
-
-    var glassClear: Bool { return glassStyle == "clear" }
+    var isTransparentTheme: Bool { return theme == "transparent" }
 
     var accentName: String {
         get { return store.string(forKey: SettingKey.accent) ?? SettingDefault.accent }
@@ -259,15 +254,13 @@ final class Settings {
     }
 
     func clearLearnedWords() {
-        for code in ["en", "hu"] {
-            store.removeObject(forKey: SettingKey.learnedPrefix + code)
+        for language in Language.allCases {
+            store.removeObject(forKey: SettingKey.learnedPrefix + language.rawValue)
         }
-        store.set(Date().timeIntervalSince1970, forKey: SyncKey.clearLearned)   // tells the keyboard too
     }
 
-    func requestClearRecentEmoji() {
+    func clearRecentEmoji() {
         store.removeObject(forKey: SettingKey.recentEmoji)
-        store.set(Date().timeIntervalSince1970, forKey: SyncKey.clearRecents)
     }
 
     var shortcuts: [TextShortcut] {
@@ -304,20 +297,27 @@ final class Settings {
     // MARK: Status (keyboard writes, app reads)
 
     func markKeyboardSeen(hasFullAccess: Bool) {
-        SharedStore.pullPreferences()   // fresh settings first
-        let target = SharedStore.defaults
-        target.set(Date().timeIntervalSince1970, forKey: SettingKey.lastSeen)
-        target.set(hasFullAccess, forKey: SettingKey.fullAccess)
-        // Echo the app's "Test sync" code so the app can tell the keyboard received it.
-        target.set(target.string(forKey: SyncKey.nonce) ?? "", forKey: SyncKey.echoNonce)
-        SharedStore.publishStatus()
+        store.set(Date().timeIntervalSince1970, forKey: SettingKey.lastSeen)
+        store.set(hasFullAccess, forKey: SettingKey.fullAccess)
     }
 
     func recordEmojiStats(version: String, total: Int, shown: Int) {
-        let target = SharedStore.defaults
-        target.set(version, forKey: SettingKey.emojiVersion)
-        target.set(total, forKey: SettingKey.emojiTotal)
-        target.set(shown, forKey: SettingKey.emojiShown)
-        SharedStore.publishStatus()
+        store.set(version, forKey: SettingKey.emojiVersion)
+        store.set(total, forKey: SettingKey.emojiTotal)
+        store.set(shown, forKey: SettingKey.emojiShown)
+    }
+
+    // MARK: Languages
+
+    /// ISO codes of the languages shown in the keyboard's language switcher. Never empty.
+    var enabledLanguages: [String] {
+        get {
+            let stored = store.stringArray(forKey: SettingKey.enabledLanguages) ?? SettingDefault.enabledLanguages
+            return Language.list(from: stored, fallback: .english).map { $0.rawValue }
+        }
+        set {
+            store.set(Language.list(from: newValue, fallback: .english).map { $0.rawValue },
+                      forKey: SettingKey.enabledLanguages)
+        }
     }
 }

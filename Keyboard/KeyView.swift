@@ -3,26 +3,20 @@ import UIKit
 /// One drawn key. It never receives touches itself: `KeyboardView` handles all touches so that
 /// multi-touch typing, long-press accents, cursor control and swiping work across key boundaries.
 ///
-/// Two looks:
-///  * default       - the native iOS key cap (opaque, 5pt corners, 1pt shadow line)
-///  * glass keys    - every cap is a real Liquid Glass view (opt-in; heavier)
+/// Two themes (see `Theme`):
+///  * native       - the iOS key cap (opaque, 5pt corners, 1pt shadow line)
+///  * transparent  - translucent fills with a thin outline, no shadow
 final class KeyView: UIView {
     private(set) var spec: KeySpec
     let label = UILabel()
     private let hintLabel = UILabel()
     private let iconView = UIImageView()
-    private var glass: GlassView?
-    private let useGlass: Bool
+    private let transparent: Bool
 
     var isPressed = false {
         didSet {
             guard oldValue != isPressed else { return }
             refreshAppearance()
-            if useGlass {
-                UIView.animate(withDuration: 0.07, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-                    self.transform = self.isPressed ? CGAffineTransform(scaleX: 0.95, y: 0.95) : .identity
-                }
-            }
         }
     }
     var isActive = false { didSet { refreshAppearance() } }
@@ -30,17 +24,14 @@ final class KeyView: UIView {
 
     init(spec: KeySpec) {
         self.spec = spec
-        self.useGlass = Settings.shared.glassKeys && GlassView.usesRealGlass
+        self.transparent = Theme.isTransparent
         super.init(frame: .zero)
         isUserInteractionEnabled = false
 
-        layer.cornerRadius = useGlass ? 9 : 5.5
+        layer.cornerRadius = transparent ? 7 : 5.5
         layer.cornerCurve = .continuous
-
-        if useGlass {
-            let glassView = GlassView()
-            addSubview(glassView)
-            glass = glassView
+        if transparent {
+            layer.borderWidth = 0.5
         } else {
             layer.shadowOpacity = 1
             layer.shadowRadius = 0
@@ -113,29 +104,11 @@ final class KeyView: UIView {
             textColor = UIColor.white
         } else if isActive {
             textColor = UIColor.black
-        } else if spec.isFunction && isPressed && !useGlass {
-            textColor = UIColor.label
         } else {
             textColor = UIColor.label
         }
         label.textColor = textColor
         iconView.tintColor = textColor
-
-        if useGlass {
-            backgroundColor = UIColor.clear
-            if isProminent {
-                glass?.contentView.backgroundColor = Theme.accent.withAlphaComponent(0.85)
-            } else if isActive {
-                glass?.contentView.backgroundColor = Theme.activeKey
-            } else if isPressed {
-                glass?.contentView.backgroundColor = Theme.glassPressedOverlay
-            } else if spec.isFunction {
-                glass?.contentView.backgroundColor = Theme.glassFunctionOverlay
-            } else {
-                glass?.contentView.backgroundColor = UIColor.clear
-            }
-            return
-        }
 
         if isProminent {
             backgroundColor = isPressed ? Theme.accent.withAlphaComponent(0.7) : Theme.accent
@@ -150,8 +123,9 @@ final class KeyView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        glass?.frame = bounds
-        if !useGlass {
+        if transparent {
+            layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
+        } else {
             layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
             layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
         }

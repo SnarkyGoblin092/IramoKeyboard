@@ -17,6 +17,8 @@ protocol KeyboardViewDelegate: AnyObject {
 ///  - dragging across the letter keys is recognised as swipe typing.
 final class KeyboardView: UIView {
     weak var delegate: KeyboardViewDelegate?
+    /// Decides how letters are capitalised (Turkish i -> İ).
+    var typingLanguage: Language = .english
     /// Popups are added here (the controller's root view) so they can rise above the first row.
     weak var popupHost: UIView?
 
@@ -138,7 +140,7 @@ final class KeyboardView: UIView {
                 switch spec.action {
                 case .character(let text):
                     if page == .letters && text.count == 1 && text.first?.isLetter == true {
-                        key.label.text = (shift == .off) ? text : text.uppercased()
+                        key.label.text = (shift == .off) ? text : typingLanguage.uppercase(text)
                     }
                 case .shift:
                     key.isActive = (shift != .off)
@@ -595,7 +597,7 @@ final class KeyboardView: UIView {
         guard let host = popupHost else { return }
         hidePreview()
         let uppercase = (page == .letters && shift != .off)
-        let items = key.spec.alternates.map { uppercase ? $0.uppercased() : $0 }
+        let items = key.spec.alternates.map { uppercase ? typingLanguage.uppercase($0) : $0 }
         let popup = AlternatesPopupView(alternates: items,
                                         keyFrame: convert(key.frame, to: host),
                                         hostBounds: host.bounds)
