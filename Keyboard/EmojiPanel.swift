@@ -414,6 +414,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             if let image = UIImage(systemName: section.symbol,
                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 14.4, weight: .light)) {
                 button.setImage(image, for: .normal)
+                // Outline by default, filled while this is the active tab.
+                let filledConfig = UIImage.SymbolConfiguration(pointSize: 14.4, weight: .regular)
+                let filled = UIImage(systemName: section.symbol + ".fill", withConfiguration: filledConfig) ?? image
+                button.setImage(filled, for: .selected)
+                button.setImage(filled, for: [.selected, .highlighted])
             } else {
                 button.setTitle(section.fallback, for: .normal)
                 button.titleLabel?.font = UIFont.systemFont(ofSize: 14)
@@ -431,6 +436,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == selectedTabIndex)
             button.tintColor = EmojiLook.text
+            button.isSelected = selected
             button.alpha = selected ? 1.0 : 0.9
         }
         if currentSection < sections.count {
@@ -668,7 +674,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiCell.reuseID, for: indexPath)
         if let emojiCell = cell as? EmojiCell {
             let side = min(gridLayout.cellSize.width, gridLayout.cellSize.height)
-            emojiCell.label.font = UIFont.systemFont(ofSize: side * 0.66)
+            emojiCell.label.font = UIFont.systemFont(ofSize: side * 0.79)
             emojiCell.label.text = sections[indexPath.section].items[indexPath.item].base
         }
         return cell

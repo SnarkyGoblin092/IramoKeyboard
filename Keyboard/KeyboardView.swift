@@ -44,6 +44,8 @@ final class KeyboardView: UIView {
         let startPoint: CGPoint
         var path: [CGPoint]
         var startedOnLetter = false
+        /// Distinct keys the finger has been over (used to tell a sloppy tap from a real swipe).
+        var visited = Set<ObjectIdentifier>()
         var startedOnSpace = false
         var isSwiping = false
         var popupActive = false
@@ -396,6 +398,7 @@ final class KeyboardView: UIView {
             let state = TouchState(start: point)
             states[touch] = state
             guard let index = keyIndex(at: point) else { continue }
+            state.visited.insert(ObjectIdentifier(keyViews[index.row][index.col]))
             press(state, key: keyViews[index.row][index.col])
         }
     }
@@ -405,6 +408,9 @@ final class KeyboardView: UIView {
             guard let state = states[touch] else { continue }
             let point = touch.location(in: self)
             state.path.append(point)
+            if state.startedOnLetter && !state.isSwiping, let index = keyIndex(at: point) {
+                state.visited.insert(ObjectIdentifier(keyViews[index.row][index.col]))
+            }
 
             if state.isCursorMode {
                 moveCursor(state, to: point)
@@ -597,6 +603,10 @@ final class KeyboardView: UIView {
         state.repeatTimer?.invalidate()
         state.key?.isPressed = false
         hidePreview()
+        // Another finger may still be holding a key (two-thumb typing): keep its preview.
+        if let other = states.values.first(where: { $0.key != nil && !$0.isSwiping && !$0.isCursorMode }), let otherKey = other.key {
+            showPreview(for: otherKey)
+        }
 
         if state.isCursorMode {
             setCursorAppearance(false)
@@ -628,7 +638,13 @@ final class KeyboardView: UIView {
             return
         }
         if state.isWordDeleting { return }
-        guard !state.handledByHold, let key = state.key ?? state.startKey else { return }
+        guard !state.handledByHold else { return }
+        // A touch that began where no key could be resolved still types the key nearest to where it ended.
+        var resolved = state.key ?? state.startKey
+        if resolved == nil, let last = state.path.last, let index = keyIndex(at: last) {
+            resolved = keyViews[index.row][index.col]
+        }
+        guard let key = resolved else { return }
 
         // The system cancels touches now and then (edge gestures, notifications, app switcher hints).
         // A press that has not really moved is still a tap, so it must not be lost.
@@ -719,6 +735,8 @@ final class KeyboardView: UIView {
         guard Prefs.swipe, page == .letters, state.startedOnLetter, states.count == 1 else {
             return false
         }
+        // A real swipe crosses at least two other keys; a sloppy tap or a quick drift never does.
+        guard state.visited.count >= 3 else { return false }
         // A swipe needs a clear, deliberate slide: well over one key width away from where the finger
         // went down, and onto a different key. Anything smaller stays a tap (fast typists drift a lot).
         let keyWidth = max(letterKeySize().width, 1)

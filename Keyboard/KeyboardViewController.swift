@@ -37,6 +37,7 @@ final class KeyboardViewController: UIInputViewController {
     private var lastSwipeInserted: String?
     private var swipeAlternatives: [String] = []
     private var refreshScheduled = false
+    private var suggestionWork: DispatchWorkItem?
 
     // Emoji search (typing on the normal keys while the picker's search field is "active")
     private var isSearchingEmoji = false
@@ -106,6 +107,9 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    /// Ask the system not to hold back touches at the screen edges for its own gestures (keeps edge keys instant).
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { return [.left, .right, .bottom] }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
@@ -126,8 +130,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         updateReturnTitle()
-        if !isSearchingEmoji { updateAutoShift() }
-        scheduleRefresh()
+        scheduleRefresh()   // auto-shift and suggestions are refreshed off the typing path
     }
 
     // MARK: Building the interface
@@ -246,7 +249,9 @@ final class KeyboardViewController: UIInputViewController {
         total *= CGFloat(Prefs.heightScale)
         // The emoji picker always shows four full rows: the keyboard grows to fit while it is open.
         if emojiPanel != nil { total = max(total, EmojiPanel.requiredHeight(forWidth: view.bounds.width)) }
-        let suggestions: CGFloat = isLandscape ? 36 : 44
+        if isSearchingEmoji { total += 6 }
+        // While searching for an emoji the strip gets 6pt of top inset so its pill sits inside the keyboard's corner.
+        let suggestions: CGFloat = (isLandscape ? 36 : 44) + (isSearchingEmoji ? 6 : 0)
 
         if let constraint = totalHeight {
             if constraint.constant != total { constraint.constant = total }
@@ -518,11 +523,12 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
-        learnWord(endingAt: before)
         clearSwipeState()
         textDocumentProxy.insertText(" ")
         lastSpaceTime = Date()
         afterTyping()
+        // Learning the finished word is not needed to show the space, so it runs right after.
+        DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
     }
 
     private func handleEnter() {
@@ -539,7 +545,7 @@ final class KeyboardViewController: UIInputViewController {
             for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(phrase)
         } else {
-            learnWord(endingAt: before)
+            DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
         }
         clearSwipeState()
         textDocumentProxy.insertText("\n")
@@ -692,15 +698,22 @@ final class KeyboardViewController: UIInputViewController {
     // MARK: Suggestions
 
     private func scheduleRefresh() {
-        if refreshScheduled { return }
-        refreshScheduled = true
-        // The text proxy updates a moment after insertText, so read it on the next run-loop turn.
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.refreshScheduled = false
-            self.updateAutoShift()
-            self.refreshSuggestions()
+        // Cheap part first: the shift state must be right for the very next key.
+        if !refreshScheduled {
+            refreshScheduled = true
+            // The text proxy updates a moment after insertText, so read it on the next run-loop turn.
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.refreshScheduled = false
+                self.updateAutoShift()
+            }
         }
+        // Suggestions are the heavy part: coalesce bursts of typing into one refresh just after the last key,
+        // so a fast typist never waits behind dictionary work.
+        suggestionWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.refreshSuggestions() }
+        suggestionWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
     }
 
     private func clearSwipeState() {
@@ -894,6 +907,7 @@ final class KeyboardViewController: UIInputViewController {
     private func beginEmojiSearch() {
         hideEmojiPanel(refresh: false)
         isSearchingEmoji = true
+        applyHeight()
         searchQuery = ""
         page = .letters
         shift = .off
@@ -908,6 +922,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func endEmojiSearch(returnToPicker: Bool) {
         isSearchingEmoji = false
+        applyHeight()
         searchQuery = ""
         searchBar.isHidden = true
         suggestionBar.isHidden = false
