@@ -94,7 +94,7 @@ enum Theme {
     /// Native keys carry the 1pt shadow line under them.
     static var drawsKeyShadow: Bool { return kind == .native }
     /// Everything but the native theme gets a hairline outline.
-    static var drawsKeyBorder: Bool { return kind != .native && !usesRealGlass }
+    static var drawsKeyBorder: Bool { return kind != .native && !usesRealGlass && Prefs.keyBorders }
 
     // MARK: Colours (read at use time, so they follow the cached palette)
 

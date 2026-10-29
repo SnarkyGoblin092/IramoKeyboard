@@ -8,6 +8,7 @@ struct ThemePreview: View {
     var showsStrip = true
     var cornerRadius: CGFloat = 14
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
+    @AppStorage(SettingKey.keyBorders, store: SharedStore.defaults) private var keyBorders = SettingDefault.keyBorders
 
     @Environment(\.colorScheme) private var systemScheme
 
@@ -234,6 +235,6 @@ struct ThemePreview: View {
         let rounded = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return rounded
             .fill(fill)
-            .overlay(rounded.stroke(borderColor, lineWidth: 0.5))
+            .overlay(rounded.stroke(borderColor, lineWidth: keyBorders ? 0.5 : 0))
     }
 }

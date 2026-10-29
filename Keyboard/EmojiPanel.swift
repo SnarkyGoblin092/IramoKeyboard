@@ -79,7 +79,7 @@ final class RepeatingButton: HitButton {
 /// continuous strip that scrolls freely. Categories follow each other with a small gap.
 private final class EmojiGridLayout: UICollectionViewLayout {
     var rows = 4
-    var edgeInset: CGFloat = 0
+    var edgeInset: CGFloat = 7.3
     var sectionGap: CGFloat = 0
     /// Band at the top of the strip for the category names (they scroll with the content, like stock).
     var headerHeight: CGFloat = 0
@@ -108,8 +108,9 @@ private final class EmojiGridLayout: UICollectionViewLayout {
         guard viewWidth > 0, height > 0, rows > 0 else { return }
 
         let side = max(1, (height - headerHeight) / CGFloat(rows))
-        // About eight columns across the screen, like the stock picker.
-        cellSize = CGSize(width: max(36, viewWidth / 8), height: side)
+        // Stock metrics (measured on 440pt): 54.8pt pitch, 7.3pt left inset, eight columns across.
+        cellSize = CGSize(width: viewWidth * 54.8 / 440, height: side)
+        edgeInset = viewWidth * 7.3 / 440
         gapAfterRecents = cellSize.width * 0.75
 
         var x = edgeInset
@@ -200,7 +201,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var collectionView: UICollectionView!
     private var headerLabels: [UILabel] = []
 
-    private let searchGlass = FlatPanel(background: EmojiLook.searchField, cornerRadius: 19)
+    private let searchGlass = FlatPanel(background: EmojiLook.searchField, cornerRadius: 20)
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -210,7 +211,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     private let tabGlass = FlatPanel(background: UIColor.clear)
     private let tabSelection = FlatPanel(background: EmojiLook.selection, cornerRadius: 100)
-    private let tabUnderline = UIView()
     private let abcPanel = FlatPanel(background: UIColor.clear)
     private let deletePanel = FlatPanel(background: UIColor.clear)
     private let abcButton = HitButton(type: .system)
@@ -222,31 +222,24 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var isProgrammaticScroll = false
     private var variantPopup: UIView?
 
-    // Fixed metrics: search pill + exactly four emoji rows + tab bar always fit (the keyboard grows if needed).
-    static let searchTopInset: CGFloat = 5
-    static let searchHeightFixed: CGFloat = 38
-    static let searchGapFixed: CGFloat = 8
-    static let barHeightFixed: CGFloat = 44
-
-    /// Row pitch of the grid: the cell width (a full width / 8), capped so landscape stays reasonable.
-    static func rowPitch(forWidth width: CGFloat) -> CGFloat {
-        return min(54, max(40, width / 8))
+    /// Everything is measured on the stock 440 x 402pt picker and scaled by the width (capped in landscape).
+    static func scale(forWidth width: CGFloat) -> CGFloat {
+        return width > 500 ? 0.75 : min(1, max(0.6, width / 440))
     }
 
-    /// Keyboard height needed to show the search pill, four full rows and the tab bar.
+    /// Keyboard height needed to show the whole picker.
     static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
-        return searchTopInset + searchHeightFixed + searchGapFixed + 4 * rowPitch(forWidth: width) + barHeightFixed
+        return (402 * scale(forWidth: width)).rounded()
     }
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
     private var searchHeight: CGFloat = 36
     private var titleHeight: CGFloat = 18
-    private var barHeight: CGFloat = 44
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         // Native look: the system keyboard backdrop shows in the native theme; other themes get the native colour.
-        backgroundColor = (Theme.kind == .native) ? UIColor.clear : EmojiLook.background
+        backgroundColor = UIColor.clear
         let systemStyle = UIScreen.main.traitCollection.userInterfaceStyle
         if systemStyle != .unspecified { overrideUserInterfaceStyle = systemStyle }
         _ = 0   // the keyboard's own backdrop (system / gradient / glass) shows; the key stage is hidden while this is open
@@ -256,7 +249,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchIcon.image = UIImage(systemName: "magnifyingglass")
         searchIcon.tintColor = EmojiLook.secondary
         searchIcon.contentMode = .scaleAspectFit
-        searchLabel.font = UIFont.systemFont(ofSize: 17)
+        searchLabel.font = UIFont.systemFont(ofSize: 20)
         searchLabel.textColor = EmojiLook.secondary
         searchGlass.contentView.addSubview(searchIcon)
         searchGlass.contentView.addSubview(searchLabel)
@@ -298,14 +291,15 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         addSubview(tabGlass)
         tabSelection.isUserInteractionEnabled = false
         tabGlass.contentView.addSubview(tabSelection)
-        tabUnderline.isUserInteractionEnabled = false
         abcButton.setTitle("ABC", for: .normal)
-        abcButton.setTitleColor(EmojiLook.secondary, for: .normal)
-        abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .regular)
+        abcButton.setTitleColor(EmojiLook.text, for: .normal)
+        abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .regular)
+        abcButton.contentHorizontalAlignment = .left
         abcButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         addSubview(abcButton)
 
-        backspaceButton.setImage(UIImage(systemName: "delete.left"), for: .normal)
+        backspaceButton.setImage(UIImage(systemName: "delete.left",
+                                         withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .light)), for: .normal)
         backspaceButton.tintColor = EmojiLook.text
         backspaceButton.onFire = { [weak self] in
             guard let self = self else { return }
@@ -432,8 +426,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func refreshTabHighlight() {
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == selectedTabIndex)
-            button.tintColor = selected ? EmojiLook.text : EmojiLook.secondary.withAlphaComponent(0.7)
-            button.alpha = selected ? 1.0 : 0.85
+            button.tintColor = EmojiLook.text
+            button.alpha = selected ? 1.0 : 0.9
         }
         if currentSection < sections.count {
             titleLabel.text = sections[currentSection].title.uppercased()
@@ -446,27 +440,19 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func positionTabSelection(animated: Bool) {
         guard selectedTabIndex < tabButtons.count, tabGlass.bounds.height > 0 else {
             tabSelection.isHidden = true
-            tabUnderline.isHidden = true
             return
         }
         tabSelection.isHidden = false
-        tabUnderline.isHidden = false
-        tabUnderline.backgroundColor = EmojiLook.text
-        tabUnderline.layer.cornerRadius = 1
         let buttonFrame = tabButtons[selectedTabIndex].frame
-        let circle = max(0, min(buttonFrame.width, buttonFrame.height) - 4)
+        let circle = 30 * EmojiPanel.scale(forWidth: bounds.width)
         let target = CGRect(x: buttonFrame.midX - circle / 2, y: buttonFrame.midY - circle / 2, width: circle, height: circle)
-        let underlineTarget = CGRect(x: buttonFrame.midX - 9, y: buttonFrame.maxY - 3, width: 18, height: 2)
-        tabGlass.contentView.addSubview(tabUnderline)
         tabGlass.contentView.sendSubviewToBack(tabSelection)
         if animated && tabSelection.frame != .zero {
             UIView.animate(withDuration: 0.16, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
                 self.tabSelection.frame = target
-                self.tabUnderline.frame = underlineTarget
             }
         } else {
             tabSelection.frame = target
-            tabUnderline.frame = underlineTarget
         }
     }
 
@@ -490,41 +476,34 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     override func layoutSubviews() {
         super.layoutSubviews()
         let width = bounds.width
-
-        let total = bounds.height
-        let showTitle = false
+        let xf = width / 440
+        let f = EmojiPanel.scale(forWidth: width)
         gridLayout.headerHeight = 0
-        searchHeight = EmojiPanel.searchHeightFixed
-        barHeight = EmojiPanel.barHeightFixed
-        let searchTop = EmojiPanel.searchTopInset
-        let searchGap = EmojiPanel.searchGapFixed
         titleLabel.isHidden = true
 
-        searchGlass.frame = CGRect(x: 6, y: searchTop, width: width - 12, height: searchHeight)
+        // Search pill: x 9...431, y 13...53 (stock, 440pt wide).
+        searchHeight = 40 * f
+        searchGlass.frame = CGRect(x: 9 * xf, y: 13 * f, width: width - 18 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
-        searchIcon.frame = CGRect(x: 14, y: (searchHeight - 18) / 2, width: 18, height: 18)
-        searchLabel.frame = CGRect(x: 40, y: 0, width: searchGlass.bounds.width - 56, height: searchHeight)
+        searchIcon.frame = CGRect(x: 13 * xf, y: (searchHeight - 17 * f) / 2, width: 17 * f, height: 17 * f)
+        searchLabel.font = UIFont.systemFont(ofSize: 20 * f)
+        searchLabel.frame = CGRect(x: 37 * xf, y: 0, width: max(0, searchGlass.bounds.width - 50 * xf), height: searchHeight)
 
-        let gridTop = searchGlass.frame.maxY + searchGap
-        let gridHeight = max(0, bounds.height - gridTop - barHeight)
-        let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
+        // Four rows of 54.8pt, the first row centred at y = 89.
+        let gridHeight = 4 * 54.8 * f
+        let newGridFrame = CGRect(x: 0, y: 61.6 * f, width: width, height: gridHeight)
         if collectionView.frame != newGridFrame {
             collectionView.frame = newGridFrame
-            gridLayout.rows = 4          // the stock picker always shows exactly four rows
+            gridLayout.rows = 4
             gridLayout.invalidateLayout()
         }
-        if collectionView.bounds.width > 0 {
-            collectionView.layoutIfNeeded()
-            positionHeaders()
-        }
+        if collectionView.bounds.width > 0 { collectionView.layoutIfNeeded() }
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
 
-        let barTop = bounds.height - barHeight
-        abcButton.frame = CGRect(x: 0, y: barTop, width: 64, height: barHeight)
-        backspaceButton.frame = CGRect(x: width - 64, y: barTop, width: 64, height: barHeight)
-        abcPanel.frame = CGRect(x: 8, y: barTop + 4, width: 48, height: barHeight - 8)
-        deletePanel.frame = CGRect(x: width - 56, y: barTop + 4, width: 48, height: barHeight - 8)
-        tabGlass.frame = CGRect(x: 64, y: barTop + 4, width: max(0, width - 128), height: barHeight - 8)
+        // Tab row (icon centres at y = 302), ABC (centred at y = 369), delete at x = 411.
+        tabGlass.frame = CGRect(x: 0, y: 284 * f, width: width, height: 36 * f)
+        abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
+        backspaceButton.frame = CGRect(x: 411 * xf - 26, y: 302 * f - 22, width: 52, height: 44)
         layoutTabs()
         positionTabSelection(animated: false)
         applyInitialScrollIfPossible()
@@ -532,10 +511,12 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     private func layoutTabs() {
         guard !tabButtons.isEmpty else { return }
+        let xf = bounds.width / 440
         let area = tabGlass.bounds
-        let width = area.width / CGFloat(tabButtons.count)
+        let pitch = 39.8 * xf
         for (index, button) in tabButtons.enumerated() {
-            button.frame = CGRect(x: CGFloat(index) * width, y: 0, width: width, height: area.height)
+            let centre = (37.7 + 39.8 * CGFloat(index)) * xf
+            button.frame = CGRect(x: centre - pitch / 2, y: 0, width: pitch, height: area.height)
         }
     }
 
@@ -548,11 +529,13 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if let popup = variantPopup, popup.frame.insetBy(dx: -4, dy: -4).contains(point) {
             return super.hitTest(point, with: event)
         }
+        let f = EmojiPanel.scale(forWidth: bounds.width)
         if point.y < searchGlass.frame.maxY + 4 { return searchButton }
-        let barTop = bounds.height - barHeight
-        if point.y >= barTop - 4 {
-            if point.x < 64 { return abcButton }
-            if point.x > bounds.width - 64 { return backspaceButton }
+        if point.y >= 346 * f {
+            return point.x < bounds.width * 0.4 ? abcButton : super.hitTest(point, with: event)
+        }
+        if point.y >= 282 * f {
+            if point.x > bounds.width - 44 * bounds.width / 440 { return backspaceButton }
             if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
         }
         return super.hitTest(point, with: event)
@@ -648,7 +631,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiCell.reuseID, for: indexPath)
         if let emojiCell = cell as? EmojiCell {
             let side = min(gridLayout.cellSize.width, gridLayout.cellSize.height)
-            emojiCell.label.font = UIFont.systemFont(ofSize: min(32, side * 0.8))
+            emojiCell.label.font = UIFont.systemFont(ofSize: side * 0.55)
             emojiCell.label.text = sections[indexPath.section].items[indexPath.item].base
         }
         return cell

@@ -216,6 +216,8 @@ private struct AppearanceSection: View {
                           range: Settings.heightScaleRange,
                           step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
             RoundnessSlider()
+            SettingToggle("Key borders", key: SettingKey.keyBorders, defaultValue: SettingDefault.keyBorders,
+                          subtitle: "Thin outline around keys on the translucent themes")
             SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow)
             SettingToggle("Long-press hints on keys", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints)
         } header: {

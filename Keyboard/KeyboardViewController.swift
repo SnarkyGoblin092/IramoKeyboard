@@ -11,6 +11,7 @@ final class KeyboardViewController: UIInputViewController {
     private var searchBar = EmojiSearchBar()
     private var keyboardView = KeyboardView()
     private var emojiPanel: EmojiPanel?
+    private var hiddenForEmoji: [UIView] = []
 
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
@@ -135,7 +136,7 @@ final class KeyboardViewController: UIInputViewController {
         let s = settings
         return [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
-            "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.enabledLanguages.joined(separator: ","),
+            "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", "\(s.keyBorders)", s.enabledLanguages.joined(separator: ","),
             SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             SharedStore.defaults.string(forKey: ThemeCatalog.customThemeKey) ?? ""
         ].joined(separator: "|")
@@ -837,6 +838,22 @@ final class KeyboardViewController: UIInputViewController {
         panel.delegate = self
         panel.language = language
         panel.translatesAutoresizingMaskIntoConstraints = false
+        // The picker shows only the system keyboard backdrop (like the native emoji picker): hide any theme
+        // backdrop, and supply a native one when the root itself is see-through (Liquid Glass).
+        hiddenForEmoji = container.subviews.filter { !$0.isHidden }
+        for sub in hiddenForEmoji { sub.isHidden = true }
+        if !rootIsKeyboardStyle {
+            let native = UIInputView(frame: .zero, inputViewStyle: .keyboard)
+            native.translatesAutoresizingMaskIntoConstraints = false
+            native.accessibilityIdentifier = "emojiNativeBackdrop"
+            container.addSubview(native)
+            NSLayoutConstraint.activate([
+                native.topAnchor.constraint(equalTo: container.topAnchor),
+                native.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                native.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                native.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        }
         container.addSubview(panel)
         NSLayoutConstraint.activate([
             panel.topAnchor.constraint(equalTo: container.topAnchor),
@@ -855,6 +872,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func hideEmojiPanel(refresh: Bool = true) {
+        if emojiPanel != nil {
+            for sub in container.subviews where sub.accessibilityIdentifier == "emojiNativeBackdrop" { sub.removeFromSuperview() }
+            for sub in hiddenForEmoji { sub.isHidden = false }
+            hiddenForEmoji = []
+        }
         emojiPanel?.removeFromSuperview()
         emojiPanel = nil
         applyHeight()
