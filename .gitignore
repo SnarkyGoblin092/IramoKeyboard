@@ -12,3 +12,6 @@ Keyboard/Resources/*
 
 .DS_Store
 __pycache__/
+
+# Prediction tests (scripts/predict_eval)
+.eval/

@@ -566,6 +566,11 @@ STARTERS = 12           # words that open sentences
 CLAUSE_BREAK = re.compile(r"[.!?…;:,()\[\]{}\"“”„«»‹›—–]+")
 
 
+def is_held_out(sentence_id: str) -> bool:
+    """One sentence in 20 is kept out of the word pairs: scripts/predict_eval tests the keyboard on these."""
+    return sentence_id.isdigit() and int(sentence_id) % 20 == 0
+
+
 def read_sentences(path: Path, lang: str, vocabulary):
     """Counts in Tatoeba's example sentences (everyday text, and proofread): word pairs, sentence starters and how
     often each word occurs. Only dictionary words count; punctuation ends a run of words."""
@@ -576,7 +581,7 @@ def read_sentences(path: Path, lang: str, vocabulary):
     with bz2.open(path, "rt", encoding="utf-8", errors="ignore") as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 3:
+            if len(parts) < 3 or is_held_out(parts[0]):
                 continue
             first = True
             for clause in CLAUSE_BREAK.split(lower(parts[2], lang)):
@@ -700,7 +705,13 @@ def build_language(lang: str, groups) -> None:
         keywords, searchable = {}, {}
     write_json(f"emoji_keywords_{lang}.json", keywords)
     write_json(f"emoji_search_{lang}.json", searchable)
+    build_dictionary(lang)
 
+
+def build_dictionary(lang: str) -> None:
+    """words_<lang>.tsv and pairs_<lang>.tsv. English (and Russian, for Ukrainian) must be built first: their
+    counts filter leaked words out of the other languages."""
+    required = lang in REQUIRED
     print(f"Words ({lang}) …")
     try:
         word_file = fetch(f"{lang}_full.txt", optional=True) or fetch(f"{lang}_50k.txt", optional=not required)
