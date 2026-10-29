@@ -20,8 +20,7 @@ final class SwipeDecoder {
         let store: WordStore
         /// The store's words and swipe index, copied when the swipe starts, so a dictionary reloading on the main
         /// thread never changes them under the decoder.
-        let entries: [WordEntry]
-        let edges: [String: [Int]]
+        let entries: Entries
         /// Added to the cost of every word from this source.
         var penalty: Double
         /// word -> extra score (0...0.6) given the word before the swipe (`WordStore.contextBonuses(after:)`).
@@ -54,7 +53,6 @@ final class SwipeDecoder {
              fieldBonuses: [String: Double] = [:]) {
             self.store = store
             self.entries = store.entries
-            self.edges = store.edgeIndex
             self.penalty = penalty
             self.contextBonuses = contextBonuses
             self.personal = personal
@@ -67,7 +65,7 @@ final class SwipeDecoder {
             var result: [Int] = []
             for f in first {
                 for l in last {
-                    if let list = edges[String([f, l])] { result.append(contentsOf: list) }
+                    result.append(contentsOf: entries.edgeEntries(first: f, last: l))
                 }
             }
             return result

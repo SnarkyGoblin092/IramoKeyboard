@@ -207,7 +207,9 @@ final class KeyboardViewController: UIInputViewController {
         secondaryWordBudget = max(minimumSecondaryWords, secondaryWordBudget / 2)
         let others = max(1, min(maxSecondaryStores, enabledLanguages.count - 1))
         let share = max(minimumSecondaryWords, secondaryWordBudget / others)
-        for (key, store) in stores where key != language && store.isLoaded && store.entries.count > share {
+        // Memory-mapped dictionaries cost no memory of their own; only lists parsed from text are shrunk.
+        for (key, store) in stores
+        where key != language && store.isLoaded && !store.entries.isMapped && store.entries.count > share {
             store.saveNow()
             store.unload()
         }
@@ -385,6 +387,7 @@ final class KeyboardViewController: UIInputViewController {
         let tag = "\(target.rawValue)-\(limit ?? 0)"
         if loadingStores.contains(tag) { return }
         if let existing = stores[target], existing.isLoaded {
+            if existing.entries.isMapped { return }   // the whole list, at no memory cost
             // The whole list is there and fits: nothing to load. A list bigger than the limit (it was the active
             // language) is trimmed; a trimmed one is reloaded only when its limit changes.
             if existing.isFull && (limit == nil || existing.entries.count <= limit ?? 0) { return }

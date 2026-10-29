@@ -47,6 +47,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import language_model
+import lexicon
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(os.environ.get("HUNKEYS_OUT", ROOT / "Keyboard" / "Resources"))
@@ -483,7 +484,7 @@ def word_pattern(lang: str):
 
 # How many words each dictionary keeps. Languages that build words from many suffixes need far more forms
 # ("billentyűzet", "billentyűzetet", "billentyűzeten" ... are all separate words).
-WORD_LIMITS = {"hu": 160000, "tr": 140000, "pl": 100000, "cs": 100000, "ru": 100000, "uk": 100000, "ro": 90000}
+WORD_LIMITS = {"hu": int(os.environ.get("HUNKEYS_HU_WORDS", 400000)), "tr": 140000, "pl": 100000, "cs": 100000, "ru": 100000, "uk": 100000, "ro": 90000}
 DEFAULT_WORD_LIMIT = 80000
 MIN_COUNT = 3   # rarer "words" in the full lists are mostly typos and names
 
@@ -804,10 +805,14 @@ def build_dictionary(lang: str) -> None:
 
     capitals = build_language_model(lang, words) if words else {}
     print(f"  {len(words)} words, {len(capitals)} written with capitals")
-    # Fourth column: "T" = written Capitalised, "U" = written in CAPITALS ("i'm" -> I'm, "haus" -> Haus).
-    with open(OUT / f"words_{lang}.tsv", "w", encoding="utf-8") as handle:
-        for word, folded, count in words:
-            handle.write(f"{word}\t{folded}\t{count}\t{capitals.get(word, '')}\n")
+    # The keyboard reads the memory-mapped dict_<lang>.bin; the text list is for the prediction tests (and older
+    # builds). Fourth column: "T" = written Capitalised, "U" = in CAPITALS ("i'm" -> I'm, "haus" -> Haus).
+    if words:
+        lexicon.write(OUT / f"dict_{lang}.bin", lang, words, capitals)
+    if os.environ.get("HUNKEYS_TSV") or not words:
+        with open(OUT / f"words_{lang}.tsv", "w", encoding="utf-8") as handle:
+            for word, folded, count in words:
+                handle.write(f"{word}\t{folded}\t{count}\t{capitals.get(word, '')}\n")
     with open(OUT / f"pairs_{lang}.tsv", "w", encoding="utf-8") as handle:
         for word, followers in pairs:
             handle.write(f"{word}\t{' '.join(followers)}\n")

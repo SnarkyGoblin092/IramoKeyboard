@@ -65,21 +65,18 @@ struct WordCandidate {
 
 /// Frequency dictionary for one language, plus the words and word pairs the user typed.
 ///
-/// `entries` is sorted by the match key so prefix lookups are a binary search, and it is
-/// immutable after `apply(_:)`, which makes it safe to read from the swipe decoder's thread.
+/// `entries` is sorted by the match key so prefix lookups are a binary search. It is memory-mapped from
+/// dict_<lang>.bin (see `Lexicon`), and immutable after `apply(_:)`, which makes it safe to read from the swipe
+/// decoder's thread.
 final class WordStore {
     let language: Language
 
-    private(set) var entries: [WordEntry] = []
+    private(set) var entries: Entries = .empty
     private(set) var isLoaded = false
     /// True when every word of the list is loaded (false when it was cut at a limit).
     private(set) var isFull = false
     /// The word limit the dictionary was loaded with (nil = none), for the languages that are not the active layout.
     private(set) var loadedLimit: Int?
-    private(set) var maxLogFreq: Double = 1
-
-    /// "first letter + last letter" key -> word indices, for swipe typing.
-    private(set) var edgeIndex: [String: [Int]] = [:]
     private var learned: [String: Int]
     /// Dictionary words the user wrote -> how often, so their own vocabulary outranks the corpus's.
     private var used: [String: Int]
@@ -97,10 +94,6 @@ final class WordStore {
     let neighbors: [Character: Set<Character>]
     /// The word trigram model (nil when the app was built without it).
     private(set) var model: LanguageModel?
-    /// Language model id - firstWord -> index in `entries` (-1 = not loaded).
-    private var entryByRank: [Int32] = []
-    /// Sum of all word counts, for unigram probabilities when there is no language model.
-    private var totalFreq: Double = 1
     private var saveScheduled = false
 
     init(language: Language) {
@@ -124,16 +117,12 @@ final class WordStore {
     // MARK: Loading (parse off the main thread, then apply on the main thread)
 
     struct Parsed {
-        let entries: [WordEntry]
-        let edges: [String: [Int]]
-        let maxLogFreq: Double
+        let entries: Entries
         let isFull: Bool
         let limit: Int?
         /// word -> its most common next words, space separated ("." -> sentence starters), from `pairs_<lang>.tsv`.
         let pairs: [String: String]
         var model: LanguageModel? = nil
-        var entryByRank: [Int32] = []
-        var totalFreq: Double = 1
     }
 
     /// The layout key a word's letter is typed on ("é" -> "e" in Hungarian, but "ö" stays "ö" in German).
@@ -147,14 +136,18 @@ final class WordStore {
         return WordStore.keyLetter(for: character, in: keyLetters)
     }
 
-    /// Parses `words_<lang>.tsv` (sorted by frequency, most common first).
-    /// - Parameter limit: keep only the most frequent `limit` words (nil = all). Used for the languages
-    ///   that are not the active layout, to keep memory low.
+    /// Opens `dict_<lang>.bin` (memory-mapped, always the whole list), or else parses `words_<lang>.tsv` (sorted by
+    /// frequency, most common first).
+    /// - Parameter limit: for the text list only: keep the most frequent `limit` words (nil = all). Used for the
+    ///   languages that are not the active layout, to keep memory low.
     static func parse(language: Language, limit: Int? = nil) -> Parsed {
+        if let lexicon = Lexicon(language: language) {
+            return Parsed(entries: Entries(lexicon: lexicon), isFull: true, limit: nil,
+                          pairs: parsePairs(language: language), model: LanguageModel(language: language))
+        }
         guard let url = Bundle.main.url(forResource: "words_\(language.rawValue)", withExtension: "tsv"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
-            return Parsed(entries: [], edges: [:], maxLogFreq: 1, isFull: limit == nil, limit: limit,
-                          pairs: parsePairs(language: language))
+            return Parsed(entries: .empty, isFull: limit == nil, limit: limit, pairs: parsePairs(language: language))
         }
 
         // One pass: the file is sorted by frequency, so the first row has the highest count, and its second
@@ -214,9 +207,9 @@ final class WordStore {
         }
         // A limit the list never reached still loaded every word.
         let isFull = limit.map { list.count < $0 } ?? true
-        return Parsed(entries: list, edges: edges, maxLogFreq: maxLog, isFull: isFull, limit: limit,
-                      pairs: parsePairs(language: language), model: LanguageModel(language: language),
-                      entryByRank: byRank, totalFreq: max(total, 1))
+        return Parsed(entries: Entries(list: list, edges: edges, byRank: byRank, totalCount: max(total, 1)),
+                      isFull: isFull, limit: limit, pairs: parsePairs(language: language),
+                      model: LanguageModel(language: language))
     }
 
     /// Reads `pairs_<lang>.tsv`: word <TAB> next words (space separated). Missing file = no built-in pairs.
@@ -234,11 +227,9 @@ final class WordStore {
 
     /// Frees the dictionary (on a memory warning, before it is reloaded smaller). Learned words are kept.
     func unload() {
-        entries = []
-        edgeIndex = [:]
+        entries = .empty
         builtInPairs = [:]
         model = nil
-        entryByRank = []
         prefixCache = [:]
         frequencyOrder = nil
         loadedLimit = nil
@@ -248,14 +239,10 @@ final class WordStore {
 
     func apply(_ parsed: Parsed) {
         entries = parsed.entries
-        edgeIndex = parsed.edges
-        maxLogFreq = parsed.maxLogFreq
         isFull = parsed.isFull
         loadedLimit = parsed.limit
         builtInPairs = parsed.pairs
         model = parsed.model
-        entryByRank = parsed.entryByRank
-        totalFreq = parsed.totalFreq
         prefixCache = [:]
         frequencyOrder = nil
         isLoaded = true
@@ -282,14 +269,15 @@ final class WordStore {
     /// scan thousands of words per keystroke.
     private func topIndices(forPrefix prefix: String) -> [Int] {
         if let cached = prefixCache[prefix] { return cached }
-        var matches: [Int] = []
+        var matches: [(index: Int, freq: Int)] = []
+        let bytes = Array(prefix.utf8)
         var index = lowerBound(of: prefix)
-        while index < entries.count, entries[index].folded.hasPrefix(prefix) {
-            matches.append(index)
+        while index < entries.count, entries.keyHasPrefix(index, bytes) {
+            matches.append((index, entries.freq(index)))
             index += 1
         }
-        matches.sort { entries[$0].freq > entries[$1].freq }
-        let top = Array(matches.prefix(100))
+        matches.sort { $0.freq > $1.freq }
+        let top = matches.prefix(100).map { $0.index }
         if prefixCache.count > 400 { prefixCache = [:] }
         prefixCache[prefix] = top
         return top
@@ -298,24 +286,14 @@ final class WordStore {
     // MARK: Lookup
 
     private func lowerBound(of key: String) -> Int {
-        var low = 0
-        var high = entries.count
-        while low < high {
-            let mid = (low + high) / 2
-            if entries[mid].folded < key {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        return low
+        return entries.lowerBound(key)
     }
 
     /// True if the dictionary (or the user's own words) contains a word with this match key.
     func contains(key: String) -> Bool {
         guard !key.isEmpty else { return false }
         let index = lowerBound(of: key)
-        if index < entries.count, entries[index].folded == key { return true }
+        if index < entries.count, entries.keyEquals(index, Array(key.utf8)) { return true }
         return learnedKeySet.contains(key)
     }
 
@@ -325,7 +303,8 @@ final class WordStore {
         guard !key.isEmpty else { return 0 }
         var index = lowerBound(of: key)
         var best = 0.0
-        while index < entries.count, entries[index].folded == key {
+        let bytes = Array(key.utf8)
+        while index < entries.count, entries.keyEquals(index, bytes) {
             best = max(best, entries[index].norm)
             index += 1
         }
@@ -407,7 +386,8 @@ final class WordStore {
             var scanned = 0
             // The run is alphabetical, so stopping early would hide frequent words late in the alphabet; the cap
             // only guards against pathological lists.
-            while index < entries.count, scanned < 40_000, entries[index].folded.hasPrefix(key) {
+            let bytes = Array(key.utf8)
+            while index < entries.count, scanned < 40_000, entries.keyHasPrefix(index, bytes) {
                 let entry = entries[index]
                 index += 1
                 scanned += 1
@@ -489,14 +469,17 @@ final class WordStore {
         for start in starts {
             var index = lowerBound(of: String(start))
             var known = 0   // leading rows of `table` that still belong to `letters`
-            while index < entries.count, entries[index].folded.first == start {
-                let entry = entries[index]
+            while index < entries.count {
+                let folded = entries.key(index)
+                guard folded.first == start else { break }
+                let current = index
                 index += 1
                 var row = 0
                 var shared = true
                 var complete = true
+                var over = false
                 var prefixCost = Double.greatestFiniteMagnitude
-                for character in entry.folded {
+                for character in folded {
                     if row == depth { complete = false; break }
                     if !(shared && row < known && letters[row] == character) {
                         shared = false
@@ -521,11 +504,15 @@ final class WordStore {
                     row += 1
                     prefixCost = min(prefixCost, table[row * width + n])
                     // Two rows over the limit: no longer beginning can get back under it (a swap reaches back two).
-                    if rowMin[row] > maxCost && rowMin[row - 1] > maxCost { complete = false; break }
+                    if rowMin[row] > maxCost && rowMin[row - 1] > maxCost { complete = false; over = true; break }
                 }
                 known = row
-                guard prefixCost <= maxCost else { continue }
-                visit(entry, prefixCost, complete ? table[row * width + n] : nil)
+                guard prefixCost <= maxCost else {
+                    // Every word sharing this failed beginning fails the same way: skip them all.
+                    if over { index = max(index, lowerBound(of: String(letters[0..<row]) + "\u{10FFFF}")) }
+                    continue
+                }
+                visit(entries[current], prefixCost, complete ? table[row * width + n] : nil)
             }
         }
     }
@@ -549,8 +536,7 @@ final class WordStore {
     /// The most frequent words whose first letter is in `letters` (used after "l'", "j'", "dell'" ...); nil = any.
     func frequentWords(startingWith letters: Set<Character>?, limit: Int) -> [WordCandidate] {
         if frequencyOrder == nil {
-            let capped = min(entries.count, 6000)
-            frequencyOrder = Array(0..<entries.count).sorted { entries[$0].freq > entries[$1].freq }.prefix(capped).map { $0 }
+            frequencyOrder = entries.mostCommon(6000)
         }
         var result: [WordCandidate] = []
         for index in frequencyOrder ?? [] {
@@ -892,16 +878,14 @@ extension WordStore {
 
     /// The loaded dictionary entry of a language model id, or nil (specials, or beyond a secondary store's limit).
     func entry(forModelId id: Int32) -> WordEntry? {
-        let rank = Int(id - LanguageModel.firstWord)
-        guard rank >= 0, rank < entryByRank.count else { return nil }
-        let index = Int(entryByRank[rank])
-        return index >= 0 ? entries[index] : nil
+        guard let index = entries.index(ofRank: Int(id - LanguageModel.firstWord)) else { return nil }
+        return entries[index]
     }
 
     /// log10 P(word) from the word counts alone (when the app has no language model for this language).
     func unigramLogProb(of word: String) -> Double? {
         guard let entry = entry(forWord: word) else { return nil }
-        return log10(Double(max(entry.freq, 1)) / totalFreq)
+        return log10(Double(max(entry.freq, 1)) / entries.totalCount)
     }
 
     /// An unknown word counts as the user's own after this many uses: a slip typed once is not a word.

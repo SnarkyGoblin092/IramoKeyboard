@@ -54,6 +54,7 @@ METRICS = ["next", "typed", "space", "clean", "slipped", "ksr", "swipe1", "swipe
 def prepare(langs):
     """Builds words_/pairs_<lang>.tsv into .eval/data, again whenever build_data.py changes."""
     os.environ["HUNKEYS_OUT"] = str(DATA_DIR)
+    os.environ["HUNKEYS_TSV"] = "1"     # the engines read the text word lists
     import build_data
     build_data.OUT = DATA_DIR
     DATA_DIR.mkdir(parents=True, exist_ok=True)

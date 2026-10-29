@@ -370,8 +370,9 @@ enum Decoder {
                 let u = history.count >= 2 ? history[history.count - 2] : nil
                 for id in model.followers(previous: history[history.count - 1], before: u)
                 where id >= LanguageModel.firstWord {
-                    if let entry = store.entry(forModelId: id), let letter = entry.folded.first, starts.contains(letter) {
-                        words.insert(entry.word)
+                    if let index = store.entries.index(ofRank: Int(id - LanguageModel.firstWord)),
+                       let letter = store.entries.key(index).first, starts.contains(letter) {
+                        words.insert(store.entries[index].word)
                     }
                 }
             }
