@@ -217,6 +217,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [HitButton] = []
     private var currentSection = 0
+    private var compact = false
+    private var tabCentreY: CGFloat = 302
+    private var tabBandTop: CGFloat = 282
     private var startSection = 0
     private var needsInitialScroll = false
     private var isProgrammaticScroll = false
@@ -229,7 +232,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     /// Keyboard height needed to show the whole picker.
     static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
-        return (402 * scale(forWidth: width)).rounded()
+        return (314 * scale(forWidth: width)).rounded()
     }
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
@@ -481,17 +484,32 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         gridLayout.headerHeight = 0
         titleLabel.isHidden = true
 
-        // Search pill: x 9...431, y 13...53 (stock, 440pt wide).
-        searchHeight = 40 * f
-        searchGlass.frame = CGRect(x: 9 * xf, y: 13 * f, width: width - 18 * xf, height: searchHeight)
+        // Full stock layout (440 x 402pt) when the keyboard is tall enough, otherwise a compact layout that
+        // is anchored to the real height so the tab row, ABC and delete are never cut off.
+        let height = bounds.height
+        compact = height < 390 * f
+        let pillTop: CGFloat = compact ? 6 * f : 13 * f
+        searchHeight = (compact ? 36 : 40) * f
+        searchGlass.frame = CGRect(x: 9 * xf, y: pillTop, width: width - 18 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         searchIcon.frame = CGRect(x: 13 * xf, y: (searchHeight - 17 * f) / 2, width: 17 * f, height: 17 * f)
         searchLabel.font = UIFont.systemFont(ofSize: 20 * f)
         searchLabel.frame = CGRect(x: 37 * xf, y: 0, width: max(0, searchGlass.bounds.width - 50 * xf), height: searchHeight)
 
-        // Four rows of 54.8pt, the first row centred at y = 89.
-        let gridHeight = 4 * 54.8 * f
-        let newGridFrame = CGRect(x: 0, y: 61.6 * f, width: width, height: gridHeight)
+        let gridTop: CGFloat
+        let gridHeight: CGFloat
+        if compact {
+            tabCentreY = height - 24 * f
+            gridTop = pillTop + searchHeight + 4 * f
+            gridHeight = max(120, (tabCentreY - 22 * f) - gridTop)
+            tabBandTop = tabCentreY - 22 * f
+        } else {
+            tabCentreY = 302 * f
+            gridTop = 61.6 * f
+            gridHeight = 4 * 54.8 * f
+            tabBandTop = 282 * f
+        }
+        let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
         if collectionView.frame != newGridFrame {
             collectionView.frame = newGridFrame
             gridLayout.rows = 4
@@ -500,10 +518,14 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if collectionView.bounds.width > 0 { collectionView.layoutIfNeeded() }
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
 
-        // Tab row (icon centres at y = 302), ABC (centred at y = 369), delete at x = 411.
-        tabGlass.frame = CGRect(x: 0, y: 284 * f, width: width, height: 36 * f)
-        abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
-        backspaceButton.frame = CGRect(x: 411 * xf - 26, y: 302 * f - 22, width: 52, height: 44)
+        tabGlass.frame = CGRect(x: 0, y: tabCentreY - 18 * f, width: width, height: 36 * f)
+        if compact {
+            // ABC sits at the left of the tab row.
+            abcButton.frame = CGRect(x: 6 * xf, y: tabCentreY - 22, width: 56 * xf, height: 44)
+        } else {
+            abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
+        }
+        backspaceButton.frame = CGRect(x: 411 * xf - 26, y: tabCentreY - 22, width: 52, height: 44)
         layoutTabs()
         positionTabSelection(animated: false)
         applyInitialScrollIfPossible()
@@ -513,9 +535,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         guard !tabButtons.isEmpty else { return }
         let xf = bounds.width / 440
         let area = tabGlass.bounds
-        let pitch = 39.8 * xf
+        let first: CGFloat = compact ? 84 : 37.7
+        let step: CGFloat = compact ? (370 - 84) / CGFloat(max(1, tabButtons.count - 1)) : 39.8
+        let pitch = step * xf
         for (index, button) in tabButtons.enumerated() {
-            let centre = (37.7 + 39.8 * CGFloat(index)) * xf
+            let centre = (first + step * CGFloat(index)) * xf
             button.frame = CGRect(x: centre - pitch / 2, y: 0, width: pitch, height: area.height)
         }
     }
@@ -531,10 +555,18 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
         let f = EmojiPanel.scale(forWidth: bounds.width)
         if point.y < searchGlass.frame.maxY + 4 { return searchButton }
+        if compact {
+            if point.y >= tabBandTop {
+                if point.x < 62 * bounds.width / 440 { return abcButton }
+                if point.x > bounds.width - 44 * bounds.width / 440 { return backspaceButton }
+                if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
+            }
+            return super.hitTest(point, with: event)
+        }
         if point.y >= 346 * f {
             return point.x < bounds.width * 0.4 ? abcButton : super.hitTest(point, with: event)
         }
-        if point.y >= 282 * f {
+        if point.y >= tabBandTop {
             if point.x > bounds.width - 44 * bounds.width / 440 { return backspaceButton }
             if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
         }
