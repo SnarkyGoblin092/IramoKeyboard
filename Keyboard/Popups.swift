@@ -64,29 +64,52 @@ final class KeyPreviewView: UIView {
         let y = keyFrame.maxY - totalHeight
         frame = CGRect(x: x, y: y, width: balloonWidth, height: totalHeight)
 
-        let topRect = CGRect(x: 0, y: 0, width: balloonWidth, height: topHeight)
-        let keyRect = CGRect(x: keyX, y: topHeight + neck, width: keyFrame.width, height: keyFrame.height)
+        // One continuous outline (wide rounded top, smooth neck, key-shaped foot), so no corners poke out
+        // where separate shapes would overlap.
+        let keyRadius = min(Theme.keyCornerRadius(for: keyFrame.size), keyFrame.width / 2, keyFrame.height / 2)
+        let topRadius = min(max(10, keyRadius * 1.6), balloonWidth / 2, topHeight / 2)
+        let keyLeft = keyX
+        let keyRight = keyX + keyFrame.width
+        let footTop = topHeight + neck
+        let bottom = totalHeight
 
-        let keyRadius = Theme.keyCornerRadius(for: keyFrame.size)
-        let path = UIBezierPath(roundedRect: topRect, cornerRadius: max(10, keyRadius * 1.6))
-        path.append(UIBezierPath(roundedRect: keyRect, cornerRadius: keyRadius))
-        let neckPath = UIBezierPath()
-        neckPath.move(to: CGPoint(x: 2, y: topHeight - 8))
-        neckPath.addLine(to: CGPoint(x: balloonWidth - 2, y: topHeight - 8))
-        neckPath.addLine(to: CGPoint(x: keyRect.maxX, y: keyRect.minY + 8))
-        neckPath.addLine(to: CGPoint(x: keyRect.minX, y: keyRect.minY + 8))
-        neckPath.close()
-        path.append(neckPath)
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 0, y: topRadius))
+        path.addArc(withCenter: CGPoint(x: topRadius, y: topRadius), radius: topRadius,
+                    startAngle: .pi, endAngle: .pi * 1.5, clockwise: true)
+        path.addLine(to: CGPoint(x: balloonWidth - topRadius, y: 0))
+        path.addArc(withCenter: CGPoint(x: balloonWidth - topRadius, y: topRadius), radius: topRadius,
+                    startAngle: .pi * 1.5, endAngle: 0, clockwise: true)
+        path.addLine(to: CGPoint(x: balloonWidth, y: topHeight - topRadius))
+        path.addCurve(to: CGPoint(x: keyRight, y: footTop),
+                      controlPoint1: CGPoint(x: balloonWidth, y: topHeight),
+                      controlPoint2: CGPoint(x: keyRight, y: topHeight))
+        path.addLine(to: CGPoint(x: keyRight, y: bottom - keyRadius))
+        path.addArc(withCenter: CGPoint(x: keyRight - keyRadius, y: bottom - keyRadius), radius: keyRadius,
+                    startAngle: 0, endAngle: .pi / 2, clockwise: true)
+        path.addLine(to: CGPoint(x: keyLeft + keyRadius, y: bottom))
+        path.addArc(withCenter: CGPoint(x: keyLeft + keyRadius, y: bottom - keyRadius), radius: keyRadius,
+                    startAngle: .pi / 2, endAngle: .pi, clockwise: true)
+        path.addLine(to: CGPoint(x: keyLeft, y: footTop))
+        path.addCurve(to: CGPoint(x: 0, y: topHeight - topRadius),
+                      controlPoint1: CGPoint(x: keyLeft, y: topHeight),
+                      controlPoint2: CGPoint(x: 0, y: topHeight))
+        path.close()
 
         shape.path = path.cgPath
         shape.shadowPath = path.cgPath
-        shape.fillColor = Theme.popupFill.resolvedColor(with: traitCollection).cgColor
+        shape.fillColor = balloonFill
         label.frame = CGRect(x: 0, y: 2, width: balloonWidth, height: topHeight - 4)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        shape.fillColor = Theme.popupFill.resolvedColor(with: traitCollection).cgColor
+        shape.fillColor = balloonFill
+    }
+
+    /// Always opaque: a see-through balloon lets the pressed key and its letter show through it.
+    private var balloonFill: CGColor {
+        return Theme.popupFill.resolvedColor(with: traitCollection).withAlphaComponent(1).cgColor
     }
 }
 

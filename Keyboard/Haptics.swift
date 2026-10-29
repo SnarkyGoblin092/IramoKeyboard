@@ -1,3 +1,4 @@
+import AudioToolbox
 import UIKit
 
 /// Key-press vibration with adjustable strength, plus the optional system key-click sound.
@@ -10,6 +11,11 @@ final class Haptics {
     private let pressGenerator = UIImpactFeedbackGenerator(style: .rigid)
     private let tickGenerator = UIImpactFeedbackGenerator(style: .soft)
     private var lastTick = Date.distantPast
+    /// Set by the keyboard when it appears. System sounds only play with Full Access.
+    var hasFullAccess = false
+
+    /// The system keyboard's key-tap sound.
+    private static let keyTapSound: SystemSoundID = 1104
 
     private init() {}
 
@@ -26,7 +32,13 @@ final class Haptics {
             pressGenerator.prepare()
         }
         if Prefs.clickSound {
-            UIDevice.current.playInputClick()
+            // `playInputClick` is usually silent in keyboard extensions, so play the system key-tap
+            // sound (it follows the silent switch). Without Full Access only the input click can work.
+            if hasFullAccess {
+                AudioServicesPlaySystemSound(Haptics.keyTapSound)
+            } else {
+                UIDevice.current.playInputClick()
+            }
         }
     }
 
