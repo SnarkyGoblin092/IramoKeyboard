@@ -218,6 +218,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var tabButtons: [HitButton] = []
     private var currentSection = 0
     private var compact = false
+    private var tabImages: [Int: (outline: UIImage, filled: UIImage)] = [:]
     private var tabCentreY: CGFloat = 302
     private var tabBandTop: CGFloat = 282
     private var startSection = 0
@@ -409,6 +410,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func rebuildTabs() {
         for button in tabButtons { button.removeFromSuperview() }
         tabButtons = []
+        tabImages = [:]
         for (index, section) in sections.enumerated() {
             let button = HitButton(type: .system)
             if let image = UIImage(systemName: section.symbol,
@@ -417,8 +419,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
                 // Outline by default, filled while this is the active tab.
                 let filledConfig = UIImage.SymbolConfiguration(pointSize: 14.4, weight: .regular)
                 let filled = UIImage(systemName: section.symbol + ".fill", withConfiguration: filledConfig) ?? image
-                button.setImage(filled, for: .selected)
-                button.setImage(filled, for: [.selected, .highlighted])
+                tabImages[index] = (image, filled)
             } else {
                 button.setTitle(section.fallback, for: .normal)
                 button.titleLabel?.font = UIFont.systemFont(ofSize: 14)
@@ -436,7 +437,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == selectedTabIndex)
             button.tintColor = EmojiLook.text
-            button.isSelected = selected
+            if let pair = tabImages[index] { button.setImage(selected ? pair.filled : pair.outline, for: .normal) }
             button.alpha = selected ? 1.0 : 0.9
         }
         if currentSection < sections.count {
@@ -530,13 +531,15 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if compact {
             // ABC sits at the left of the tab row.
             // ABC is centred between the screen edge and the first (recents) icon at x = 84.
+            // ABC, the nine tabs and delete share eleven equally spaced slots (centres 38 ... 402).
             abcButton.contentHorizontalAlignment = .center
-            abcButton.frame = CGRect(x: 14 * xf, y: tabCentreY - 22, width: 56 * xf, height: 44)
+            abcButton.frame = CGRect(x: (38 - 28) * xf, y: tabCentreY - 22, width: 56 * xf, height: 44)
         } else {
             abcButton.contentHorizontalAlignment = .left
             abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
         }
-        backspaceButton.frame = CGRect(x: 411 * xf - 26, y: tabCentreY - 22, width: 52, height: 44)
+        let deleteCentre: CGFloat = compact ? 402 : 411
+        backspaceButton.frame = CGRect(x: deleteCentre * xf - 26, y: tabCentreY - 22, width: 52, height: 44)
         layoutTabs()
         positionTabSelection(animated: false)
         applyInitialScrollIfPossible()
@@ -546,8 +549,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         guard !tabButtons.isEmpty else { return }
         let xf = bounds.width / 440
         let area = tabGlass.bounds
-        let first: CGFloat = compact ? 84 : 37.7
-        let step: CGFloat = compact ? (370 - 84) / CGFloat(max(1, tabButtons.count - 1)) : 39.8
+        let first: CGFloat = compact ? 74.4 : 37.7
+        let step: CGFloat = compact ? 36.4 : 39.8
         let pitch = step * xf
         for (index, button) in tabButtons.enumerated() {
             let centre = (first + step * CGFloat(index)) * xf
@@ -568,7 +571,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if point.y < searchGlass.frame.maxY + 4 { return searchButton }
         if compact {
             if point.y >= tabBandTop {
-                if point.x < 62 * bounds.width / 440 { return abcButton }
+                if point.x < 56 * bounds.width / 440 { return abcButton }
                 if point.x > bounds.width - 44 * bounds.width / 440 { return backspaceButton }
                 if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
             }

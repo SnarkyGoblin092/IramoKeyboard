@@ -876,7 +876,8 @@ final class KeyboardViewController: UIInputViewController {
         }
         container.addSubview(panel)
         NSLayoutConstraint.activate([
-            panel.topAnchor.constraint(equalTo: container.topAnchor),
+            // The panel starts a little above the view so its search pill follows the keyboard's rounded top corners.
+            panel.topAnchor.constraint(equalTo: container.topAnchor, constant: -14),
             panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
