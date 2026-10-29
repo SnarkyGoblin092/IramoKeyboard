@@ -235,7 +235,7 @@ final class KeyboardView: UIView {
                 rects.append(hit)
                 let key = keyViews[r][c]
                 if key.transform == .identity {
-                    key.frame = hit.insetBy(dx: 0.5, dy: 0.5)   // keys touch: no dead space between them
+                    key.frame = hit.insetBy(dx: 3, dy: 5.5)   // drawn size; the touch area is the whole hit rectangle
                 }
                 x += width
             }
