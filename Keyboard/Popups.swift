@@ -43,19 +43,23 @@ final class KeyPreviewView: UIView {
 
         if let glassView = glassView {
             let width = keyFrame.width + 24
-            let height = keyFrame.height * 1.1
+            let room = keyFrame.minY - hostBounds.minY - 6 - 1
+            let height = max(keyFrame.height * 0.7, min(keyFrame.height * 1.1, room))
             var x = keyFrame.midX - width / 2
             x = max(2, min(x, hostBounds.width - width - 2))
-            frame = CGRect(x: x, y: keyFrame.minY - height - 6, width: width, height: height)
+            frame = CGRect(x: x, y: max(hostBounds.minY, keyFrame.minY - height - 6), width: width, height: height)
             glassView.frame = bounds
-            GlassSupport.applyShape(glassView, radius: max(10, Theme.keyCornerRadius(for: keyFrame.size) * 1.5), size: bounds.size)
+            GlassSupport.applyShape(glassView, radius: Theme.keyCornerRadius(for: bounds.size), size: bounds.size)
+            label.font = UIFont.systemFont(ofSize: min(38, height * 0.75), weight: .light)
             label.frame = glassView.bounds
             return
         }
 
         let balloonWidth = keyFrame.width + 28
-        let topHeight = keyFrame.height * 1.2
         let neck: CGFloat = 8
+        // The keyboard clips anything above its top edge, so on the first row the balloon gets shorter.
+        let room = keyFrame.minY - hostBounds.minY - neck - 1
+        let topHeight = max(keyFrame.height * 0.7, min(keyFrame.height * 1.2, room))
         let totalHeight = topHeight + neck + keyFrame.height
 
         var x = keyFrame.midX - balloonWidth / 2
@@ -67,7 +71,8 @@ final class KeyPreviewView: UIView {
         // One continuous outline (wide rounded top, smooth neck, key-shaped foot), so no corners poke out
         // where separate shapes would overlap.
         let keyRadius = min(Theme.keyCornerRadius(for: keyFrame.size), keyFrame.width / 2, keyFrame.height / 2)
-        let topRadius = min(max(10, keyRadius * 1.6), balloonWidth / 2, topHeight / 2)
+        // Same roundness as the keys.
+        let topRadius = Theme.keyCornerRadius(for: CGSize(width: balloonWidth, height: topHeight))
         let keyLeft = keyX
         let keyRight = keyX + keyFrame.width
         let footTop = topHeight + neck
@@ -99,6 +104,7 @@ final class KeyPreviewView: UIView {
         shape.path = path.cgPath
         shape.shadowPath = path.cgPath
         shape.fillColor = balloonFill
+        label.font = UIFont.systemFont(ofSize: min(38, topHeight * 0.75), weight: .light)
         label.frame = CGRect(x: 0, y: 2, width: balloonWidth, height: topHeight - 4)
     }
 
@@ -123,6 +129,7 @@ final class AlternatesPopupView: UIView {
     private let inset: CGFloat = 5
     private(set) var highlightedIndex = 0
     private var popupRadius: CGFloat = 8
+    private var cellRadius: CGFloat = 4
 
     /// The character that will be inserted if the finger lifts now.
     var selectedItem: String { return displayItems[highlightedIndex] }
@@ -140,7 +147,12 @@ final class AlternatesPopupView: UIView {
         super.init(frame: .zero)
 
         isUserInteractionEnabled = false
-        popupRadius = max(8, Theme.keyCornerRadius(for: keyFrame.size) * 1.4)
+        let count = CGFloat(displayItems.count)
+        let width = itemWidth * count + inset * 2
+        let height = keyFrame.height + 12
+        // Cells are shaped like keys; the strip's corners follow them, so it never pinches into a lemon.
+        cellRadius = Theme.keyCornerRadius(for: CGSize(width: itemWidth, height: height - inset * 2))
+        popupRadius = min(cellRadius + inset, min(width, height) / 2)
         if glassView == nil {
             backgroundColor = Theme.popupFill
             layer.cornerRadius = popupRadius
@@ -151,9 +163,6 @@ final class AlternatesPopupView: UIView {
             layer.shadowOffset = CGSize(width: 0, height: 1)
         }
 
-        let count = CGFloat(displayItems.count)
-        let width = itemWidth * count + inset * 2
-        let height = keyFrame.height + 12
         var x = startsAtKey ? keyFrame.minX - inset : keyFrame.maxX - width + inset
         x = max(2, min(x, hostBounds.width - width - 2))
         let y = max(0, keyFrame.minY - height - 4)
@@ -209,7 +218,7 @@ final class AlternatesPopupView: UIView {
         guard highlightedIndex < labels.count else { return }
         let frame = labels[highlightedIndex].frame
         highlight.frame = frame
-        highlight.layer.cornerRadius = max(4, popupRadius - 3)
+        highlight.layer.cornerRadius = cellRadius
         highlight.backgroundColor = Theme.accent
         for (index, label) in labels.enumerated() {
             label.textColor = (index == highlightedIndex) ? Theme.onAccent : Theme.keyText
