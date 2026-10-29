@@ -596,8 +596,9 @@ final class KeyboardViewController: UIInputViewController {
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         if let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
-            // Right after a swipe, backspace removes the whole swiped word.
+            // Right after a swipe, backspace removes the whole swiped word (and takes back its use).
             for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
+            noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
             clearSwipeState()
         } else {
             clearSwipeState()
@@ -653,13 +654,25 @@ final class KeyboardViewController: UIInputViewController {
         var prefix = TextFolding.normalizeApostrophes(currentPrefix(in: before))
         while prefix.hasSuffix("'") { prefix.removeLast() }
         guard !prefix.isEmpty else { return }
-        let key = TextFolding.key(prefix)
-        if prefix.count >= 3, key.count >= 2 {
-            // Only unknown words are learned; known words in any enabled language are left alone.
-            let known = stores.values.contains { $0.isLoaded && $0.contains(key: key) }
-            if !known { stores[language]?.learn(prefix.lowercased()) }
-        }
+        if prefix.count >= 3 { noteWordUse(prefix) }
         recordBigram(contextBefore: before, next: prefix)
+    }
+
+    /// Counts a finished word: a dictionary word ranks higher from now on (in the dictionary that has it, the active
+    /// language first); a word no enabled dictionary knows is learned. `delta` -1 takes back a swiped word.
+    private func noteWordUse(_ word: String, delta: Int = 1) {
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
+        let cleaned = TextFolding.normalizeApostrophes(word).lowercased()
+        guard cleaned.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
+        if stores[language]?.noteUse(cleaned, delta: delta) == true { return }
+        for store in stores.values where store.language != language && store.isLoaded {
+            if store.noteUse(cleaned, delta: delta) { return }
+        }
+        let key = TextFolding.key(cleaned)
+        guard delta > 0, cleaned.count >= 3, key.count >= 2 else { return }
+        // Only unknown words are learned; known words in any enabled language (other spellings) are left alone.
+        let known = stores.values.contains { $0.isLoaded && $0.contains(key: key) }
+        if !known { stores[language]?.learn(cleaned) }
     }
 
     /// Remembers which word followed which, for next-word suggestions.
@@ -853,6 +866,7 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         let prefix = currentPrefix(in: before)
         recordBigram(contextBefore: before, next: replacement)
+        noteWordUse(replacement)
         for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
         textDocumentProxy.insertText(replacement + " ")
         lastSpaceTime = Date()
@@ -874,6 +888,7 @@ final class KeyboardViewController: UIInputViewController {
         let word = applyShift(to: first)
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         recordBigram(contextBefore: before, next: first)
+        noteWordUse(first)
 
         var leadingSpace = ""
         if let last = before.last, !last.isWhitespace, !"([{\"\u{201C}\u{2018}'".contains(last) {
@@ -898,6 +913,8 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         guard before.hasSuffix(inserted) else { clearSwipeState(); return }
         for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
+        noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
+        noteWordUse(replacement)
         let newText = replacement + " "
         textDocumentProxy.insertText(newText)
         lastSwipeInserted = newText
@@ -1100,7 +1117,8 @@ extension KeyboardViewController: KeyboardViewDelegate {
             let candidatePrevious = previous
             sources.append(SwipeDecoder.Source(
                 store: candidateStore,
-                penalty: min(0.6, 0.9 * (best - likelihood(candidate))),
+                // Firm enough that a common word of another language does not beat the one being written.
+                penalty: min(0.7, 1.1 * (best - likelihood(candidate))),
                 contextBonuses: candidatePrevious.map {
                     candidateStore.contextBonuses(after: $0, before2: (candidate == language && before2.count > 1) ? before2[0] : nil)
                 } ?? [:],

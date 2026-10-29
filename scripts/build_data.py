@@ -22,10 +22,11 @@ for that language).
 Sources (downloaded at build time, nothing is checked into the repo):
     * https://unicode.org/Public/emoji/latest/emoji-test.txt
     * https://github.com/unicode-org/cldr-json            (CLDR annotations)
-    * https://github.com/hermitdave/FrequencyWords        (OpenSubtitles 2018 word counts, CC-BY-SA-4.0)
+    * https://github.com/hermitdave/FrequencyWords        (OpenSubtitles 2018 word counts, CC-BY-SA-4.0;
+                                                            the full lists, the 50k lists as a fallback)
 
 For offline testing set HUNKEYS_FIXTURES=/some/dir containing the files named by url_for() below
-(emoji-test.txt, annotations_<lang>.json, derived_<lang>.json, <lang>_50k.txt).
+(emoji-test.txt, annotations_<lang>.json, derived_<lang>.json, <lang>_full.txt or <lang>_50k.txt).
 """
 
 import json
@@ -57,7 +58,7 @@ def url_for(name: str) -> str:
     match = re.fullmatch(r"derived_([a-z]+)\.json", name)
     if match:
         return f"{CLDR}/cldr-annotations-derived-full/annotationsDerived/{match.group(1)}/annotations.json"
-    match = re.fullmatch(r"([a-z]+)_50k\.txt", name)
+    match = re.fullmatch(r"([a-z]+)_(?:50k|full)\.txt", name)
     if match:
         return f"{FREQ}/{match.group(1)}/{name}"
     raise KeyError(name)
@@ -324,6 +325,8 @@ ALPHABETS = {
     "sv": "a-zåäöé",
 }
 APOSTROPHE = {"en", "fr", "it", "uk"}
+# Hungarian subtitles are often in Latin-1, which has no ő / ű: "szõr", "tûz" are really "szőr", "tűz".
+REPAIRS = {"hu": {"õ": "ő", "ô": "ő", "û": "ű"}}
 VOWELS = {
     "en": "aeiouy", "hu": "aeiouyáéíóöőúüű", "es": "aeiouyáéíóúü", "fr": "aeiouyàâæéèêëîïôœùûüÿ",
     "de": "aeiouyäöü", "it": "aeiouyàèéìíîòóùú", "pt": "aeiouyáàâãéêíóôõúü", "nl": "aeiouyáäéëíïóöúü",
@@ -399,26 +402,69 @@ def word_pattern(lang: str):
     return re.compile(f"^[{alpha}]+$")
 
 
-def build_words(path: Path, lang: str, limit: int = 40000):
+# How many words each dictionary keeps. Languages that build words from many suffixes need far more forms
+# ("billenty\u0171zet", "billenty\u0171zetet", "billenty\u0171zeten" ... are all separate words).
+WORD_LIMITS = {"hu": 160000, "tr": 140000, "pl": 100000, "cs": 100000, "ru": 100000, "uk": 100000, "ro": 90000}
+DEFAULT_WORD_LIMIT = 80000
+MIN_COUNT = 3   # rarer "words" in the full lists are mostly typos and names
+
+# Subtitles keep songs and untranslated lines in English, so every list contains English words ("love", "that").
+# Beyond the most common words, a word that is far more frequent in English than here is dropped.
+ENGLISH_RATIO = 30
+ENGLISH_PROTECTED_RANK = 1000
+
+
+def read_counts(path: Path, lang: str):
+    """word -> count for the words that pass the language's spelling filters."""
     word_re = word_pattern(lang)
     vowels = set(VOWELS[lang]) if VOWELS[lang] else None
     singles = SINGLES[lang]
     blocked = EN_BLOCK if lang == "en" else set()
+    repairs = REPAIRS.get(lang, {})
     counts = {}
-    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        parts = line.strip().split()
-        if len(parts) != 2 or not parts[1].isdigit():
+    with open(path, encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            parts = line.strip().split()
+            if len(parts) != 2 or not parts[1].isdigit():
+                continue
+            word, count = parts[0].lower().replace("\u2019", "'").replace("\u02bc", "'"), int(parts[1])
+            if count < MIN_COUNT:
+                continue
+            for wrong, right in repairs.items():
+                word = word.replace(wrong, right)
+            if not word_re.match(word) or word in blocked:
+                continue
+            if len(word) == 1 and word not in singles:
+                continue
+            if vowels is not None and len(word) > 2 and not (set(word) & vowels) and word not in NO_VOWEL_OK:
+                continue
+            if re.search(r"(.)\1\1", word):
+                continue
+            counts[word] = counts.get(word, 0) + count
+    return counts
+
+
+def drop_english(counts, english):
+    """Removes English words that leaked into another language's list (see ENGLISH_RATIO)."""
+    if not counts or not english:
+        return counts
+    total = sum(counts.values())
+    english_total = sum(english.values())
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    kept = {}
+    dropped = 0
+    for rank, (word, count) in enumerate(ranked):
+        share = english.get(word, 0) / english_total
+        if rank >= ENGLISH_PROTECTED_RANK and share > ENGLISH_RATIO * count / total:
+            dropped += 1
             continue
-        word, count = parts[0].lower().replace("\u2019", "'").replace("\u02bc", "'"), int(parts[1])
-        if not word_re.match(word) or word in blocked:
-            continue
-        if len(word) == 1 and word not in singles:
-            continue
-        if vowels is not None and len(word) > 2 and not (set(word) & vowels) and word not in NO_VOWEL_OK:
-            continue
-        if re.search(r"(.)\1\1", word):
-            continue
-        counts[word] = counts.get(word, 0) + count
+        kept[word] = count
+    print(f"  dropped {dropped} English words")
+    return kept
+
+
+def build_words(counts, lang: str, limit: int):
+    counts = dict(counts)
     if counts:
         reference = max(counts.values())
         for word, weight in CONTRACTIONS.get(lang, {}).items():
@@ -432,6 +478,10 @@ def build_words(path: Path, lang: str, limit: int = 40000):
 
 def write_json(name: str, data) -> None:
     (OUT / name).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
+# English word counts, kept for the other languages' English filter (English is built first).
+english_counts = {}
 
 
 def build_language(lang: str, groups) -> None:
@@ -456,11 +506,15 @@ def build_language(lang: str, groups) -> None:
 
     print(f"Words ({lang}) …")
     try:
-        word_file = fetch(f"{lang}_50k.txt", optional=not required)
+        word_file = fetch(f"{lang}_full.txt", optional=True) or fetch(f"{lang}_50k.txt", optional=not required)
         if word_file is None:
             raise RuntimeError("word list not available")
-        limit = 50000 if lang in {"hu", "tr"} else (40000 if required else 30000)   # suffix-rich languages need more forms
-        words = build_words(word_file, lang, limit)
+        counts = read_counts(word_file, lang)
+        if lang == "en":
+            english_counts.update(counts)
+        else:
+            counts = drop_english(counts, english_counts)
+        words = build_words(counts, lang, WORD_LIMITS.get(lang, DEFAULT_WORD_LIMIT))
         if not words and not required:
             raise RuntimeError("word list was empty after filtering")
         print(f"  {len(words)} words")

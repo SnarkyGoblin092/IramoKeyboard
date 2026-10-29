@@ -293,6 +293,17 @@ enum Predictor {
             }
         }
 
+        // A slip while typing must not stop completion: words whose beginning is a key or two away
+        // ("mrg" -> "meg", "bilenty" -> "billentyűzet"). Their scores carry the cost of the slip, so they only
+        // win over exact completions when those are much rarer. Only languages the text is written in.
+        if !endsWithApostrophe && key.count >= 3 {
+            for language in ordered
+            where language == active || language == foreignDominant || (weights[language] ?? 0) >= 0.5 {
+                guard let store = stores[language] else { continue }
+                add(store.fuzzyCompletionCandidates(forKey: key, limit: 4), bonus: languageBonus(language), language: language)
+            }
+        }
+
         // Words already in the field complete the prefix too, even when no dictionary has them.
         if let field = field, !endsWithApostrophe {
             for word in field.counts.keys where word != lower && word.count > lower.count {

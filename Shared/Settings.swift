@@ -38,6 +38,7 @@ enum SettingKey {
     static let bigramPrefix = "hunkeys.bigrams."
     static let trigramPrefix = "hunkeys.trigrams."
     static let usagePrefix = "hunkeys.learnedDays."
+    static let usedWordsPrefix = "hunkeys.usedWords."
     // Written by the keyboard so the app can show its status
     static let lastSeen = "hunkeys.status.lastSeen"
     static let fullAccess = "hunkeys.status.fullAccess"
@@ -407,8 +408,18 @@ final class Settings {
         put(days, SettingKey.usagePrefix + languageCode)
     }
 
+    /// Dictionary words the user wrote -> count, so suggestions favour their own vocabulary.
+    func usedWords(for languageCode: String) -> [String: Int] {
+        return value(SettingKey.usedWordsPrefix + languageCode) as? [String: Int] ?? [:]
+    }
+
+    func setUsedWords(_ words: [String: Int], for languageCode: String) {
+        put(words, SettingKey.usedWordsPrefix + languageCode)
+    }
+
     func clearLearnedWords() {
         for language in Language.allCases {
+            put(nil, SettingKey.usedWordsPrefix + language.rawValue)
             put(nil, SettingKey.trigramPrefix + language.rawValue)
             put(nil, SettingKey.usagePrefix + language.rawValue)
             put(nil, SettingKey.learnedPrefix + language.rawValue)

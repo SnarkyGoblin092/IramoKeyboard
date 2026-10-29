@@ -47,30 +47,31 @@ final class SwipeDecoder {
         let pathLength = length(of: path)
         let sampledPath = resample(path, count: sampleCount)
 
+        // Keys the finger came near. A word with a letter elsewhere fails the coverage test below anyway, so it is
+        // rejected before any geometry (most candidates of a big dictionary end here).
+        var nearKeys = Set<Character>()
+        for (key, center) in keyCenters
+        where sampledPath.contains(where: { distance($0, center) <= keyWidth * 1.9 }) {
+            nearKeys.insert(key)
+        }
+
         var scored: [(word: String, score: Double)] = []
         var seen = Set<String>()
 
-        func consider(_ entry: WordEntry, source: Source) {
+        func consider(_ entry: WordEntry, source: Source, keyFor: (Character) -> Character?) {
             if seen.contains(entry.word) { return }
             // Ideal path: centres of the word's letters, consecutive duplicates collapsed (a double letter is
             // one pass over the key).
             var template: [CGPoint] = []
             var previous: Character? = nil
-            var knownKeys = true
             for character in entry.word where character.isLetter {
-                guard let key = source.store.keyLetter(for: character) else {
-                    knownKeys = false
-                    break
-                }
+                guard let key = keyFor(character), nearKeys.contains(key) else { return }
                 if key == previous { continue }
                 previous = key
-                guard let center = keyCenters[key] else {
-                    knownKeys = false
-                    break
-                }
+                guard let center = keyCenters[key] else { return }
                 template.append(center)
             }
-            guard knownKeys, template.count >= 2, let templateStart = template.first, let templateEnd = template.last else { return }
+            guard template.count >= 2, let templateStart = template.first, let templateEnd = template.last else { return }
 
             // Start and end matter most: a swipe begins on the first letter and lifts on the last.
             let startMiss = Double(distance(start, templateStart) / keyWidth)
@@ -124,10 +125,18 @@ final class SwipeDecoder {
         }
 
         for source in sources {
-            for index in source.store.candidateIndices(first: startKeys, last: endKeys) {
-                consider(source.store.entries[index], source: source)
+            // Letter -> key, remembered: accented letters need Unicode folding, far too slow per word.
+            var keyMemo: [Character: Character?] = [:]
+            func keyFor(_ character: Character) -> Character? {
+                if let known = keyMemo[character] { return known }
+                let key = source.store.keyLetter(for: character)
+                keyMemo[character] = key
+                return key
             }
-            for entry in source.extras { consider(entry, source: source) }
+            for index in source.store.candidateIndices(first: startKeys, last: endKeys) {
+                consider(source.store.entries[index], source: source, keyFor: keyFor)
+            }
+            for entry in source.extras { consider(entry, source: source, keyFor: keyFor) }
         }
 
         scored.sort { $0.score < $1.score }
