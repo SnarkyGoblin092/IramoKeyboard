@@ -1,40 +1,24 @@
 import UIKit
 
+/// The emoji picker always uses the native iOS look, whatever theme the keyboard has.
+enum EmojiLook {
+    private static func pick(_ light: UIColor, _ dark: UIColor) -> UIColor {
+        return UIColor { trait in trait.userInterfaceStyle == .dark ? dark : light }
+    }
+    static let text = UIColor.label
+    static let secondary = UIColor.secondaryLabel
+    static let searchField = pick(UIColor(white: 0, alpha: 0.08), UIColor(white: 1, alpha: 0.14))
+    static let separator = pick(UIColor(white: 0, alpha: 0.12), UIColor(white: 1, alpha: 0.20))
+    static let selection = pick(UIColor(white: 0, alpha: 0.10), UIColor(white: 1, alpha: 0.18))
+    static let popup = pick(UIColor.white, UIColor(white: 0.42, alpha: 1))
+    static let background = pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), UIColor(white: 0.17, alpha: 1))
+}
+
 protocol EmojiPanelDelegate: AnyObject {
     func emojiPanel(_ panel: EmojiPanel, didSelect emoji: String)
     func emojiPanelDidTapBackspace(_ panel: EmojiPanel)
     func emojiPanelDidTapSearch(_ panel: EmojiPanel)
     func emojiPanelDidClose(_ panel: EmojiPanel)
-    func emojiPanel(_ panel: EmojiPanel, didSelectSticker emoji: String, image: UIImage)
-}
-
-/// Renders an emoji as a large transparent image, used as a sticker.
-enum StickerRenderer {
-    static func image(for emoji: String, side: CGFloat = 512) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
-        return renderer.image { _ in
-            let font = UIFont.systemFont(ofSize: side * 0.78)
-            let attributes: [NSAttributedString.Key: Any] = [.font: font]
-            let text = emoji as NSString
-            let size = text.size(withAttributes: attributes)
-            text.draw(at: CGPoint(x: (side - size.width) / 2, y: (side - size.height) / 2), withAttributes: attributes)
-        }
-    }
-
-    static let recentsKey = "hunkeys.recentStickers"
-
-    static func recents() -> [String] {
-        return SharedStore.defaults.stringArray(forKey: recentsKey) ?? []
-    }
-
-    static func remember(_ emoji: String) {
-        var list = recents().filter { $0 != emoji }
-        list.insert(emoji, at: 0)
-        SharedStore.defaults.set(Array(list.prefix(24)), forKey: recentsKey)
-    }
 }
 
 /// A button that fires once on touch-down and then repeats while held (used for backspace).
@@ -99,6 +83,8 @@ private final class EmojiGridLayout: UICollectionViewLayout {
     var sectionGap: CGFloat = 0
     /// Band at the top of the strip for the category names (they scroll with the content, like stock).
     var headerHeight: CGFloat = 0
+    /// Empty space after the Recently Used block, before the smileys begin.
+    var gapAfterRecents: CGFloat = 0
 
     private(set) var cellSize = CGSize(width: 40, height: 40)
     /// The content offset that puts each category's first column at the left edge.
@@ -124,6 +110,7 @@ private final class EmojiGridLayout: UICollectionViewLayout {
         let side = max(1, (height - headerHeight) / CGFloat(rows))
         // About eight columns across the screen, like the stock picker.
         cellSize = CGSize(width: max(36, viewWidth / 8), height: side)
+        gapAfterRecents = cellSize.width * 0.75
 
         var x = edgeInset
         for section in 0..<collectionView.numberOfSections {
@@ -147,7 +134,7 @@ private final class EmojiGridLayout: UICollectionViewLayout {
                 let columns = (count + rows - 1) / rows
                 x += CGFloat(columns) * cellSize.width
             }
-            x += sectionGap
+            x += (section == 0 && count > 0) ? gapAfterRecents : sectionGap
         }
         // Room so that even the last category can be scrolled to the left edge.
         let lastStart = (sectionStartX.last ?? 0)
@@ -211,14 +198,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var sections: [Section] = []
     private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
-    private let stickerLayout = UICollectionViewFlowLayout()
-    private var stickerView: UICollectionView!
-    private var stickerItems: [String] = []
-    private var stickerMode = false
     private var headerLabels: [UILabel] = []
-    private let stickerHeader = UILabel()
 
-    private let searchGlass = FlatPanel(background: Theme.searchField, cornerRadius: 20, keyLike: true)
+    private let searchGlass = FlatPanel(background: EmojiLook.searchField, cornerRadius: 19)
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -226,11 +208,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
 
-    private let tabGlass = FlatPanel(background: EmojiPanel.tabBarFill, followsKeyRoundness: true, keyLike: true)
-    private let tabSelection = FlatPanel(background: EmojiPanel.selectionFill, cornerRadius: 100)
+    private let tabGlass = FlatPanel(background: UIColor.clear)
+    private let tabSelection = FlatPanel(background: EmojiLook.selection, cornerRadius: 100)
     private let tabUnderline = UIView()
-    private let abcPanel = FlatPanel(background: EmojiPanel.buttonFill, allowGlass: true, followsKeyRoundness: true, keyLike: true)
-    private let deletePanel = FlatPanel(background: EmojiPanel.buttonFill, allowGlass: true, followsKeyRoundness: true, keyLike: true)
+    private let abcPanel = FlatPanel(background: UIColor.clear)
+    private let deletePanel = FlatPanel(background: UIColor.clear)
     private let abcButton = HitButton(type: .system)
     private let backspaceButton = RepeatingButton(frame: .zero)
     private var tabButtons: [HitButton] = []
@@ -240,20 +222,20 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var isProgrammaticScroll = false
     private var variantPopup: UIView?
 
-    /// Fill behind the selected category tab (the native theme keeps a flat bar and only changes the icon colour).
-    private static var selectionFill: UIColor {
-        if Theme.kind == .native { return Theme.separator }
-        return Theme.accent.withAlphaComponent(0.28)
+    // Fixed metrics: search pill + exactly four emoji rows + tab bar always fit (the keyboard grows if needed).
+    static let searchTopInset: CGFloat = 5
+    static let searchHeightFixed: CGFloat = 38
+    static let searchGapFixed: CGFloat = 8
+    static let barHeightFixed: CGFloat = 44
+
+    /// Row pitch of the grid: the cell width (a full width / 8), capped so landscape stays reasonable.
+    static func rowPitch(forWidth width: CGFloat) -> CGFloat {
+        return min(54, max(40, width / 8))
     }
 
-    /// Fill behind the ABC and delete buttons: a function-key look in the themed keyboards, nothing in native.
-    /// The tab container: key-coloured with the key outline in themed keyboards, flat in native.
-    private static var tabBarFill: UIColor {
-        return Theme.kind == .native ? UIColor.clear : Theme.letterKey
-    }
-
-    private static var buttonFill: UIColor {
-        return Theme.kind == .native ? UIColor.clear : Theme.functionKey
+    /// Keyboard height needed to show the search pill, four full rows and the tab bar.
+    static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
+        return searchTopInset + searchHeightFixed + searchGapFixed + 4 * rowPitch(forWidth: width) + barHeightFixed
     }
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
@@ -263,15 +245,19 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor.clear   // the keyboard's own backdrop (system / gradient / glass) shows; the key stage is hidden while this is open
+        // Native look: the system keyboard backdrop shows in the native theme; other themes get the native colour.
+        backgroundColor = (Theme.kind == .native) ? UIColor.clear : EmojiLook.background
+        let systemStyle = UIScreen.main.traitCollection.userInterfaceStyle
+        if systemStyle != .unspecified { overrideUserInterfaceStyle = systemStyle }
+        _ = 0   // the keyboard's own backdrop (system / gradient / glass) shows; the key stage is hidden while this is open
 
         // Search field
         addSubview(searchGlass)
         searchIcon.image = UIImage(systemName: "magnifyingglass")
-        searchIcon.tintColor = Theme.secondaryText
+        searchIcon.tintColor = EmojiLook.secondary
         searchIcon.contentMode = .scaleAspectFit
         searchLabel.font = UIFont.systemFont(ofSize: 17)
-        searchLabel.textColor = Theme.secondaryText
+        searchLabel.textColor = EmojiLook.secondary
         searchGlass.contentView.addSubview(searchIcon)
         searchGlass.contentView.addSubview(searchLabel)
         searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
@@ -279,7 +265,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
         // Section title
         titleLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
-        titleLabel.textColor = Theme.secondaryText
+        titleLabel.textColor = EmojiLook.secondary
         addSubview(titleLabel)
 
         // Grid
@@ -293,30 +279,13 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         collectionView.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiCell.reuseID)
         addSubview(collectionView)
 
-        stickerLayout.scrollDirection = .horizontal
-        stickerLayout.minimumInteritemSpacing = 0
-        stickerLayout.minimumLineSpacing = 0
-        stickerLayout.sectionInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
-        stickerView = UICollectionView(frame: .zero, collectionViewLayout: stickerLayout)
-        stickerView.backgroundColor = UIColor.clear
-        stickerView.showsHorizontalScrollIndicator = false
-        stickerView.alwaysBounceHorizontal = true
-        stickerView.dataSource = self
-        stickerView.delegate = self
-        stickerView.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiCell.reuseID)
-        stickerView.isHidden = true
-        addSubview(stickerView)
-        stickerHeader.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
-        stickerHeader.textColor = Theme.secondaryText
-        stickerHeader.isUserInteractionEnabled = false
-        stickerView.addSubview(stickerHeader)
 
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         longPress.minimumPressDuration = max(0.25, Prefs.holdDelay)
         collectionView.addGestureRecognizer(longPress)
 
         emptyLabel.textAlignment = .center
-        emptyLabel.textColor = Theme.secondaryText
+        emptyLabel.textColor = EmojiLook.secondary
         emptyLabel.font = UIFont.systemFont(ofSize: 15)
         emptyLabel.numberOfLines = 0
         emptyLabel.isHidden = true
@@ -331,13 +300,13 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         tabGlass.contentView.addSubview(tabSelection)
         tabUnderline.isUserInteractionEnabled = false
         abcButton.setTitle("ABC", for: .normal)
-        abcButton.setTitleColor(Theme.secondaryText, for: .normal)
+        abcButton.setTitleColor(EmojiLook.secondary, for: .normal)
         abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .regular)
         abcButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         addSubview(abcButton)
 
         backspaceButton.setImage(UIImage(systemName: "delete.left"), for: .normal)
-        backspaceButton.tintColor = Theme.text
+        backspaceButton.tintColor = EmojiLook.text
         backspaceButton.onFire = { [weak self] in
             guard let self = self else { return }
             self.delegate?.emojiPanelDidTapBackspace(self)
@@ -360,7 +329,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let store = EmojiStore.shared
         var built: [Section] = []
 
-        let recents = Settings.shared.recentEmoji.map { EmojiItem(base: $0, variants: []) }
+        let recents = Settings.shared.recentEmoji.prefix(32).map { EmojiItem(base: $0, variants: []) }
         built.append(Section(key: "recent",
                              symbol: EmojiCategory.recentSymbol,
                              fallback: EmojiCategory.recentFallback,
@@ -376,15 +345,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
         sections = built
 
-        var stickers = StickerRenderer.recents()
-        for category in store.categories {
-            for item in category.items where !stickers.contains(item.base) { stickers.append(item.base) }
-        }
-        stickerItems = stickers
-        stickerMode = false
-        stickerView.isHidden = true
         collectionView.isHidden = false
-        stickerView.reloadData()
         rebuildHeaders()
         rebuildTabs()
         collectionView.reloadData()
@@ -407,7 +368,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // The stock picker has no titles inside the grid: it is purely emoji.
         for label in headerLabels { label.removeFromSuperview() }
         headerLabels = []
-        stickerHeader.removeFromSuperview()
     }
 
     private func positionHeaders() {
@@ -434,9 +394,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     private func updateEmptyState() {
         let store = EmojiStore.shared
-        if stickerMode {
-            emptyLabel.isHidden = true
-        } else if !store.isReady {
+        if !store.isReady {
             emptyLabel.text = language.strings.loadingEmoji
             emptyLabel.isHidden = false
         } else if store.categories.isEmpty {
@@ -467,19 +425,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             tabGlass.contentView.addSubview(button)
             tabButtons.append(button)
         }
-        // Stickers tab (last).
-        let stickerButton = HitButton(type: .system)
-        if let image = UIImage(systemName: "photo.on.rectangle",
-                               withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .light)) {
-            stickerButton.setImage(image, for: .normal)
-        } else {
-            stickerButton.setTitle("🏷", for: .normal)
-        }
-        stickerButton.tag = sections.count
-        stickerButton.accessibilityLabel = language.stickersTitle
-        stickerButton.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
-        tabGlass.contentView.addSubview(stickerButton)
-        tabButtons.append(stickerButton)
         layoutTabs()
         refreshTabHighlight()
     }
@@ -487,18 +432,16 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func refreshTabHighlight() {
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == selectedTabIndex)
-            button.tintColor = selected ? Theme.text : Theme.secondaryText.withAlphaComponent(0.7)
+            button.tintColor = selected ? EmojiLook.text : EmojiLook.secondary.withAlphaComponent(0.7)
             button.alpha = selected ? 1.0 : 0.85
         }
-        if stickerMode {
-            titleLabel.text = language.stickersTitle.uppercased()
-        } else if currentSection < sections.count {
+        if currentSection < sections.count {
             titleLabel.text = sections[currentSection].title.uppercased()
         }
         positionTabSelection(animated: true)
     }
 
-    private var selectedTabIndex: Int { return stickerMode ? sections.count : currentSection }
+    private var selectedTabIndex: Int { return currentSection }
 
     private func positionTabSelection(animated: Bool) {
         guard selectedTabIndex < tabButtons.count, tabGlass.bounds.height > 0 else {
@@ -508,7 +451,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
         tabSelection.isHidden = false
         tabUnderline.isHidden = false
-        tabUnderline.backgroundColor = Theme.accent
+        tabUnderline.backgroundColor = EmojiLook.text
         tabUnderline.layer.cornerRadius = 1
         let buttonFrame = tabButtons[selectedTabIndex].frame
         let circle = max(0, min(buttonFrame.width, buttonFrame.height) - 4)
@@ -527,33 +470,16 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
     }
 
-    private func setStickerMode(_ on: Bool) {
-        guard stickerMode != on else { return }
-        stickerMode = on
-        stickerView.isHidden = !on
-        collectionView.isHidden = on
-        if on { stickerView.setContentOffset(.zero, animated: false) }
-    }
-
     private func scrollToSection(_ section: Int, animated: Bool) {
-        if section == sections.count {
-            dismissVariantPopup()
-            setStickerMode(true)
-            refreshTabHighlight()
-            updateEmptyState()
-            return
-        }
         guard section < sections.count else { return }
-        let wasSticker = stickerMode
-        setStickerMode(false)
         currentSection = section
         collectionView.layoutIfNeeded()
         if section < gridLayout.sectionStartX.count {
             // Smooth scroll; the highlight stays on the tapped tab until the scroll settles.
             let maxOffset = max(0, collectionView.contentSize.width - collectionView.bounds.width)
             let target = min(gridLayout.sectionStartX[section], maxOffset)
-            isProgrammaticScroll = animated && !wasSticker
-            collectionView.setContentOffset(CGPoint(x: target, y: 0), animated: animated && !wasSticker)
+            isProgrammaticScroll = animated
+            collectionView.setContentOffset(CGPoint(x: target, y: 0), animated: animated)
         }
         refreshTabHighlight()
         updateEmptyState()
@@ -568,14 +494,13 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let total = bounds.height
         let showTitle = false
         gridLayout.headerHeight = 0
-        let tall = total >= 250
-        searchHeight = tall ? 40 : (total >= 190 ? 34 : 30)
-        barHeight = tall ? 44 : (total >= 190 ? 40 : 36)
-        let searchTop: CGFloat = tall ? 9 : 6
-        let searchGap: CGFloat = tall ? 17 : (total >= 190 ? 10 : 6)
+        searchHeight = EmojiPanel.searchHeightFixed
+        barHeight = EmojiPanel.barHeightFixed
+        let searchTop = EmojiPanel.searchTopInset
+        let searchGap = EmojiPanel.searchGapFixed
         titleLabel.isHidden = true
 
-        searchGlass.frame = CGRect(x: 9, y: searchTop, width: width - 18, height: searchHeight)
+        searchGlass.frame = CGRect(x: 6, y: searchTop, width: width - 12, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         searchIcon.frame = CGRect(x: 14, y: (searchHeight - 18) / 2, width: 18, height: 18)
         searchLabel.frame = CGRect(x: 40, y: 0, width: searchGlass.bounds.width - 56, height: searchHeight)
@@ -585,7 +510,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
         if collectionView.frame != newGridFrame {
             collectionView.frame = newGridFrame
-            gridLayout.rows = max(2, min(5, Int((gridHeight / max(40, width / 8)).rounded())))
+            gridLayout.rows = 4          // the stock picker always shows exactly four rows
             gridLayout.invalidateLayout()
         }
         if collectionView.bounds.width > 0 {
@@ -593,16 +518,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             positionHeaders()
         }
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
-
-        // Stickers: big cells, two rows when there is room.
-        stickerView.frame = newGridFrame
-        let stickerRows: CGFloat = gridHeight >= 130 ? 2 : 1
-        let stickerSide = max(40, floor((gridHeight - gridLayout.headerHeight) / stickerRows))
-        stickerLayout.sectionInset = UIEdgeInsets(top: gridLayout.headerHeight, left: 8, bottom: 0, right: 8)
-        if stickerLayout.itemSize.width != stickerSide || stickerLayout.itemSize.height != stickerSide {
-            stickerLayout.itemSize = CGSize(width: stickerSide, height: stickerSide)
-            stickerLayout.invalidateLayout()
-        }
 
         let barTop = bounds.height - barHeight
         abcButton.frame = CGRect(x: 0, y: barTop, width: 64, height: barHeight)
@@ -686,7 +601,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         var y = cellFrame.minY - height - 2
         if y < 0 { y = cellFrame.maxY + 2 }
 
-        let container = FlatPanel(background: Theme.popupFill, cornerRadius: 10, allowGlass: true, followsKeyRoundness: true)
+        let container = FlatPanel(background: EmojiLook.popup, cornerRadius: 10)
         container.layer.shadowColor = UIColor.black.cgColor
         container.layer.shadowOpacity = 0.3
         container.layer.shadowRadius = 3
@@ -722,21 +637,15 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     // MARK: UICollectionViewDataSource / Delegate
 
     func numberOfSections(in collectionView: UICollectionView) -> Int {
-        return collectionView === stickerView ? 1 : sections.count
+        return sections.count
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        if collectionView === stickerView { return stickerItems.count }
         return sections[section].items.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiCell.reuseID, for: indexPath)
-        if collectionView === stickerView, let stickerCell = cell as? EmojiCell {
-            stickerCell.label.font = UIFont.systemFont(ofSize: stickerLayout.itemSize.width * 0.7)
-            stickerCell.label.text = stickerItems[indexPath.item]
-            return stickerCell
-        }
         if let emojiCell = cell as? EmojiCell {
             let side = min(gridLayout.cellSize.width, gridLayout.cellSize.height)
             emojiCell.label.font = UIFont.systemFont(ofSize: min(32, side * 0.8))
@@ -746,21 +655,13 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if collectionView === stickerView {
-            guard indexPath.item < stickerItems.count else { return }
-            let emoji = stickerItems[indexPath.item]
-            Haptics.shared.keyPress()
-            delegate?.emojiPanel(self, didSelectSticker: emoji, image: StickerRenderer.image(for: emoji))
-            StickerRenderer.remember(emoji)
-            return
-        }
         dismissVariantPopup()
         Haptics.shared.keyPress()
         delegate?.emojiPanel(self, didSelect: sections[indexPath.section].items[indexPath.item].base)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView, !stickerMode, !needsInitialScroll, !isProgrammaticScroll else { return }
+        guard scrollView === collectionView, !needsInitialScroll, !isProgrammaticScroll else { return }
         dismissVariantPopup()
 
         // The current category is the last one whose first column has reached the left edge.

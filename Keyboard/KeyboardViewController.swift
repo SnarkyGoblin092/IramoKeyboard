@@ -243,6 +243,8 @@ final class KeyboardViewController: UIInputViewController {
         var total: CGFloat = isPad ? 340 : (isLandscape ? 208 : 276)
         if Prefs.numberRow { total += isLandscape ? 26 : 40 }
         total *= CGFloat(Prefs.heightScale)
+        // The emoji picker always shows four full rows: the keyboard grows to fit while it is open.
+        if emojiPanel != nil { total = max(total, EmojiPanel.requiredHeight(forWidth: view.bounds.width)) }
         let suggestions: CGFloat = isLandscape ? 36 : 44
 
         if let constraint = totalHeight {
@@ -824,7 +826,7 @@ final class KeyboardViewController: UIInputViewController {
         textDocumentProxy.insertText(emoji)
         var recents = settings.recentEmoji.filter { $0 != emoji }
         recents.insert(emoji, at: 0)
-        settings.recentEmoji = Array(recents.prefix(48))
+        settings.recentEmoji = Array(recents.prefix(32))
         lastSpaceTime = Date.distantPast
         clearSwipeState()
     }
@@ -843,6 +845,7 @@ final class KeyboardViewController: UIInputViewController {
             panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
         emojiPanel = panel
+        applyHeight()
         // The picker replaces the keyboard completely: nothing may show through from behind it.
         stage.isHidden = true
         panel.reload()
@@ -854,6 +857,7 @@ final class KeyboardViewController: UIInputViewController {
     private func hideEmojiPanel(refresh: Bool = true) {
         emojiPanel?.removeFromSuperview()
         emojiPanel = nil
+        applyHeight()
         stage.isHidden = false
         if refresh { scheduleRefresh() }
     }
@@ -992,7 +996,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
             textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
             var recents = settings.recentEmoji.filter { $0 != suggestion.text }
             recents.insert(suggestion.text, at: 0)
-            settings.recentEmoji = Array(recents.prefix(48))
+            settings.recentEmoji = Array(recents.prefix(32))
             lastSpaceTime = Date.distantPast
             clearSwipeState()
             afterTyping()
@@ -1021,16 +1025,6 @@ extension KeyboardViewController: EmojiPanelDelegate {
 
     func emojiPanelDidClose(_ panel: EmojiPanel) {
         hideEmojiPanel()
-    }
-
-    /// Stickers travel as a transparent PNG on the pasteboard and are pasted into the field (needs Full Access).
-    func emojiPanel(_ panel: EmojiPanel, didSelectSticker emoji: String, image: UIImage) {
-        guard hasFullAccess, let png = image.pngData() else {
-            suggestionBar.flash(language.stickersNeedFullAccess, duration: 3.0)
-            return
-        }
-        UIPasteboard.general.setData(png, forPasteboardType: "public.png")
-        _ = (textDocumentProxy as AnyObject).perform(Selector(("paste:")), with: nil)
     }
 }
 
