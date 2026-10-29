@@ -50,7 +50,7 @@ private struct HeaderSection: View {
                                                      startPoint: .topLeading, endPoint: .bottomTrailing)))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("HunKeys").font(.title2.weight(.bold))
+                        Text("Tempo").font(.title2.weight(.bold))
                         Text("Your keyboard, your way")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -91,7 +91,7 @@ private struct HeaderSection: View {
             return "This install can't share settings with the keyboard (no App Group). Install the IPA with iloader."
         }
         if !status.seen {
-            return "Add HunKeys in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
+            return "Add Tempo in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
         }
         if !status.fullAccess {
             return "Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words."

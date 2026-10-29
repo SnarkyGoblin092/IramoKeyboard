@@ -248,7 +248,11 @@ final class KeyboardViewController: UIInputViewController {
         if Prefs.numberRow { total += isLandscape ? 26 : 40 }
         total *= CGFloat(Prefs.heightScale)
         // The emoji picker always shows four full rows: the keyboard grows to fit while it is open.
-        if emojiPanel != nil { total = max(total, EmojiPanel.requiredHeight(forWidth: view.bounds.width)) }
+        if emojiPanel != nil {
+            // The view may not have its final width yet when the picker opens, so fall back to the screen width.
+            let width = view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width
+            total = max(total, EmojiPanel.requiredHeight(forWidth: width))
+        }
         if isSearchingEmoji { total += 6 }
         // While searching for an emoji the strip gets 6pt of top inset so its pill sits inside the keyboard's corner.
         let suggestions: CGFloat = (isLandscape ? 36 : 44) + (isSearchingEmoji ? 6 : 0)
@@ -261,6 +265,7 @@ final class KeyboardViewController: UIInputViewController {
             constraint.isActive = true
             totalHeight = constraint
         }
+        view.setNeedsLayout()
         if let constraint = suggestionHeight, constraint.constant != suggestions {
             constraint.constant = suggestions
         }
@@ -876,8 +881,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         container.addSubview(panel)
         NSLayoutConstraint.activate([
-            // The panel starts a little above the view so its search pill follows the keyboard's rounded top corners.
-            panel.topAnchor.constraint(equalTo: container.topAnchor, constant: -14),
+            panel.topAnchor.constraint(equalTo: container.topAnchor),
             panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)

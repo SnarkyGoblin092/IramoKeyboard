@@ -27,7 +27,7 @@ targets:
     info:
       path: Config/App-Info.plist
       properties:
-        CFBundleDisplayName: HunKeys
+        CFBundleDisplayName: Tempo
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -51,7 +51,7 @@ targets:
     info:
       path: Config/Keyboard-Info.plist
       properties:
-        CFBundleDisplayName: HunKeys
+        CFBundleDisplayName: Tempo
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController

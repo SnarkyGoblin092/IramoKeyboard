@@ -233,7 +233,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     /// Keyboard height needed to show the whole picker.
     static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
-        return (322 * scale(forWidth: width)).rounded()
+        return (332 * scale(forWidth: width)).rounded()
     }
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
@@ -419,7 +419,12 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
                 // Outline by default, filled while this is the active tab.
                 let filledConfig = UIImage.SymbolConfiguration(pointSize: 14.4, weight: .regular)
                 let filled = UIImage(systemName: section.symbol + ".fill", withConfiguration: filledConfig) ?? image
-                tabImages[index] = (image, filled)
+                if section.key == "smileys" {
+                    // On iOS the plain smiley symbol is the solid one, so the roles are swapped for this tab.
+                    tabImages[index] = (filled, image)
+                } else {
+                    tabImages[index] = (image, filled)
+                }
             } else {
                 button.setTitle(section.fallback, for: .normal)
                 button.titleLabel?.font = UIFont.systemFont(ofSize: 14)
@@ -497,7 +502,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let height = bounds.height
         compact = height < 390 * f
         // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
-        let pillTop: CGFloat = compact ? 5 * f : 8 * f
+        let pillTop: CGFloat = compact ? 0 : 6 * f
         searchHeight = (compact ? 44 : 46) * f
         searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds

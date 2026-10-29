@@ -3,7 +3,7 @@ import UIKit
 /// Key-press vibration with adjustable strength, plus the optional system key-click sound.
 ///
 /// iOS only lets keyboard extensions use the haptic engine when the user has switched on
-/// "Allow Full Access" for the keyboard (Settings > General > Keyboard > Keyboards > HunKeys).
+/// "Allow Full Access" for the keyboard (Settings > General > Keyboard > Keyboards > Tempo).
 final class Haptics {
     static let shared = Haptics()
 
