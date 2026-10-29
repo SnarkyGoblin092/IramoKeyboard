@@ -264,11 +264,18 @@ final class KeyboardViewController: UIInputViewController {
     // MARK: Layout & language
 
     private func reloadKeyboardLayout() {
-        let rows = LayoutBuilder.rows(language: language,
+        var rows = LayoutBuilder.rows(language: language,
                                       page: page,
                                       returnTitle: returnTitle,
                                       numberRow: Prefs.numberRow,
                                       showHints: Prefs.keyHints)
+        if isSearchingEmoji {
+            // While searching for an emoji the emoji key has no use, so it is left out.
+            rows = rows.map { row in row.filter { spec in
+                if case .emoji = spec.action { return false }
+                return true
+            } }
+        }
         keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()

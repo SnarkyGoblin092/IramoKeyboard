@@ -114,6 +114,8 @@ final class FlatPanel: UIView {
     private let fixedRadius: CGFloat
     private let followsKeyRoundness: Bool
     private let drawsKeyBorder: Bool
+    /// Fully rounded ends (radius = half the height), used for search pills.
+    var capsule = false
 
     var contentView: UIView { return effectView?.contentView ?? self }
 
@@ -156,7 +158,7 @@ final class FlatPanel: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let radius = followsKeyRoundness ? Theme.keyCornerRadius(for: bounds.size) : fixedRadius
+        let radius = capsule ? bounds.height / 2 : (followsKeyRoundness ? Theme.keyCornerRadius(for: bounds.size) : fixedRadius)
         if let effectView = effectView {
             effectView.frame = bounds
             if followsKeyRoundness {

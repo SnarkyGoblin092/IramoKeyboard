@@ -10,7 +10,7 @@ protocol EmojiSearchBarDelegate: AnyObject {
 final class EmojiSearchBar: UIView {
     weak var delegate: EmojiSearchBarDelegate?
 
-    private let glass = FlatPanel(background: Theme.searchField, followsKeyRoundness: true, keyLike: true)
+    private let glass = FlatPanel(background: EmojiLook.searchField)
     private let backButton = HitButton(type: .system)
     private let iconView = UIImageView()
     private let queryLabel = UILabel()
@@ -24,17 +24,18 @@ final class EmojiSearchBar: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor.clear
+        glass.capsule = true
         addSubview(glass)
 
         backButton.setImage(UIImage(systemName: "chevron.left",
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)),
                             for: .normal)
-        backButton.tintColor = Theme.text
+        backButton.tintColor = EmojiLook.text
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         glass.contentView.addSubview(backButton)
 
         iconView.image = UIImage(systemName: "magnifyingglass")
-        iconView.tintColor = Theme.secondaryText
+        iconView.tintColor = EmojiLook.secondary
         iconView.contentMode = .scaleAspectFit
         glass.contentView.addSubview(iconView)
 
@@ -44,7 +45,7 @@ final class EmojiSearchBar: UIView {
         queryLabel.minimumScaleFactor = 0.7
         glass.contentView.addSubview(queryLabel)
 
-        divider.backgroundColor = Theme.separator
+        divider.backgroundColor = EmojiLook.separator
         glass.contentView.addSubview(divider)
 
         scroll.showsHorizontalScrollIndicator = false
@@ -60,10 +61,10 @@ final class EmojiSearchBar: UIView {
         placeholder = newPlaceholder
         if text.isEmpty {
             queryLabel.text = placeholder
-            queryLabel.textColor = Theme.secondaryText
+            queryLabel.textColor = EmojiLook.secondary
         } else {
             queryLabel.text = text
-            queryLabel.textColor = Theme.text
+            queryLabel.textColor = EmojiLook.text
         }
     }
 
@@ -86,7 +87,8 @@ final class EmojiSearchBar: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        glass.frame = bounds.insetBy(dx: 12, dy: 6)
+        // Same thickness and curve as the picker's search pill.
+        glass.frame = bounds.insetBy(dx: 6, dy: 0)
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)

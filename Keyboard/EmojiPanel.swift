@@ -232,7 +232,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     /// Keyboard height needed to show the whole picker.
     static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
-        return (314 * scale(forWidth: width)).rounded()
+        return (322 * scale(forWidth: width)).rounded()
     }
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
@@ -248,6 +248,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         _ = 0   // the keyboard's own backdrop (system / gradient / glass) shows; the key stage is hidden while this is open
 
         // Search field
+        searchGlass.capsule = true
         addSubview(searchGlass)
         searchIcon.image = UIImage(systemName: "magnifyingglass")
         searchIcon.tintColor = EmojiLook.secondary
@@ -488,9 +489,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // is anchored to the real height so the tab row, ABC and delete are never cut off.
         let height = bounds.height
         compact = height < 390 * f
-        let pillTop: CGFloat = compact ? 6 * f : 13 * f
-        searchHeight = (compact ? 36 : 40) * f
-        searchGlass.frame = CGRect(x: 9 * xf, y: pillTop, width: width - 18 * xf, height: searchHeight)
+        // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
+        let pillTop: CGFloat = compact ? 5 * f : 8 * f
+        searchHeight = (compact ? 44 : 46) * f
+        searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         searchIcon.frame = CGRect(x: 13 * xf, y: (searchHeight - 17 * f) / 2, width: 17 * f, height: 17 * f)
         searchLabel.font = UIFont.systemFont(ofSize: 20 * f)
@@ -500,7 +502,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let gridHeight: CGFloat
         if compact {
             tabCentreY = height - 24 * f
-            gridTop = pillTop + searchHeight + 4 * f
+            gridTop = pillTop + searchHeight + 3 * f
             gridHeight = max(120, (tabCentreY - 22 * f) - gridTop)
             tabBandTop = tabCentreY - 22 * f
         } else {
@@ -521,8 +523,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         tabGlass.frame = CGRect(x: 0, y: tabCentreY - 18 * f, width: width, height: 36 * f)
         if compact {
             // ABC sits at the left of the tab row.
-            abcButton.frame = CGRect(x: 6 * xf, y: tabCentreY - 22, width: 56 * xf, height: 44)
+            // ABC is centred between the screen edge and the first (recents) icon at x = 84.
+            abcButton.contentHorizontalAlignment = .center
+            abcButton.frame = CGRect(x: 14 * xf, y: tabCentreY - 22, width: 56 * xf, height: 44)
         } else {
+            abcButton.contentHorizontalAlignment = .left
             abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
         }
         backspaceButton.frame = CGRect(x: 411 * xf - 26, y: tabCentreY - 22, width: 52, height: 44)
