@@ -37,7 +37,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from keyboard import Layout, normalize_apostrophes, swipe_path, tap_word, APOSTROPHES  # noqa: E402
+from keyboard import Layout, normalize_apostrophes, swipe_path, tap_word_points, APOSTROPHES  # noqa: E402
 
 EVAL_DIR = ROOT / ".eval"
 DATA_DIR = EVAL_DIR / "data"
@@ -136,7 +136,12 @@ def score_sentence(row):
             continue
         before = text[:match.start()]
         rng = random.Random(f"{sentence_id}:{index}")
-        typed = tap_word(target, layout, rng, sigma)
+        typed, points = tap_word_points(target, layout, rng, sigma)
+        # Engines that use where each tap landed get the positions (`--no-taps` hides them).
+        give_taps = getattr(engine, "uses_taps", False) and not _options.get("no_taps")
+
+        def taps(k=None):
+            return {"taps": points[:k] if k is not None else points} if give_taps else {}
         slipped = typed != "".join(layout.key_letter(c) or c for c in target)
         exact = typed == target
 
@@ -150,16 +155,16 @@ def score_sentence(row):
         shown_at = None
         if not next_hit:
             for k in range(1, len(typed)):
-                if target in engine.suggest(before + typed[:k], typed[:k])[:2]:
+                if target in engine.suggest(before + typed[:k], typed[:k], **taps(k))[:2]:
                     shown_at = k
                     break
 
         # The whole word typed.
-        bar = engine.suggest(before + typed, typed)[:2]
+        bar = engine.suggest(before + typed, typed, **taps())[:2]
         in_bar = exact or target in bar
         totals["typed"][0] += in_bar
         totals["typed"][1] += 1
-        committed = _target(engine.on_space(before + typed, typed))
+        committed = _target(engine.on_space(before + typed, typed, **taps()))
         right = committed == target
         if _options.get("learn"):
             # The keyboard learns what space committed; a wrong word is then fixed: an unwanted correction is
@@ -221,7 +226,7 @@ def score_block(block):
 def run_config(engine_name, enabled, active, lang, args, workers):
     sentences = test_sentences(lang, args.sentences)
     options = {"sigma": args.sigma, "swipe": not args.no_swipe, "swipe_sigma": args.swipe_sigma,
-               "learn": bool(args.learn)}
+               "learn": bool(args.learn), "no_taps": args.no_taps}
     started = time.time()
     with multiprocessing.Pool(workers, _init, (engine_name, enabled, active, active, options)) as pool:
         if args.learn:
@@ -277,6 +282,7 @@ def main():
     parser.add_argument("--sigma", type=float, default=0.25, help="tap scatter in key widths")
     parser.add_argument("--swipe-sigma", type=float, default=0.30, help="swipe scatter in key widths")
     parser.add_argument("--no-swipe", action="store_true")
+    parser.add_argument("--no-taps", action="store_true", help="don't give engines the tap positions")
     parser.add_argument("--learn", type=int, default=0,
                         help="simulate users who each type this many sentences in order while the keyboard learns")
     parser.add_argument("--workers", type=int, default=max(1, min(16, (os.cpu_count() or 2) - 2)))

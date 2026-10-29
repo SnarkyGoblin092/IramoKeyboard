@@ -135,6 +135,13 @@ class Mixture:
     def __init__(self, models, active):
         self.models = models
         self.active = active
+        self.usage = {}     # language -> recency-weighted words the user wrote in it (Decoder.languageUsage)
+
+    def prior(self, lang):
+        """log10 prior of a language before any word is seen (Decoder.prior in Decoder.swift)."""
+        total = sum(self.usage.values())
+        share = self.usage.get(lang, 0.0) / total if total > 0 else 0.0
+        return math.log10(0.15 + share) + (math.log10(1.3) if lang == self.active else 0.0)
 
     def language_weights(self, before):
         """P(language | recent words): each model's likelihood of the last 8 words (across sentence ends), and a
@@ -153,7 +160,7 @@ class Mixture:
                     w = model.ids.get(normalize_apostrophes(token), UNKNOWN)
                     recent.append(model.logp(w, history[-1], history[-2] if len(history) >= 2 else None))
                     history.append(w)
-            scores[lang] = sum(recent[-8:]) + (math.log10(1.5) if lang == self.active else 0.0)
+            scores[lang] = sum(recent[-8:]) + self.prior(lang)
         top = max(scores.values())
         weights = {lang: 10 ** (s - top) for lang, s in scores.items()}
         norm = sum(weights.values())

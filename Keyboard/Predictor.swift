@@ -206,7 +206,8 @@ enum Predictor {
                         enabled: [Language],
                         stores: [Language: WordStore],
                         limit: Int,
-                        field: FieldContext? = nil) -> [String] {
+                        field: FieldContext? = nil,
+                        taps: Decoder.Taps? = nil) -> [String] {
         let token = TextFolding.normalizeApostrophes(typed)
         let lower = token.lowercased()
         let key = TextFolding.key(token)
@@ -216,7 +217,7 @@ enum Predictor {
         // The language-model decoder; typed apostrophes ("we'", "l'ami") keep the dictionary rules below.
         if Decoder.isAvailable(stores) && !lower.contains("'") {
             return Decoder.suggest(typed: typed, before: before, active: active, enabled: enabled,
-                                   stores: stores, limit: limit, field: field)
+                                   stores: stores, limit: limit, field: field, taps: taps)
         }
 
         let weights = contextWeights(before: before, currentPrefix: typed, active: active, stores: stores)
@@ -359,10 +360,11 @@ enum Predictor {
                         active: Language,
                         enabled: [Language],
                         stores: [Language: WordStore],
-                        field: FieldContext?) -> String? {
+                        field: FieldContext?,
+                        taps: Decoder.Taps? = nil) -> String? {
         if Decoder.isAvailable(stores) {
             return Decoder.autoCorrect(typed: typed, before: before, active: active, enabled: enabled,
-                                       stores: stores, field: field)
+                                       stores: stores, field: field, taps: taps)
         }
         let lower = TextFolding.normalizeApostrophes(typed).lowercased()
         guard lower.count >= 2, field?.uses(lower, atLeast: 2) != true else { return nil }

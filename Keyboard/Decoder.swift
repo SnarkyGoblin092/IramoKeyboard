@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// The typing decoder: every suggestion, auto-correction and next word comes from one probability,
@@ -24,6 +25,59 @@ enum Decoder {
     /// True when at least one loaded language has its language model (otherwise the older predictor is used).
     static func isAvailable(_ stores: [Language: WordStore]) -> Bool {
         return stores.values.contains { $0.isLoaded && $0.model != nil }
+    }
+
+    // MARK: Names from the user's contacts
+
+    struct Name {
+        let written: String     // as in the contact ("Zsófi")
+        let key: String         // match key ("zsofi")
+    }
+
+    /// Lower-case name -> the name, from iOS's supplementary lexicon (the user's contacts). Any language may use them.
+    private(set) static var names: [String: Name] = [:]
+    /// The same names as dictionary entries, for swiping.
+    private(set) static var nameEntries: [WordEntry] = []
+    /// log10 probability of a contact's name (about as likely as a fairly common word).
+    static let nameLogProb = -5.0
+
+    static func setNames(_ written: [String: String]) {
+        var result: [String: Name] = [:]
+        var entries: [WordEntry] = []
+        for (lower, text) in written {
+            let key = TextFolding.key(lower)
+            guard key.count >= 2 else { continue }
+            result[lower] = Name(written: text, key: key)
+            var entry = WordEntry(word: lower, folded: key, freq: 1, norm: 0.5, length: key.count)
+            entry.capitals = text == lower ? .none : (text.count > 1 && text == text.uppercased() ? .all : .title)
+            entries.append(entry)
+        }
+        names = result
+        nameEntries = entries
+    }
+
+    // MARK: Which languages the user writes in
+
+    /// Language -> recency-weighted number of words written in it (loaded from and saved to Settings by the
+    /// keyboard). It decides which language the first words of a text lean towards.
+    static var languageUsage: [Language: Double] = [:]
+    /// Each new word counts 1; older ones fade (half after ~140 words).
+    private static let usageDecay = 0.995
+
+    /// log10 prior of a language before any word of the text is seen: the share of the user's recent writing in
+    /// it (never below a floor, so every enabled language stays possible), and a small lean to the layout's.
+    static func prior(_ language: Language, active: Language) -> Double {
+        let total = languageUsage.values.reduce(0, +)
+        let share = total > 0 ? (languageUsage[language] ?? 0) / total : 0
+        return log10(0.15 + share) + (language == active ? log10(1.3) : 0)
+    }
+
+    /// Counts a finished word towards the languages, by how likely each one wrote it here.
+    static func noteLanguage(of word: String, before: String, active: Language, stores: [Language: WordStore]) {
+        guard isAvailable(stores) else { return }
+        let context = Decoder.context(before: before + word + " ", active: active, stores: stores)
+        languageUsage = languageUsage.mapValues { $0 * usageDecay }
+        for (language, weight) in context.weights { languageUsage[language, default: 0] += weight }
     }
 
     // MARK: Context
@@ -105,7 +159,7 @@ enum Decoder {
                 }
             }
             context.histories[language] = history
-            scores[language] = recent.reduce(0, +) + (language == active ? log10(1.5) : 0)
+            scores[language] = recent.reduce(0, +) + prior(language, active: active)
         }
         if let top = scores.values.max() {
             var total = 0.0
@@ -153,6 +207,7 @@ enum Decoder {
             if let value = value { total += weight * pow(10, value) }
             personal = max(personal, store.personalLogBonus(word, previous: context.previous, before2: context.before2))
         }
+        if names[word] != nil { total += pow(10, nameLogProb) }
         var result = total > 0 ? log10(total) : -99
         result += personal
         if let field = field { result += 2 * field.bonus(for: word) }
@@ -161,9 +216,70 @@ enum Decoder {
 
     // MARK: Typing cost
 
+    /// Where the letters of the word being typed were tapped, and where the keys are (keyboard view coordinates).
+    struct Taps {
+        let points: [CGPoint?]
+        let centers: [Character: CGPoint]
+        let keySize: CGSize
+    }
+
+    /// Cost of tap positions: per squared key pitch of extra distance to the intended key (decoder.py SPATIAL).
+    static let spatial = 0.5
+
+    /// Per letter of `key`: letter -> cost of that typed key standing for it. With the tap's position, a key the
+    /// finger nearly hit costs almost nothing and one it was far from up to 1; without it, the typed key costs 0
+    /// and its neighbours 0.5. Same as Engine.substitution_costs in decoder.py.
+    static func substitutionCosts(lower: String, key: [Character], taps: Taps?,
+                                  near: [Character: Set<Character>]) -> [[Character: Double]] {
+        var aligned: [CGPoint?] = []
+        if let taps = taps, taps.points.count == lower.count {
+            for (character, point) in zip(lower, taps.points) {
+                aligned += Array(repeating: point, count: TextFolding.key(String(character)).count)
+            }
+        }
+        if aligned.count != key.count { aligned = Array(repeating: nil, count: key.count) }
+
+        // Key centres by folded letter ("o" is the o key, not German's "ö" key), and the key pitch.
+        var centers: [Character: CGPoint] = [:]
+        var pitch = CGSize(width: 1, height: 1)
+        if let taps = taps {
+            for baseLettersFirst in [true, false] {
+                for (letter, center) in taps.centers where (TextFolding.fold(String(letter)) == String(letter)) == baseLettersFirst {
+                    if let folded = TextFolding.fold(String(letter)).first, centers[folded] == nil { centers[folded] = center }
+                }
+            }
+            let ys = taps.centers.values.map { $0.y }
+            let rows = max(1, Set(taps.centers.values.map { Int(($0.y / max(taps.keySize.height, 1)).rounded()) }).count - 1)
+            let height = ((ys.max() ?? 0) - (ys.min() ?? 0)) / CGFloat(rows)
+            pitch = CGSize(width: max(taps.keySize.width * 1.15, 1), height: max(height, taps.keySize.height, 1))
+        }
+
+        var costs: [[Character: Double]] = []
+        for (t, point) in zip(key, aligned) {
+            var table: [Character: Double] = [:]
+            if let point = point, let own = centers[t] {
+                func distance2(_ center: CGPoint) -> Double {
+                    let dx = Double((point.x - center.x) / pitch.width)
+                    let dy = Double((point.y - center.y) / pitch.height)
+                    return dx * dx + dy * dy
+                }
+                let base = distance2(own)
+                for (letter, center) in centers {
+                    table[letter] = min(1, max(0, spatial * (distance2(center) - base)))
+                }
+            } else {
+                for letter in near[t] ?? [] { table[letter] = 0.5 }
+            }
+            table[t] = 0
+            costs.append(table)
+        }
+        return costs
+    }
+
     /// (cost against the word's best-fitting beginning, cost against the whole word) of typing `typed` for
-    /// `word`, both match keys. Same as `typing_cost` in decoder.py.
-    static func typingCost(_ typed: [Character], _ word: [Character], near: [Set<Character>]) -> (prefix: Double, whole: Double) {
+    /// `word`, both match keys; `costs[j]` is the j-th typed key's substitution table (missing letters cost 1).
+    /// Same as `typing_cost` in decoder.py.
+    static func typingCost(_ typed: [Character], _ word: [Character], costs: [[Character: Double]]) -> (prefix: Double, whole: Double) {
         let n = typed.count
         var previous2 = [Double](repeating: 0, count: n + 1)
         var previous = (0...n).map { Double($0) }
@@ -176,7 +292,7 @@ enum Decoder {
             if n > 0 {
                 for j in 1...n {
                     let t = typed[j - 1]
-                    let substitution: Double = t == character ? 0 : (near[j - 1].contains(character) ? 0.5 : 1)
+                    let substitution = costs[j - 1][character] ?? 1
                     var value = min(previous[j - 1] + substitution, min(previous[j] + 1, row[j - 1] + 1))
                     if i > 1, j > 1, t == word[i - 2], typed[j - 2] == character {
                         value = min(value, previous2[j - 2] + 0.8)
@@ -218,7 +334,8 @@ enum Decoder {
                              active: Language,
                              ordered: [Language],
                              stores: [Language: WordStore],
-                             field: Predictor.FieldContext?) -> (rows: [Row], lower: String, context: Context) {
+                             field: Predictor.FieldContext?,
+                             taps: Taps?) -> (rows: [Row], lower: String, context: Context) {
         let lower = TextFolding.normalizeApostrophes(typed).lowercased()
         let key = Array(TextFolding.key(lower))
         var head = before
@@ -259,17 +376,19 @@ enum Decoder {
                 }
             }
         }
+        // Contacts' names.
+        for (lower, name) in names where name.key.hasPrefix(keyString) { words.insert(lower) }
         // Words already in the field complete too, even when no dictionary has them.
         if let field = field {
             for word in field.counts.keys where TextFolding.key(word).hasPrefix(keyString) { words.insert(word) }
         }
 
-        let nearTyped = key.map { near[$0] ?? [] }
+        let costs = substitutionCosts(lower: lower, key: key, taps: taps, near: near)
         var result: [Row] = []
         for word in words {
             let wordKey = Array(TextFolding.key(word))
             guard !wordKey.isEmpty else { continue }
-            let cost = typingCost(key, wordKey, near: nearTyped)
+            let cost = typingCost(key, wordKey, costs: costs)
             guard cost.prefix <= maxCost else { continue }
             result.append(Row(word: word,
                               logProb: logProb(word, context: context, stores: stores, field: field),
@@ -300,9 +419,11 @@ enum Decoder {
                         enabled: [Language],
                         stores: [Language: WordStore],
                         limit: Int,
-                        field: Predictor.FieldContext?) -> [String] {
+                        field: Predictor.FieldContext?,
+                        taps: Taps? = nil) -> [String] {
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
-        let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field)
+        let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field,
+                         taps: taps)
         return Array(ranked(found.rows, whole: false).map { $0.word }.filter { $0 != found.lower }.prefix(limit))
             .map { written($0, context: found.context, stores: stores) }
     }
@@ -316,7 +437,7 @@ enum Decoder {
             let weight = context.weights[language] ?? 0
             if best == nil || weight > best!.weight { best = (weight, text) }
         }
-        return best?.text ?? word
+        return best?.text ?? names[word]?.written ?? word
     }
 
     /// What space should leave in place of the word just typed, or nil to keep it: the most likely word, when it
@@ -328,7 +449,8 @@ enum Decoder {
                             active: Language,
                             enabled: [Language],
                             stores: [Language: WordStore],
-                            field: Predictor.FieldContext?) -> String? {
+                            field: Predictor.FieldContext?,
+                            taps: Taps? = nil) -> String? {
         let lower = TextFolding.normalizeApostrophes(typed).lowercased()
         guard !lower.isEmpty, lower.allSatisfy({ Predictor.isWordCharacter($0) }) else { return nil }
         // ALLCAPS, iPhone: deliberate spellings.
@@ -337,7 +459,8 @@ enum Decoder {
         if stores.values.contains(where: { $0.isLearned(lower) }) { return nil }
 
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
-        let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field)
+        let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field,
+                         taps: taps)
         var choice = lower
         if let best = ranked(found.rows, whole: true).first, best.word != lower {
             let typedScore = max(logProb(lower, context: found.context, stores: stores, field: field), unknownWord)

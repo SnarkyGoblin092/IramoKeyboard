@@ -14,9 +14,10 @@ known continuations of the context; the probability decides among them.
 """
 
 import math
+import os
 
 import baseline
-from keyboard import key as match_key, normalize_apostrophes
+from keyboard import ROW_PITCH, fold, key as match_key, normalize_apostrophes
 from lm import LanguageModel, Mixture, COMMA, UNKNOWN
 
 # Tuned with tune.py on the tuning sentences.
@@ -31,12 +32,14 @@ LEARNED_CAP = 2.0
 LEARN_AFTER = 2         # an unknown word counts as the user's own after this many uses (one slip is not a word)
 USED_SLOPE, USED_CAP = 0.25, 0.8        # dictionary words the user writes
 PAIR_SLOPE, PAIR_CAP = 0.5, 1.2         # words the user put after the previous word
+SPATIAL = 0.5           # tap positions: cost per squared key-width of extra distance to the intended key
 SHAPE = 10.0            # log10 cost of one unit of swipe shape mismatch (see baseline.decode_swipe)
 CANDIDATES = 30
 
 
-def typing_cost(typed, word, near):
-    """(prefix cost, whole cost) of typing `typed` for `word` (both match keys)."""
+def typing_cost(typed, word, costs):
+    """(prefix cost, whole cost) of typing `typed` for `word` (both match keys). `costs[j]` maps a letter to the
+    cost of the j-th typed key standing for it (see Engine.substitution_costs; missing letters cost 1)."""
     n, m = len(typed), len(word)
     previous2 = None
     previous = list(map(float, range(n + 1)))
@@ -46,7 +49,7 @@ def typing_cost(typed, word, near):
         row = [float(i)] + [0.0] * n
         for j in range(1, n + 1):
             t = typed[j - 1]
-            sub = 0.0 if t == ch else (0.5 if ch in near[j - 1] else 1.0)
+            sub = costs[j - 1].get(ch, 1.0)
             value = min(previous[j - 1] + sub, previous[j] + 1, row[j - 1] + 1)
             if i > 1 and j > 1 and t == word[i - 2] and typed[j - 2] == ch:
                 value = min(value, previous2[j - 2] + 0.8)
@@ -62,6 +65,7 @@ class Personal:
     def __init__(self):
         self.learned = {}
         self.used = {}
+        self.usage = {}         # language -> recency-weighted words written in it
         self.pairs = {}
         self.triples = {}
 
@@ -98,6 +102,13 @@ class Engine(baseline.Engine):
         self.lm_keys = {lang: [match_key(w) for w in model.words] for lang, model in self.models.items()}
         self.personal = Personal()
         self.params = dict(Engine.params)
+        if os.environ.get("HUNKEYS_SPATIAL"):
+            self.params["spatial"] = float(os.environ["HUNKEYS_SPATIAL"])
+        # Key centres by folded letter ("o" is the o key, not German's "ö" key).
+        self.folded_centers = {}
+        layout_centers = self.stores[active].layout.centers
+        for letter in sorted(layout_centers, key=lambda letter: letter != fold(letter)):
+            self.folded_centers.setdefault(fold(letter)[:1], layout_centers[letter])
 
     # -- learning (KeyboardViewController.learnWord / noteWordUse / recordBigram) --------------------------------
 
@@ -107,6 +118,13 @@ class Engine(baseline.Engine):
         if len(word) < 2 or not all(baseline.is_word_char(c) for c in word):
             return
         personal = self.personal
+        # Which languages the user writes in (Decoder.noteLanguage).
+        self.mixture.usage = personal.usage
+        weights = self.mixture.language_weights(before + word + " ")
+        for lang in personal.usage:
+            personal.usage[lang] *= 0.995
+        for lang, weight in weights.items():
+            personal.usage[lang] = personal.usage.get(lang, 0.0) + weight
         if explicit:
             personal.learned[word] = personal.learned.get(word, 0) + self.params["learn_after"]
         elif any(store.entry_exact(word) for store in self.stores.values()):
@@ -130,6 +148,7 @@ class Engine(baseline.Engine):
     def _context(self, before):
         """Per language: (weight, history ids) for the text before the word being typed; "_words": the last two
         words of the sentence, for the user's own word pairs."""
+        self.mixture.usage = self.personal.usage
         weights = self.mixture.language_weights(before)
         context = {lang: (weights[lang], model.context(before)) for lang, model in self.models.items()}
         sentence = [] if baseline.is_sentence_start(before) else baseline.last_words(before, 2)
@@ -190,14 +209,42 @@ class Engine(baseline.Engine):
                 result.add(key[:i] + other + key[i + 1:])
         return result
 
-    def features(self, before, typed):
+    uses_taps = True
+
+    def substitution_costs(self, lower, key, taps):
+        """Per letter of `key`: letter -> cost of that typed key standing for it. With the tap's position (run.py
+        passes them; the keyboard records them), a key the finger nearly hit costs almost nothing and one it was
+        far from costs up to 1; without it, the typed key costs 0, its neighbours 0.5."""
+        aligned = []
+        if taps is not None and len(taps) == len(lower):
+            for ch, tap in zip(lower, taps):
+                aligned += [tap] * len(match_key(ch))
+        if len(aligned) != len(key):
+            aligned = [None] * len(key)
+        layout = self.stores[self.active].layout
+        centers = self.folded_centers
+        spatial = self.params["spatial"]
+        costs = []
+        for t, tap in zip(key, aligned):
+            if tap is None or t not in centers:
+                table = {c: 0.5 for c in self.near.get(t, ())}
+            else:
+                def d2(center):
+                    return ((tap[0] - center[0]) / layout.key_width) ** 2 + ((tap[1] - center[1]) / ROW_PITCH) ** 2
+                own = d2(centers[t])
+                table = {c: min(1.0, max(0.0, spatial * (d2(center) - own))) for c, center in centers.items()}
+            table[t] = 0.0
+            costs.append(table)
+        return costs
+
+    def features(self, before, typed, taps=None):
         """(word, log10 P(word | context), prefix cost, whole cost, wrong first letter) for every candidate, plus the
         typed text's own probability. Everything the settings act on, so tune.py can try settings quickly."""
         lower = normalize_apostrophes(typed).lower()
         key = match_key(lower)
         head = before[:-len(typed)] if typed and before.endswith(typed) else before
         context = self._context(head)
-        near = [self.near.get(c, set()) for c in key]
+        near = self.substitution_costs(lower, key, taps)
         rows = []
         for word in self._candidates(key, lower, context):
             word_key = match_key(word)
@@ -212,7 +259,8 @@ class Engine(baseline.Engine):
     # -- the keyboard's questions ---------------------------------------------------------------------------------
 
     params = {"slip": SLIP, "first": FIRST_LETTER, "unknown": UNKNOWN_WORD, "margin": CORRECT_MARGIN, "shape": SHAPE,
-              "learn_after": LEARN_AFTER, "learned_base": LEARNED_BASE, "learned_slope": LEARNED_SLOPE}
+              "learn_after": LEARN_AFTER, "learned_base": LEARNED_BASE, "learned_slope": LEARNED_SLOPE,
+              "spatial": SPATIAL}
 
     def swipe_features(self, before, path):
         """(word, shape cost, log10 P(word | context)) for every word the swipe could be."""
@@ -231,15 +279,15 @@ class Engine(baseline.Engine):
     def swipe(self, before, path, limit=4):
         return swipe_ranking(self.swipe_features(before, path), self.params)[:limit]
 
-    def suggest(self, before, typed, limit=4):
-        rows, lower, _ = self.features(before, typed)
+    def suggest(self, before, typed, limit=4, taps=None):
+        rows, lower, _ = self.features(before, typed, taps)
         return suggestions(rows, lower, self.params, limit)
 
-    def on_space(self, before, typed):
+    def on_space(self, before, typed, taps=None):
         lower = normalize_apostrophes(typed).lower()
         if self.personal.is_learned(lower, self.params):
             return lower
-        rows, lower, typed_lm = self.features(before, typed)
+        rows, lower, typed_lm = self.features(before, typed, taps)
         return correction(rows, lower, typed_lm, self.params)
 
     def next_words(self, before, limit=3):

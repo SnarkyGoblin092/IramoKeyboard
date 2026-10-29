@@ -644,6 +644,33 @@ def is_stripped(typo: str, word: str) -> bool:
     return len(typo) == len(word) and all(t == w or t == fold(w) for t, w in zip(typo, word))
 
 
+# Short tokens are where subtitle noise hides ("ln", "jj", "wc", "xv"). A word of one or two letters is kept when
+# it is among the language's SHORT_RANK most common words, or a known abbreviation, or (accented / non-Latin
+# words such as "ív", "íz", which noise never is) the proofread sentences use it at least SHORT_SHARE as often,
+# relatively, as the subtitles do.
+SHORT_WORDS_OK = {"en": {"mr", "ms", "dr", "tv", "pm", "am", "ok", "st", "uk", "us"}}
+SHORT_RANK = 1500
+SHORT_SHARE = 0.1
+
+
+def drop_short_noise(words, seen, lang):
+    allowed = SHORT_WORDS_OK.get(lang, set()) | SINGLES.get(lang, set())
+    total_seen = sum(seen.values()) or 1
+    total = sum(count for _, _, count in words) or 1
+    ranked = sorted(range(len(words)), key=lambda i: -words[i][2])
+    rank = {words[i][0]: position for position, i in enumerate(ranked)}
+
+    def keep(word, count):
+        if len(word) > 2 or word in allowed or rank[word] < SHORT_RANK:
+            return True
+        return (not word.isascii() and seen.get(word, 0) >= 2
+                and seen[word] / total_seen >= SHORT_SHARE * count / total)
+
+    kept = [entry for entry in words if keep(entry[0], entry[2])]
+    print(f"  dropped {len(words) - len(kept)} short noise words")
+    return kept
+
+
 def drop_typos(words, seen):
     groups = collections.defaultdict(list)
     for word, folded, _ in words:
@@ -769,6 +796,7 @@ def build_dictionary(lang: str) -> None:
             raise RuntimeError("sentences not available")
         pair_counts, starts, seen = read_sentences(sentences, lang, {word for word, _, _ in words})
         words = drop_typos(words, seen)
+        words = drop_short_noise(words, seen, lang)
         pairs = build_pairs(pair_counts, starts, seen, words)
         print(f"  {len(pairs[0][1])} sentence starters, {len(pairs) - 1} words with followers")
     except Exception as error:  # noqa: BLE001

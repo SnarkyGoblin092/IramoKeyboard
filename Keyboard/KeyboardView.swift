@@ -23,6 +23,8 @@ protocol KeyboardViewDelegate: AnyObject {
 ///  - dragging across the letter keys is recognised as swipe typing.
 final class KeyboardView: UIView {
     weak var delegate: KeyboardViewDelegate?
+    /// Where the last key tap landed (this view's coordinates), read by the controller for the typing decoder.
+    private(set) var lastTapPoint: CGPoint?
     /// Decides how letters are capitalised (Turkish i -> İ).
     var typingLanguage: Language = .english
     /// Popups are added here (the controller's root view) so they can rise above the first row.
@@ -633,6 +635,7 @@ final class KeyboardView: UIView {
             let displacement = hypot(end.x - state.startPoint.x, end.y - state.startPoint.y)
             if travel(of: state) < keyWidth * 2.2 && displacement < keyWidth * 1.4, let key = state.startKey {
                 delegate?.keyboardViewDidCancelSwipe(self)
+                lastTapPoint = state.startPoint
                 delegate?.keyboardView(self, didTap: key.spec.action)
             } else {
                 delegate?.keyboardView(self, didFinishSwipe: state.path)
@@ -663,6 +666,7 @@ final class KeyboardView: UIView {
         }
         if key.spec.action != .backspace {          // backspace already fired on touch-down
             if !cancelled { learnFromTap(state, key: key) }
+            lastTapPoint = state.startPoint
             delegate?.keyboardView(self, didTap: key.spec.action)
         }
     }

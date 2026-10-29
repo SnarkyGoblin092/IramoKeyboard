@@ -40,6 +40,8 @@ enum SettingKey {
     static let trigramPrefix = "hunkeys.trigrams."
     static let usagePrefix = "hunkeys.learnedDays."
     static let usedWordsPrefix = "hunkeys.usedWords."
+    /// language code -> how much of what the user writes is in it (recent words count most).
+    static let languageUsage = "hunkeys.languageUsage"
     // Written by the keyboard so the app can show its status
     static let lastSeen = "hunkeys.status.lastSeen"
     static let fullAccess = "hunkeys.status.fullAccess"
@@ -425,7 +427,16 @@ final class Settings {
         put(words, SettingKey.usedWordsPrefix + languageCode)
     }
 
+    func languageUsage() -> [String: Double] {
+        return value(SettingKey.languageUsage) as? [String: Double] ?? [:]
+    }
+
+    func setLanguageUsage(_ usage: [String: Double]) {
+        put(usage, SettingKey.languageUsage)
+    }
+
     func clearLearnedWords() {
+        put(nil, SettingKey.languageUsage)
         for language in Language.allCases {
             put(nil, SettingKey.usedWordsPrefix + language.rawValue)
             put(nil, SettingKey.trigramPrefix + language.rawValue)

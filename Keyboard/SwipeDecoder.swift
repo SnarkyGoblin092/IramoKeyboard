@@ -170,8 +170,10 @@ final class SwipeDecoder {
                 var logProb: Double
                 if let model = source.model, entry.rank >= 0 {
                     logProb = model.logProb(entry.rank + LanguageModel.firstWord, previous: source.previousId, before: source.beforeId)
-                } else {
+                } else if source.model == nil && entry.rank >= 0 {
                     logProb = -7 + 5 * entry.norm   // no model for this language: frequency only
+                } else {
+                    logProb = -99                   // the user's own words and names: see learnedLogProbs
                 }
                 if let learned = source.learnedLogProbs[entry.word] { logProb = max(logProb, learned) }
                 seen.insert(entry.word)

@@ -99,8 +99,56 @@ final class KeyboardViewController: UIInputViewController {
 
         buildInterface()
         ensureStores()
+        loadSystemLexicon()
         EmojiStore.shared.loadIfNeeded()
         Haptics.shared.prepare()
+    }
+
+    /// Where each letter of the word being typed was tapped, for the typing decoder (nil = not tapped: pasted,
+    /// picked from a popup...). Kept in step with the word by length; see `currentTaps(for:)`.
+    private var wordTaps: [CGPoint?] = []
+
+    private func noteTap(_ text: String, at point: CGPoint?) {
+        let prefix = currentPrefix(in: textDocumentProxy.documentContextBeforeInput ?? "")
+        guard !prefix.isEmpty, prefix.hasSuffix(text) else {
+            wordTaps = []
+            return
+        }
+        if wordTaps.count + text.count != prefix.count {
+            wordTaps = Array(repeating: nil, count: max(0, prefix.count - text.count))
+        }
+        wordTaps += Array(repeating: point, count: text.count)
+    }
+
+    /// The tap positions of `prefix`, when they are known for every letter.
+    private func currentTaps(for prefix: String) -> Decoder.Taps? {
+        guard !prefix.isEmpty, wordTaps.count == prefix.count, wordTaps.allSatisfy({ $0 != nil }) else { return nil }
+        return Decoder.Taps(points: wordTaps, centers: keyboardView.letterCenters(), keySize: keyboardView.letterKeySize())
+    }
+
+    /// The user's text replacements (Settings > General > Keyboard > Text Replacement), lower-case shortcut -> phrase.
+    private var systemShortcuts: [String: String] = [:]
+
+    /// Contacts' names (suggested, never "corrected") and the user's text replacements, from iOS.
+    private func loadSystemLexicon() {
+        requestSupplementaryLexicon { [weak self] lexicon in
+            var names: [String: String] = [:]
+            var shortcuts: [String: String] = [:]
+            for entry in lexicon.entries {
+                let input = entry.userInput
+                let text = entry.documentText
+                if input == text {
+                    guard text.count >= 2, text.allSatisfy({ Predictor.isWordCharacter($0) }) else { continue }
+                    names[text.lowercased()] = text
+                } else if !input.isEmpty {
+                    shortcuts[input.lowercased()] = text
+                }
+            }
+            DispatchQueue.main.async {
+                Decoder.setNames(names)
+                self?.systemShortcuts = shortcuts
+            }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -108,6 +156,11 @@ final class KeyboardViewController: UIInputViewController {
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
+        var usage: [Language: Double] = [:]
+        for (code, value) in settings.languageUsage() {
+            if let language = Language(rawValue: code) { usage[language] = value }
+        }
+        Decoder.languageUsage = usage
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
@@ -141,6 +194,9 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         for store in stores.values { store.saveNow() }
+        var usage: [String: Double] = [:]
+        for (language, value) in Decoder.languageUsage { usage[language.rawValue] = value }
+        settings.setLanguageUsage(usage)
         keyboardView.saveTouchModel()
     }
 
@@ -582,7 +638,8 @@ final class KeyboardViewController: UIInputViewController {
             let fieldText = Predictor.fieldContext(before: before, after: textDocumentProxy.documentContextAfterInput ?? "")
             if !typedWord.isEmpty,
                let fixed = Predictor.autoFix(typed: typedWord, before: before, active: language,
-                                             enabled: enabledLanguages, stores: stores, field: fieldText) {
+                                             enabled: enabledLanguages, stores: stores, field: fieldText,
+                                             taps: currentTaps(for: typedWord)) {
                 let replacement = matchCase(of: typedWord, for: fixed)
                 recordBigram(contextBefore: before, next: fixed)
                 noteWordUse(fixed)
@@ -708,6 +765,13 @@ final class KeyboardViewController: UIInputViewController {
         guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         let cleaned = TextFolding.normalizeApostrophes(word).lowercased()
         guard cleaned.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
+        if delta > 0 {
+            // Which languages the user writes in (the first words of a text lean towards them).
+            var head = textDocumentProxy.documentContextBeforeInput ?? ""
+            let typing = currentPrefix(in: head)
+            if !typing.isEmpty { head = String(head.dropLast(typing.count)) }
+            Decoder.noteLanguage(of: cleaned, before: head, active: language, stores: stores)
+        }
         if stores[language]?.noteUse(cleaned, delta: delta) == true { return }
         for store in stores.values where store.language != language && store.isLoaded {
             if store.noteUse(cleaned, delta: delta) { return }
@@ -743,7 +807,7 @@ final class KeyboardViewController: UIInputViewController {
     private func shortcutExpansion(in before: String) -> String? {
         let prefix = currentPrefix(in: before)
         guard !prefix.isEmpty else { return nil }
-        return settings.shortcutPhrase(for: prefix)
+        return settings.shortcutPhrase(for: prefix) ?? systemShortcuts[prefix.lowercased()]
     }
 
     // MARK: Words
@@ -870,7 +934,8 @@ final class KeyboardViewController: UIInputViewController {
                                           enabled: enabledLanguages,
                                           stores: stores,
                                           limit: 4,
-                                          field: field)
+                                          field: field,
+                                          taps: currentTaps(for: prefix))
                     .map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
             } else if before.isEmpty || before.hasSuffix(" ") {
                 words = Predictor.nextWords(before: before,
@@ -885,7 +950,9 @@ final class KeyboardViewController: UIInputViewController {
 
         // Layout is [left, CENTRE, right]; the most probable word sits in the centre (as on iOS).
         var ranked: [String] = []
-        if !prefix.isEmpty, let phrase = settings.shortcutPhrase(for: prefix) { ranked.append(phrase) }
+        if !prefix.isEmpty, let phrase = settings.shortcutPhrase(for: prefix) ?? systemShortcuts[prefix.lowercased()] {
+            ranked.append(phrase)
+        }
         for word in words where word != prefix && !ranked.contains(word) { ranked.append(word) }
         var result: [Suggestion] = []
         if !prefix.isEmpty {
@@ -1087,10 +1154,14 @@ extension KeyboardViewController: KeyboardViewDelegate {
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction) {
         if action != .backspace { lastAutoFix = nil }   // an auto-fix can only be undone by the very next key
         switch action {
-        case .character(let text): insert(text)
+        case .character(let text):
+            insert(text)
+            noteTap(text, at: view.lastTapPoint)
         case .space: handleSpace()
         case .enter: handleEnter()
-        case .backspace: handleBackspace()
+        case .backspace:
+            handleBackspace()
+            if !wordTaps.isEmpty { wordTaps.removeLast() }
         case .shift: handleShift()
         case .showLetters:
             page = .letters
@@ -1257,6 +1328,9 @@ extension KeyboardViewController: KeyboardViewDelegate {
                 for entry in sources[index].extras {
                     if let value = source.learnedLogProb(entry.word) { learned[entry.word] = value }
                 }
+                // Contacts' names, in every language (their weights add up to one).
+                sources[index].extras += Decoder.nameEntries
+                for entry in Decoder.nameEntries { learned[entry.word] = max(learned[entry.word] ?? -99, Decoder.nameLogProb) }
                 sources[index].learnedLogProbs = learned
                 var boosts: [String: Double] = [:]
                 for (word, strength) in sources[index].personal { boosts[word] = 0.8 * strength }

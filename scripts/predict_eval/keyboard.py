@@ -103,22 +103,24 @@ class Layout:
 
 
 def tap_word(word: str, layout: Layout, rng: random.Random, sigma: float) -> str:
-    """What a user types for `word`: each letter's key, hit with Gaussian scatter of `sigma` key widths.
+    return tap_word_points(word, layout, rng, sigma)[0]
 
-    Accented letters are typed on their base key (no long-press), as most people do; apostrophes and letters
-    that have no key are typed as they are.
-    """
-    out = []
+
+def tap_word_points(word: str, layout: Layout, rng: random.Random, sigma: float):
+    """tap_word, plus where each tap landed (None for characters typed without a letter key)."""
+    letters, points = [], []
     for ch in word:
         letter = layout.key_letter(ch)
         if letter is None:
-            out.append(ch)
+            letters.append(ch)
+            points.append(None)
             continue
         cx, cy = layout.centers[letter]
         x = cx + rng.gauss(0, sigma * layout.key_width)
         y = cy + rng.gauss(0, sigma * layout.key_width)
-        out.append(layout.nearest(x, y))
-    return "".join(out)
+        letters.append(layout.nearest(x, y))
+        points.append((x, y))
+    return "".join(letters), points
 
 
 def swipe_path(word: str, layout: Layout, rng: random.Random, sigma: float):
