@@ -21,7 +21,6 @@ struct EmojiCategory {
     /// Display order, names, and tab icons - the same order as the system emoji keyboard.
     static let layout: [(key: String, symbol: String, fallback: String)] = [
         ("smileys", "face.smiling", "😀"),
-        ("people", "person", "🧑"),
         ("animals", "pawprint", "🐶"),
         ("food", "fork.knife", "🍎"),
         ("activity", "sportscourt", "⚽"),
@@ -327,7 +326,7 @@ final class EmojiStore {
         // Unicode groups -> the picker's tabs (one tab per Unicode group).
         let tabForGroup: [String: String] = [
             "Smileys & Emotion": "smileys",
-            "People & Body": "people",
+            "People & Body": "smileys",
             "Animals & Nature": "animals",
             "Food & Drink": "food",
             "Activities": "activity",

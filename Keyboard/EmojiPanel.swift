@@ -233,7 +233,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     /// Keyboard height needed to show the whole picker.
     static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
-        return (332 * scale(forWidth: width)).rounded()
+        return (337 * scale(forWidth: width)).rounded()
     }
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
@@ -505,7 +505,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let height = bounds.height
         compact = height < 390 * f
         // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
-        let pillTop: CGFloat = compact ? 0 : 6 * f
+        let pillTop: CGFloat = compact ? 5 * f : 6 * f
         searchHeight = (compact ? 44 : 46) * f
         searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
