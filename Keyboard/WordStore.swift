@@ -234,61 +234,107 @@ final class WordStore {
         return top
     }
 
-    /// Whole words one typo away from `key` (swapped letters, a neighbouring key, a missing or extra letter).
+    /// Whole words a typo or two away from `key`: neighbouring-key slips cost half, swapped / missing / extra /
+    /// other wrong letters cost one. The cheapest, most frequent words win.
     func fuzzyCandidates(forKey key: String, limit: Int) -> [WordCandidate] {
         let typed = Array(key)
         guard typed.count >= 3, limit > 0, let first = typed.first else { return [] }
         var top: [WordCandidate] = []
+        let maxCost = typed.count >= 6 ? 1.6 : 1.1
 
-        var index = lowerBound(of: String(first))
-        while index < entries.count, entries[index].folded.first == first {
-            let entry = entries[index]
-            index += 1
-            if abs(entry.length - typed.count) > 1 || entry.folded == key { continue }
-            guard let kind = editKind(typed, Array(entry.folded)) else { continue }
-            var score = entry.norm * 0.8
-            switch kind {
-            case .transposition: score += 0.25
-            case .neighborSubstitution: score += 0.25
-            case .missingLetter, .extraLetter: score += 0.10
-            case .otherSubstitution: break
+        // The first letter is usually right; a neighbouring key slip is the other likely case.
+        var starts: Set<Character> = [first]
+        if let near = neighbors[first] { starts.formUnion(near) }
+        if typed.count >= 2 { starts.insert(typed[1]) }   // first letter doubled / extra
+
+        for start in starts {
+            var index = lowerBound(of: String(start))
+            while index < entries.count, entries[index].folded.first == start {
+                let entry = entries[index]
+                index += 1
+                if abs(entry.length - typed.count) > 2 || entry.folded == key { continue }
+                guard let cost = editCost(typed, Array(entry.folded), limit: maxCost) else { continue }
+                let score = entry.norm * 0.75 + (maxCost - cost) * 0.30
+                if top.count == limit, let last = top.last, score <= last.score { continue }
+                if top.contains(where: { $0.word == entry.word }) { continue }
+                var position = top.count
+                while position > 0 && top[position - 1].score < score {
+                    position -= 1
+                }
+                top.insert(WordCandidate(word: entry.word, score: score), at: position)
+                if top.count > limit { top.removeLast() }
             }
-            if top.count == limit, let last = top.last, score <= last.score { continue }
-            var position = top.count
-            while position > 0 && top[position - 1].score < score {
-                position -= 1
-            }
-            top.insert(WordCandidate(word: entry.word, score: score), at: position)
-            if top.count > limit { top.removeLast() }
         }
         return top
     }
 
-    private enum EditKind {
-        case transposition, neighborSubstitution, otherSubstitution, missingLetter, extraLetter
+    /// Weighted Damerau-Levenshtein distance, or nil as soon as it must exceed `limit`.
+    private func editCost(_ a: [Character], _ b: [Character], limit: Double) -> Double? {
+        let n = a.count
+        let m = b.count
+        if n == 0 || m == 0 { return nil }
+        var previousPrevious = [Double](repeating: 0, count: m + 1)
+        var previous = (0...m).map { Double($0) }
+        var current = [Double](repeating: 0, count: m + 1)
+        for i in 1...n {
+            current[0] = Double(i)
+            var rowMin = current[0]
+            for j in 1...m {
+                var substitution = 1.0
+                if a[i - 1] == b[j - 1] {
+                    substitution = 0
+                } else if neighbors[a[i - 1]]?.contains(b[j - 1]) ?? false {
+                    substitution = 0.5
+                }
+                var best = min(previous[j - 1] + substitution, min(previous[j] + 1, current[j - 1] + 1))
+                if i > 1, j > 1, a[i - 1] == b[j - 2], a[i - 2] == b[j - 1] {
+                    best = min(best, previousPrevious[j - 2] + 0.8)
+                }
+                current[j] = best
+                rowMin = min(rowMin, best)
+            }
+            if rowMin > limit { return nil }
+            previousPrevious = previous
+            previous = current
+        }
+        let cost = previous[m]
+        return cost <= limit ? cost : nil
     }
 
-    /// The single edit that turns `typed` into `word` (nil if they differ by more than one edit).
-    private func editKind(_ typed: [Character], _ word: [Character]) -> EditKind? {
-        let n = typed.count
-        let m = word.count
-        var i = 0
-        while i < n && i < m && typed[i] == word[i] { i += 1 }
+    // MARK: Frequency order (elision continuations)
 
-        if n == m {
-            if i + 1 < n, typed[i] == word[i + 1], typed[i + 1] == word[i], typed[(i + 2)...] == word[(i + 2)...] {
-                return .transposition
-            }
-            guard typed[(i + 1)...] == word[(i + 1)...] else { return nil }
-            return (neighbors[typed[i]]?.contains(word[i]) ?? false) ? .neighborSubstitution : .otherSubstitution
+    private var frequencyOrder: [Int]?
+
+    /// The most frequent words whose first letter is in `letters` (used after "l'", "j'", "dell'" ...).
+    func frequentWords(startingWith letters: Set<Character>, limit: Int) -> [WordCandidate] {
+        if frequencyOrder == nil {
+            let capped = min(entries.count, 6000)
+            frequencyOrder = Array(0..<entries.count).sorted { entries[$0].freq > entries[$1].freq }.prefix(capped).map { $0 }
         }
-        if n + 1 == m {   // the word has one more letter than typed
-            return typed[i...] == word[(i + 1)...] ? .missingLetter : nil
+        var result: [WordCandidate] = []
+        for index in frequencyOrder ?? [] {
+            let entry = entries[index]
+            guard let letter = entry.folded.first, letters.contains(letter), !entry.word.contains("'"), entry.length >= 2 else { continue }
+            result.append(WordCandidate(word: entry.word, score: entry.norm))
+            if result.count >= limit { break }
         }
-        if n == m + 1 {   // typed has one extra letter
-            return typed[(i + 1)...] == word[i...] ? .extraLetter : nil
+        return result
+    }
+
+    // MARK: Context
+
+    /// 0...0.6: how strongly `previous` points at `next` (words the user typed after it, then built-in pairs).
+    func bigramBonus(previous: String, next: String) -> Double {
+        let prev = TextFolding.normalizeApostrophes(previous).lowercased()
+        let following = TextFolding.normalizeApostrophes(next).lowercased()
+        guard !prev.isEmpty, !following.isEmpty else { return 0 }
+        if let count = bigrams[prev + " " + following] {
+            return min(0.6, 0.25 + log(Double(count) + 1) * 0.15)
         }
-        return nil
+        if let list = WordStore.commonPairs[language.rawValue]?[prev], let position = list.firstIndex(of: following) {
+            return 0.35 - 0.05 * Double(position)
+        }
+        return 0
     }
 
     private static func neighborMap(for language: Language) -> [Character: Set<Character>] {
@@ -329,6 +375,23 @@ final class WordStore {
                 if let list = edgeIndex[String([f, l])] {
                     result.append(contentsOf: list)
                 }
+            }
+        }
+        return result
+    }
+
+    /// word -> bonus for every word known to follow `previous`; a plain value copy that is safe to hand to another thread.
+    func contextBonuses(after previous: String) -> [String: Double] {
+        let prev = TextFolding.normalizeApostrophes(previous).lowercased()
+        guard !prev.isEmpty else { return [:] }
+        var result: [String: Double] = [:]
+        let prefix = prev + " "
+        for (pair, count) in bigrams where pair.hasPrefix(prefix) {
+            result[String(pair.dropFirst(prefix.count))] = min(0.6, 0.25 + log(Double(count) + 1) * 0.15)
+        }
+        if let list = WordStore.commonPairs[language.rawValue]?[prev] {
+            for (position, word) in list.enumerated() where result[word] == nil {
+                result[word] = 0.35 - 0.05 * Double(position)
             }
         }
         return result

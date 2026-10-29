@@ -11,11 +11,88 @@ struct ThemePreview: View {
 
     @Environment(\.colorScheme) private var systemScheme
 
-    private let rows: [[String]] = [
-        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-        ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-        ["z", "x", "c", "v", "b", "n", "m"]
-    ]
+    /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
+    var language: Language? = nil
+    @AppStorage(SettingKey.enabledLanguages, store: SharedStore.defaults) private var enabledCodes = SettingDefault.enabledLanguages
+
+    private var shownLanguage: Language {
+        if let language = language { return language }
+        return Language.list(from: enabledCodes).first ?? .english
+    }
+
+    // Mirrors `Language.letterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
+    private var letterRows: [[String]] {
+        func split(_ rows: String...) -> [[String]] { return rows.map { $0.map { String($0) } } }
+        switch shownLanguage {
+        case .english, .italian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .hungarian, .czech: return split("qwertzuiop", "asdfghjkl", "yxcvbnm")
+        case .spanish: return split("qwertyuiop", "asdfghjklñ", "zxcvbnm")
+        case .french: return split("azertyuiop", "qsdfghjklm", "wxcvbn")
+        case .german: return split("qwertzuiopü", "asdfghjklöä", "yxcvbnm")
+        case .portuguese: return split("qwertyuiop", "asdfghjklç", "zxcvbnm")
+        case .dutch, .polish, .romanian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .turkish: return split("qwertyuıopğü", "asdfghjklşi", "zxcvbnmöç")
+        case .russian: return split("йцукенгшщзхъ", "фывапролджэ", "ячсмитьбю")
+        case .ukrainian: return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
+        case .swedish: return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
+        }
+    }
+
+    /// First long-press alternative of a key, shown as the small hint.
+    private var hints: [String: String] {
+        switch shownLanguage {
+        case .hungarian: return ["a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú"]
+        case .spanish: return ["a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú"]
+        case .french: return ["a": "à", "e": "é", "i": "î", "o": "ô", "u": "ù", "y": "ÿ", "c": "ç"]
+        case .german: return ["s": "ß", "e": "é"]
+        case .italian: return ["a": "à", "e": "è", "i": "ì", "o": "ò", "u": "ù"]
+        case .portuguese: return ["a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú"]
+        case .dutch: return ["a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú"]
+        case .polish: return ["a": "ą", "c": "ć", "e": "ę", "l": "ł", "n": "ń", "o": "ó", "s": "ś", "z": "ż"]
+        case .czech: return ["a": "á", "c": "č", "d": "ď", "e": "é", "i": "í", "n": "ň", "o": "ó", "r": "ř", "s": "š", "t": "ť", "u": "ú", "y": "ý", "z": "ž"]
+        case .romanian: return ["a": "ă", "i": "î", "s": "ș", "t": "ț"]
+        case .turkish: return ["a": "â", "i": "î", "u": "û"]
+        case .russian: return ["е": "ё"]
+        case .swedish: return ["e": "é", "u": "ü"]
+        default: return [:]
+        }
+    }
+
+    private struct PreviewKey {
+        var title = ""
+        var symbol: String? = nil
+        var weight: CGFloat = 1
+        var function = false
+        var spacer = false
+        var accent = false
+        var active = false
+    }
+
+    private var keyRows: [[PreviewKey]] {
+        let letters = letterRows
+        let top = letters[0].count
+        func letterKey(_ l: String) -> PreviewKey { return PreviewKey(title: l) }
+        let side = CGFloat(max(0, top - letters[1].count)) / 2
+        var row2: [PreviewKey] = []
+        if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
+        row2 += letters[1].map(letterKey)
+        if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
+        let edge = min(1.8, max(1.0, CGFloat(top - letters[2].count) / 2))
+        var row3 = [PreviewKey(symbol: "shift", weight: edge, function: true, active: true)]
+        row3 += letters[2].map(letterKey)
+        row3.append(PreviewKey(symbol: "delete.left", weight: edge, function: true))
+        return [
+            letters[0].map(letterKey),
+            row2,
+            row3,
+            [PreviewKey(title: "123", weight: 1.3, function: true),
+             PreviewKey(symbol: "face.smiling", function: true),
+             PreviewKey(title: ","),
+             PreviewKey(title: shownLanguage.displayName, weight: 3.9),
+             PreviewKey(title: "."),
+             PreviewKey(symbol: "return", weight: 1.8, function: true, accent: true)]
+        ]
+    }
 
     // MARK: Palette (straight from the theme)
 
@@ -29,8 +106,11 @@ struct ThemePreview: View {
     private var panelFill: Color { return nativeDark ? Color(white: 0.20) : Color(theme.panel) }
 
     /// Gradient themes carry their own accent; the others use the accent chosen in the app.
-    private var accentColor: Color { return theme.kind == .gradient ? Color(theme.accent) : accent }
-    private var onAccent: Color { return theme.kind == .gradient ? Color(theme.onAccent) : .white }
+    /// A custom accent from the colour picker wins over a gradient theme's own accent (as on the keyboard).
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    private var usesThemeAccent: Bool { return theme.kind == .gradient && accentHex.isEmpty && theme.id != ThemeCatalog.customID }
+    private var accentColor: Color { return usesThemeAccent ? Color(theme.accent) : accent }
+    private var onAccent: Color { return usesThemeAccent ? Color(theme.onAccent) : .white }
 
     @ViewBuilder private var backdrop: some View {
         if nativeDark {
@@ -51,37 +131,24 @@ struct ThemePreview: View {
             let width = proxy.size.width
             let height = proxy.size.height
             let gap = max(1.5, width * 0.012)
-            let stripHeight = showsStrip ? height * 0.15 : 0
+            let sidePad = gap * 1.5
+            let stripHeight = showsStrip ? height * 0.14 : 0
             let rowCount: CGFloat = 4
-            let keyHeight = max(1, (height - stripHeight - gap * (rowCount + 2) - (showsStrip ? gap : 0)) / rowCount)
-            let keyWidth = max(1, (width - gap * 11) / 10)
-            let radius = max(0, roundness * min(keyWidth, keyHeight) / 2)
+            let keyHeight = max(1, (height - stripHeight - gap * (rowCount + 1) - (showsStrip ? gap : 0)) / rowCount)
+            let rowWidth = width - sidePad * 2
+            let unit = max(1, (rowWidth - gap * 9) / 10)
+            let radius = max(0, roundness * min(unit, keyHeight) / 2)
 
             ZStack {
                 backdrop
                 VStack(spacing: gap) {
-                    if showsStrip { strip(radius: radius, height: stripHeight) }
-                    ForEach(0..<rows.count, id: \.self) { index in
-                        HStack(spacing: gap) {
-                            if index == 2 {
-                                key(symbol: "shift", fill: functionFill, width: keyWidth * 1.4, height: keyHeight, radius: radius)
-                            }
-                            ForEach(rows[index], id: \.self) { letter in
-                                key(text: letter, fill: keyFill, width: keyWidth, height: keyHeight, radius: radius)
-                            }
-                            if index == 2 {
-                                key(symbol: "delete.left", fill: functionFill, width: keyWidth * 1.4, height: keyHeight, radius: radius)
-                            }
-                        }
-                    }
-                    HStack(spacing: gap) {
-                        key(text: "123", fill: functionFill, width: keyWidth * 1.3, height: keyHeight, radius: radius)
-                        key(symbol: "face.smiling", fill: functionFill, width: keyWidth, height: keyHeight, radius: radius)
-                        key(text: "", fill: keyFill, width: keyWidth * 4.4, height: keyHeight, radius: radius)
-                        key(symbol: "return", fill: accentColor, width: keyWidth * 1.6, height: keyHeight, radius: radius, tint: onAccent)
+                    if showsStrip { strip(height: stripHeight) }
+                    ForEach(0..<keyRows.count, id: \.self) { index in
+                        row(keyRows[index], rowWidth: rowWidth, gap: gap, height: keyHeight, radius: radius,
+                            hintsOn: showsStrip)
                     }
                 }
-                .padding(.horizontal, gap * 1.5)
+                .padding(.horizontal, sidePad)
                 .padding(.vertical, gap)
             }
             .frame(width: width, height: height)
@@ -93,40 +160,72 @@ struct ThemePreview: View {
 
     // MARK: Pieces
 
-    private func strip(radius: CGFloat, height: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            ForEach(["the", "that", "this"], id: \.self) { word in
-                Text(word)
-                    .font(.system(size: max(6, height * 0.42)))
-                    .foregroundColor(textColor)
-                    .frame(maxWidth: .infinity)
+    /// A row scaled to the full width by key weights, like the real keyboard.
+    private func row(_ keys: [PreviewKey], rowWidth: CGFloat, gap: CGFloat, height: CGFloat,
+                     radius: CGFloat, hintsOn: Bool) -> some View {
+        let total = keys.reduce(CGFloat(0)) { $0 + $1.weight }
+        let usable = rowWidth - gap * CGFloat(keys.count - 1)
+        return HStack(spacing: gap) {
+            ForEach(0..<keys.count, id: \.self) { i in
+                let k = keys[i]
+                let w = max(1, usable * k.weight / total)
+                if k.spacer {
+                    Color.clear.frame(width: w, height: height)
+                } else {
+                    key(k, width: w, height: height, radius: radius, hint: hintsOn ? hints[k.title] : nil)
+                }
             }
-            Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: max(6, height * 0.42)))
-                .foregroundColor(textColor.opacity(0.7))
-                .frame(width: height * 1.5)
         }
-        .frame(height: height)
-        .background(shape(radius * 1.3, fill: panelFill))
     }
 
-    private func key(text: String = "",
-                     symbol: String? = nil,
-                     fill: Color,
-                     width: CGFloat,
-                     height: CGFloat,
-                     radius: CGFloat,
-                     tint: Color? = nil) -> some View {
-        ZStack {
+    /// Flat strip: no border, three slots with thin dividers and the hide-keyboard slot.
+    private func strip(height: CGFloat) -> some View {
+        let words = ["the", "that", "this"]
+        let size = max(6, height * 0.42)
+        return HStack(spacing: 0) {
+            ForEach(0..<words.count, id: \.self) { i in
+                Text(words[i])
+                    .font(.system(size: size))
+                    .foregroundColor(textColor)
+                    .frame(maxWidth: .infinity)
+                    .overlay(
+                        Rectangle().fill(separatorColor).frame(width: 0.5).padding(.vertical, height * 0.22),
+                        alignment: .trailing)
+            }
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: size))
+                .foregroundColor(textColor.opacity(0.6))
+                .frame(width: height * 1.4)
+        }
+        .frame(height: height)
+    }
+
+    private var separatorColor: Color { return textColor.opacity(0.2) }
+
+    private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, radius: CGFloat, hint: String?) -> some View {
+        let fill = k.accent ? accentColor : (k.function ? functionFill : keyFill)
+        let tint: Color = k.accent ? onAccent : (k.active ? accentColor : textColor)
+        return ZStack {
             shape(radius, fill: fill)
-            if let symbol = symbol {
+            if let symbol = k.symbol {
                 Image(systemName: symbol)
                     .font(.system(size: max(5, height * 0.38)))
-                    .foregroundColor(tint ?? textColor)
-            } else if !text.isEmpty {
-                Text(text)
-                    .font(.system(size: max(6, height * 0.5)))
-                    .foregroundColor(tint ?? textColor)
+                    .foregroundColor(tint)
+            } else if !k.title.isEmpty {
+                Text(k.title)
+                    .font(.system(size: max(6, height * (k.title.count > 2 ? 0.3 : 0.5))))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundColor(tint)
+                    .padding(.horizontal, 2)
+            }
+            if let hint = hint {
+                Text(hint)
+                    .font(.system(size: max(4, height * 0.2)))
+                    .foregroundColor(textColor.opacity(0.55))
+                    .padding(.trailing, 2 + radius * 0.3)
+                    .padding(.top, 1)
+                    .frame(width: width, height: height, alignment: .topTrailing)
             }
         }
         .frame(width: width, height: height)

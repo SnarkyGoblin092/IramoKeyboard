@@ -114,12 +114,17 @@ final class KeyView: UIView {
         hintLabel.alpha = alpha
     }
 
+    /// The return key is always accent-coloured (like Gboard); shift lights up in the accent when on.
+    private var usesAccent: Bool {
+        if isProminent || isActive { return true }
+        if case .enter = spec.action { return true }
+        return false
+    }
+
     private func refreshAppearance() {
         let textColor: UIColor
-        if isProminent {
+        if usesAccent {
             textColor = Theme.onAccent
-        } else if isActive {
-            textColor = Theme.onActiveKey
         } else {
             textColor = Theme.text
         }
@@ -127,10 +132,8 @@ final class KeyView: UIView {
         iconView.tintColor = textColor
 
         let fill: UIColor
-        if isProminent {
+        if usesAccent {
             fill = isPressed ? Theme.accent.withAlphaComponent(0.7) : Theme.accent
-        } else if isActive {
-            fill = Theme.activeKey
         } else if isPressed {
             fill = spec.isFunction ? Theme.functionKeyPressed : Theme.letterKeyPressed
         } else {
@@ -146,10 +149,8 @@ final class KeyView: UIView {
     /// Tints the glass for the key's state (plain letter keys stay untinted) and gives it the springy press.
     private func applyGlass(_ glassView: UIVisualEffectView, fill: UIColor) {
         let tint: UIColor?
-        if isProminent {
+        if usesAccent {
             tint = Theme.accent.withAlphaComponent(isPressed ? 0.55 : 0.85)
-        } else if isActive {
-            tint = Theme.activeKey.withAlphaComponent(0.75)
         } else if isPressed {
             tint = Theme.letterKeyPressed
         } else if spec.isFunction {
@@ -157,7 +158,7 @@ final class KeyView: UIView {
         } else {
             tint = nil
         }
-        let state = "\(isProminent)|\(isActive)|\(isPressed)|\(spec.isFunction)"
+        let state = "\(usesAccent)|\(isPressed)|\(spec.isFunction)"
         if state != lastGlassState {
             lastGlassState = state
             GlassSupport.setTint(glassView, clear: false, tint: tint)

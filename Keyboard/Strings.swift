@@ -103,3 +103,47 @@ extension Language {
         }
     }
 }
+
+extension Language {
+    /// Title of the stickers tab in the emoji picker.
+    var stickersTitle: String {
+        switch self {
+        case .english: return "Stickers"
+        case .hungarian: return "Matricák"
+        case .spanish: return "Stickers"
+        case .french: return "Autocollants"
+        case .german: return "Sticker"
+        case .italian: return "Sticker"
+        case .portuguese: return "Figurinhas"
+        case .dutch: return "Stickers"
+        case .polish: return "Naklejki"
+        case .czech: return "Nálepky"
+        case .romanian: return "Abțibilduri"
+        case .turkish: return "Çıkartmalar"
+        case .russian: return "Стикеры"
+        case .ukrainian: return "Стікери"
+        case .swedish: return "Klistermärken"
+        }
+    }
+
+    /// Shown when a sticker is tapped but the keyboard has no Full Access (needed to use the pasteboard).
+    var stickersNeedFullAccess: String {
+        switch self {
+        case .english: return "Turn on Full Access in Settings to send stickers"
+        case .hungarian: return "Matricákhoz kapcsold be a Teljes hozzáférést a Beállításokban"
+        case .spanish: return "Activa el Acceso total en Ajustes para enviar stickers"
+        case .french: return "Activez l’accès complet dans Réglages pour envoyer des autocollants"
+        case .german: return "Aktiviere „Vollzugriff“ in den Einstellungen, um Sticker zu senden"
+        case .italian: return "Attiva l’Accesso completo nelle Impostazioni per inviare sticker"
+        case .portuguese: return "Ative o Acesso total em Ajustes para enviar figurinhas"
+        case .dutch: return "Zet Volledige toegang aan in Instellingen om stickers te sturen"
+        case .polish: return "Włącz Pełny dostęp w Ustawieniach, aby wysyłać naklejki"
+        case .czech: return "Pro odesílání nálepek zapněte v Nastavení Plný přístup"
+        case .romanian: return "Activează Acces complet în Setări pentru a trimite abțibilduri"
+        case .turkish: return "Çıkartma göndermek için Ayarlar’da Tam Erişim’i aç"
+        case .russian: return "Включите «Полный доступ» в настройках, чтобы отправлять стикеры"
+        case .ukrainian: return "Увімкніть «Повний доступ» у налаштуваннях, щоб надсилати стікери"
+        case .swedish: return "Slå på Full åtkomst i Inställningar för att skicka klistermärken"
+        }
+    }
+}

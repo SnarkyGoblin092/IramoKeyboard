@@ -73,7 +73,7 @@ final class SuggestionBar: UIView {
         for index in 0..<slotCount {
             // Highlight (pressed state) below the label; both are purely visual - the bar itself takes the touches.
             let highlight = UIView()
-            highlight.backgroundColor = Theme.separator
+            highlight.backgroundColor = Theme.accent.withAlphaComponent(0.22)
             highlight.alpha = 0
             glass.contentView.addSubview(highlight)
             slotHighlights.append(highlight)
@@ -96,11 +96,11 @@ final class SuggestionBar: UIView {
             }
         }
 
-        dismissHighlight.backgroundColor = Theme.separator
+        dismissHighlight.backgroundColor = Theme.accent.withAlphaComponent(0.22)
         dismissHighlight.alpha = 0
         glass.contentView.addSubview(dismissHighlight)
 
-        dismissIcon.tintColor = Theme.secondaryText
+        dismissIcon.tintColor = Theme.accent
         dismissIcon.contentMode = .center
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
@@ -122,11 +122,15 @@ final class SuggestionBar: UIView {
 
     func update(_ newSuggestions: [Suggestion]) {
         suggestions = Array(newSuggestions.prefix(slotCount))
+        let bestIndex = suggestions.firstIndex(where: { $0.kind == .word || $0.kind == .swipeAlternative })
         for (index, label) in slotLabels.enumerated() {
             if index < suggestions.count {
                 let item = suggestions[index]
                 label.text = item.text
-                label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17)
+                // The first real completion/correction is the one space will accept: show it in the accent colour.
+                let isBest = (index == bestIndex)
+                label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17, weight: isBest ? .semibold : .regular)
+                label.textColor = isBest ? Theme.accent : Theme.text
             } else {
                 label.text = nil
             }

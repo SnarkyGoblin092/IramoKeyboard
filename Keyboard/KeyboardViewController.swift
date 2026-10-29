@@ -493,6 +493,21 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
+        // "dont" + space -> "don't ": words that only exist with an apostrophe get it automatically.
+        if Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true {
+            let typedWord = currentPrefix(in: before)
+            if !typedWord.isEmpty, let fixed = Predictor.withApostrophe(typedWord, language: language) {
+                let replacement = matchCase(of: typedWord, for: fixed)
+                recordBigram(contextBefore: before, next: fixed)
+                for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
+                textDocumentProxy.insertText(replacement + " ")
+                clearSwipeState()
+                lastSpaceTime = Date()
+                afterTyping()
+                return
+            }
+        }
+
         learnWord(endingAt: before)
         clearSwipeState()
         textDocumentProxy.insertText(" ")
@@ -784,7 +799,7 @@ final class KeyboardViewController: UIInputViewController {
         textDocumentProxy.insertText(leadingSpace + inserted)
 
         lastSwipeInserted = inserted
-        swipeAlternatives = words.map { applyShift(to: $0) }
+        swipeAlternatives = words.prefix(3).map { applyShift(to: $0) }
         lastSpaceTime = Date.distantPast
         if shift == .once {
             shift = .off
@@ -941,9 +956,16 @@ extension KeyboardViewController: KeyboardViewDelegate {
         let centers = keyboardView.letterCenters()
         let keySize = keyboardView.letterKeySize()
         let decoder = self.decoder
+        // Context is read here on the main thread; the decoder only gets a copy.
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        var previous: String? = nil
+        if before.isEmpty || before.last == " " || before.last == "\n" {
+            previous = Predictor.lastWords(in: before, count: 1).first
+        }
+        let bonuses = previous.map { store.contextBonuses(after: $0) } ?? [:]
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let words = decoder.decode(path: path, keyCenters: centers, keySize: keySize, store: store)
+            let words = decoder.decode(path: path, keyCenters: centers, keySize: keySize, store: store, contextBonuses: bonuses)
             DispatchQueue.main.async {
                 self?.commitSwipe(words)
             }
@@ -999,6 +1021,16 @@ extension KeyboardViewController: EmojiPanelDelegate {
 
     func emojiPanelDidClose(_ panel: EmojiPanel) {
         hideEmojiPanel()
+    }
+
+    /// Stickers travel as a transparent PNG on the pasteboard and are pasted into the field (needs Full Access).
+    func emojiPanel(_ panel: EmojiPanel, didSelectSticker emoji: String, image: UIImage) {
+        guard hasFullAccess, let png = image.pngData() else {
+            suggestionBar.flash(language.stickersNeedFullAccess, duration: 3.0)
+            return
+        }
+        UIPasteboard.general.setData(png, forPasteboardType: "public.png")
+        _ = (textDocumentProxy as AnyObject).perform(Selector(("paste:")), with: nil)
     }
 }
 

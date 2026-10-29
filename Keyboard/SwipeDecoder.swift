@@ -14,28 +14,33 @@ import CoreGraphics
 final class SwipeDecoder {
     private let sampleCount = 32
 
+    /// - Parameter contextBonuses: word -> extra score (0...0.6) given the word before the swipe, taken on the
+    ///   main thread beforehand (`WordStore.contextBonuses(after:)`), so this can run on a background thread.
     func decode(path rawPath: [CGPoint],
                 keyCenters: [Character: CGPoint],
                 keySize: CGSize,
                 store: WordStore,
-                limit: Int = 3) -> [String] {
+                contextBonuses: [String: Double] = [:],
+                limit: Int = 4) -> [String] {
         let path = thinned(rawPath, minimumStep: 2)
         guard path.count >= 2, let start = path.first, let end = path.last else { return [] }
 
         let keyWidth = max(keySize.width, 1)
-        let startKeys = nearestKeys(to: start, centers: keyCenters, within: keyWidth * 1.6, count: 3)
-        let endKeys = nearestKeys(to: end, centers: keyCenters, within: keyWidth * 1.6, count: 3)
+        let startKeys = nearestKeys(to: start, centers: keyCenters, within: keyWidth * 1.7, count: 4)
+        let endKeys = nearestKeys(to: end, centers: keyCenters, within: keyWidth * 1.7, count: 4)
         guard !startKeys.isEmpty, !endKeys.isEmpty else { return [] }
 
         let pathLength = length(of: path)
         let sampledPath = resample(path, count: sampleCount)
 
         var scored: [(word: String, score: Double)] = []
+        var seen = Set<String>()
 
         for index in store.candidateIndices(first: startKeys, last: endKeys) {
             let entry = store.entries[index]
 
-            // Ideal path: centres of the word's letters, consecutive duplicates collapsed.
+            // Ideal path: centres of the word's letters, consecutive duplicates collapsed (a double letter is
+            // one pass over the key).
             var template: [CGPoint] = []
             var previous: Character? = nil
             var knownKeys = true
@@ -52,32 +57,57 @@ final class SwipeDecoder {
                 }
                 template.append(center)
             }
-            guard knownKeys, template.count >= 2 else { continue }
+            guard knownKeys, template.count >= 2, let templateStart = template.first, let templateEnd = template.last else { continue }
+
+            // Start and end matter most: a swipe begins on the first letter and lifts on the last.
+            let startMiss = Double(distance(start, templateStart) / keyWidth)
+            let endMiss = Double(distance(end, templateEnd) / keyWidth)
+            if startMiss > 1.7 || endMiss > 1.7 { continue }
 
             let templateLength = length(of: template)
             guard templateLength > keyWidth * 0.5 else { continue }
             let ratio = pathLength / templateLength
-            if ratio < 0.4 || ratio > 3.0 { continue }
+            if ratio < 0.45 || ratio > 2.8 { continue }
 
+            // 1. Shape: same-arc-length points of both paths, compared one by one.
             let sampledTemplate = resample(template, count: sampleCount)
-            var total: CGFloat = 0
+            var shape = 0.0
             for i in 0..<sampleCount {
-                total += distance(sampledPath[i], sampledTemplate[i])
+                shape += Double(min(distance(sampledPath[i], sampledTemplate[i]), keyWidth * 2.5))
             }
-            let meanDistance = Double(total) / Double(sampleCount) / Double(keyWidth)
+            shape /= Double(sampleCount) * Double(keyWidth)
+            if shape > 1.7 { continue }
 
-            let frequencyBonus = log(Double(entry.freq) + 1) / store.maxLogFreq   // 0...1
-            scored.append((word: entry.word, score: meanDistance - 0.30 * frequencyBonus))
+            // 2. Coverage: every letter of the word has to lie close to the finger's path.
+            var coverage = 0.0
+            var worstLetter = 0.0
+            for center in template {
+                var nearest = CGFloat.greatestFiniteMagnitude
+                for point in sampledPath { nearest = min(nearest, distance(point, center)) }
+                let miss = Double(nearest / keyWidth)
+                coverage += min(miss, 2)
+                worstLetter = max(worstLetter, miss)
+            }
+            coverage /= Double(template.count)
+            if worstLetter > 1.9 { continue }
+
+            // 3. Excess: the finger must not wander to places the word never goes.
+            var excess = 0.0
+            for point in sampledPath {
+                excess += Double(min(distanceToPolyline(point, template), keyWidth * 2.5))
+            }
+            excess /= Double(sampleCount) * Double(keyWidth)
+
+            let frequency = entry.norm
+            let context = contextBonuses[entry.word] ?? 0
+            let cost = 0.45 * shape + 0.40 * coverage + 0.35 * excess
+                + 0.55 * (startMiss + endMiss) + 0.35 * max(0, worstLetter - 0.9)
+            let score = cost - 0.55 * frequency - 0.8 * context
+            if seen.insert(entry.word).inserted { scored.append((word: entry.word, score: score)) }
         }
 
         scored.sort { $0.score < $1.score }
-
-        var words: [String] = []
-        for item in scored {
-            if !words.contains(item.word) { words.append(item.word) }
-            if words.count >= limit { break }
-        }
-        return words
+        return scored.prefix(limit).map { $0.word }
     }
 
     // MARK: Geometry
@@ -86,6 +116,26 @@ final class SwipeDecoder {
         let dx = a.x - b.x
         let dy = a.y - b.y
         return (dx * dx + dy * dy).squareRoot()
+    }
+
+    /// Distance from a point to the closest part of a polyline.
+    private func distanceToPolyline(_ point: CGPoint, _ line: [CGPoint]) -> CGFloat {
+        guard line.count > 1 else { return line.first.map { distance(point, $0) } ?? 0 }
+        var best = CGFloat.greatestFiniteMagnitude
+        for i in 1..<line.count {
+            let a = line[i - 1]
+            let b = line[i]
+            let dx = b.x - a.x
+            let dy = b.y - a.y
+            let lengthSquared = dx * dx + dy * dy
+            var t: CGFloat = 0
+            if lengthSquared > 0 {
+                t = max(0, min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared))
+            }
+            let closest = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+            best = min(best, distance(point, closest))
+        }
+        return best
     }
 
     private func length(of points: [CGPoint]) -> CGFloat {

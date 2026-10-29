@@ -84,6 +84,13 @@ enum Predictor {
 
         let weights = contextWeights(before: before, currentPrefix: typed, active: active, stores: stores)
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
+        let activeConfident = (weights[active] ?? 0) >= 0.6
+
+        // The word right before the one being typed (only when it is directly separated by a space).
+        var previousWord: String? = nil
+        var head = before
+        if !typed.isEmpty, head.hasSuffix(typed) { head = String(head.dropLast(typed.count)) }
+        if head.hasSuffix(" ") { previousWord = lastWords(in: head, count: 1).first }
 
         var best: [String: Double] = [:]
         var activeCount = 0
@@ -94,12 +101,15 @@ enum Predictor {
                 if word == lower { continue }
                 let isExact = TextFolding.key(word) == key
                 if language != active {
-                    // Another language: only with context support, as a complete word, or when the
-                    // active language has little to offer.
+                    // Another language: only with context support, as an accent variant of what was typed,
+                    // or when the active language has little to offer. A confident context shuts it out.
                     let supported = (weights[language] ?? 0) > 0
-                    if !supported && !isExact && activeCount >= 2 { continue }
+                    if !supported && !isExact && activeCount >= (activeConfident ? 1 : 2) { continue }
                 }
-                let score = candidate.score + bonus
+                var score = candidate.score + bonus
+                if let previous = previousWord, let store = stores[language] {
+                    score += store.bigramBonus(previous: previous, next: word)
+                }
                 if score > (best[word] ?? -1) { best[word] = score }
                 if language == active { activeCount += 1 }
             }
@@ -110,33 +120,66 @@ enum Predictor {
             let bonus = (language == active ? 0.30 : 0) + 0.5 * (weights[language] ?? 0)
             add(store.completionCandidates(forKey: key,
                                            typedLower: lower,
-                                           limit: 6,
+                                           limit: 8,
                                            contractionsOnly: endsWithApostrophe),
                 bonus: bonus,
                 language: language)
 
             // French / Italian elision: "l'" + word, "dell'" + word ...
-            if let (head, tail) = splitElision(lower, language: language), !tail.isEmpty {
-                let tailKey = TextFolding.key(tail)
-                add(store.completionCandidates(forKey: tailKey, typedLower: tail, limit: 6),
-                    bonus: bonus,
-                    language: language,
-                    prefix: head + "'")
+            if let (elisionHead, tail) = splitElision(lower, language: language) {
+                if tail.isEmpty {
+                    // Just typed "j'": offer the usual continuations (vowel or silent h).
+                    let letters: Set<Character> = language == .french
+                        ? Set("aeiouyhàâéèêîôû")
+                        : Set("aeiouhàèéìòù")
+                    add(store.frequentWords(startingWith: letters, limit: 6),
+                        bonus: bonus,
+                        language: language,
+                        prefix: elisionHead + "'")
+                } else {
+                    let tailKey = TextFolding.key(tail)
+                    add(store.completionCandidates(forKey: tailKey, typedLower: tail, limit: 6),
+                        bonus: bonus,
+                        language: language,
+                        prefix: elisionHead + "'")
+                }
             }
         }
 
-        // Nothing (or one thing) fits: try one-typo corrections.
-        if best.count < 2 && !endsWithApostrophe && key.count >= 3 {
-            for language in ordered where language == active || (weights[language] ?? 0) >= 0.5 {
-                guard let store = stores[language] else { continue }
-                let bonus = (language == active ? 0.30 : 0) + 0.5 * (weights[language] ?? 0)
-                add(store.fuzzyCandidates(forKey: key, limit: 3), bonus: bonus, language: language)
+        // The typed word is not a word anywhere: offer the closest real ones (one or two slips).
+        if !endsWithApostrophe && key.count >= 3 {
+            let known = ordered.contains { stores[$0]?.contains(key: key) == true }
+            if !known || best.count < 2 {
+                for language in ordered where language == active || (weights[language] ?? 0) >= 0.5 {
+                    guard let store = stores[language] else { continue }
+                    let bonus = (language == active ? 0.30 : 0) + 0.5 * (weights[language] ?? 0)
+                    add(store.fuzzyCandidates(forKey: key, limit: 4), bonus: bonus, language: language)
+                }
             }
         }
 
         return best.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
             .prefix(limit)
             .map { $0.key }
+    }
+
+    // MARK: Missing apostrophes
+
+    private static let englishApostrophes: [String: String] = [
+        "dont": "don't", "cant": "can't", "doesnt": "doesn't", "didnt": "didn't", "isnt": "isn't",
+        "arent": "aren't", "wasnt": "wasn't", "werent": "weren't", "hasnt": "hasn't", "havent": "haven't",
+        "hadnt": "hadn't", "couldnt": "couldn't", "wouldnt": "wouldn't", "shouldnt": "shouldn't",
+        "mustnt": "mustn't", "im": "i'm", "ive": "i've", "youre": "you're", "theyre": "they're",
+        "thats": "that's", "whats": "what's", "theres": "there's", "youve": "you've", "theyve": "they've",
+        "youll": "you'll", "theyll": "they'll", "itll": "it'll", "couldve": "could've", "wouldve": "would've",
+        "shouldve": "should've", "mightve": "might've", "mustve": "must've", "whos": "who's",
+        "heres": "here's", "hows": "how's", "wheres": "where's",
+    ]
+
+    /// "dont" -> "don't" for typed words that are not words without the apostrophe (English only).
+    static func withApostrophe(_ typed: String, language: Language) -> String? {
+        guard language == .english else { return nil }
+        return englishApostrophes[typed.lowercased()]
     }
 
     private static let elisionHeads: [Language: Set<String>] = [

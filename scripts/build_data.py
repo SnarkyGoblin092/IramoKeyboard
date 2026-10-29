@@ -355,12 +355,34 @@ CONTRACTIONS = {
         "how's": .02, "where's": .02, "ain't": .03, "y'all": .02, "o'clock": .02, "ma'am": .01,
         "mustn't": .01, "needn't": .005, "that'll": .01, "it'll": .03, "he'll": .03, "she'll": .02,
         "he'd": .03, "she'd": .02, "we'd": .02, "you'd": .03, "they'd": .01, "when's": .005,
+        "could've": .04, "would've": .05, "should've": .04, "might've": .01, "must've": .008, "may've": .001,
+        "who'll": .005, "who'd": .005, "who've": .002, "what'll": .004, "what've": .001, "where'd": .004,
+        "there'll": .008, "there'd": .006, "there've": .002, "that'd": .006, "it'd": .008, "how'd": .004,
+        "why's": .002, "here're": .0005, "mightn't": .001, "shan't": .004, "daren't": .0003, "oughtn't": .0003,
+        "i'm": .50, "that's": .35, "let's": .12, "what're": .004, "we'd": .02, "y'know": .003, "ne'er": .0005,
+        "e'en": .0003,
     },
     "fr": {
         "c'est": .40, "j'ai": .30, "qu'il": .20, "qu'elle": .10, "qu'on": .10, "qu'un": .08, "qu'une": .05,
         "n'est": .10, "n'a": .08, "n'y": .03, "s'il": .05, "s'est": .12, "d'accord": .08, "aujourd'hui": .15,
         "jusqu'à": .05, "jusqu'au": .03, "c'était": .10, "j'étais": .03, "j'en": .03, "l'on": .02,
         "m'a": .03, "t'a": .02, "n'était": .03, "qu'est": .04, "quelqu'un": .05, "presqu'île": .002,
+        # spoken / texting forms (the apostrophe replaces a dropped vowel)
+        "j'taime": .03, "j't'aime": .03, "j't'adore": .01, "j'taimerais": .004, "j't'attends": .004,
+        "j'suis": .08, "j'sais": .04, "j'veux": .03, "j'peux": .03, "j'vais": .04, "j'crois": .01, "j'pense": .02,
+        "j'sais": .04, "j'te": .03, "j'me": .02, "j'm'appelle": .01, "j'aime": .12, "j'adore": .04, "j'avais": .05,
+        "j'étais": .04, "j'ai": .30, "j'arrive": .03, "j'attends": .02, "j'espère": .04, "j'imagine": .01,
+        "t'es": .06, "t'as": .06, "t'inquiète": .02, "t'en": .02, "t'aime": .06, "t'adore": .01, "t'attends": .005,
+        "t'étais": .004, "t'sais": .004, "m'aime": .015, "m'en": .02, "m'a": .03, "m'appelle": .04, "m'étonne": .001,
+        "l'aime": .02, "l'ai": .02, "l'avais": .004, "l'ami": .01, "l'amour": .03, "l'homme": .02, "l'heure": .02,
+        "l'année": .02, "l'autre": .04, "l'eau": .01, "l'une": .01, "l'un": .02, "l'idée": .01, "l'air": .01,
+        "d'abord": .05, "d'autres": .03, "d'un": .10, "d'une": .08, "d'être": .01, "d'avoir": .01, "d'aller": .01,
+        "d'ici": .01, "d'accord": .08, "d'ailleurs": .01, "d'habitude": .005, "n'importe": .02, "n'ai": .02,
+        "n'as": .02, "n'en": .02, "n'ont": .01, "n'avait": .01, "n'avez": .005, "n'aime": .005, "n'oublie": .004,
+        "s'en": .03, "s'il": .05, "s'ils": .01, "s'est": .12, "s'appelle": .02, "s'agit": .02, "s'il": .05,
+        "c'est": .40, "c'était": .10, "qu'à": .003, "qu'en": .01, "qu'ils": .08,
+        "qu'elles": .01, "qu'ont": .005, "qu'avec": .001, "lorsqu'il": .01, "lorsqu'on": .005, "puisqu'il": .003,
+        "puisqu'on": .003, "quoiqu'il": .001, "jusqu'ici": .01, "jusqu'à": .05, "jusqu'en": .005,
     },
     "it": {
         "c'è": .30, "un'altra": .05, "po'": .02, "quest'anno": .02, "dov'è": .05, "cos'è": .06,
@@ -373,7 +395,7 @@ CONTRACTIONS = {
 def word_pattern(lang: str):
     alpha = ALPHABETS[lang]
     if lang in APOSTROPHE:
-        return re.compile(f"^[{alpha}]+(?:'[{alpha}]+)?$")
+        return re.compile(f"^[{alpha}]+(?:'[{alpha}]+){{0,2}}$")
     return re.compile(f"^[{alpha}]+$")
 
 

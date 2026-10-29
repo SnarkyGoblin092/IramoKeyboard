@@ -174,8 +174,10 @@ final class KeyboardView: UIView {
     // MARK: Geometry (also used by swipe typing)
 
     /// Centre of every letter key, in this view's coordinates. Only meaningful on the letters page.
+    /// The centres are moved by what the touch model learned about where this user really lands.
     func letterCenters() -> [Character: CGPoint] {
         var centers: [Character: CGPoint] = [:]
+        let layout = layoutID
         for (r, row) in rows.enumerated() {
             for (c, spec) in row.enumerated() {
                 if case .character(let text) = spec.action,
@@ -183,7 +185,9 @@ final class KeyboardView: UIView {
                    let letter = text.lowercased().first,
                    letter.isLetter {
                     let frame = keyViews[r][c].frame
-                    centers[letter] = CGPoint(x: frame.midX, y: frame.midY)
+                    let shift = TouchModel.shared.offset(letter: String(letter), layout: layout)
+                    centers[letter] = CGPoint(x: frame.midX + CGFloat(shift.dx) * frame.width,
+                                              y: frame.midY + CGFloat(shift.dy) * frame.height)
                 }
             }
         }
@@ -239,6 +243,7 @@ final class KeyboardView: UIView {
 
     /// The key under (or nearest to) a point. Rows and keys tile the whole area, so there are no dead gaps.
     private func keyIndex(at point: CGPoint) -> (row: Int, col: Int)? {
+        if hitRects.count != rows.count, !rows.isEmpty, bounds.width > 0 { layoutIfNeeded() }
         guard !hitRects.isEmpty, hitRects.count == rows.count, keyViews.count == rows.count else { return nil }
 
         var bestRow = 0
@@ -294,7 +299,14 @@ final class KeyboardView: UIView {
     /// Judges a touch near a letter key against the learned (shifted) key centres of the letters around it, so
     /// a tap between two keys goes to the one the user most likely meant. Falls back to the plain key.
     private func refineLetter(at point: CGPoint, geometric g: (row: Int, col: Int)) -> (row: Int, col: Int) {
-        guard letterID(row: g.row, col: g.col) != nil else { return g }
+        guard letterID(row: g.row, col: g.col) != nil, g.row < hitRects.count, g.col < hitRects[g.row].count else { return g }
+        // A touch well inside a key always belongs to that key; the learned shifts only decide near the edges.
+        let own = hitRects[g.row][g.col]
+        if own.width > 0, own.height > 0 {
+            let cx = abs(point.x - own.midX) / own.width
+            let cy = abs(point.y - own.midY) / own.height
+            if cx < 0.30 && cy < 0.30 { return g }
+        }
         let layout = layoutID
         var best = g
         var bestScore = CGFloat.greatestFiniteMagnitude
@@ -311,7 +323,7 @@ final class KeyboardView: UIView {
                 let nx = (point.x - cx) / max(rect.width, 1)
                 let ny = (point.y - cy) / max(rect.height, 1)
                 var score = nx * nx + ny * ny
-                if r == g.row && c == g.col { score *= 0.8 }   // the key under the finger keeps a small edge
+                if r == g.row && c == g.col { score *= 0.65 }   // the key under the finger keeps a clear edge
                 if score < bestScore {
                     bestScore = score
                     best = (row: r, col: c)
@@ -339,6 +351,11 @@ final class KeyboardView: UIView {
         }
         let id = text.lowercased()
         let layout = layoutID
+        // Only touches that really landed on the key teach the model (no feedback loop from reassigned taps).
+        guard rect.insetBy(dx: -2, dy: -2).contains(state.startPoint) else {
+            lastTap = nil
+            return
+        }
         if let pending = pendingCorrection, pending.id != id, now - pending.time < 3 {
             let dx = Double((pending.point.x - rect.midX) / rect.width)
             let dy = Double((pending.point.y - rect.midY) / rect.height)
@@ -369,6 +386,11 @@ final class KeyboardView: UIView {
     // MARK: Touches
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // A touch whose end was never delivered must not linger (it would block swipes and keep keys pressed).
+        for (touch, state) in states where touch.phase == .ended || touch.phase == .cancelled {
+            states.removeValue(forKey: touch)
+            finish(state, cancelled: true)
+        }
         for touch in touches {
             let point = touch.location(in: self)
             let state = TouchState(start: point)
@@ -470,7 +492,7 @@ final class KeyboardView: UIView {
             }
         default:
             if !key.spec.alternates.isEmpty {
-                startHoldTimer(state, delay: Prefs.holdDelay)
+                startHoldTimer(state, delay: popupDelay)
             } else if key.spec.action == .emoji {
                 // Holding emoji hands over to the next keyboard; a slow ordinary tap must not do that.
                 startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
@@ -483,8 +505,14 @@ final class KeyboardView: UIView {
         let newKey = keyViews[index.row][index.col]
         guard newKey !== state.key else { return }
 
-        // Hysteresis: a finger that wobbles a little past the edge of the key it went down on stays on that
-        // key, so taps are not stolen by the neighbour. Only a clear move onto another key switches.
+        // Sliding onto backspace never deletes or cancels anything: the finger just stays on its key.
+        if newKey.spec.action == .backspace { return }
+
+        // A tap with a bit of drift stays on the key it went down on. Only a clear, deliberate move
+        // (more than half a key from the touch-down point AND past the edge of the current key) switches.
+        let keyWidth = max(letterKeySize().width, 1)
+        let moved = hypot(point.x - state.startPoint.x, point.y - state.startPoint.y)
+        if moved < max(10, keyWidth * 0.5) { return }
         if let current = state.key, let rect = hitRect(of: current) {
             let margin = min(rect.width, rect.height) * 0.22
             if rect.insetBy(dx: -margin, dy: -margin).contains(point) { return }
@@ -494,20 +522,18 @@ final class KeyboardView: UIView {
         state.holdTimer = nil
         state.key?.isPressed = false
 
-        if newKey.spec.action == .backspace {
-            state.key = nil            // sliding onto backspace must not delete anything
-            hidePreview()
-            return
-        }
         state.key = newKey
         newKey.isPressed = true
         showPreview(for: newKey)
         if !newKey.spec.alternates.isEmpty {
-            startHoldTimer(state, delay: Prefs.holdDelay)
+            startHoldTimer(state, delay: popupDelay)
         } else if newKey.spec.action == .emoji {
             startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
         }
     }
+
+    /// Long-press delay for accent popups: never so short that a slow, careful tap opens one.
+    private var popupDelay: TimeInterval { return max(0.30, Prefs.holdDelay) }
 
     private func makeTimer(after interval: TimeInterval, repeats: Bool, _ block: @escaping () -> Void) -> Timer {
         let timer = Timer(timeInterval: interval, repeats: repeats) { _ in block() }
@@ -602,12 +628,12 @@ final class KeyboardView: UIView {
             return
         }
         if state.isWordDeleting { return }
-        guard !state.handledByHold, let key = state.key else { return }
+        guard !state.handledByHold, let key = state.key ?? state.startKey else { return }
 
         // The system cancels touches now and then (edge gestures, notifications, app switcher hints).
         // A press that has not really moved is still a tap, so it must not be lost.
         if cancelled {
-            if travel(of: state) > 14 { return }
+            if travel(of: state) > max(14, letterKeySize().width * 0.6) { return }
             if key.spec.action == .emoji { return }
         }
         if key.spec.action != .backspace {          // backspace already fired on touch-down

@@ -17,7 +17,7 @@ final class TouchModel {
     private static let warmup = 10.0
     private static let ramp = 30.0
     /// An offset never moves a key's centre by more than this share of its size.
-    private static let maxShift = 0.35
+    private static let maxShift = 0.25
     private static let maxLayouts = 6
 
     private struct Entry {

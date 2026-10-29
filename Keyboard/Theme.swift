@@ -121,23 +121,35 @@ enum Theme {
         return UIColor { trait in trait.userInterfaceStyle == .dark ? dark : light }
     }
 
+    /// White text on dark accents, near-black on light ones (yellow, mint...).
+    private static func contrastingText(on rgb: (red: Double, green: Double, blue: Double)) -> UIColor {
+        let luminance = 0.299 * rgb.red + 0.587 * rgb.green + 0.114 * rgb.blue
+        return luminance > 0.62 ? UIColor(white: 0.08, alpha: 1) : UIColor.white
+    }
+
     private static func white(_ alpha: CGFloat) -> UIColor { return UIColor(white: 1.0, alpha: alpha) }
     private static func black(_ alpha: CGFloat) -> UIColor { return UIColor(white: 0.0, alpha: alpha) }
     private static func grey(_ value: CGFloat, _ alpha: CGFloat = 1) -> UIColor { return UIColor(white: value, alpha: alpha) }
 
     private static func makePalette(for theme: ThemeDefinition) -> Palette {
-        let rgb = Settings.shared.accentRGB
+        // Read straight from the shared store (not the throttled Settings cache) so a change made in the app
+        // shows up the moment the keyboard rebuilds.
+        let customHex = SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? ""
+        let accentName = SharedStore.defaults.string(forKey: SettingKey.accent) ?? SettingDefault.accent
+        let rgb = HexColor.parse(customHex) ?? (AccentChoice(rawValue: accentName) ?? .blue).rgb
         let userAccent = UIColor(red: CGFloat(rgb.red), green: CGFloat(rgb.green), blue: CGFloat(rgb.blue), alpha: 1)
-        // A custom accent (colour picker) wins over a gradient theme's own accent; the "custom" theme has none.
-        let customHex = SharedStore.defaults.string(forKey: "hunkeys.accentHex") ?? ""
-        let gradientAccent = (!customHex.isEmpty || theme.id == ThemeCatalog.customID) ? userAccent : theme.accent.uiColor
+        let userOnAccent = contrastingText(on: rgb)
+        // Any accent the user picked wins; a gradient theme only keeps its own accent while the default is untouched.
+        let userPicked = !customHex.isEmpty || accentName != SettingDefault.accent
+        let gradientAccent = (userPicked || theme.id == ThemeCatalog.customID) ? userAccent : theme.accent.uiColor
+        let gradientOnAccent = (userPicked || theme.id == ThemeCatalog.customID) ? userOnAccent : theme.onAccent.uiColor
 
         switch theme.kind {
         case .native:
             let nativeFunction = UIColor(red: 0.675, green: 0.702, blue: 0.745, alpha: 1)
             return Palette(
                 accent: userAccent,
-                onAccent: UIColor.white,
+                onAccent: userOnAccent,
                 text: UIColor.label,
                 secondaryText: UIColor.secondaryLabel,
                 letterKey: pick(UIColor.white, grey(0.42)),
@@ -156,7 +168,7 @@ enum Theme {
         case .transparent:
             return Palette(
                 accent: userAccent,
-                onAccent: UIColor.white,
+                onAccent: userOnAccent,
                 text: UIColor.label,
                 secondaryText: UIColor.secondaryLabel,
                 letterKey: pick(white(0.34), white(0.16)),
@@ -177,7 +189,7 @@ enum Theme {
             // (and give the blur fallback on older iOS something to draw).
             return Palette(
                 accent: userAccent,
-                onAccent: UIColor.white,
+                onAccent: userOnAccent,
                 text: UIColor.label,
                 secondaryText: UIColor.secondaryLabel,
                 letterKey: GlassSupport.isAvailable ? UIColor.clear : pick(white(0.34), white(0.16)),
@@ -196,7 +208,7 @@ enum Theme {
         case .gradient:
             return Palette(
                 accent: gradientAccent,
-                onAccent: theme.onAccent.uiColor,
+                onAccent: gradientOnAccent,
                 text: theme.text.uiColor,
                 secondaryText: theme.secondaryText.uiColor,
                 letterKey: theme.key.uiColor,
