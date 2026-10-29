@@ -57,7 +57,8 @@ def prepare(langs):
     import build_data
     build_data.OUT = DATA_DIR
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = hashlib.sha1((ROOT / "scripts" / "build_data.py").read_bytes()).hexdigest()
+    stamp = hashlib.sha1(b"".join((ROOT / "scripts" / name).read_bytes()
+                              for name in ("build_data.py", "language_model.py"))).hexdigest()
     stamp_file = DATA_DIR / "stamp"
     if not stamp_file.exists() or stamp_file.read_text() != stamp:
         for old in DATA_DIR.glob("*.tsv"):
@@ -66,12 +67,18 @@ def prepare(langs):
     missing = [lang for lang in langs if not (DATA_DIR / f"words_{lang}.tsv").exists()]
     if not missing:
         return
-    # English (and Russian, for Ukrainian) filter leaked words out of the others, so they are built first.
-    order = ["en"] + (["ru"] if "uk" in missing else []) + [lang for lang in missing if lang not in ("en", "ru")]
-    order += [lang for lang in missing if lang == "ru" and "ru" not in order]
-    build_data.prefetch([f"{lang}_full.txt" for lang in order] + [f"sentences_{lang}.tsv.bz2" for lang in order])
-    for lang in order:
-        build_data.build_dictionary(lang)
+    needed = sorted(set(missing) | {"en"} | ({"ru"} if "uk" in missing else set()))
+    build_data.prefetch([f"{lang}_full.txt" for lang in needed] + [f"sentences_{lang}.tsv.bz2" for lang in needed]
+                        + [f"subtitles_{lang}.txt.gz" for lang in needed])
+    with multiprocessing.Pool(min(build_data.BUILD_PROCESSES, len(missing))) as pool:
+        pool.map(_build_dictionary, missing, chunksize=1)
+
+
+def _build_dictionary(lang):
+    os.environ["HUNKEYS_OUT"] = str(DATA_DIR)
+    import build_data
+    build_data.OUT = DATA_DIR
+    build_data.build_dictionary(lang)
 
 
 def test_sentences(lang, count):

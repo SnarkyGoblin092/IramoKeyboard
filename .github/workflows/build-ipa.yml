@@ -39,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Keyboard/Resources
-          key: data-${{ hashFiles('scripts/build_data.py') }}-${{ steps.week.outputs.week }}
+          key: data-${{ hashFiles('scripts/build_data.py', 'scripts/language_model.py') }}-${{ steps.week.outputs.week }}
 
       - name: Download words, emoji and keywords
         if: steps.data-cache.outputs.cache-hit != 'true'
@@ -57,6 +57,11 @@ jobs:
           for f in Keyboard/Resources/pairs_*.tsv; do
             test -s "$f" || echo "::warning::$f is empty; next-word suggestions for it only come from typing"
           done
+          for f in Keyboard/Resources/words_*.tsv; do
+            lm="${f/words_/lm_}"; lm="${lm%.tsv}.bin"
+            test -s "$lm" || echo "::warning::$lm is missing; that language has no language model"
+          done
+          du -ch Keyboard/Resources/lm_*.bin | tail -1
           python3 - <<'PY'
           import glob, json
           data = json.load(open("Keyboard/Resources/emoji.json"))

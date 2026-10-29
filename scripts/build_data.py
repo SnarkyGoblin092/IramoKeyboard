@@ -36,6 +36,7 @@ sentences_<lang>.tsv.bz2).
 import bz2
 import collections
 import json
+import multiprocessing
 import os
 import re
 import subprocess
@@ -45,6 +46,8 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import language_model
+
 ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(os.environ.get("HUNKEYS_OUT", ROOT / "Keyboard" / "Resources"))
 CACHE = Path(os.environ.get("HUNKEYS_CACHE", ROOT / ".data-cache"))
@@ -52,11 +55,13 @@ CACHE = Path(os.environ.get("HUNKEYS_CACHE", ROOT / ".data-cache"))
 CLDR = "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json"
 FREQ = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018"
 TATOEBA = "https://downloads.tatoeba.org/exports/per_language"
+OPUS = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2018/mono"
 ISO3 = {"en": "eng", "hu": "hun", "es": "spa", "fr": "fra", "de": "deu", "it": "ita", "pt": "por", "nl": "nld",
         "pl": "pol", "cs": "ces", "ro": "ron", "tr": "tur", "ru": "rus", "uk": "ukr", "sv": "swe"}
 
 LANGS = ["en", "hu", "es", "fr", "de", "it", "pt", "nl", "pl", "cs", "ro", "tr", "ru", "uk", "sv"]
 REQUIRED = {"en", "hu"}
+BUILD_PROCESSES = 4
 
 
 def url_for(name: str) -> str:
@@ -75,7 +80,15 @@ def url_for(name: str) -> str:
     if match:
         iso3 = ISO3[match.group(1)]
         return f"{TATOEBA}/{iso3}/{iso3}_sentences.tsv.bz2"
+    match = re.fullmatch(r"subtitles_([a-z]+)\.txt\.gz", name)
+    if match:
+        return f"{OPUS}/{match.group(1)}.txt.gz"
     raise KeyError(name)
+
+
+def download_limit(name: str):
+    """Only the start of the (multi-gigabyte) subtitle texts is needed."""
+    return language_model.SUBTITLE_BYTES if name.startswith("subtitles_") else None
 
 
 SKIN_TONES = {0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF}
@@ -97,12 +110,13 @@ GROUP_ICONS = {
 # Downloading
 # ----------------------------------------------------------------------------
 
-def download(url: str, dest: Path) -> None:
+def download(url: str, dest: Path, max_bytes=None) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     last_error = ""
+    limit = ["-r", f"0-{max_bytes - 1}"] if max_bytes else []
     for _ in range(3):
         result = subprocess.run(
-            ["curl", "-fsSL", "--retry", "2", "--max-time", "180", "-o", str(dest), url],
+            ["curl", "-fsSL", "--retry", "2", "--max-time", "180", *limit, "-o", str(dest), url],
             capture_output=True, text=True,
         )
         if result.returncode == 0 and dest.exists() and dest.stat().st_size > 0:
@@ -117,6 +131,8 @@ fetched = {}
 
 
 def fetch(name: str, optional: bool = False):
+    if name not in fetched and name in os.environ.get("HUNKEYS_PREFETCHED", "").split("\n"):
+        fetched[name] = CACHE / name    # downloaded by the parent process (see prefetch)
     if name in fetched:
         if fetched[name] is None and not optional:
             raise RuntimeError(f"download failed earlier: {name}")
@@ -131,7 +147,7 @@ def fetch(name: str, optional: bool = False):
         raise FileNotFoundError(path)
     dest = CACHE / name
     try:
-        download(url_for(name), dest)
+        download(url_for(name), dest, download_limit(name))
     except RuntimeError as error:
         if optional:
             print(f"  (optional) skipped {name}: {error}")
@@ -147,13 +163,16 @@ def prefetch(names) -> None:
 
     def get(name):
         try:
-            download(url_for(name), CACHE / name)
+            download(url_for(name), CACHE / name, download_limit(name))
             return name, CACHE / name
         except RuntimeError:
             return name, None    # fetch decides later whether it was optional
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         fetched.update(pool.map(get, names))
+    # Worker processes building languages see this in their environment and reuse the files.
+    done = [name for name, path in fetched.items() if path is not None]
+    os.environ["HUNKEYS_PREFETCHED"] = "\n".join(done)
 
 
 # ----------------------------------------------------------------------------
@@ -681,9 +700,16 @@ def write_json(name: str, data) -> None:
     (OUT / name).write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 
-# Word counts of the languages other lists leak (English, Russian), kept for the leak filters. LANGS builds
-# them first.
+# Word counts of the languages other lists leak (English, Russian), for the leak filters. Read on first use, so
+# languages can be built in any order and in separate processes.
 reference_counts = {}
+
+
+def reference(lang: str):
+    if lang not in reference_counts:
+        path = fetch(f"{lang}_full.txt", optional=True) or fetch(f"{lang}_50k.txt", optional=True)
+        reference_counts[lang] = read_counts(path, lang) if path is not None else None
+    return reference_counts[lang]
 
 
 def build_language(lang: str, groups) -> None:
@@ -721,9 +747,9 @@ def build_dictionary(lang: str) -> None:
         if lang in {"en", "ru"}:
             reference_counts[lang] = counts
         if lang != "en":
-            counts = drop_foreign(counts, reference_counts.get("en"), "English")
+            counts = drop_foreign(counts, reference("en"), "English")
         for other, name in LEAKS.get(lang, []):
-            counts = drop_foreign(counts, reference_counts.get(other), name)
+            counts = drop_foreign(counts, reference(other), name)
         words = build_words(counts, lang, WORD_LIMITS.get(lang, DEFAULT_WORD_LIMIT))
         if not words and not required:
             raise RuntimeError("word list was empty after filtering")
@@ -755,13 +781,42 @@ def build_dictionary(lang: str) -> None:
     with open(OUT / f"pairs_{lang}.tsv", "w", encoding="utf-8") as handle:
         for word, followers in pairs:
             handle.write(f"{word}\t{' '.join(followers)}\n")
+    if words:
+        build_language_model(lang, words)
+
+
+def build_language_model(lang: str, words) -> None:
+    """lm_<lang>.bin: word sequences from subtitles and the (not held-out) example sentences."""
+    print(f"Language model ({lang}) …")
+    ids = {}
+    for index, (word, _, _) in enumerate(words):
+        ids.setdefault(word, language_model.FIRST_WORD + index)
+    tokenizer = language_model.Tokenizer(ids, lang, lower, repair)
+    counts = language_model.Counts()
+    subtitles = fetch(f"subtitles_{lang}.txt.gz", optional=True)
+    if subtitles is not None:
+        language_model.count_text(counts, tokenizer, language_model.subtitle_lines(subtitles))
+    sentences = fetch(f"sentences_{lang}.tsv.bz2", optional=True)
+    if sentences is not None:
+        with bz2.open(sentences, "rt", encoding="utf-8", errors="ignore") as handle:
+            rows = (line.rstrip("\n").split("\t") for line in handle)
+            texts = (parts[2] for parts in rows if len(parts) >= 3 and not is_held_out(parts[0]))
+            language_model.count_text(counts, tokenizer, texts, fresh_lines=True)
+    if counts.tokens == 0:
+        print(f"  WARNING: no text for the {lang} language model")
+        return
+    unigrams = [0] * language_model.FIRST_WORD + [count for _, _, count in words]
+    bigrams, trigrams = language_model.build(counts, unigrams, OUT / f"lm_{lang}.bin")
+    size = (OUT / f"lm_{lang}.bin").stat().st_size
+    print(f"  {counts.tokens:,} words of text -> {bigrams:,} pairs, {trigrams:,} triples, {size / 1e6:.1f} MB")
 
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
     print("Downloading …")
-    prefetch([f"{lang}_full.txt" for lang in LANGS] + [f"sentences_{lang}.tsv.bz2" for lang in LANGS])
+    prefetch([f"{lang}_full.txt" for lang in LANGS] + [f"sentences_{lang}.tsv.bz2" for lang in LANGS]
+             + [f"subtitles_{lang}.txt.gz" for lang in LANGS])
 
     print("Emoji …")
     version, raw_groups = parse_emoji_test(fetch("emoji-test.txt"))
@@ -771,8 +826,9 @@ def main() -> int:
     write_json("emoji.json", {"version": version, "groups": groups})
     print(f"  Unicode emoji {version}: {total} items + {variants} variants in {len(groups)} groups")
 
-    for lang in LANGS:
-        build_language(lang, groups)
+    # Languages are independent; a few at a time (each needs ~1.5 GB while counting word sequences).
+    with multiprocessing.Pool(min(BUILD_PROCESSES, os.cpu_count() or 1)) as pool:
+        pool.starmap(build_language, [(lang, groups) for lang in LANGS], chunksize=1)
 
     print("Done ->", OUT)
     return 0
