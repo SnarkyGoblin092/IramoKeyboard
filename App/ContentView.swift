@@ -139,6 +139,7 @@ private struct TypingSection: View {
         Section {
             SettingToggle("Swipe typing", key: SettingKey.swipe, defaultValue: SettingDefault.swipe)
             SettingToggle("Word suggestions", key: SettingKey.suggestions, defaultValue: SettingDefault.suggestions)
+            SettingToggle("Auto-correction", key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect)
             SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions)
             SettingToggle("Auto-capitalize", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize)
             SettingToggle("Double space for period", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod)

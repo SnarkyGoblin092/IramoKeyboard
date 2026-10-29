@@ -14,6 +14,7 @@ enum SettingKey {
     static let emojiSuggestions = "hunkeys.emojiSuggestions"
     static let autoCapitalize = "hunkeys.autoCapitalize"
     static let doubleSpacePeriod = "hunkeys.doubleSpacePeriod"
+    static let autoCorrect = "hunkeys.autoCorrect"
     static let cursorControl = "hunkeys.cursorControl"
     static let deleteSwipe = "hunkeys.deleteSwipe"
     // Layout and look
@@ -49,7 +50,7 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, cursorControl, deleteSwipe, numberRow, keyHints,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
         theme, accent, accentHex, keyboardHeight, keyRoundness, oneHanded, enabledLanguages, touchLearning, keyBorders
     ]
 }
@@ -64,6 +65,7 @@ enum SettingDefault {
     static let emojiSuggestions = true
     static let autoCapitalize = true
     static let doubleSpacePeriod = true
+    static let autoCorrect = true
     static let cursorControl = true
     static let deleteSwipe = true
     static let numberRow = false
@@ -204,6 +206,7 @@ final class Settings {
             SettingKey.emojiSuggestions: SettingDefault.emojiSuggestions,
             SettingKey.autoCapitalize: SettingDefault.autoCapitalize,
             SettingKey.doubleSpacePeriod: SettingDefault.doubleSpacePeriod,
+            SettingKey.autoCorrect: SettingDefault.autoCorrect,
             SettingKey.cursorControl: SettingDefault.cursorControl,
             SettingKey.deleteSwipe: SettingDefault.deleteSwipe,
             SettingKey.numberRow: SettingDefault.numberRow,
@@ -275,6 +278,11 @@ final class Settings {
     var doubleSpacePeriod: Bool {
         get { return readBool(SettingKey.doubleSpacePeriod) }
         set { put(newValue, SettingKey.doubleSpacePeriod) }
+    }
+
+    var autoCorrect: Bool {
+        get { return readBool(SettingKey.autoCorrect) }
+        set { put(newValue, SettingKey.autoCorrect) }
     }
 
     var cursorControl: Bool {

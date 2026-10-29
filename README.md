@@ -12,8 +12,12 @@ and a theme picker (native, transparent, Liquid Glass and gradient themes). All 
    (needed for vibration, recent emoji and learned words).
 
 ## Limits
-Auto-fix only restores missing accents and apostrophes ("koszonom" -> "köszönöm", "dont" -> "don't"; backspace
-right after undoes it), it does not correct other typos. No voice typing, cursor control is horizontal only.
+Auto-correction ("vsgyok" -> "vagyok", "koszonom" -> "köszönöm", "dont" -> "don't") uses a word trigram model per
+language; backspace right after undoes it, and it can be turned off in the app. No voice typing, cursor control is
+horizontal only.
+
+Prediction quality is measured with `python3 scripts/predict_eval/run.py` (held-out sentences, simulated sloppy
+typing and swiping); see the script for options.
 
 - Adjustable key roundness (Appearance), larger touch targets, and a Liquid Glass theme alongside the gradient themes.
 - 12 accent presets plus a colour picker, key-colour themes (they only recolour the keys, never the background), and optional adaptive key areas that learn where you tap (reset in Data).

@@ -81,8 +81,9 @@ def _build_dictionary(lang):
     build_data.build_dictionary(lang)
 
 
-def test_sentences(lang, count):
-    """`count` held-out sentences of 3 to 20 words, the same ones on every run."""
+def test_sentences(lang, count, tuning=False):
+    """`count` held-out sentences of 3 to 20 words, the same ones on every run. `tuning`: a separate set, for
+    choosing an engine's settings without fitting them to the test sentences."""
     import bz2
     import build_data
     path = build_data.fetch(f"sentences_{lang}.tsv.bz2")
@@ -99,7 +100,7 @@ def test_sentences(lang, count):
             if 3 <= len(words) <= 20:
                 rows.append((parts[0], text))
     random.Random(f"sentences-{lang}").shuffle(rows)
-    return rows[:count]
+    return rows[-count:] if tuning else rows[:count]
 
 
 # ---------------------------------------------------------------------------------------------------------------

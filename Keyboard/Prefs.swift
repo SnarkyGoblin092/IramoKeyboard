@@ -14,6 +14,7 @@ final class Prefs {
     static var emojiSuggestions = SettingDefault.emojiSuggestions
     static var autoCapitalize = SettingDefault.autoCapitalize
     static var doubleSpacePeriod = SettingDefault.doubleSpacePeriod
+    static var autoCorrect = SettingDefault.autoCorrect
     static var cursorControl = SettingDefault.cursorControl
     static var deleteSwipe = SettingDefault.deleteSwipe
     static var numberRow = SettingDefault.numberRow
@@ -40,6 +41,7 @@ final class Prefs {
         emojiSuggestions = s.emojiSuggestionsEnabled
         autoCapitalize = s.autoCapitalize
         doubleSpacePeriod = s.doubleSpacePeriod
+        autoCorrect = s.autoCorrect
         cursorControl = s.cursorControl
         deleteSwipe = s.deleteSwipe
         numberRow = s.numberRow

@@ -137,16 +137,23 @@ class Mixture:
         self.active = active
 
     def language_weights(self, before):
-        """P(language | recent words): each model's likelihood of the last few words, a small prior for the layout."""
+        """P(language | recent words): each model's likelihood of the last 8 words (across sentence ends), and a
+        small prior for the layout's language. Same as Decoder.context in Decoder.swift."""
         scores = {}
         for lang, model in self.models.items():
-            ids = model.context(before)
             history = [START]
-            total = math.log10(1.5) if lang == self.active else 0.0
-            for w in ids[1:][-8:]:
-                total += model.logp(w, history[-1], history[-2] if len(history) >= 2 else None)
-                history.append(w)
-            scores[lang] = total
+            recent = []
+            for token in TOKENS.findall(model.lower(before[-300:])):
+                if token == ",":
+                    if len(history) > 1 and history[-1] != COMMA:
+                        history.append(COMMA)
+                elif re.match(r"^[.!?…]+$", token):
+                    history = [START]
+                elif token[0].isalpha():
+                    w = model.ids.get(normalize_apostrophes(token), UNKNOWN)
+                    recent.append(model.logp(w, history[-1], history[-2] if len(history) >= 2 else None))
+                    history.append(w)
+            scores[lang] = sum(recent[-8:]) + (math.log10(1.5) if lang == self.active else 0.0)
         top = max(scores.values())
         weights = {lang: 10 ** (s - top) for lang, s in scores.items()}
         norm = sum(weights.values())

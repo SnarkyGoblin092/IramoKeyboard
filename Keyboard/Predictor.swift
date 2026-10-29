@@ -213,6 +213,12 @@ enum Predictor {
         guard !key.isEmpty, limit > 0 else { return [] }
         let endsWithApostrophe = lower.hasSuffix("'")
 
+        // The language-model decoder; typed apostrophes ("we'", "l'ami") keep the dictionary rules below.
+        if Decoder.isAvailable(stores) && !lower.contains("'") {
+            return Decoder.suggest(typed: typed, before: before, active: active, enabled: enabled,
+                                   stores: stores, limit: limit, field: field)
+        }
+
         let weights = contextWeights(before: before, currentPrefix: typed, active: active, stores: stores)
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
 
@@ -354,6 +360,10 @@ enum Predictor {
                         enabled: [Language],
                         stores: [Language: WordStore],
                         field: FieldContext?) -> String? {
+        if Decoder.isAvailable(stores) {
+            return Decoder.autoCorrect(typed: typed, before: before, active: active, enabled: enabled,
+                                       stores: stores, field: field)
+        }
         let lower = TextFolding.normalizeApostrophes(typed).lowercased()
         guard lower.count >= 2, field?.uses(lower, atLeast: 2) != true else { return nil }
         let languages = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
@@ -401,6 +411,10 @@ enum Predictor {
                           stores: [Language: WordStore],
                           limit: Int,
                           field: FieldContext? = nil) -> [String] {
+        // An empty field gets sentence starters from the language models.
+        if Decoder.isAvailable(stores) && (before.isEmpty || before.hasSuffix(" ")) {
+            return Decoder.nextWords(before: before, active: active, stores: stores, limit: limit, field: field)
+        }
         guard let last = before.last, last == " " else { return [] }
         let wide = field == nil ? limit : limit * 2
         let weights = contextWeights(before: before, currentPrefix: "", active: active, stores: stores)

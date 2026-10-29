@@ -574,9 +574,12 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        // "dont" + space -> "don't ", "koszonom" -> "köszönöm ": a word typed without its apostrophe or accents gets
-        // them, in any enabled language. Backspace right after takes it back.
-        if Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true {
+        // Auto-correction: "vsgyok" + space -> "vagyok ", "koszonom" -> "köszönöm ", "dont" -> "don't ", in any enabled
+        // language (see Decoder.autoCorrect). Backspace right after takes it back. Fields that ask for no
+        // correction (addresses, codes) are left alone.
+        if Prefs.suggestions, Prefs.autoCorrect, textDocumentProxy.isSecureTextEntry != true,
+           textDocumentProxy.autocorrectionType != .no,
+           ![UIKeyboardType.URL, .emailAddress].contains(textDocumentProxy.keyboardType ?? .default) {
             let typedWord = currentPrefix(in: before)
             let fieldText = Predictor.fieldContext(before: before, after: textDocumentProxy.documentContextAfterInput ?? "")
             if !typedWord.isEmpty,
@@ -871,7 +874,7 @@ final class KeyboardViewController: UIInputViewController {
                                           limit: 4,
                                           field: field)
                     .map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
-            } else if before.hasSuffix(" ") {
+            } else if before.isEmpty || before.hasSuffix(" ") {
                 words = Predictor.nextWords(before: before,
                                             active: language,
                                             enabled: enabledLanguages,

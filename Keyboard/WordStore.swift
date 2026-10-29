@@ -6,6 +6,7 @@ struct WordEntry {
     let freq: Int
     let norm: Double      // log-frequency scaled to 0...1 within its language (comparable across languages)
     let length: Int       // number of characters in `folded`
+    var rank: Int32 = -1  // line in words_<lang>.tsv (the language model's word id minus 3); -1 for learned words
 }
 
 enum TextFolding {
@@ -84,7 +85,14 @@ final class WordStore {
     /// word -> common next words, space separated ("." -> sentence starters); see `Parsed.pairs`.
     private var builtInPairs: [String: String] = [:]
     private let keyLetters: Set<Character>
-    private let neighbors: [Character: Set<Character>]
+    /// Keys next to each key of this language's layout (folded letters).
+    let neighbors: [Character: Set<Character>]
+    /// The word trigram model (nil when the app was built without it).
+    private(set) var model: LanguageModel?
+    /// Language model id - firstWord -> index in `entries` (-1 = not loaded).
+    private var entryByRank: [Int32] = []
+    /// Sum of all word counts, for unigram probabilities when there is no language model.
+    private var totalFreq: Double = 1
     private var saveScheduled = false
 
     init(language: Language) {
@@ -115,6 +123,9 @@ final class WordStore {
         let limit: Int?
         /// word -> its most common next words, space separated ("." -> sentence starters), from `pairs_<lang>.tsv`.
         let pairs: [String: String]
+        var model: LanguageModel? = nil
+        var entryByRank: [Int32] = []
+        var totalFreq: Double = 1
     }
 
     /// The layout key a word's letter is typed on ("é" -> "e" in Hungarian, but "ö" stays "ö" in German).
@@ -143,9 +154,13 @@ final class WordStore {
         var list: [WordEntry] = []
         list.reserveCapacity(limit ?? 160_000)
         var maxLog = 1.0
+        var total = 0.0
+        var lineNumber = -1
         text.enumerateLines { line, stop in
+            lineNumber += 1   // every line, so ranks stay the language model's ids
             let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
             guard parts.count >= 3, let freq = Int(parts[2]) else { return }
+            total += Double(freq)
             if list.isEmpty { maxLog = max(log(Double(freq) + 1), 1) }
             let word = TextFolding.normalizeApostrophes(String(parts[0]))
             let key = parts[1].isEmpty ? TextFolding.key(word) : String(parts[1])
@@ -154,10 +169,15 @@ final class WordStore {
                                   folded: key,
                                   freq: freq,
                                   norm: min(1, log(Double(freq) + 1) / maxLog),
-                                  length: key.count))
+                                  length: key.count,
+                                  rank: Int32(lineNumber)))
             if let limit = limit, list.count >= limit { stop = true }
         }
         list.sort { $0.folded < $1.folded }
+        var byRank = [Int32](repeating: -1, count: lineNumber + 1)
+        for (index, entry) in list.enumerated() where entry.rank >= 0 && Int(entry.rank) < byRank.count {
+            byRank[Int(entry.rank)] = Int32(index)
+        }
 
         // Index by first + last letter so the swipe decoder only looks at plausible words.
         var edges: [String: [Int]] = [:]
@@ -186,7 +206,8 @@ final class WordStore {
         // A limit the list never reached still loaded every word.
         let isFull = limit.map { list.count < $0 } ?? true
         return Parsed(entries: list, edges: edges, maxLogFreq: maxLog, isFull: isFull, limit: limit,
-                      pairs: parsePairs(language: language))
+                      pairs: parsePairs(language: language), model: LanguageModel(language: language),
+                      entryByRank: byRank, totalFreq: max(total, 1))
     }
 
     /// Reads `pairs_<lang>.tsv`: word <TAB> next words (space separated). Missing file = no built-in pairs.
@@ -209,6 +230,9 @@ final class WordStore {
         isFull = parsed.isFull
         loadedLimit = parsed.limit
         builtInPairs = parsed.pairs
+        model = parsed.model
+        entryByRank = parsed.entryByRank
+        totalFreq = parsed.totalFreq
         prefixCache = [:]
         frequencyOrder = nil
         isLoaded = true
@@ -818,5 +842,83 @@ final class WordStore {
         Settings.shared.setLearnedBigrams(bigrams, for: language.rawValue)
         Settings.shared.setLearnedTrigrams(trigrams, for: language.rawValue)
         Settings.shared.setLearnedUsage(usage, for: language.rawValue)
+    }
+}
+
+// MARK: - Language model and personal learning (used by Decoder)
+
+extension WordStore {
+    /// The dictionary entry with this exact spelling, if loaded.
+    func entry(forWord word: String) -> WordEntry? {
+        let key = TextFolding.key(word)
+        guard !key.isEmpty else { return nil }
+        var index = lowerBound(of: key)
+        while index < entries.count, entries[index].folded == key {
+            if entries[index].word == word { return entries[index] }
+            index += 1
+        }
+        return nil
+    }
+
+    /// The language model's id for a dictionary word (exact spelling), or nil.
+    func modelId(of word: String) -> Int32? {
+        guard model != nil, let entry = entry(forWord: word), entry.rank >= 0 else { return nil }
+        return entry.rank + LanguageModel.firstWord
+    }
+
+    /// The loaded dictionary entry of a language model id, or nil (specials, or beyond a secondary store's limit).
+    func entry(forModelId id: Int32) -> WordEntry? {
+        let rank = Int(id - LanguageModel.firstWord)
+        guard rank >= 0, rank < entryByRank.count else { return nil }
+        let index = Int(entryByRank[rank])
+        return index >= 0 ? entries[index] : nil
+    }
+
+    /// log10 P(word) from the word counts alone (when the app has no language model for this language).
+    func unigramLogProb(of word: String) -> Double? {
+        guard let entry = entry(forWord: word) else { return nil }
+        return log10(Double(max(entry.freq, 1)) / totalFreq)
+    }
+
+    func isLearned(_ word: String) -> Bool {
+        return learned[word] != nil
+    }
+
+    /// log10 probability of a word the user taught the keyboard (names, slang), by how much they use it; nil if
+    /// it is not one.
+    func learnedLogProb(_ word: String) -> Double? {
+        guard let count = learned[word] else { return nil }
+        return -5.5 + min(2.0, 0.6 * log(1 + effective(count, key: word)))
+    }
+
+    /// log10 boost for this user's habits: dictionary words they write, and words they put after `previous`.
+    func personalLogBonus(_ word: String, previous: String?, before2: String?) -> Double {
+        var bonus = 0.0
+        if let count = used[word] {
+            bonus += min(0.8, 0.25 * log(1 + effective(count, key: word)))
+        }
+        if let previous = previous {
+            let pair = previous + " " + word
+            if let count = bigrams[pair] {
+                bonus += min(1.2, 0.5 * log(1 + effective(count, key: pair)))
+            }
+            if let before2 = before2 {
+                let triple = before2 + " " + pair
+                if let count = trigrams[triple] {
+                    bonus += min(0.6, 0.3 * log(1 + effective(count, key: triple)))
+                }
+            }
+        }
+        return bonus
+    }
+
+    /// Words this user wrote after `previous` ("." = at a sentence start), with a log10 strength.
+    func userFollowers(of previous: String) -> [(word: String, strength: Double)] {
+        let prefix = previous + " "
+        var result: [(word: String, strength: Double)] = []
+        for (pair, count) in bigrams where pair.hasPrefix(prefix) {
+            result.append((String(pair.dropFirst(prefix.count)), min(1.2, 0.5 * log(1 + effective(count, key: pair)))))
+        }
+        return result
     }
 }
