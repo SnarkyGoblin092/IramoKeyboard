@@ -13,11 +13,10 @@ struct ThemePreview: View {
 
     /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
     var language: Language? = nil
-    @AppStorage(SettingKey.enabledLanguages, store: SharedStore.defaults) private var enabledCodes = SettingDefault.enabledLanguages
 
     private var shownLanguage: Language {
         if let language = language { return language }
-        return Language.list(from: enabledCodes).first ?? .english
+        return Language.list(from: Settings.shared.enabledLanguages).first ?? .english
     }
 
     // Mirrors `Language.letterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
