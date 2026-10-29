@@ -97,24 +97,30 @@ struct ThemePreview: View {
     // MARK: Palette (straight from the theme)
 
     /// Native follows the system, so its dark variant is swapped in here; every other theme is fixed.
-    private var nativeDark: Bool { return theme.kind == .native && systemScheme == .dark }
+    private var nativeDark: Bool { return (theme.kind == .native || theme.kind == .colored) && systemScheme == .dark }
+    /// Themes that sit on the normal system keyboard background.
+    private var onSystemBackground: Bool { return theme.kind == .native || theme.kind == .colored }
 
-    private var textColor: Color { return nativeDark ? .white : Color(theme.text) }
-    private var keyFill: Color { return nativeDark ? Color(white: 0.42) : Color(theme.key) }
-    private var functionFill: Color { return nativeDark ? Color(white: 0.27) : Color(theme.function) }
-    private var borderColor: Color { return Color(theme.keyBorder) }
+    private var textColor: Color { return nativeDark && theme.kind == .native ? .white : Color(theme.text) }
+    /// Strip text sits on the background, not on a key.
+    private var stripText: Color { return theme.kind == .colored ? (nativeDark ? .white : Color(white: 0.08)) : textColor }
+    private var keyFill: Color { return nativeDark && theme.kind == .native ? Color(white: 0.42) : Color(theme.key) }
+    private var functionFill: Color { return nativeDark && theme.kind == .native ? Color(white: 0.27) : Color(theme.function) }
+    private var borderColor: Color { return theme.kind == .colored ? Color.white.opacity(0.3) : Color(theme.keyBorder) }
     private var panelFill: Color { return nativeDark ? Color(white: 0.20) : Color(theme.panel) }
 
     /// Gradient themes carry their own accent; the others use the accent chosen in the app.
     /// A custom accent from the colour picker wins over a gradient theme's own accent (as on the keyboard).
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-    private var usesThemeAccent: Bool { return theme.kind == .gradient && accentHex.isEmpty && theme.id != ThemeCatalog.customID }
+    private var usesThemeAccent: Bool { return theme.kind == .colored && accentHex.isEmpty }
     private var accentColor: Color { return usesThemeAccent ? Color(theme.accent) : accent }
     private var onAccent: Color { return usesThemeAccent ? Color(theme.onAccent) : .white }
 
     @ViewBuilder private var backdrop: some View {
         if nativeDark {
             Rectangle().fill(Color(white: 0.13))
+        } else if onSystemBackground {
+            Rectangle().fill(Color(red: 0.82, green: 0.84, blue: 0.86))
         } else if theme.gradientStops.count > 1 {
             LinearGradient(colors: theme.gradientStops.map { Color($0) },
                            startPoint: UnitPoint(x: theme.gradientStart.x, y: theme.gradientStart.y),
@@ -186,7 +192,7 @@ struct ThemePreview: View {
             ForEach(0..<words.count, id: \.self) { i in
                 Text(words[i])
                     .font(.system(size: size))
-                    .foregroundColor(textColor)
+                    .foregroundColor(stripText)
                     .frame(maxWidth: .infinity)
                     .overlay(
                         Rectangle().fill(separatorColor).frame(width: 0.5).padding(.vertical, height * 0.22),
@@ -194,13 +200,13 @@ struct ThemePreview: View {
             }
             Image(systemName: "keyboard.chevron.compact.down")
                 .font(.system(size: size))
-                .foregroundColor(textColor.opacity(0.6))
+                .foregroundColor(stripText.opacity(0.6))
                 .frame(width: height * 1.4)
         }
         .frame(height: height)
     }
 
-    private var separatorColor: Color { return textColor.opacity(0.2) }
+    private var separatorColor: Color { return stripText.opacity(0.2) }
 
     private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, radius: CGFloat, hint: String?) -> some View {
         let fill = k.accent ? accentColor : (k.function ? functionFill : keyFill)

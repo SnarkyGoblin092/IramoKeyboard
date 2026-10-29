@@ -23,6 +23,9 @@ enum Theme {
         var accent: UIColor
         var onAccent: UIColor
         var text: UIColor
+        /// Label colour on the keys (differs from `text` on coloured keys, since the strip sits on the system background).
+        var keyText: UIColor
+        var keySecondaryText: UIColor
         var secondaryText: UIColor
         var letterKey: UIColor
         var functionKey: UIColor
@@ -59,20 +62,18 @@ enum Theme {
 
     static var kind: ThemeDefinition.Kind { return definition.kind }
     static var isTransparent: Bool { return kind == .transparent }
-    static var isGradient: Bool { return kind == .gradient }
+    static var isColored: Bool { return kind == .colored }
     static var isLiquidGlass: Bool { return kind == .liquidGlass }
 
     /// Real Liquid Glass (iOS 26 SDK + iOS 26 phone + the Liquid Glass theme).
     static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable }
 
     /// Keys are blurred / see-through rather than solid.
-    static var wantsClearBackdrop: Bool { return kind != .native }
+    static var wantsClearBackdrop: Bool { return kind != .native && kind != .colored }
 
     /// Whether the keyboard draws its own gradient behind everything. Only the gradient themes do:
     /// Liquid Glass must stay see-through, so nothing is painted behind it.
-    static var drawsBackdrop: Bool {
-        return isGradient && !definition.gradientStops.isEmpty
-    }
+    static var drawsBackdrop: Bool { return false }
 
     /// Opacity of that gradient.
     static var backdropOpacity: CGFloat { return 0.45 }
@@ -102,6 +103,8 @@ enum Theme {
     static var onAccent: UIColor { return palette.onAccent }
     static var text: UIColor { return palette.text }
     static var secondaryText: UIColor { return palette.secondaryText }
+    static var keyText: UIColor { return palette.keyText }
+    static var keySecondaryText: UIColor { return palette.keySecondaryText }
     static var letterKey: UIColor { return palette.letterKey }
     static var functionKey: UIColor { return palette.functionKey }
     static var letterKeyPressed: UIColor { return palette.letterKeyPressed }
@@ -141,8 +144,8 @@ enum Theme {
         let userOnAccent = contrastingText(on: rgb)
         // Any accent the user picked wins; a gradient theme only keeps its own accent while the default is untouched.
         let userPicked = !customHex.isEmpty || accentName != SettingDefault.accent
-        let gradientAccent = (userPicked || theme.id == ThemeCatalog.customID) ? userAccent : theme.accent.uiColor
-        let gradientOnAccent = (userPicked || theme.id == ThemeCatalog.customID) ? userOnAccent : theme.onAccent.uiColor
+        let gradientAccent = userPicked ? userAccent : theme.accent.uiColor
+        let gradientOnAccent = userPicked ? userOnAccent : theme.onAccent.uiColor
 
         switch theme.kind {
         case .native:
@@ -151,7 +154,9 @@ enum Theme {
                 accent: userAccent,
                 onAccent: userOnAccent,
                 text: UIColor.label,
+                keyText: UIColor.label,
                 secondaryText: UIColor.secondaryLabel,
+                keySecondaryText: UIColor.secondaryLabel,
                 letterKey: pick(UIColor.white, grey(0.42)),
                 functionKey: pick(nativeFunction, grey(0.27)),
                 letterKeyPressed: pick(nativeFunction, grey(0.27)),
@@ -170,7 +175,9 @@ enum Theme {
                 accent: userAccent,
                 onAccent: userOnAccent,
                 text: UIColor.label,
+                keyText: UIColor.label,
                 secondaryText: UIColor.secondaryLabel,
+                keySecondaryText: UIColor.secondaryLabel,
                 letterKey: pick(white(0.34), white(0.16)),
                 functionKey: pick(black(0.12), black(0.28)),
                 letterKeyPressed: pick(white(0.62), white(0.32)),
@@ -191,7 +198,9 @@ enum Theme {
                 accent: userAccent,
                 onAccent: userOnAccent,
                 text: UIColor.label,
+                keyText: UIColor.label,
                 secondaryText: UIColor.secondaryLabel,
+                keySecondaryText: UIColor.secondaryLabel,
                 letterKey: GlassSupport.isAvailable ? UIColor.clear : pick(white(0.34), white(0.16)),
                 functionKey: GlassSupport.isAvailable ? pick(black(0.08), white(0.10)) : pick(black(0.12), black(0.28)),
                 letterKeyPressed: pick(white(0.55), white(0.30)),
@@ -205,24 +214,26 @@ enum Theme {
                 searchField: pick(black(0.06), white(0.12)),
                 separator: pick(black(0.12), white(0.20)))
 
-        case .gradient:
+        case .colored:
             return Palette(
                 accent: gradientAccent,
                 onAccent: gradientOnAccent,
-                text: theme.text.uiColor,
-                secondaryText: theme.secondaryText.uiColor,
+                text: UIColor.label,
+                keyText: theme.text.uiColor,
+                secondaryText: UIColor.secondaryLabel,
+                keySecondaryText: theme.secondaryText.uiColor,
                 letterKey: theme.key.uiColor,
                 functionKey: theme.function.uiColor,
                 letterKeyPressed: theme.keyPressed.uiColor,
                 functionKeyPressed: theme.functionPressed.uiColor,
-                activeKey: white(0.88),
+                activeKey: white(0.92),
                 keyShadow: UIColor.clear,
-                keyBorder: theme.keyBorder.uiColor,
+                keyBorder: pick(white(0.60), white(0.28)),
                 popupFill: theme.popup.uiColor,
-                panelBackground: UIColor.clear,
+                panelBackground: pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), grey(0.17)),
                 stripFill: UIColor.clear,
-                searchField: theme.panel.uiColor,
-                separator: theme.text.uiColor.withAlphaComponent(0.20))
+                searchField: pick(black(0.08), white(0.16)),
+                separator: pick(black(0.12), white(0.20)))
         }
     }
 

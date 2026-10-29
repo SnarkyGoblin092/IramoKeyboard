@@ -5,18 +5,13 @@ struct ThemesView: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-    @State private var customSpec = ThemeCatalog.loadCustomSpec()
 
-    private let basics = ThemeCatalog.all.filter { $0.kind != .gradient }
-    private let gradients = ThemeCatalog.all.filter { $0.kind == .gradient }
+    private let basics = ThemeCatalog.all.filter { $0.kind != .colored }
+    private let gradients = ThemeCatalog.all.filter { $0.kind == .colored }
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
-    private var customTheme: ThemeDefinition { return ThemeCatalog.custom(from: customSpec) }
-    private var isCustomSelected: Bool { return themeID == ThemeCatalog.customID }
-    private var selected: ThemeDefinition {
-        return isCustomSelected ? customTheme : ThemeCatalog.theme(id: themeID)
-    }
+    private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
     var body: some View {
         ScrollView {
@@ -31,10 +26,7 @@ struct ThemesView: View {
                 .padding(.top, 8)
 
                 group("Basics", themes: basics)
-                group("Gradients", themes: gradients)
-                group("Your own", themes: [customTheme])
-
-                CustomThemeEditor(spec: $customSpec, accent: accent, select: selectCustom)
+                group("Key colours", themes: gradients)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
@@ -42,13 +34,6 @@ struct ThemesView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Themes")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func selectCustom() {
-        if themeID != ThemeCatalog.customID {
-            Feedback.tick()
-            themeID = ThemeCatalog.customID
-        }
     }
 
     private func group(_ title: String, themes: [ThemeDefinition]) -> some View {
@@ -104,115 +89,5 @@ private struct ThemeCard: View {
         .buttonStyle(PressableStyle())
         .accessibilityLabel(theme.name)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-// MARK: - Custom theme
-
-private struct CustomThemeEditor: View {
-    @Binding var spec: CustomThemeSpec
-    let accent: Color
-    let select: () -> Void
-
-    @State private var saveTask: Task<Void, Never>?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Customise").font(.headline)
-
-            VStack(spacing: 0) {
-                colourRow("Backdrop top", \.topHex)
-                Divider()
-                colourRow("Backdrop bottom", \.bottomHex)
-                Divider()
-                colourRow("Keys", \.keyHex)
-                Divider()
-                colourRow("Function keys", \.functionHex)
-                Divider()
-                colourRow("Text", \.textHex)
-            }
-            .padding(.horizontal, 14)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("Key opacity")
-                    Spacer()
-                    Text("\(Int((spec.keyOpacity * 100).rounded()))%")
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                }
-                Slider(value: $spec.keyOpacity, in: 0.2...1.0, step: 0.05) { editing in
-                    if !editing { commit() }
-                }
-                .accessibilityLabel("Key opacity")
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-
-            VStack(spacing: 12) {
-                Toggle("Dark keyboard styling", isOn: Binding(
-                    get: { spec.isDark },
-                    set: { spec.isDark = $0; Feedback.tick(); commit() }))
-                Picker("Style", selection: Binding(
-                    get: { spec.style },
-                    set: { spec.style = $0; Feedback.tick(); commit() })) {
-                    Text("Gradient").tag("gradient")
-                    Text("Glass").tag("glass")
-                }
-                .pickerStyle(.segmented)
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-
-            Button {
-                spec = CustomThemeSpec.standard
-                Feedback.tick()
-                commit()
-            } label: {
-                Text("Reset custom colours")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-
-            Text("Changing a colour here switches the keyboard to your custom theme.")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-        }
-        .onDisappear {
-            // Save any change still waiting for the delay.
-            if saveTask != nil { commit() }
-        }
-    }
-
-    private func colourRow(_ title: String, _ path: WritableKeyPath<CustomThemeSpec, String>) -> some View {
-        ColorPicker(title, selection: Binding(
-            get: { Color(hex: spec[keyPath: path]) },
-            set: { newColor in
-                let hex = newColor.hexString
-                guard hex != spec[keyPath: path] else { return }
-                spec[keyPath: path] = hex
-                scheduleCommit()
-            }), supportsOpacity: false)
-            .padding(.vertical, 10)
-    }
-
-    /// Colour pickers report continuously while dragging: the preview updates at once, the save waits.
-    private func scheduleCommit() {
-        saveTask?.cancel()
-        saveTask = Task {
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            if Task.isCancelled { return }
-            await MainActor.run { commit() }
-        }
-    }
-
-    private func commit() {
-        saveTask?.cancel()
-        saveTask = nil
-        select()
-        ThemeCatalog.saveCustomSpec(spec)
     }
 }

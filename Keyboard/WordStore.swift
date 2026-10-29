@@ -449,6 +449,29 @@ final class WordStore {
         return result
     }
 
+    /// word -> 0...1: how much this user writes each learned word (more and more recent = higher). A plain value
+    /// copy that is safe to hand to another thread.
+    func personalStrengths() -> [String: Double] {
+        var result: [String: Double] = [:]
+        for (word, count) in learned {
+            let key = learnedKeys[word] ?? TextFolding.key(word)
+            let strength = effective(count, key: key)
+            result[word] = min(1, log(1 + strength) / log(31))
+        }
+        return result
+    }
+
+    /// Entries for learned words (names, slang...) so swiping can find them too. Duplicates of dictionary words
+    /// are skipped by the decoder.
+    func learnedEntries() -> [WordEntry] {
+        return learned.compactMap { (word, count) -> WordEntry? in
+            let folded = learnedKeys[word] ?? TextFolding.key(word)
+            guard folded.count >= 2 else { return nil }
+            let norm = min(0.9, 0.35 + log(1 + Double(count)) / 12)
+            return WordEntry(word: word, folded: folded, freq: count, norm: norm, length: folded.count)
+        }
+    }
+
     /// word -> bonus for every word known to follow `previous`; a plain value copy that is safe to hand to another thread.
     func contextBonuses(after previous: String, before2: String? = nil) -> [String: Double] {
         let prev = TextFolding.normalizeApostrophes(previous).lowercased()

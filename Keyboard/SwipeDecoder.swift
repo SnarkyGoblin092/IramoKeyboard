@@ -14,20 +14,32 @@ import CoreGraphics
 final class SwipeDecoder {
     private let sampleCount = 32
 
-    /// - Parameter contextBonuses: word -> extra score (0...0.6) given the word before the swipe, taken on the
-    ///   main thread beforehand (`WordStore.contextBonuses(after:)`), so this can run on a background thread.
+    /// One dictionary the decoder may take words from: the language being typed in (no penalty), or another
+    /// language the user switches to often (small penalty).
+    struct Source {
+        let store: WordStore
+        /// Added to the cost of every word from this source.
+        var penalty: Double = 0
+        /// word -> extra score (0...0.6) given the word before the swipe (`WordStore.contextBonuses(after:)`).
+        var contextBonuses: [String: Double] = [:]
+        /// word -> how much this user writes it (0...1), from the learned words (`WordStore.personalStrengths()`).
+        var personal: [String: Double] = [:]
+        /// Words the user typed that the built-in dictionary does not have (names, slang).
+        var extras: [WordEntry] = []
+    }
+
     func decode(path rawPath: [CGPoint],
                 keyCenters: [Character: CGPoint],
                 keySize: CGSize,
-                store: WordStore,
-                contextBonuses: [String: Double] = [:],
+                sources: [Source],
                 limit: Int = 4) -> [String] {
         let path = thinned(rawPath, minimumStep: 2)
         guard path.count >= 2, let start = path.first, let end = path.last else { return [] }
 
         let keyWidth = max(keySize.width, 1)
-        let startKeys = nearestKeys(to: start, centers: keyCenters, within: keyWidth * 1.7, count: 4)
-        let endKeys = nearestKeys(to: end, centers: keyCenters, within: keyWidth * 1.7, count: 4)
+        // A swipe that starts or ends between two keys is judged against several nearby keys.
+        let startKeys = nearestKeys(to: start, centers: keyCenters, within: keyWidth * 1.9, count: 5)
+        let endKeys = nearestKeys(to: end, centers: keyCenters, within: keyWidth * 1.9, count: 5)
         guard !startKeys.isEmpty, !endKeys.isEmpty else { return [] }
 
         let pathLength = length(of: path)
@@ -36,16 +48,15 @@ final class SwipeDecoder {
         var scored: [(word: String, score: Double)] = []
         var seen = Set<String>()
 
-        for index in store.candidateIndices(first: startKeys, last: endKeys) {
-            let entry = store.entries[index]
-
+        func consider(_ entry: WordEntry, source: Source) {
+            if seen.contains(entry.word) { return }
             // Ideal path: centres of the word's letters, consecutive duplicates collapsed (a double letter is
             // one pass over the key).
             var template: [CGPoint] = []
             var previous: Character? = nil
             var knownKeys = true
             for character in entry.word where character.isLetter {
-                guard let key = store.keyLetter(for: character) else {
+                guard let key = source.store.keyLetter(for: character) else {
                     knownKeys = false
                     break
                 }
@@ -57,17 +68,17 @@ final class SwipeDecoder {
                 }
                 template.append(center)
             }
-            guard knownKeys, template.count >= 2, let templateStart = template.first, let templateEnd = template.last else { continue }
+            guard knownKeys, template.count >= 2, let templateStart = template.first, let templateEnd = template.last else { return }
 
             // Start and end matter most: a swipe begins on the first letter and lifts on the last.
             let startMiss = Double(distance(start, templateStart) / keyWidth)
             let endMiss = Double(distance(end, templateEnd) / keyWidth)
-            if startMiss > 1.7 || endMiss > 1.7 { continue }
+            if startMiss > 1.9 || endMiss > 1.9 { return }
 
             let templateLength = length(of: template)
-            guard templateLength > keyWidth * 0.5 else { continue }
+            guard templateLength > keyWidth * 0.5 else { return }
             let ratio = pathLength / templateLength
-            if ratio < 0.45 || ratio > 2.8 { continue }
+            if ratio < 0.45 || ratio > 2.8 { return }
 
             // 1. Shape: same-arc-length points of both paths, compared one by one.
             let sampledTemplate = resample(template, count: sampleCount)
@@ -76,7 +87,7 @@ final class SwipeDecoder {
                 shape += Double(min(distance(sampledPath[i], sampledTemplate[i]), keyWidth * 2.5))
             }
             shape /= Double(sampleCount) * Double(keyWidth)
-            if shape > 1.7 { continue }
+            if shape > 1.8 { return }
 
             // 2. Coverage: every letter of the word has to lie close to the finger's path.
             var coverage = 0.0
@@ -89,7 +100,7 @@ final class SwipeDecoder {
                 worstLetter = max(worstLetter, miss)
             }
             coverage /= Double(template.count)
-            if worstLetter > 1.9 { continue }
+            if worstLetter > 1.9 { return }
 
             // 3. Excess: the finger must not wander to places the word never goes.
             var excess = 0.0
@@ -99,11 +110,21 @@ final class SwipeDecoder {
             excess /= Double(sampleCount) * Double(keyWidth)
 
             let frequency = entry.norm
-            let context = contextBonuses[entry.word] ?? 0
+            let context = source.contextBonuses[entry.word] ?? 0
+            let personal = source.personal[entry.word] ?? 0
             let cost = 0.45 * shape + 0.40 * coverage + 0.35 * excess
-                + 0.55 * (startMiss + endMiss) + 0.35 * max(0, worstLetter - 0.9)
-            let score = cost - 0.55 * frequency - 0.8 * context
-            if seen.insert(entry.word).inserted { scored.append((word: entry.word, score: score)) }
+                + 0.50 * (startMiss + endMiss) + 0.35 * max(0, worstLetter - 0.9) + source.penalty
+            // Words this user writes (and words that tend to follow the previous word) are favoured.
+            let score = cost - 0.55 * frequency - 0.8 * context - 0.45 * personal
+            seen.insert(entry.word)
+            scored.append((word: entry.word, score: score))
+        }
+
+        for source in sources {
+            for index in source.store.candidateIndices(first: startKeys, last: endKeys) {
+                consider(source.store.entries[index], source: source)
+            }
+            for entry in source.extras { consider(entry, source: source) }
         }
 
         scored.sort { $0.score < $1.score }

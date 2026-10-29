@@ -31,6 +31,10 @@ final class KeyboardViewController: UIInputViewController {
     private let maxSecondaryStores = 3
     private let secondaryWordLimit = 12000
     private let decoder = SwipeDecoder()
+    /// The language that was active before the current one (swiping also considers it, a little less strongly).
+    private var lastOtherLanguage: Language?
+    /// The text just before the cursor right after a swipe / suggestion added its own trailing space.
+    private var autoSpaceMarker: String?
 
     private var lastSpaceTime = Date.distantPast
     private var lastShiftTap = Date.distantPast
@@ -140,8 +144,7 @@ final class KeyboardViewController: UIInputViewController {
         return [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
             "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", "\(s.keyBorders)", s.enabledLanguages.joined(separator: ","),
-            SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
-            SharedStore.defaults.string(forKey: ThemeCatalog.customThemeKey) ?? ""
+            SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? ""
         ].joined(separator: "|")
     }
 
@@ -149,7 +152,7 @@ final class KeyboardViewController: UIInputViewController {
     private func buildInterface() {
         Prefs.refresh()
         Theme.reload()
-        view.overrideUserInterfaceStyle = Theme.interfaceStyle   // gradient themes force light/dark
+        view.overrideUserInterfaceStyle = Theme.interfaceStyle   // themes may force light/dark
         validateLanguage()
         hideEmojiPanel(refresh: false)
         isSearchingEmoji = false
@@ -359,6 +362,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func selectLanguage(_ target: Language) {
         guard target != language else { return }
+        lastOtherLanguage = language
         language = target
         settings.languageCode = target.rawValue
         page = .letters
@@ -480,12 +484,23 @@ final class KeyboardViewController: UIInputViewController {
             refreshEmojiSearch()
             return
         }
+        // Punctuation that normally ends a word goes right after the word when the space in front of it was
+        // added automatically (by a swipe or a picked suggestion) and nothing was typed since.
+        if text.count == 1, ".,!?;:)]}\u{2026}".contains(text) {
+            let before = textDocumentProxy.documentContextBeforeInput ?? ""
+            if let marker = autoSpaceMarker, !marker.isEmpty, before.hasSuffix(marker), before.hasSuffix(" "),
+               let beforeSpace = before.dropLast().last, beforeSpace.isLetter || beforeSpace.isNumber {
+                textDocumentProxy.deleteBackward()
+            }
+        }
+        autoSpaceMarker = nil
         textDocumentProxy.insertText(output)
         lastSpaceTime = Date.distantPast
         afterTyping()
     }
 
     private func handleSpace() {
+        autoSpaceMarker = nil
         if isSearchingEmoji {
             if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
             refreshEmojiSearch()
@@ -832,6 +847,7 @@ final class KeyboardViewController: UIInputViewController {
         for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
         textDocumentProxy.insertText(replacement + " ")
         lastSpaceTime = Date()
+        autoSpaceMarker = String((String(before.dropLast(prefix.count)) + replacement + " ").suffix(12))
     }
 
     // MARK: Swipe typing
@@ -856,6 +872,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         let inserted = word + " "
         textDocumentProxy.insertText(leadingSpace + inserted)
+        autoSpaceMarker = String((before + leadingSpace + inserted).suffix(12))
 
         lastSwipeInserted = inserted
         swipeAlternatives = words.prefix(3).map { applyShift(to: $0) }
@@ -1046,10 +1063,25 @@ extension KeyboardViewController: KeyboardViewDelegate {
         if before.isEmpty || before.last == " " || before.last == "\n" {
             previous = Predictor.lastWords(in: before, count: 1).first
         }
-        let bonuses = previous.map { store.contextBonuses(after: $0) } ?? [:]
+        let before2 = Predictor.lastWords(in: before, count: 2)
+        let bonuses = previous.map { store.contextBonuses(after: $0, before2: before2.count > 1 ? before2[0] : nil) } ?? [:]
+        var sources = [SwipeDecoder.Source(store: store,
+                                           penalty: 0,
+                                           contextBonuses: bonuses,
+                                           personal: store.personalStrengths(),
+                                           extras: store.learnedEntries())]
+        // The language switched away from most recently is a plausible second reading, with a small penalty.
+        if let other = lastOtherLanguage, other != language, enabledLanguages.contains(other),
+           let otherStore = stores[other], otherStore.isLoaded {
+            sources.append(SwipeDecoder.Source(store: otherStore,
+                                               penalty: 0.30,
+                                               contextBonuses: previous.map { otherStore.contextBonuses(after: $0) } ?? [:],
+                                               personal: otherStore.personalStrengths(),
+                                               extras: otherStore.learnedEntries()))
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let words = decoder.decode(path: path, keyCenters: centers, keySize: keySize, store: store, contextBonuses: bonuses)
+            let words = decoder.decode(path: path, keyCenters: centers, keySize: keySize, sources: sources)
             DispatchQueue.main.async {
                 self?.commitSwipe(words)
             }

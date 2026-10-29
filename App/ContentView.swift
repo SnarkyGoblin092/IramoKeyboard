@@ -262,7 +262,7 @@ private struct DataSection: View {
             case .recents: return "The Recently Used emoji tab will be empty."
             case .learned: return "Words the keyboard picked up while you type will be removed."
             case .touch: return "The keyboard forgets how you tap and goes back to the standard key areas."
-            case .reset: return "Your shortcuts, recent emoji, learned words and custom theme colours are kept."
+            case .reset: return "Your shortcuts, recent emoji and learned words are kept."
             }
         }
 

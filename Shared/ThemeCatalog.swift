@@ -40,33 +40,6 @@ extension ThemeRGBA {
     }
 }
 
-/// The user's own theme (id "custom"). The app writes it as JSON (a String) under
-/// `ThemeCatalog.customThemeKey` in `SharedStore.defaults`; the keyboard reads it.
-/// JSON shape: {"topHex":"#5B2A86","bottomHex":"#FF9A4D","keyHex":"#FFFFFF","functionHex":"#000000",
-///              "textHex":"#FFFFFF","keyOpacity":0.2,"isDark":true,"style":"gradient"}
-struct CustomThemeSpec: Codable, Equatable {
-    var topHex: String
-    var bottomHex: String
-    var keyHex: String
-    var functionHex: String
-    var textHex: String
-    /// 0.2 ... 1 - how solid the keys are.
-    var keyOpacity: Double
-    /// Forces dark or light key styling/text handling.
-    var isDark: Bool
-    /// "gradient" (opaque-ish gradient backdrop) or "glass" (tinted Liquid Glass over a clear backdrop).
-    var style: String
-
-    static let standard = CustomThemeSpec(topHex: "#5B2A86",
-                                          bottomHex: "#FF9A4D",
-                                          keyHex: "#FFFFFF",
-                                          functionHex: "#000000",
-                                          textHex: "#FFFFFF",
-                                          keyOpacity: 0.3,
-                                          isDark: true,
-                                          style: "gradient")
-}
-
 // MARK: - Theme definition
 
 /// One keyboard theme. The keyboard (Keyboard/Theme.swift) and the app's theme picker both read this,
@@ -78,8 +51,8 @@ struct ThemeDefinition: Hashable {
         case native
         /// See-through keys over the clear keyboard backdrop (the wallpaper/app shows through).
         case transparent
-        /// A gradient backdrop behind translucent keys. Uses `gradient*` and the colour fields below.
-        case gradient
+        /// Coloured keys on the normal system keyboard background. Only the keys change colour.
+        case colored
         /// iOS 26 Liquid Glass keys/popups/strip (real `UIGlassEffect`); older iOS falls back to a blur.
         /// The backdrop is clear, so `gradient*` is ignored unless `gradientStops` is non-empty
         /// (then it is drawn faintly behind the glass so previews and fallbacks still have colour).
@@ -147,7 +120,7 @@ struct ThemeDefinition: Hashable {
     }
 
     /// True when the keyboard should draw its own backdrop and a clear system background.
-    var drawsBackdrop: Bool { return kind == .gradient && !gradientStops.isEmpty }
+    var drawsBackdrop: Bool { return false }
 }
 
 // MARK: - Catalog
@@ -159,75 +132,13 @@ enum ThemeCatalog {
     /// Picker order.
     static let all: [ThemeDefinition] = [
         native, transparent, liquidGlass,
-        aurora, sunset, ocean, forest, midnight, rose, graphite, neon, lavender
+        ocean, forest, sunset, aurora, rose, lavender, graphite, midnight, neon
     ]
 
-    /// Unknown ids fall back to Native. The id "custom" is built from the user's saved `CustomThemeSpec`.
+    /// Unknown ids (including the removed "custom" theme) fall back to Native.
     static func theme(id: String) -> ThemeDefinition {
-        if id == customID { return custom(from: loadCustomSpec()) }
         for theme in all where theme.id == id { return theme }
         return native
-    }
-
-    // MARK: Custom theme
-
-    static let customID = "custom"
-    /// UserDefaults key (in `SharedStore.defaults`) holding the JSON of a `CustomThemeSpec` (a String).
-    static let customThemeKey = "hunkeys.customTheme"
-
-    static func loadCustomSpec() -> CustomThemeSpec {
-        let defaults = SharedStore.defaults
-        var data: Data? = nil
-        if let text = defaults.string(forKey: customThemeKey) {
-            data = text.data(using: .utf8)
-        } else if let raw = defaults.data(forKey: customThemeKey) {
-            data = raw
-        }
-        if let data = data, let spec = try? JSONDecoder().decode(CustomThemeSpec.self, from: data) {
-            return spec
-        }
-        return CustomThemeSpec.standard
-    }
-
-    static func saveCustomSpec(_ spec: CustomThemeSpec) {
-        if let data = try? JSONEncoder().encode(spec), let text = String(data: data, encoding: .utf8) {
-            SharedStore.defaults.set(text, forKey: customThemeKey)
-        }
-    }
-
-    /// Builds the theme from the user's colours. `style == "glass"` gives a tinted Liquid Glass theme.
-    static func custom(from spec: CustomThemeSpec) -> ThemeDefinition {
-        let dark = spec.isDark
-        let opacity = min(max(spec.keyOpacity, 0.2), 1.0)
-        let top = ThemeRGBA(hexString: spec.topHex) ?? ThemeRGBA(hex: 0x5B2A86)
-        let bottom = ThemeRGBA(hexString: spec.bottomHex) ?? ThemeRGBA(hex: 0xFF9A4D)
-        let keyColor = ThemeRGBA(hexString: spec.keyHex) ?? ThemeRGBA(1, 1, 1, 1)
-        let functionColor = ThemeRGBA(hexString: spec.functionHex) ?? ThemeRGBA(0, 0, 0, 1)
-        let textColor = ThemeRGBA(hexString: spec.textHex) ?? (dark ? ThemeRGBA(1, 1, 1, 1) : ThemeRGBA(0.08, 0.08, 0.10, 1))
-        let isGlass = (spec.style == "glass")
-
-        func alpha(_ color: ThemeRGBA, _ a: Double) -> ThemeRGBA { return ThemeRGBA(color.r, color.g, color.b, a) }
-        let glassFactor = isGlass ? 0.45 : 1.0
-
-        return ThemeDefinition(
-            id: customID,
-            name: "Custom",
-            kind: isGlass ? .liquidGlass : .gradient,
-            isDark: dark,
-            key: alpha(keyColor, opacity * glassFactor),
-            function: alpha(functionColor, min(1, opacity * 0.85) * glassFactor),
-            keyPressed: alpha(keyColor, min(1, opacity * 1.5 + 0.1)),
-            functionPressed: alpha(functionColor, min(1, opacity * 1.3 + 0.1)),
-            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.28) : ThemeRGBA(1, 1, 1, 0.70),
-            text: textColor,
-            secondaryText: alpha(textColor, 0.6),
-            accent: ThemeRGBA(hex: 0x0A84FF),
-            onAccent: ThemeRGBA(1, 1, 1, 1),
-            popup: alpha(dark ? ThemeRGBA(0.12, 0.12, 0.16, 1) : ThemeRGBA(1, 1, 1, 1), 0.96),
-            panel: dark ? ThemeRGBA(1, 1, 1, 0.16) : ThemeRGBA(0, 0, 0, 0.08),
-            gradientStops: [top, bottom],
-            gradientAngle: 90
-        )
     }
 
     // MARK: Helpers
@@ -235,36 +146,41 @@ enum ThemeCatalog {
     private static let clear = ThemeRGBA(0, 0, 0, 0)
     private static let white = ThemeRGBA(1, 1, 1, 1)
 
-    /// Builds a tinted translucent theme: keys/borders/panels match the Transparent theme; only the colours (a soft gradient wash) differ.
-    /// `dark` themes use light text on dark glassy keys; light themes use dark text on white-ish keys.
-    private static func gradient(id: String,
-                                 name: String,
-                                 dark: Bool,
-                                 angle: Double,
-                                 stops: [UInt32],
-                                 accent: UInt32,
-                                 onAccent: UInt32 = 0xFFFFFF) -> ThemeDefinition {
-        let text = dark ? ThemeRGBA(1, 1, 1, 1) : ThemeRGBA(0.08, 0.08, 0.10, 1)
-        let key = dark ? ThemeRGBA(1, 1, 1, 0.16) : ThemeRGBA(1, 1, 1, 0.34)
-        let function = dark ? ThemeRGBA(0, 0, 0, 0.28) : ThemeRGBA(0, 0, 0, 0.12)
+    /// Mixes a colour toward white (amount > 0) or black (amount < 0).
+    private static func shade(_ hex: UInt32, _ amount: Double) -> ThemeRGBA {
+        let base = ThemeRGBA(hex: hex)
+        let target: Double = amount >= 0 ? 1 : 0
+        let t = abs(amount)
+        return ThemeRGBA(base.r + (target - base.r) * t, base.g + (target - base.g) * t, base.b + (target - base.b) * t, 1)
+    }
+
+    /// Coloured keys on the normal system background: letter keys use `key`, function keys a deeper shade.
+    /// `lightText` picks white labels (dark keys) or near-black labels (light keys).
+    private static func colored(id: String,
+                                name: String,
+                                key: UInt32,
+                                lightText: Bool,
+                                accent: UInt32,
+                                onAccent: UInt32 = 0xFFFFFF) -> ThemeDefinition {
+        let text = lightText ? ThemeRGBA(1, 1, 1, 1) : ThemeRGBA(0.08, 0.08, 0.10, 1)
         return ThemeDefinition(
             id: id,
             name: name,
-            kind: .gradient,
-            isDark: dark,
-            key: key,
-            function: function,
-            keyPressed: dark ? ThemeRGBA(1, 1, 1, 0.32) : ThemeRGBA(1, 1, 1, 0.62),
-            functionPressed: dark ? ThemeRGBA(1, 1, 1, 0.24) : ThemeRGBA(1, 1, 1, 0.50),
-            keyBorder: dark ? ThemeRGBA(1, 1, 1, 0.28) : ThemeRGBA(1, 1, 1, 0.70),
+            kind: .colored,
+            isDark: nil,
+            key: shade(key, 0),
+            function: shade(key, -0.30),
+            keyPressed: shade(key, lightText ? 0.25 : -0.12),
+            functionPressed: shade(key, lightText ? 0.10 : -0.40),
+            keyBorder: clear,
             text: text,
-            secondaryText: dark ? ThemeRGBA(1, 1, 1, 0.65) : ThemeRGBA(0.08, 0.08, 0.10, 0.55),
+            secondaryText: ThemeRGBA(text.r, text.g, text.b, 0.65),
             accent: ThemeRGBA(hex: accent),
             onAccent: ThemeRGBA(hex: onAccent),
-            popup: dark ? ThemeRGBA(0.12, 0.12, 0.16, 0.96) : ThemeRGBA(1, 1, 1, 0.97),
-            panel: dark ? ThemeRGBA(1, 1, 1, 0.16) : ThemeRGBA(0, 0, 0, 0.08),
-            gradientStops: stops.map { ThemeRGBA(hex: $0) },
-            gradientAngle: angle
+            popup: shade(key, 0),
+            panel: ThemeRGBA(0, 0, 0, 0.08),
+            gradientStops: [],
+            gradientAngle: 90
         )
     }
 
@@ -333,39 +249,13 @@ enum ThemeCatalog {
         gradientAngle: 120
     )
 
-    static let aurora = gradient(id: "aurora", name: "Aurora", dark: true, angle: 135,
-                                 stops: [0x0F2027, 0x1B6E6A, 0x5B3FA0],
-                                 accent: 0x4DF0C0, onAccent: 0x06231C)
-
-    static let sunset = gradient(id: "sunset", name: "Sunset", dark: true, angle: 90,
-                                 stops: [0x5B2A86, 0xD1456B, 0xFF9A4D],
-                                 accent: 0xFFD166, onAccent: 0x3A1B00)
-
-    static let ocean = gradient(id: "ocean", name: "Ocean", dark: true, angle: 100,
-                                stops: [0x0B3D91, 0x1380C4, 0x3CC7D9],
-                                accent: 0xFFFFFF, onAccent: 0x0B3D91)
-
-    static let forest = gradient(id: "forest", name: "Forest", dark: true, angle: 120,
-                                 stops: [0x0B2A1A, 0x1F6B3B, 0x7BAF52],
-                                 accent: 0xC8F169, onAccent: 0x10300F)
-
-    static let midnight = gradient(id: "midnight", name: "Midnight", dark: true, angle: 90,
-                                   stops: [0x05060F, 0x131A3A, 0x2A2F6B],
-                                   accent: 0x7C8CFF)
-
-    static let rose = gradient(id: "rose", name: "Rose", dark: false, angle: 135,
-                               stops: [0xFFD6E0, 0xFFB3C7, 0xF78FB3],
-                               accent: 0xE0457B)
-
-    static let graphite = gradient(id: "graphite", name: "Graphite", dark: true, angle: 90,
-                                   stops: [0x2B2D31, 0x1B1C1F],
-                                   accent: 0xFF9F0A, onAccent: 0x2A1700)
-
-    static let neon = gradient(id: "neon", name: "Neon", dark: true, angle: 45,
-                               stops: [0x12002B, 0x4A00A0, 0xE100A8],
-                               accent: 0x00F5D4, onAccent: 0x00231F)
-
-    static let lavender = gradient(id: "lavender", name: "Lavender", dark: false, angle: 120,
-                                   stops: [0xE9E4FF, 0xCFC3FF, 0xA9B8FF],
-                                   accent: 0x6C5CE7)
+    static let ocean = colored(id: "ocean", name: "Ocean", key: 0x2F7FD6, lightText: true, accent: 0xFFFFFF, onAccent: 0x0B3D91)
+    static let forest = colored(id: "forest", name: "Forest", key: 0x3A8F5A, lightText: true, accent: 0xC8F169, onAccent: 0x10300F)
+    static let sunset = colored(id: "sunset", name: "Sunset", key: 0xE2703A, lightText: true, accent: 0xFFD166, onAccent: 0x3A1B00)
+    static let aurora = colored(id: "aurora", name: "Aurora", key: 0x1F9A94, lightText: true, accent: 0x4DF0C0, onAccent: 0x06231C)
+    static let rose = colored(id: "rose", name: "Rose", key: 0xF4A3BF, lightText: false, accent: 0xE0457B)
+    static let lavender = colored(id: "lavender", name: "Lavender", key: 0xC4B8FF, lightText: false, accent: 0x6C5CE7)
+    static let graphite = colored(id: "graphite", name: "Graphite", key: 0x55585F, lightText: true, accent: 0xFF9F0A, onAccent: 0x2A1700)
+    static let midnight = colored(id: "midnight", name: "Midnight", key: 0x303A85, lightText: true, accent: 0x7C8CFF)
+    static let neon = colored(id: "neon", name: "Neon", key: 0x8A2BE2, lightText: true, accent: 0x00F5D4, onAccent: 0x00231F)
 }

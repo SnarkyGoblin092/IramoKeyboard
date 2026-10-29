@@ -25,7 +25,7 @@ final class KeyPreviewView: UIView {
 
         label.textAlignment = .center
         label.font = UIFont.systemFont(ofSize: 38, weight: .light)
-        label.textColor = Theme.text
+        label.textColor = Theme.keyText
         if let glassView = glassView {
             glassView.contentView.addSubview(label)
         } else {
@@ -189,7 +189,7 @@ final class AlternatesPopupView: UIView {
         highlight.layer.cornerRadius = max(4, popupRadius - 3)
         highlight.backgroundColor = Theme.accent
         for (index, label) in labels.enumerated() {
-            label.textColor = (index == highlightedIndex) ? Theme.onAccent : Theme.text
+            label.textColor = (index == highlightedIndex) ? Theme.onAccent : Theme.keyText
         }
     }
 }

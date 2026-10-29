@@ -62,7 +62,7 @@ final class KeyView: UIView {
 
         hintLabel.textAlignment = .right
         hintLabel.font = UIFont.systemFont(ofSize: 10, weight: .regular)
-        hintLabel.textColor = Theme.secondaryText
+        hintLabel.textColor = Theme.keySecondaryText
         hintLabel.text = spec.hint
         host.addSubview(hintLabel)
 
@@ -126,7 +126,7 @@ final class KeyView: UIView {
         if usesAccent {
             textColor = Theme.onAccent
         } else {
-            textColor = Theme.text
+            textColor = Theme.keyText
         }
         label.textColor = textColor
         iconView.tintColor = textColor
@@ -163,7 +163,7 @@ final class KeyView: UIView {
             lastGlassState = state
             GlassSupport.setTint(glassView, clear: false, tint: tint)
         }
-        let scale: CGFloat = isPressed ? 0.94 : 1.0
+        let scale: CGFloat = 1.0   // keys never change size while typing
         UIView.animate(withDuration: 0.22, delay: 0,
                        usingSpringWithDamping: 0.62, initialSpringVelocity: 0.8,
                        options: [.allowUserInteraction, .beginFromCurrentState]) {
