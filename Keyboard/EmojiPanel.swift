@@ -9,7 +9,7 @@ enum EmojiLook {
     static let secondary = UIColor.secondaryLabel
     static let searchField = pick(UIColor(white: 0, alpha: 0.08), UIColor(white: 1, alpha: 0.14))
     static let separator = pick(UIColor(white: 0, alpha: 0.12), UIColor(white: 1, alpha: 0.20))
-    static let selection = pick(UIColor(white: 0, alpha: 0.10), UIColor(white: 1, alpha: 0.18))
+    static let selection = pick(UIColor(white: 0, alpha: 0.30), UIColor(white: 1, alpha: 0.30))
     static let popup = pick(UIColor.white, UIColor(white: 0.42, alpha: 1))
     static let background = pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), UIColor(white: 0.17, alpha: 1))
 }
@@ -210,7 +210,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let emptyLabel = UILabel()
 
     private let tabGlass = FlatPanel(background: UIColor.clear)
-    private let tabSelection = FlatPanel(background: EmojiLook.selection, cornerRadius: 100)
+    private let tabSelection = UIView()
     private let abcPanel = FlatPanel(background: UIColor.clear)
     private let deletePanel = FlatPanel(background: UIColor.clear)
     private let abcButton = HitButton(type: .system)
@@ -295,6 +295,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         addSubview(deletePanel)
         addSubview(tabGlass)
         tabSelection.isUserInteractionEnabled = false
+        tabSelection.backgroundColor = UIColor.label.withAlphaComponent(0.3)
+        tabSelection.layer.cornerCurve = .continuous
         tabGlass.contentView.addSubview(tabSelection)
         abcButton.setTitle("ABC", for: .normal)
         abcButton.setTitleColor(EmojiLook.text, for: .normal)
@@ -462,6 +464,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             return
         }
         tabSelection.isHidden = false
+        tabSelection.layer.cornerRadius = 15 * EmojiPanel.scale(forWidth: bounds.width)
         let buttonFrame = tabButtons[selectedTabIndex].frame
         let circle = 30 * EmojiPanel.scale(forWidth: bounds.width)
         let target = CGRect(x: buttonFrame.midX - circle / 2, y: buttonFrame.midY - circle / 2, width: circle, height: circle)
@@ -557,12 +560,14 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     /// (ABC has its own row there).
     private func slotLayout() -> (abc: CGFloat, first: CGFloat, step: CGFloat, delete: CGFloat) {
         let tabs = max(1, tabButtons.count)
+        let step: CGFloat = 32
+        // The tab group is centred between ABC and delete.
         if compact {
-            let step = (402 - 38) / CGFloat(tabs + 1)
-            return (38, 38 + step, step, 402)
+            let first = (38 + 402) / 2 - step * CGFloat(tabs - 1) / 2
+            return (38, first, step, 402)
         }
-        let step = (411 - 37.7) / CGFloat(tabs)
-        return (27.7, 37.7, step, 411)
+        let first = (37.7 + 411) / 2 - step * CGFloat(tabs - 1) / 2
+        return (27.7, first, step, 411)
     }
 
     private func layoutTabs() {

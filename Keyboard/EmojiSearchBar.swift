@@ -85,10 +85,14 @@ final class EmojiSearchBar: UIView {
         setNeedsLayout()
     }
 
+    /// Same distance from the keyboard's top edge as the picker's search field, so it does not jump when tapped.
+    static var topInset: CGFloat = 5
+
     override func layoutSubviews() {
         super.layoutSubviews()
         // Same thickness and curve as the picker's search pill.
-        glass.frame = CGRect(x: 6, y: 0, width: max(0, bounds.width - 12), height: bounds.height)
+        let topInset = min(bounds.height - 30, EmojiSearchBar.topInset)
+        glass.frame = CGRect(x: 6, y: topInset, width: max(0, bounds.width - 12), height: bounds.height - topInset)
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)

@@ -248,12 +248,18 @@ final class KeyboardViewController: UIInputViewController {
         if Prefs.numberRow { total += isLandscape ? 26 : 40 }
         total *= CGFloat(Prefs.heightScale)
         // The emoji picker always shows four full rows: the keyboard grows to fit while it is open.
-        if emojiPanel != nil {
+        let panelScale = EmojiPanel.scale(forWidth: view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width)
+        if emojiPanel != nil || isSearchingEmoji {
             // The view may not have its final width yet when the picker opens, so fall back to the screen width.
             let width = view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width
             total = max(total, EmojiPanel.requiredHeight(forWidth: width))
         }
-        let suggestions: CGFloat = isLandscape ? 36 : 44
+        var suggestions: CGFloat = isLandscape ? 36 : 44
+        if isSearchingEmoji {
+            // Same height and top gap as the picker, so the search field stays exactly where it was.
+            EmojiSearchBar.topInset = (5 * panelScale).rounded()
+            suggestions = 44 * panelScale + EmojiSearchBar.topInset
+        }
 
         if let constraint = totalHeight {
             if constraint.constant != total { constraint.constant = total }
