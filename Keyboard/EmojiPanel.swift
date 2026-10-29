@@ -411,11 +411,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         for (index, section) in sections.enumerated() {
             let button = HitButton(type: .system)
             if let image = UIImage(systemName: section.symbol,
-                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .light)) {
+                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 14.4, weight: .light)) {
                 button.setImage(image, for: .normal)
             } else {
                 button.setTitle(section.fallback, for: .normal)
-                button.titleLabel?.font = UIFont.systemFont(ofSize: 17)
+                button.titleLabel?.font = UIFont.systemFont(ofSize: 14)
             }
             button.tag = index
             button.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
@@ -663,7 +663,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiCell.reuseID, for: indexPath)
         if let emojiCell = cell as? EmojiCell {
             let side = min(gridLayout.cellSize.width, gridLayout.cellSize.height)
-            emojiCell.label.font = UIFont.systemFont(ofSize: side * 0.55)
+            emojiCell.label.font = UIFont.systemFont(ofSize: side * 0.66)
             emojiCell.label.text = sections[indexPath.section].items[indexPath.item].base
         }
         return cell
