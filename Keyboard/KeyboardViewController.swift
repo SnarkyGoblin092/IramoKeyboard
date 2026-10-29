@@ -27,7 +27,6 @@ final class KeyboardViewController: UIInputViewController {
 
     private var stores: [Language: WordStore] = [:]
     private var loadingStores: Set<String> = []
-    private var secondaryStoresAllowed = true
     private let maxSecondaryStores = 4
     /// Words kept for all the other enabled languages together (split between them); halved on a memory warning.
     private var secondaryWordBudget = 160_000
@@ -147,15 +146,16 @@ final class KeyboardViewController: UIInputViewController {
 
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
-        // Free the other languages now. They come back with half as many words, so every enabled language keeps
-        // working; only when that is already small are they given up.
-        for (key, store) in stores where key != language { store.saveNow() }
-        stores = stores.filter { $0.key == language }
-        if secondaryWordBudget >= 2 * minimumSecondaryWords {
-            secondaryWordBudget /= 2
-        } else {
-            secondaryStoresAllowed = false
+        // Shrink the other languages instead of dropping them: they are freed now and reloaded at once with half as
+        // many words (never fewer than `minimumSecondaryWords`), so typing in every enabled language keeps working.
+        secondaryWordBudget = max(minimumSecondaryWords, secondaryWordBudget / 2)
+        let others = max(1, min(maxSecondaryStores, enabledLanguages.count - 1))
+        let share = max(minimumSecondaryWords, secondaryWordBudget / others)
+        for (key, store) in stores where key != language && store.isLoaded && store.entries.count > share {
+            store.saveNow()
+            store.unload()
         }
+        ensureStores()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
@@ -356,13 +356,11 @@ final class KeyboardViewController: UIInputViewController {
     private func ensureStores() {
         loadStore(for: language, limit: nil)
         var wanted: Set<Language> = [language]
-        if secondaryStoresAllowed {
-            let others = Array(enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores))
-            let share = others.isEmpty ? 0 : max(minimumSecondaryWords, secondaryWordBudget / others.count)
-            for other in others {
-                wanted.insert(other)
-                loadStore(for: other, limit: share)
-            }
+        let others = Array(enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores))
+        let share = others.isEmpty ? 0 : max(minimumSecondaryWords, secondaryWordBudget / others.count)
+        for other in others {
+            wanted.insert(other)
+            loadStore(for: other, limit: share)
         }
         for key in Array(stores.keys) where !wanted.contains(key) {
             stores[key]?.saveNow()

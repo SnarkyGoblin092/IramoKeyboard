@@ -223,6 +223,20 @@ final class WordStore {
         return pairs
     }
 
+    /// Frees the dictionary (on a memory warning, before it is reloaded smaller). Learned words are kept.
+    func unload() {
+        entries = []
+        edgeIndex = [:]
+        builtInPairs = [:]
+        model = nil
+        entryByRank = []
+        prefixCache = [:]
+        frequencyOrder = nil
+        loadedLimit = nil
+        isFull = false
+        isLoaded = false
+    }
+
     func apply(_ parsed: Parsed) {
         entries = parsed.entries
         edgeIndex = parsed.edges
