@@ -8,7 +8,11 @@ protocol KeyboardViewDelegate: AnyObject {
     func keyboardViewDidHoldGlobe(_ view: KeyboardView)
     /// A quick horizontal swipe on the space bar: +1 = next language, -1 = previous.
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int)
+    /// The finger moved during a swipe (the whole path so far), for a live preview of the word.
+    func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint])
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint])
+    /// A swipe ended without a word (cancelled, or it was a sloppy tap).
+    func keyboardViewDidCancelSwipe(_ view: KeyboardView)
 }
 
 /// Draws the keys and owns ALL touch handling, so that
@@ -418,6 +422,7 @@ final class KeyboardView: UIView {
             }
             if state.isSwiping {
                 updateTrail(state.path)
+                delegate?.keyboardView(self, didUpdateSwipe: state.path)
                 continue
             }
             if state.popupActive, let popup = alternatesPopup {
@@ -618,12 +623,16 @@ final class KeyboardView: UIView {
         }
         if state.isSwiping {
             fadeTrail()
-            if cancelled { return }
+            if cancelled {
+                delegate?.keyboardViewDidCancelSwipe(self)
+                return
+            }
             // A short slide is a sloppy tap, not a swipe: type the key the finger went down on.
             let keyWidth = max(letterKeySize().width, 1)
             let end = state.path.last ?? state.startPoint
             let displacement = hypot(end.x - state.startPoint.x, end.y - state.startPoint.y)
             if travel(of: state) < keyWidth * 2.2 && displacement < keyWidth * 1.4, let key = state.startKey {
+                delegate?.keyboardViewDidCancelSwipe(self)
                 delegate?.keyboardView(self, didTap: key.spec.action)
             } else {
                 delegate?.keyboardView(self, didFinishSwipe: state.path)
@@ -758,6 +767,7 @@ final class KeyboardView: UIView {
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
+        delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }
 
     private func updateTrail(_ points: [CGPoint]) {

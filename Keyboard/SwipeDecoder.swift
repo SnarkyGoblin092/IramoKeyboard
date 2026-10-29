@@ -18,16 +18,47 @@ final class SwipeDecoder {
     /// language the user switches to often (small penalty).
     struct Source {
         let store: WordStore
+        /// The store's words and swipe index, copied when the swipe starts, so a dictionary reloading on the main
+        /// thread never changes them under the decoder.
+        let entries: [WordEntry]
+        let edges: [String: [Int]]
         /// Added to the cost of every word from this source.
-        var penalty: Double = 0
+        var penalty: Double
         /// word -> extra score (0...0.6) given the word before the swipe (`WordStore.contextBonuses(after:)`).
-        var contextBonuses: [String: Double] = [:]
+        var contextBonuses: [String: Double]
         /// word -> how much this user writes it (0...1), from the learned words (`WordStore.personalStrengths()`).
-        var personal: [String: Double] = [:]
+        var personal: [String: Double]
         /// Words the user typed that the built-in dictionary does not have (names, slang).
-        var extras: [WordEntry] = []
+        var extras: [WordEntry]
         /// word -> bonus (0...0.35) for words already used in the text field.
-        var fieldBonuses: [String: Double] = [:]
+        var fieldBonuses: [String: Double]
+
+        init(store: WordStore,
+             penalty: Double = 0,
+             contextBonuses: [String: Double] = [:],
+             personal: [String: Double] = [:],
+             extras: [WordEntry] = [],
+             fieldBonuses: [String: Double] = [:]) {
+            self.store = store
+            self.entries = store.entries
+            self.edges = store.edgeIndex
+            self.penalty = penalty
+            self.contextBonuses = contextBonuses
+            self.personal = personal
+            self.extras = extras
+            self.fieldBonuses = fieldBonuses
+        }
+
+        /// Indices of words that start near one of `first` and end near one of `last`.
+        func candidateIndices(first: [Character], last: [Character]) -> [Int] {
+            var result: [Int] = []
+            for f in first {
+                for l in last {
+                    if let list = edges[String([f, l])] { result.append(contentsOf: list) }
+                }
+            }
+            return result
+        }
     }
 
     func decode(path rawPath: [CGPoint],
@@ -133,8 +164,8 @@ final class SwipeDecoder {
                 keyMemo[character] = key
                 return key
             }
-            for index in source.store.candidateIndices(first: startKeys, last: endKeys) {
-                consider(source.store.entries[index], source: source, keyFor: keyFor)
+            for index in source.candidateIndices(first: startKeys, last: endKeys) {
+                consider(source.entries[index], source: source, keyFor: keyFor)
             }
             for entry in source.extras { consider(entry, source: source, keyFor: keyFor) }
         }

@@ -2,10 +2,9 @@ import Foundation
 
 /// Chooses the words shown in the suggestion strip.
 ///
-/// All enabled languages are searched. The active layout's language gets a head start, and the
-/// language of the last few words (the "context") gets one too, so typing English in the Hungarian
-/// layout soon offers English words. Weak prefix matches from another language never push out decent
-/// matches in the language being used.
+/// All enabled languages are searched and compete on score. The active layout's language gets a head
+/// start, and the language of the last few words (the "context") a bigger one, so typing English in the
+/// Hungarian layout soon offers English words, while a Hungarian sentence keeps Hungarian suggestions.
 enum Predictor {
 
     // MARK: Tokens
@@ -209,7 +208,6 @@ enum Predictor {
 
         let weights = contextWeights(before: before, currentPrefix: typed, active: active, stores: stores)
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
-        let activeConfident = (weights[active] ?? 0) >= 0.6
 
         // The language of the text already in the field (when it differs from the layout, it wins).
         let dominant = field?.dominant(active: active, stores: stores)
@@ -233,19 +231,13 @@ enum Predictor {
         }
 
         var best: [String: Double] = [:]
-        var activeCount = 0
 
+        // Every enabled language competes on score; `bonus` is the language's head start (the layout's language,
+        // and much more the language of the recent words), so another language wins only with a clearly better word.
         func add(_ candidates: [WordCandidate], bonus: Double, language: Language, prefix: String = "") {
             for candidate in candidates {
                 let word = prefix + candidate.word
                 if word == lower { continue }
-                let isExact = TextFolding.key(word) == key
-                if language != active {
-                    // Another language: only with context support, as an accent variant of what was typed,
-                    // or when the active language has little to offer. A confident context shuts it out.
-                    let supported = (weights[language] ?? 0) > 0 || language == foreignDominant
-                    if !supported && !isExact && activeCount >= (activeConfident ? 1 : 2) { continue }
-                }
                 var score = candidate.score + bonus
                 if let previous = previousWord, let store = stores[language] {
                     score += store.bigramBonus(previous: previous, next: word, before2: wordBeforePrevious)
@@ -258,7 +250,6 @@ enum Predictor {
                     }
                 }
                 if score > (best[word] ?? -1) { best[word] = score }
-                if language == active { activeCount += 1 }
             }
         }
 
@@ -295,10 +286,9 @@ enum Predictor {
 
         // A slip while typing must not stop completion: words whose beginning is a key or two away
         // ("mrg" -> "meg", "bilenty" -> "billentyűzet"). Their scores carry the cost of the slip, so they only
-        // win over exact completions when those are much rarer. Only languages the text is written in.
+        // win over exact completions when those are much rarer.
         if !endsWithApostrophe && key.count >= 3 {
-            for language in ordered
-            where language == active || language == foreignDominant || (weights[language] ?? 0) >= 0.5 {
+            for language in ordered {
                 guard let store = stores[language] else { continue }
                 add(store.fuzzyCompletionCandidates(forKey: key, limit: 4), bonus: languageBonus(language), language: language)
             }
@@ -319,7 +309,7 @@ enum Predictor {
             let known = ordered.contains { stores[$0]?.contains(key: key) == true }
                 || (field?.uses(lower) ?? false)
             if !known {
-                for language in ordered where language == active || (weights[language] ?? 0) >= 0.5 {
+                for language in ordered {
                     guard let store = stores[language] else { continue }
                     let bonus = languageBonus(language)
                     add(store.fuzzyCandidates(forKey: key, limit: 4), bonus: bonus, language: language)
@@ -404,6 +394,16 @@ enum Predictor {
         let words = lastWords(in: trimmed, count: 2)
         guard let previous = words.last, !previous.isEmpty else { return [] }
         let beforePrevious = words.count == 2 ? words[0] : nil
+
+        // The other enabled languages too, after a word only they know ("thank" in the Hungarian layout -> "you").
+        // A word the layout's language knows ("is" is Hungarian too) keeps its own followers.
+        let previousKey = TextFolding.key(previous)
+        if stores[active]?.contains(key: previousKey) != true {
+            for language in enabled
+            where !languages.contains(language) && stores[language]?.contains(key: previousKey) == true {
+                languages.append(language)
+            }
+        }
 
         for language in languages {
             guard let store = stores[language] else { continue }

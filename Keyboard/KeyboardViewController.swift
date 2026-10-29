@@ -28,9 +28,23 @@ final class KeyboardViewController: UIInputViewController {
     private var stores: [Language: WordStore] = [:]
     private var loadingStores: Set<String> = []
     private var secondaryStoresAllowed = true
-    private let maxSecondaryStores = 3
-    private let secondaryWordLimit = 12000
+    private let maxSecondaryStores = 4
+    /// Words kept for all the other enabled languages together (split between them).
+    private let secondaryWordBudget = 160_000
     private let decoder = SwipeDecoder()
+    /// Swipe decoding runs here, one at a time (live previews, then the final word).
+    private let swipeQueue = DispatchQueue(label: "hunkeys.swipe", qos: .userInitiated)
+    fileprivate struct SwipeContext {
+        let sources: [SwipeDecoder.Source]
+        let centers: [Character: CGPoint]
+        let keySize: CGSize
+    }
+    /// The swipe in progress: its decoder input, built once when it starts.
+    private var liveSwipe: SwipeContext?
+    private var pendingSwipePath: [CGPoint]?
+    private var liveDecodeRunning = false
+    /// Bumped when a swipe ends, so late live previews of it are ignored.
+    private var swipeGeneration = 0
     /// The language that was active before the current one (swiping also considers it, a little less strongly).
     private var lastOtherLanguage: Language?
     /// The text just before the cursor right after a swipe / suggestion added its own trailing space.
@@ -297,37 +311,45 @@ final class KeyboardViewController: UIInputViewController {
         updateReturnProminence()
     }
 
-    /// Loads a dictionary in the background. The active language is loaded in full (swipe index included);
-    /// the other enabled languages only keep their most frequent words, to save memory.
-    private func loadStore(for target: Language, full: Bool) {
-        let tag = "\(target.rawValue)-\(full)"
+    /// Loads a dictionary (with its swipe index) in the background. `limit` nil = every word, for the active
+    /// language; the other enabled languages keep their `limit` most frequent words, to save memory.
+    private func loadStore(for target: Language, limit: Int?) {
+        let tag = "\(target.rawValue)-\(limit ?? 0)"
         if loadingStores.contains(tag) { return }
-        if let existing = stores[target], existing.isLoaded, existing.isFull || !full { return }
+        if let existing = stores[target], existing.isLoaded {
+            // The whole list is there and fits: nothing to load. A list bigger than the limit (it was the active
+            // language) is trimmed; a trimmed one is reloaded only when its limit changes.
+            if existing.isFull && (limit == nil || existing.entries.count <= limit ?? 0) { return }
+            if let limit = limit, existing.loadedLimit == limit { return }
+        }
 
         let store = stores[target] ?? WordStore(language: target)
         stores[target] = store
         loadingStores.insert(tag)
-        let limit: Int? = full ? nil : secondaryWordLimit
         DispatchQueue.global(qos: .userInitiated).async {
-            let parsed = WordStore.parse(language: target, limit: limit, buildEdges: full)
+            let parsed = WordStore.parse(language: target, limit: limit)
             DispatchQueue.main.async { [weak self] in
-                if parsed.isFull || !store.isFull { store.apply(parsed) }
-                self?.loadingStores.remove(tag)
-                self?.scheduleRefresh()
+                guard let self = self else { return }
+                // A trimmed list never replaces the language being typed in (a late load after a switch).
+                if parsed.isFull || target != self.language { store.apply(parsed) }
+                self.loadingStores.remove(tag)
+                self.scheduleRefresh()
             }
         }
     }
 
-    /// Keeps exactly the dictionaries that are needed: the active language, plus a few other enabled ones
-    /// so words from the language you are really writing in can be suggested.
+    /// Keeps exactly the dictionaries that are needed: the active language in full, plus every other enabled
+    /// language (up to `maxSecondaryStores`) sharing `secondaryWordBudget` words, so suggestions and swiping
+    /// work in all of them.
     private func ensureStores() {
-        loadStore(for: language, full: true)
+        loadStore(for: language, limit: nil)
         var wanted: Set<Language> = [language]
         if secondaryStoresAllowed {
-            let others = enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores)
+            let others = Array(enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores))
+            let share = others.isEmpty ? 0 : max(30_000, secondaryWordBudget / others.count)
             for other in others {
                 wanted.insert(other)
-                loadStore(for: other, full: false)
+                loadStore(for: other, limit: share)
             }
         }
         for key in Array(stores.keys) where !wanted.contains(key) {
@@ -1078,12 +1100,66 @@ extension KeyboardViewController: KeyboardViewDelegate {
         advanceToNextInputMode()   // hand over to the next installed keyboard
     }
 
+    func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {
+        guard !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
+        if liveSwipe == nil { liveSwipe = makeSwipeContext() }
+        guard liveSwipe != nil else { return }
+        pendingSwipePath = path
+        decodeLiveSwipe()
+    }
+
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {
-        guard let store = stores[language], store.isLoaded else { return }
-        let centers = keyboardView.letterCenters()
-        let keySize = keyboardView.letterKeySize()
+        // Live previews still running belong to this swipe; their results are dropped.
+        swipeGeneration += 1
+        let context = liveSwipe ?? makeSwipeContext()
+        liveSwipe = nil
+        pendingSwipePath = nil
+        guard let swipe = context else { return }
         let decoder = self.decoder
-        // Context is read here on the main thread; the decoder only gets a copy.
+        swipeQueue.async { [weak self] in
+            let words = decoder.decode(path: path, keyCenters: swipe.centers, keySize: swipe.keySize, sources: swipe.sources)
+            DispatchQueue.main.async {
+                if words.isEmpty { self?.scheduleRefresh() }   // no word: drop the live preview
+                self?.commitSwipe(words)
+            }
+        }
+    }
+
+    func keyboardViewDidCancelSwipe(_ view: KeyboardView) {
+        swipeGeneration += 1
+        liveSwipe = nil
+        pendingSwipePath = nil
+        scheduleRefresh()   // replace the live preview with the normal suggestions
+    }
+
+    /// Decodes the latest swipe path off the main thread and shows the best word in the middle of the bar while the
+    /// finger is still moving. One decode at a time: a path that grew meanwhile is decoded right after.
+    private func decodeLiveSwipe() {
+        guard !liveDecodeRunning, let swipe = liveSwipe, let path = pendingSwipePath else { return }
+        pendingSwipePath = nil
+        liveDecodeRunning = true
+        let generation = swipeGeneration
+        let decoder = self.decoder
+        swipeQueue.async { [weak self] in
+            let words = decoder.decode(path: path, keyCenters: swipe.centers, keySize: swipe.keySize,
+                                       sources: swipe.sources, limit: 1)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.liveDecodeRunning = false
+                if generation == self.swipeGeneration, let word = words.first {
+                    self.suggestionBar.update([Suggestion(text: "", kind: .literal),
+                                               Suggestion(text: self.applyShift(to: word), kind: .word),
+                                               Suggestion(text: "", kind: .literal)])
+                }
+                self.decodeLiveSwipe()
+            }
+        }
+    }
+
+    /// Everything the decoder needs for one swipe, read on the main thread: the key geometry and every loaded
+    /// dictionary with its context. The decoder only gets copies.
+    private func makeSwipeContext() -> SwipeContext? {
+        guard let store = stores[language], store.isLoaded else { return nil }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         var previous: String? = nil
         if before.isEmpty || before.last == " " || before.last == "\n" {
@@ -1130,13 +1206,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
             sources = [SwipeDecoder.Source(store: store, penalty: 0, contextBonuses: bonuses,
                                            personal: store.personalStrengths(), extras: store.learnedEntries())]
         }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let words = decoder.decode(path: path, keyCenters: centers, keySize: keySize, sources: sources)
-            DispatchQueue.main.async {
-                self?.commitSwipe(words)
-            }
-        }
+        return SwipeContext(sources: sources, centers: keyboardView.letterCenters(), keySize: keyboardView.letterKeySize())
     }
 }
 

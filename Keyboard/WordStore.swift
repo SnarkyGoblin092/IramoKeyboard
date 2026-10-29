@@ -63,11 +63,14 @@ final class WordStore {
 
     private(set) var entries: [WordEntry] = []
     private(set) var isLoaded = false
-    /// False when only the most frequent words were loaded (languages that are not the active layout).
+    /// True when every word of the list is loaded (false when it was cut at a limit).
     private(set) var isFull = false
+    /// The word limit the dictionary was loaded with (nil = none), for the languages that are not the active layout.
+    private(set) var loadedLimit: Int?
     private(set) var maxLogFreq: Double = 1
 
-    private var edgeIndex: [String: [Int]] = [:]
+    /// "first letter + last letter" key -> word indices, for swipe typing.
+    private(set) var edgeIndex: [String: [Int]] = [:]
     private var learned: [String: Int]
     /// Dictionary words the user wrote -> how often, so their own vocabulary outranks the corpus's.
     private var used: [String: Int]
@@ -107,6 +110,7 @@ final class WordStore {
         let edges: [String: [Int]]
         let maxLogFreq: Double
         let isFull: Bool
+        let limit: Int?
     }
 
     /// The layout key a word's letter is typed on ("é" -> "e" in Hungarian, but "ö" stays "ö" in German).
@@ -123,11 +127,10 @@ final class WordStore {
     /// Parses `words_<lang>.tsv` (sorted by frequency, most common first).
     /// - Parameter limit: keep only the most frequent `limit` words (nil = all). Used for the languages
     ///   that are not the active layout, to keep memory low.
-    /// - Parameter buildEdges: the swipe index; only the active layout needs it.
-    static func parse(language: Language, limit: Int? = nil, buildEdges: Bool = true) -> Parsed {
+    static func parse(language: Language, limit: Int? = nil) -> Parsed {
         guard let url = Bundle.main.url(forResource: "words_\(language.rawValue)", withExtension: "tsv"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
-            return Parsed(entries: [], edges: [:], maxLogFreq: 1, isFull: limit == nil)
+            return Parsed(entries: [], edges: [:], maxLogFreq: 1, isFull: limit == nil, limit: limit)
         }
 
         // One pass: the file is sorted by frequency, so the first row has the highest count, and its second
@@ -153,31 +156,31 @@ final class WordStore {
 
         // Index by first + last letter so the swipe decoder only looks at plausible words.
         var edges: [String: [Int]] = [:]
-        if buildEdges {
-            let keys = language.keyLetterSet
-            var memo: [Character: Character?] = [:]
-            for (index, entry) in list.enumerated() {
-                var first: Character? = nil
-                var last: Character? = nil
-                var count = 0
-                for character in entry.word {
-                    let letter: Character?
-                    if let known = memo[character] {
-                        letter = known
-                    } else {
-                        letter = keyLetter(for: character, in: keys)
-                        memo[character] = letter
-                    }
-                    guard let found = letter else { continue }
-                    if first == nil { first = found }
-                    last = found
-                    count += 1
+        let keys = language.keyLetterSet
+        var memo: [Character: Character?] = [:]
+        for (index, entry) in list.enumerated() {
+            var first: Character? = nil
+            var last: Character? = nil
+            var count = 0
+            for character in entry.word {
+                let letter: Character?
+                if let known = memo[character] {
+                    letter = known
+                } else {
+                    letter = keyLetter(for: character, in: keys)
+                    memo[character] = letter
                 }
-                guard count >= 2, let start = first, let end = last else { continue }
-                edges[String([start, end]), default: []].append(index)
+                guard let found = letter else { continue }
+                if first == nil { first = found }
+                last = found
+                count += 1
             }
+            guard count >= 2, let start = first, let end = last else { continue }
+            edges[String([start, end]), default: []].append(index)
         }
-        return Parsed(entries: list, edges: edges, maxLogFreq: maxLog, isFull: limit == nil)
+        // A limit the list never reached still loaded every word.
+        let isFull = limit.map { list.count < $0 } ?? true
+        return Parsed(entries: list, edges: edges, maxLogFreq: maxLog, isFull: isFull, limit: limit)
     }
 
     func apply(_ parsed: Parsed) {
@@ -185,6 +188,7 @@ final class WordStore {
         edgeIndex = parsed.edges
         maxLogFreq = parsed.maxLogFreq
         isFull = parsed.isFull
+        loadedLimit = parsed.limit
         prefixCache = [:]
         frequencyOrder = nil
         isLoaded = true
@@ -493,19 +497,6 @@ final class WordStore {
         return completionCandidates(forKey: TextFolding.key(normalized),
                                     typedLower: normalized.lowercased(),
                                     limit: limit).map { $0.word }
-    }
-
-    /// Dictionary indices of words that start near `first` and end near `last` (swipe typing).
-    func candidateIndices(first: [Character], last: [Character]) -> [Int] {
-        var result: [Int] = []
-        for f in first {
-            for l in last {
-                if let list = edgeIndex[String([f, l])] {
-                    result.append(contentsOf: list)
-                }
-            }
-        }
-        return result
     }
 
     /// word -> 0...1: how much this user writes each learned word (more and more recent = higher). A plain value
