@@ -26,6 +26,8 @@ final class SwipeDecoder {
         var personal: [String: Double] = [:]
         /// Words the user typed that the built-in dictionary does not have (names, slang).
         var extras: [WordEntry] = []
+        /// word -> bonus (0...0.35) for words already used in the text field.
+        var fieldBonuses: [String: Double] = [:]
     }
 
     func decode(path rawPath: [CGPoint],
@@ -112,10 +114,11 @@ final class SwipeDecoder {
             let frequency = entry.norm
             let context = source.contextBonuses[entry.word] ?? 0
             let personal = source.personal[entry.word] ?? 0
+            let inField = source.fieldBonuses[entry.word] ?? 0
             let cost = 0.45 * shape + 0.40 * coverage + 0.35 * excess
                 + 0.50 * (startMiss + endMiss) + 0.35 * max(0, worstLetter - 0.9) + source.penalty
             // Words this user writes (and words that tend to follow the previous word) are favoured.
-            let score = cost - 0.55 * frequency - 0.8 * context - 0.45 * personal
+            let score = cost - 0.55 * frequency - 0.8 * context - 0.45 * personal - 0.9 * inField
             seen.insert(entry.word)
             scored.append((word: entry.word, score: score))
         }

@@ -500,6 +500,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleSpace() {
+        let pendingMarker = autoSpaceMarker
         autoSpaceMarker = nil
         if isSearchingEmoji {
             if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
@@ -507,6 +508,14 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
+
+        // A swiped / suggested word already has its space: the first space tap keeps just that one.
+        // Further taps add spaces as usual.
+        if let marker = pendingMarker, !marker.isEmpty, before.hasSuffix(marker), before.hasSuffix(" ") {
+            lastSpaceTime = Date.distantPast
+            scheduleRefresh()
+            return
+        }
 
         // Double space -> ". "
         if Prefs.doubleSpacePeriod,
@@ -1065,19 +1074,43 @@ extension KeyboardViewController: KeyboardViewDelegate {
         }
         let before2 = Predictor.lastWords(in: before, count: 2)
         let bonuses = previous.map { store.contextBonuses(after: $0, before2: before2.count > 1 ? before2[0] : nil) } ?? [:]
-        var sources = [SwipeDecoder.Source(store: store,
-                                           penalty: 0,
-                                           contextBonuses: bonuses,
-                                           personal: store.personalStrengths(),
-                                           extras: store.learnedEntries())]
-        // The language switched away from most recently is a plausible second reading, with a small penalty.
-        if let other = lastOtherLanguage, other != language, enabledLanguages.contains(other),
-           let otherStore = stores[other], otherStore.isLoaded {
-            sources.append(SwipeDecoder.Source(store: otherStore,
-                                               penalty: 0.30,
-                                               contextBonuses: previous.map { otherStore.contextBonuses(after: $0) } ?? [:],
-                                               personal: otherStore.personalStrengths(),
-                                               extras: otherStore.learnedEntries()))
+        // Which language is being written? The layout's language, the words already in the field and the language
+        // switched away from last all vote; every loaded language is a candidate with a penalty by how unlikely it is.
+        let after = textDocumentProxy.documentContextAfterInput ?? ""
+        let field = Predictor.fieldContext(before: before, after: after)
+        let weights = Predictor.contextWeights(before: before, currentPrefix: "", active: language, stores: stores)
+        let dominant = field.dominant(active: language, stores: stores)
+        let foreignDominant: Language? = (dominant != nil && dominant != language) ? dominant : nil
+        var fieldBonuses: [String: Double] = [:]
+        for word in field.counts.keys { fieldBonuses[word] = field.bonus(for: word) }
+
+        func likelihood(_ candidate: Language) -> Double {
+            var value = 0.5 * (weights[candidate] ?? 0)
+            if candidate == language { value += foreignDominant == nil ? 0.45 : 0.15 }
+            if candidate == foreignDominant { value += 0.45 }
+            if candidate == lastOtherLanguage { value += 0.10 }
+            return value
+        }
+        let candidates = ([language] + enabledLanguages.filter { $0 != language })
+            .filter { stores[$0]?.isLoaded == true }
+        let best = candidates.map { likelihood($0) }.max() ?? 0
+        var sources: [SwipeDecoder.Source] = []
+        for candidate in candidates {
+            guard let candidateStore = stores[candidate] else { continue }
+            let candidatePrevious = previous
+            sources.append(SwipeDecoder.Source(
+                store: candidateStore,
+                penalty: min(0.6, 0.9 * (best - likelihood(candidate))),
+                contextBonuses: candidatePrevious.map {
+                    candidateStore.contextBonuses(after: $0, before2: (candidate == language && before2.count > 1) ? before2[0] : nil)
+                } ?? [:],
+                personal: candidateStore.personalStrengths(),
+                extras: candidateStore.learnedEntries(),
+                fieldBonuses: fieldBonuses))
+        }
+        if sources.isEmpty {
+            sources = [SwipeDecoder.Source(store: store, penalty: 0, contextBonuses: bonuses,
+                                           personal: store.personalStrengths(), extras: store.learnedEntries())]
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
