@@ -304,11 +304,25 @@ enum Decoder {
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
         let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field)
         return Array(ranked(found.rows, whole: false).map { $0.word }.filter { $0 != found.lower }.prefix(limit))
+            .map { written($0, context: found.context, stores: stores) }
+    }
+
+    /// How to write `word`: as the language that most likely produced it writes it ("i'm" -> "I'm", "london" ->
+    /// "London", German "haus" -> "Haus"); unchanged when no dictionary has it.
+    static func written(_ word: String, context: Context, stores: [Language: WordStore]) -> String {
+        var best: (weight: Double, text: String)? = nil
+        for (language, store) in stores where store.isLoaded {
+            guard let text = store.written(word) else { continue }
+            let weight = context.weights[language] ?? 0
+            if best == nil || weight > best!.weight { best = (weight, text) }
+        }
+        return best?.text ?? word
     }
 
     /// What space should leave in place of the word just typed, or nil to keep it: the most likely word, when it
     /// is clearly more likely than the text as typed ("vsgyok" -> "vagyok", "koszonom" -> "köszönöm",
-    /// "dont" -> "don't"). Words the user taught the keyboard, or keeps using in the field, are left alone.
+    /// "dont" -> "don't"), written the way its language writes it ("im" -> "I'm", "monday" -> "Monday"). Words the
+    /// user taught the keyboard, or keeps using in the field, are left alone.
     static func autoCorrect(typed: String,
                             before: String,
                             active: Language,
@@ -324,9 +338,16 @@ enum Decoder {
 
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
         let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field)
-        guard let best = ranked(found.rows, whole: true).first, best.word != lower else { return nil }
-        let typedScore = max(logProb(lower, context: found.context, stores: stores, field: field), unknownWord)
-        return best.score >= typedScore + correctMargin ? best.word : nil
+        var choice = lower
+        if let best = ranked(found.rows, whole: true).first, best.word != lower {
+            let typedScore = max(logProb(lower, context: found.context, stores: stores, field: field), unknownWord)
+            if best.score >= typedScore + correctMargin { choice = best.word }
+        }
+        // Someone writing everything in lower case keeps it that way.
+        let text = field?.style == .lower ? choice : written(choice, context: found.context, stores: stores)
+        // Nothing to change: the word stays as typed, in whatever case the user typed it.
+        if text == TextFolding.normalizeApostrophes(typed) || (choice == lower && text == lower) { return nil }
+        return text
     }
 
     /// The likeliest next words (the text ends with a space), capitalised at a sentence start.
@@ -362,8 +383,9 @@ enum Decoder {
         if let previous = context.previous { combined.removeValue(forKey: previous) }
         let ranked = combined.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }.prefix(limit)
         return ranked.map { item in
-            guard context.atSentenceStart else { return item.key }
-            return Predictor.capitalized(item.key, language: bestLanguage[item.key]?.language ?? active)
+            let text = written(item.key, context: context, stores: stores)
+            guard context.atSentenceStart else { return text }
+            return Predictor.capitalized(text, language: bestLanguage[item.key]?.language ?? active)
         }
     }
 }

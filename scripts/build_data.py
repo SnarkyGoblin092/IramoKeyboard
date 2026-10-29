@@ -774,19 +774,20 @@ def build_dictionary(lang: str) -> None:
     except Exception as error:  # noqa: BLE001
         print(f"  WARNING: no sentences for {lang}: {error}")
 
-    print(f"  {len(words)} words")
+    capitals = build_language_model(lang, words) if words else {}
+    print(f"  {len(words)} words, {len(capitals)} written with capitals")
+    # Fourth column: "T" = written Capitalised, "U" = written in CAPITALS ("i'm" -> I'm, "haus" -> Haus).
     with open(OUT / f"words_{lang}.tsv", "w", encoding="utf-8") as handle:
         for word, folded, count in words:
-            handle.write(f"{word}\t{folded}\t{count}\n")
+            handle.write(f"{word}\t{folded}\t{count}\t{capitals.get(word, '')}\n")
     with open(OUT / f"pairs_{lang}.tsv", "w", encoding="utf-8") as handle:
         for word, followers in pairs:
             handle.write(f"{word}\t{' '.join(followers)}\n")
-    if words:
-        build_language_model(lang, words)
 
 
-def build_language_model(lang: str, words) -> None:
-    """lm_<lang>.bin: word sequences from subtitles and the (not held-out) example sentences."""
+def build_language_model(lang: str, words):
+    """lm_<lang>.bin: word sequences from subtitles and the (not held-out) example sentences. Returns the words
+    written with capitals (see Tokenizer.capitals)."""
     print(f"Language model ({lang}) …")
     ids = {}
     for index, (word, _, _) in enumerate(words):
@@ -804,11 +805,12 @@ def build_language_model(lang: str, words) -> None:
             language_model.count_text(counts, tokenizer, texts, fresh_lines=True)
     if counts.tokens == 0:
         print(f"  WARNING: no text for the {lang} language model")
-        return
+        return {}
     unigrams = [0] * language_model.FIRST_WORD + [count for _, _, count in words]
     bigrams, trigrams = language_model.build(counts, unigrams, OUT / f"lm_{lang}.bin")
     size = (OUT / f"lm_{lang}.bin").stat().st_size
     print(f"  {counts.tokens:,} words of text -> {bigrams:,} pairs, {trigrams:,} triples, {size / 1e6:.1f} MB")
+    return tokenizer.capitals([word for word, _, _ in words])
 
 
 def main() -> int:

@@ -7,6 +7,14 @@ struct WordEntry {
     let norm: Double      // log-frequency scaled to 0...1 within its language (comparable across languages)
     let length: Int       // number of characters in `folded`
     var rank: Int32 = -1  // line in words_<lang>.tsv (the language model's word id minus 3); -1 for learned words
+    var capitals: WordCapitals = .none   // how the word is written ("i'm" -> I'm, "haus" -> Haus)
+}
+
+/// How a dictionary word is written (column 4 of words_<lang>.tsv, counted from text by scripts/language_model.py).
+enum WordCapitals: UInt8 {
+    case none       // as listed, lower case
+    case title      // first letter capital: names, English "I'm", German nouns
+    case all        // all capitals: "TV", "USA"
 }
 
 enum TextFolding {
@@ -170,7 +178,8 @@ final class WordStore {
                                   freq: freq,
                                   norm: min(1, log(Double(freq) + 1) / maxLog),
                                   length: key.count,
-                                  rank: Int32(lineNumber)))
+                                  rank: Int32(lineNumber),
+                                  capitals: parts.count >= 4 ? (parts[3] == "T" ? .title : (parts[3] == "U" ? .all : .none)) : .none))
             if let limit = limit, list.count >= limit { stop = true }
         }
         list.sort { $0.folded < $1.folded }
@@ -938,5 +947,21 @@ extension WordStore {
             result.append((String(pair.dropFirst(prefix.count)), min(1.2, 0.5 * log(1 + effective(count, key: pair)))))
         }
         return result
+    }
+}
+
+extension WordStore {
+    /// The word as this language writes it ("i'm" -> "I'm", "haus" -> "Haus"), or nil when the dictionary lacks it.
+    func written(_ word: String) -> String? {
+        guard let entry = entry(forWord: word) else { return nil }
+        return WordStore.written(entry, language: language)
+    }
+
+    static func written(_ entry: WordEntry, language: Language) -> String {
+        switch entry.capitals {
+        case .none: return entry.word
+        case .title: return Predictor.capitalized(entry.word, language: language)
+        case .all: return language.uppercase(entry.word)
+        }
     }
 }

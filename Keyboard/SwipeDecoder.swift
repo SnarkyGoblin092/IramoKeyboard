@@ -105,9 +105,10 @@ final class SwipeDecoder {
 
         var scored: [(word: String, score: Double)] = []
         var seen = Set<String>()
-        // Language model scoring: word -> (best shape cost, summed weighted probability, best personal boost).
+        // Language model scoring: word -> (best shape cost, summed weighted probability, best personal boost, the word
+        // as written by the language with the most weight: "I'm", "Haus").
         let usesModels = sources.contains { $0.model != nil }
-        var found: [String: (shape: Double, probability: Double, boost: Double)] = [:]
+        var found: [String: (shape: Double, probability: Double, boost: Double, written: String, writtenWeight: Double)] = [:]
 
         func consider(_ entry: WordEntry, source: Source, keyFor: (Character) -> Character?) {
             if seen.contains(entry.word) { return }
@@ -174,7 +175,12 @@ final class SwipeDecoder {
                 }
                 if let learned = source.learnedLogProbs[entry.word] { logProb = max(logProb, learned) }
                 seen.insert(entry.word)
-                var item = found[entry.word] ?? (shape: Double.greatestFiniteMagnitude, probability: 0, boost: 0)
+                var item = found[entry.word]
+                    ?? (shape: Double.greatestFiniteMagnitude, probability: 0, boost: 0, written: entry.word, writtenWeight: -1)
+                if source.weight > item.writtenWeight {
+                    item.written = WordStore.written(entry, language: source.store.language)
+                    item.writtenWeight = source.weight
+                }
                 item.shape = min(item.shape, shapeCost)
                 item.probability += source.weight * pow(10, logProb)
                 item.boost = max(item.boost, (source.boosts[entry.word] ?? 0) + 2 * (source.fieldBonuses[entry.word] ?? 0))
@@ -212,9 +218,9 @@ final class SwipeDecoder {
         }
 
         if usesModels {
-            let ranked = found.map { word, item -> (word: String, score: Double) in
+            let ranked = found.values.map { item -> (word: String, score: Double) in
                 let logProb = item.probability > 0 ? log10(item.probability) : -99
-                return (word, logProb + item.boost - SwipeDecoder.shapeWeight * item.shape)
+                return (item.written, logProb + item.boost - SwipeDecoder.shapeWeight * item.shape)
             }
             return ranked.sorted { $0.score == $1.score ? $0.word < $1.word : $0.score > $1.score }
                 .prefix(limit).map { $0.word }

@@ -82,24 +82,39 @@ END = -1        # token class: ends the sentence
 SKIP = -2       # token class: ignored (quotes, dashes, brackets)
 
 
+LOWER, TITLE, UPPER = 0, 1, 2     # how a word is written
+
+
 class Tokenizer:
+    """Turns text into word ids, and counts how each word is capitalised where nothing else (a sentence or line
+    start, a quote) would capitalise it: words written capitalised there nearly always are names, German nouns,
+    English "I"... (see `capitals`)."""
+
     def __init__(self, vocabulary, lang, lower, repair):
         self.ids = vocabulary
         self.lang = lang
         self.lower = lower
         self.repair = repair
-        self.memo = {",": COMMA}
+        self.memo = {",": (COMMA, LOWER)}
+        self.case_counts = collections.Counter()    # (id, case) -> mid-sentence occurrences
 
     def classify(self, token):
-        """Word id, COMMA, END or SKIP for a lower-case token (remembered: most tokens repeat)."""
+        """(word id / COMMA / END / SKIP, case) for a token as written (remembered: most tokens repeat)."""
+        case = LOWER
         if SENTENCE_END.match(token):
             kind = END
         elif token[0].isalpha():
-            kind = self.ids.get(self.repair(token.replace("’", "'"), self.lang), UNKNOWN)
+            lowered = self.lower(token, self.lang)
+            kind = self.ids.get(self.repair(lowered.replace("’", "'"), self.lang), UNKNOWN)
+            letters = [c for c in token if c.isalpha()]
+            if len(letters) >= 2 and all(c.isupper() for c in letters):
+                case = UPPER
+            elif token[0].isupper():
+                case = TITLE
         else:
             kind = SKIP
-        self.memo[token] = kind
-        return kind
+        self.memo[token] = (kind, case)
+        return kind, case
 
     def sentences(self, text, continued):
         """Splits a line into sentences of ids. `continued` is the open sentence from the line before (subtitles
@@ -111,11 +126,15 @@ class Tokenizer:
             finished.append(current)
             current = [START]
         memo = self.memo
-        for token in TOKENS.findall(self.lower(stripped, self.lang)):
-            kind = memo.get(token)
-            if kind is None:
-                kind = self.classify(token)
+        cases = self.case_counts
+        initial = True      # the line's first word, or the first after a sentence end or a quote / dash
+        for token in TOKENS.findall(stripped):
+            found = memo.get(token)
+            kind, case = found if found is not None else self.classify(token)
             if kind >= FIRST_WORD or kind == UNKNOWN:
+                if not initial and kind >= FIRST_WORD:
+                    cases[(kind, case)] += 1
+                initial = False
                 current.append(kind)
             elif kind == COMMA:
                 if current[-1] != COMMA and len(current) > 1:
@@ -123,7 +142,26 @@ class Tokenizer:
             elif kind == END:
                 finished.append(current)
                 current = [START]
+                initial = True
+            else:
+                initial = True
         return finished, current
+
+    def capitals(self, words, min_count=4, share=0.8):
+        """word -> "T" (Title) or "U" (ALLCAPS) for the words written that way at least `share` of the time in the
+        middle of sentences (seen at least `min_count` times there)."""
+        totals = collections.Counter()
+        for (kind, _), n in self.case_counts.items():
+            totals[kind] += n
+        result = {}
+        for kind, total in totals.items():
+            if total < min_count:
+                continue
+            title = self.case_counts[(kind, TITLE)]
+            upper = self.case_counts[(kind, UPPER)]
+            if title + upper >= share * total:
+                result[words[kind - FIRST_WORD]] = "U" if upper >= share * total else "T"
+        return result
 
 
 def count_text(counts, tokenizer, lines, fresh_lines=False):
