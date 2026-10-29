@@ -265,7 +265,6 @@ final class KeyboardViewController: UIInputViewController {
             constraint.isActive = true
             totalHeight = constraint
         }
-        view.setNeedsLayout()
         if let constraint = suggestionHeight, constraint.constant != suggestions {
             constraint.constant = suggestions
         }
@@ -475,11 +474,27 @@ final class KeyboardViewController: UIInputViewController {
                 keyboardView.setShift(shift)
             }
             refreshEmojiSearch()
+            returnToLettersAfterWritingSymbol(text)
             return
         }
         textDocumentProxy.insertText(output)
         lastSpaceTime = Date.distantPast
         afterTyping()
+        returnToLettersAfterWritingSymbol(text)
+    }
+
+    /// Punctuation that belongs to normal writing (not digits or maths symbols): after one is typed from the
+    /// numbers or symbols page, the keyboard goes back to the letters, like the system keyboard.
+    private static let writingSymbols: Set<String> = [
+        ".", ",", "!", "?", "'", "\"", ":", ";", ")", "]", "}", "-", "\u{2026}", "\u{2019}", "\u{201D}",
+        "\u{00BB}", "\u{00A1}", "\u{00BF}", "\u{2013}", "\u{2014}"
+    ]
+
+    private func returnToLettersAfterWritingSymbol(_ text: String) {
+        guard page != .letters, KeyboardViewController.writingSymbols.contains(text) else { return }
+        page = .letters
+        reloadKeyboardLayout()
+        if !isSearchingEmoji { updateAutoShift() }
     }
 
     private func handleSpace() {
