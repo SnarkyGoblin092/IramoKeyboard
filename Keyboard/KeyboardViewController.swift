@@ -472,27 +472,11 @@ final class KeyboardViewController: UIInputViewController {
                 keyboardView.setShift(shift)
             }
             refreshEmojiSearch()
-            returnToLettersAfterWritingSymbol(text)
             return
         }
         textDocumentProxy.insertText(output)
         lastSpaceTime = Date.distantPast
         afterTyping()
-        returnToLettersAfterWritingSymbol(text)
-    }
-
-    /// Punctuation that belongs to normal writing (not digits or maths symbols): after one is typed from the
-    /// numbers or symbols page, the keyboard goes back to the letters, like the system keyboard.
-    private static let writingSymbols: Set<String> = [
-        ".", ",", "!", "?", "'", "\"", ":", ";", ")", "]", "}", "-", "\u{2026}", "\u{2019}", "\u{201D}",
-        "\u{00BB}", "\u{00A1}", "\u{00BF}", "\u{2013}", "\u{2014}"
-    ]
-
-    private func returnToLettersAfterWritingSymbol(_ text: String) {
-        guard page != .letters, KeyboardViewController.writingSymbols.contains(text) else { return }
-        page = .letters
-        reloadKeyboardLayout()
-        if !isSearchingEmoji { updateAutoShift() }
     }
 
     private func handleSpace() {
@@ -529,7 +513,10 @@ final class KeyboardViewController: UIInputViewController {
         // "dont" + space -> "don't ": words that only exist with an apostrophe get it automatically.
         if Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true {
             let typedWord = currentPrefix(in: before)
-            if !typedWord.isEmpty, let fixed = Predictor.withApostrophe(typedWord, language: language) {
+            let fieldText = Predictor.fieldContext(before: before, after: textDocumentProxy.documentContextAfterInput ?? "")
+            // A word the writer keeps using as typed is left alone.
+            if !typedWord.isEmpty, !fieldText.uses(typedWord, atLeast: 2),
+               let fixed = Predictor.withApostrophe(typedWord, language: language) {
                 let replacement = matchCase(of: typedWord, for: fixed)
                 recordBigram(contextBefore: before, next: fixed)
                 for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
@@ -652,11 +639,18 @@ final class KeyboardViewController: UIInputViewController {
         let typed = currentPrefix(in: text)
         if !typed.isEmpty, text.hasSuffix(typed) { text = String(text.dropLast(typed.count)) }
         guard let last = text.last, last == " " else { return }
-        let words = Predictor.lastWords(in: text, count: 1)
-        guard let previous = words.first, !previous.isEmpty else { return }
         let following = TextFolding.normalizeApostrophes(next).lowercased()
         guard !following.isEmpty else { return }
+        if Predictor.isSentenceStart(text) {
+            stores[language]?.learnBigram(previous: ".", next: following)
+            return
+        }
+        let words = Predictor.lastWords(in: text, count: 2)
+        guard let previous = words.last, !previous.isEmpty else { return }
         stores[language]?.learnBigram(previous: previous, next: following)
+        if words.count == 2 {
+            stores[language]?.learnTrigram(first: words[0], second: previous, next: following)
+        }
     }
 
     private func shortcutExpansion(in before: String) -> String? {
@@ -767,6 +761,8 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         ensureStores()
+        let after = textDocumentProxy.documentContextAfterInput ?? ""
+        let field = Predictor.fieldContext(before: before, after: after)
         var words: [String] = []
         if Prefs.suggestions && stores[language]?.isLoaded == true {
             if !prefix.isEmpty {
@@ -775,34 +771,50 @@ final class KeyboardViewController: UIInputViewController {
                                           active: language,
                                           enabled: enabledLanguages,
                                           stores: stores,
-                                          limit: 4).map { matchCase(of: prefix, for: $0) }
+                                          limit: 4,
+                                          field: field)
+                    .map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
             } else if before.hasSuffix(" ") {
                 words = Predictor.nextWords(before: before,
                                             active: language,
                                             enabled: enabledLanguages,
                                             stores: stores,
-                                            limit: 3).map { applyShift(to: $0) }
+                                            limit: 3,
+                                            field: field)
+                    .map { applyShift(to: Predictor.styled($0, field: field)) }
             }
         }
 
+        // Layout is [left, CENTRE, right]; the most probable word sits in the centre (as on iOS).
+        var ranked: [String] = []
+        if !prefix.isEmpty, let phrase = settings.shortcutPhrase(for: prefix) { ranked.append(phrase) }
+        for word in words where word != prefix && !ranked.contains(word) { ranked.append(word) }
         var result: [Suggestion] = []
-        let wordSlots = 3 - emojis.count
         if !prefix.isEmpty {
-            // Slot 1 is always exactly what was typed, so it can never be auto-"corrected" away.
+            let best = ranked.first
+            let second = ranked.dropFirst().first
+            // Left: exactly what was typed (never auto-"corrected" away); centre: best word; right: runner-up or emoji.
             result.append(Suggestion(text: prefix, kind: .literal))
-            if let phrase = settings.shortcutPhrase(for: prefix) {
-                result.append(Suggestion(text: phrase, kind: .word))
-            }
-            for word in words where word != prefix && result.count < wordSlots {
-                result.append(Suggestion(text: word, kind: .word))
+            result.append(Suggestion(text: best ?? "", kind: .word))
+            if let emoji = emojis.first {
+                result.append(Suggestion(text: emoji, kind: .emoji))
+            } else if let second = second {
+                result.append(Suggestion(text: second, kind: .word))
             }
         } else {
-            for word in words where result.count < wordSlots {
-                result.append(Suggestion(text: word, kind: .word))
+            let top = Array(ranked.prefix(3))
+            if top.count >= 3 {
+                result = [Suggestion(text: top[1], kind: .word), Suggestion(text: top[0], kind: .word), Suggestion(text: top[2], kind: .word)]
+            } else if top.count == 2 {
+                result = [Suggestion(text: top[1], kind: .word), Suggestion(text: top[0], kind: .word)]
+            } else if top.count == 1 {
+                result = [Suggestion(text: "", kind: .word), Suggestion(text: top[0], kind: .word)]
             }
-        }
-        for emoji in emojis {
-            result.append(Suggestion(text: emoji, kind: .emoji))
+            if let emoji = emojis.first {
+                while result.count < 2 { result.append(Suggestion(text: "", kind: .word)) }
+                if result.count >= 3 { result.removeLast() }
+                result.append(Suggestion(text: emoji, kind: .emoji))
+            }
         }
         suggestionBar.update(result)
     }
@@ -1046,6 +1058,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
         Haptics.shared.keyPress()
         switch suggestion.kind {
         case .literal, .word:
+            guard !suggestion.text.isEmpty else { return }
             replacePrefix(with: suggestion.text)
             clearSwipeState()
             afterTyping()

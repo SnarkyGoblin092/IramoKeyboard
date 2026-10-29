@@ -122,7 +122,7 @@ final class SuggestionBar: UIView {
 
     func update(_ newSuggestions: [Suggestion]) {
         suggestions = Array(newSuggestions.prefix(slotCount))
-        let bestIndex = suggestions.firstIndex(where: { $0.kind == .word || $0.kind == .swipeAlternative })
+        let bestIndex = suggestions.firstIndex(where: { !$0.text.isEmpty && ($0.kind == .word || $0.kind == .swipeAlternative) })
         for (index, label) in slotLabels.enumerated() {
             if index < suggestions.count {
                 let item = suggestions[index]

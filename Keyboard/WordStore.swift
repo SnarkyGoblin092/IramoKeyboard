@@ -72,6 +72,10 @@ final class WordStore {
     private var learnedKeys: [String: String] = [:]   // learned word -> match key
     private var learnedKeySet: Set<String> = []
     private var bigrams: [String: Int]
+    private var trigrams: [String: Int]
+    /// "word" / "a b" / "a b c" -> last day it was used (days since 1970); older use counts for less.
+    private var usage: [String: Int]
+    private var prefixCache: [String: [Int]] = [:]
     private let keyLetters: Set<Character>
     private let neighbors: [Character: Set<Character>]
     private var saveScheduled = false
@@ -81,6 +85,8 @@ final class WordStore {
         self.keyLetters = language.keyLetterSet
         self.learned = Settings.shared.learnedWords(for: language.rawValue)
         self.bigrams = Settings.shared.learnedBigrams(for: language.rawValue)
+        self.trigrams = Settings.shared.learnedTrigrams(for: language.rawValue)
+        self.usage = Settings.shared.learnedUsage(for: language.rawValue)
         self.neighbors = WordStore.neighborMap(for: language)
         rebuildLearnedKeys()
     }
@@ -164,7 +170,43 @@ final class WordStore {
         edgeIndex = parsed.edges
         maxLogFreq = parsed.maxLogFreq
         isFull = parsed.isFull
+        prefixCache = [:]
+        frequencyOrder = nil
         isLoaded = true
+    }
+
+    // MARK: Recency
+
+    private static var today: Int { return Int(Date().timeIntervalSince1970 / 86_400) }
+
+    /// 1 for something used today, halving every ~45 days without use.
+    private func recency(_ key: String) -> Double {
+        guard let day = usage[key] else { return 1 }
+        let age = max(0, WordStore.today - day)
+        return pow(0.5, Double(age) / 45)
+    }
+
+    private func effective(_ count: Int, key: String) -> Double {
+        return Double(count) * recency(key)
+    }
+
+    private func touch(_ key: String) { usage[key] = WordStore.today }
+
+    /// The most frequent words that start with a short prefix (cached), so one or two typed letters never
+    /// scan thousands of words per keystroke.
+    private func topIndices(forPrefix prefix: String) -> [Int] {
+        if let cached = prefixCache[prefix] { return cached }
+        var matches: [Int] = []
+        var index = lowerBound(of: prefix)
+        while index < entries.count, entries[index].folded.hasPrefix(prefix) {
+            matches.append(index)
+            index += 1
+        }
+        matches.sort { entries[$0].freq > entries[$1].freq }
+        let top = Array(matches.prefix(60))
+        if prefixCache.count > 400 { prefixCache = [:] }
+        prefixCache[prefix] = top
+        return top
     }
 
     // MARK: Lookup
@@ -212,22 +254,36 @@ final class WordStore {
             if top.count > limit { top.removeLast() }
         }
 
-        var index = lowerBound(of: key)
-        var scanned = 0
-        while index < entries.count, scanned < 8000, entries[index].folded.hasPrefix(key) {
-            let entry = entries[index]
-            index += 1
-            scanned += 1
-            if contractionsOnly && !entry.word.contains("'") { continue }
+        func entryScore(_ entry: WordEntry) -> Double {
             var score = entry.norm
-            if entry.word.hasPrefix(typedLower) { score += 0.12 }   // typed accents / apostrophe match exactly
-            consider(entry.word, score)
+            if entry.word.hasPrefix(typedLower) { score += 0.12 }       // typed accents / apostrophe match exactly
+            if entry.folded == key && entry.word != typedLower { score += 0.15 }   // "szep" -> "szép"
+            let extra = entry.length - key.count
+            if extra > 0 { score -= min(0.10, 0.012 * Double(extra)) }   // common short words beat rare long ones
+            return score
+        }
+
+        if key.count <= 3 && !contractionsOnly {
+            for index in topIndices(forPrefix: key) {
+                let entry = entries[index]
+                consider(entry.word, entryScore(entry))
+            }
+        } else {
+            var index = lowerBound(of: key)
+            var scanned = 0
+            while index < entries.count, scanned < 3000, entries[index].folded.hasPrefix(key) {
+                let entry = entries[index]
+                index += 1
+                scanned += 1
+                if contractionsOnly && !entry.word.contains("'") { continue }
+                consider(entry.word, entryScore(entry))
+            }
         }
 
         for (word, count) in learned {
             guard let learnedKey = learnedKeys[word], learnedKey.hasPrefix(key) else { continue }
             if contractionsOnly && !word.contains("'") { continue }
-            var score = 0.55 + min(0.35, log(Double(count) + 1) * 0.12)
+            var score = 0.50 + min(0.35, log(effective(count, key: word) + 1) * 0.12)
             if word.hasPrefix(typedLower) { score += 0.12 }
             consider(word, score)
         }
@@ -323,18 +379,31 @@ final class WordStore {
 
     // MARK: Context
 
-    /// 0...0.6: how strongly `previous` points at `next` (words the user typed after it, then built-in pairs).
-    func bigramBonus(previous: String, next: String) -> Double {
+    private func pairStrength(_ count: Int, key: String) -> Double {
+        return min(0.6, 0.25 + log(effective(count, key: key) + 1) * 0.15)
+    }
+
+    /// 0...0.7: how strongly the preceding word(s) point at `next` (user triples, user pairs, then built-in pairs).
+    func bigramBonus(previous: String, next: String, before2: String? = nil) -> Double {
         let prev = TextFolding.normalizeApostrophes(previous).lowercased()
         let following = TextFolding.normalizeApostrophes(next).lowercased()
         guard !prev.isEmpty, !following.isEmpty else { return 0 }
-        if let count = bigrams[prev + " " + following] {
-            return min(0.6, 0.25 + log(Double(count) + 1) * 0.15)
+        var bonus = 0.0
+        if let before2 = before2 {
+            let first = TextFolding.normalizeApostrophes(before2).lowercased()
+            let tripleKey = first + " " + prev + " " + following
+            if !first.isEmpty, let count = trigrams[tripleKey] {
+                bonus = pairStrength(count, key: tripleKey) + 0.1
+            }
         }
-        if let list = WordStore.commonPairs[language.rawValue]?[prev], let position = list.firstIndex(of: following) {
-            return 0.35 - 0.05 * Double(position)
+        let pairKey = prev + " " + following
+        if let count = bigrams[pairKey] {
+            bonus = max(bonus, pairStrength(count, key: pairKey))
+        } else if bonus == 0, let list = WordStore.commonPairs[language.rawValue]?[prev],
+                  let position = list.firstIndex(of: following) {
+            bonus = 0.35 - 0.05 * Double(position)
         }
-        return 0
+        return bonus
     }
 
     private static func neighborMap(for language: Language) -> [Character: Set<Character>] {
@@ -381,17 +450,23 @@ final class WordStore {
     }
 
     /// word -> bonus for every word known to follow `previous`; a plain value copy that is safe to hand to another thread.
-    func contextBonuses(after previous: String) -> [String: Double] {
+    func contextBonuses(after previous: String, before2: String? = nil) -> [String: Double] {
         let prev = TextFolding.normalizeApostrophes(previous).lowercased()
         guard !prev.isEmpty else { return [:] }
         var result: [String: Double] = [:]
         let prefix = prev + " "
         for (pair, count) in bigrams where pair.hasPrefix(prefix) {
-            result[String(pair.dropFirst(prefix.count))] = min(0.6, 0.25 + log(Double(count) + 1) * 0.15)
+            result[String(pair.dropFirst(prefix.count))] = pairStrength(count, key: pair)
         }
         if let list = WordStore.commonPairs[language.rawValue]?[prev] {
             for (position, word) in list.enumerated() where result[word] == nil {
                 result[word] = 0.35 - 0.05 * Double(position)
+            }
+        }
+        if let before2 = before2 {
+            let triplePrefix = TextFolding.normalizeApostrophes(before2).lowercased() + " " + prefix
+            for (triple, count) in trigrams where triple.hasPrefix(triplePrefix) {
+                result[String(triple.dropFirst(triplePrefix.count))] = pairStrength(count, key: triple) + 0.1
             }
         }
         return result
@@ -399,25 +474,54 @@ final class WordStore {
 
     // MARK: Next-word prediction
 
-    /// Words the user typed after `previous` (most frequent first), then a few built-in common pairs.
-    func nextWords(after previous: String, limit: Int) -> [String] {
+    /// Likely words after `previous` (and `before2`): user triples, user pairs, then built-in pairs; never `previous` itself.
+    func nextWords(after previous: String, before2: String? = nil, limit: Int) -> [String] {
         let prev = TextFolding.normalizeApostrophes(previous).lowercased()
         guard !prev.isEmpty, limit > 0 else { return [] }
-        let prefix = prev + " "
-        var found: [(word: String, count: Int)] = []
-        for (pair, count) in bigrams where pair.hasPrefix(prefix) {
-            found.append((word: String(pair.dropFirst(prefix.count)), count: count))
+        var scored: [String: Double] = [:]
+        for (word, bonus) in contextBonuses(after: prev, before2: before2) where word != prev {
+            scored[word] = bonus
         }
-        found.sort { $0.count > $1.count }
-        var result = found.prefix(limit).map { $0.word }
+        var result = scored.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
         if result.count < limit, let builtIn = WordStore.commonPairs[language.rawValue]?[prev] {
-            for word in builtIn where !result.contains(word) {
+            for word in builtIn where !result.contains(word) && word != prev {
                 result.append(word)
                 if result.count >= limit { break }
             }
         }
         return result
     }
+
+    /// Words that typically open a sentence: the ones the user starts sentences with, then built-in / frequent words.
+    func sentenceStarters(limit: Int) -> [String] {
+        var result: [String] = []
+        let learnedStarts = bigrams.filter { $0.key.hasPrefix(". ") }
+            .sorted { $0.value > $1.value }
+            .map { String($0.key.dropFirst(2)) }
+        for word in learnedStarts where result.count < limit { result.append(word) }
+        for word in WordStore.starters[language.rawValue] ?? [] where result.count < limit && !result.contains(word) {
+            result.append(word)
+        }
+        if result.count < limit {
+            let blocked: Set<String> = ["the", "a", "an", "of", "to", "and"]
+            for candidate in frequentWords(startingWith: Set("abcdefghijklmnopqrstuvwxyz"), limit: 40)
+            where result.count < limit && !result.contains(candidate.word) && candidate.word.count >= 2 && !blocked.contains(candidate.word) {
+                result.append(candidate.word)
+            }
+        }
+        return result
+    }
+
+    private static let starters: [String: [String]] = [
+        "en": ["i", "the", "thanks", "hey", "hi", "what", "do", "can", "we", "it's"],
+        "hu": ["szia", "köszi", "én", "nem", "hogy", "mi", "jó", "igen", "ma", "nagyon"],
+        "de": ["ich", "hallo", "danke", "das", "wir", "was", "ja", "nein", "es", "hast"],
+        "fr": ["je", "salut", "merci", "bonjour", "on", "c'est", "oui", "non", "tu", "il"],
+        "es": ["hola", "gracias", "yo", "no", "sí", "qué", "me", "es", "buenos", "te"],
+        "it": ["ciao", "grazie", "io", "non", "sì", "che", "come", "è", "ho", "buongiorno"],
+        "pt": ["olá", "obrigado", "eu", "não", "sim", "o", "que", "bom", "tudo", "oi"],
+        "nl": ["hoi", "dank", "ik", "het", "wat", "ja", "nee", "we", "je", "goed"],
+    ]
 
     private static let commonPairs: [String: [String: [String]]] = [
         "en": [
@@ -450,6 +554,7 @@ final class WordStore {
         if index < entries.count, entries[index].folded == key { return }   // already known
 
         learned[lower, default: 0] += 1
+        touch(lower)
         if learned.count > 1500 {
             let weakest = learned.sorted { $0.value < $1.value }.prefix(300)
             for (weakWord, _) in weakest { learned.removeValue(forKey: weakWord) }
@@ -461,26 +566,46 @@ final class WordStore {
         scheduleSave()
     }
 
-    /// Counts that `next` followed `previous`. Counts fade as the list fills up, so old habits expire.
+    /// Counts that `next` followed `previous`. Old, unused pairs fade (by last-use date) when the list fills up.
     func learnBigram(previous: String, next: String) {
         let a = TextFolding.normalizeApostrophes(previous).lowercased()
         let b = TextFolding.normalizeApostrophes(next).lowercased()
         guard !a.isEmpty, !b.isEmpty, a.count <= 24, b.count <= 24 else { return }
-        bigrams[a + " " + b, default: 0] += 1
-        if bigrams.count > 2000 {
-            var faded: [String: Int] = [:]
-            for (pair, count) in bigrams where count > 1 { faded[pair] = count / 2 + count % 2 }
-            if faded.count > 1500 {
-                faded = Dictionary(uniqueKeysWithValues: faded.sorted { $0.value > $1.value }.prefix(1500).map { ($0.key, $0.value) })
-            }
-            bigrams = faded
-        }
+        let key = a + " " + b
+        bigrams[key, default: 0] += 1
+        touch(key)
+        if bigrams.count > 2000 { bigrams = pruned(bigrams, keep: 1500) }
         scheduleSave()
+    }
+
+    /// Counts that `next` followed the two words `first second` (context for stronger predictions).
+    func learnTrigram(first: String, second: String, next: String) {
+        let a = TextFolding.normalizeApostrophes(first).lowercased()
+        let b = TextFolding.normalizeApostrophes(second).lowercased()
+        let c = TextFolding.normalizeApostrophes(next).lowercased()
+        guard !a.isEmpty, !b.isEmpty, !c.isEmpty, a.count <= 24, b.count <= 24, c.count <= 24 else { return }
+        let key = a + " " + b + " " + c
+        trigrams[key, default: 0] += 1
+        touch(key)
+        if trigrams.count > 2000 { trigrams = pruned(trigrams, keep: 1500) }
+        scheduleSave()
+    }
+
+    /// Keeps the `keep` entries with the highest recency-weighted count; survivors' counts are halved so new habits can overtake old ones.
+    private func pruned(_ table: [String: Int], keep: Int) -> [String: Int] {
+        let ranked = table.sorted { effective($0.value, key: $0.key) > effective($1.value, key: $1.key) }.prefix(keep)
+        var result: [String: Int] = [:]
+        for (key, count) in ranked { result[key] = max(1, count / 2 + count % 2) }
+        let dropped = Set(table.keys).subtracting(result.keys)
+        for key in dropped { usage.removeValue(forKey: key) }
+        return result
     }
 
     func forgetLearnedWords() {
         learned = [:]
         bigrams = [:]
+        trigrams = [:]
+        usage = [:]
         rebuildLearnedKeys()
     }
 
@@ -498,5 +623,7 @@ final class WordStore {
         saveScheduled = false
         Settings.shared.setLearnedWords(learned, for: language.rawValue)
         Settings.shared.setLearnedBigrams(bigrams, for: language.rawValue)
+        Settings.shared.setLearnedTrigrams(trigrams, for: language.rawValue)
+        Settings.shared.setLearnedUsage(usage, for: language.rawValue)
     }
 }

@@ -36,6 +36,8 @@ enum SettingKey {
     static let touchModel = "hunkeys.touchModel"
     static let learnedPrefix = "hunkeys.learned."
     static let bigramPrefix = "hunkeys.bigrams."
+    static let trigramPrefix = "hunkeys.trigrams."
+    static let usagePrefix = "hunkeys.learnedDays."
     // Written by the keyboard so the app can show its status
     static let lastSeen = "hunkeys.status.lastSeen"
     static let fullAccess = "hunkeys.status.fullAccess"
@@ -387,8 +389,28 @@ final class Settings {
         put(pairs, SettingKey.bigramPrefix + languageCode)
     }
 
+    /// Word triples ("thank you very") as "first second third" -> count.
+    func learnedTrigrams(for languageCode: String) -> [String: Int] {
+        return value(SettingKey.trigramPrefix + languageCode) as? [String: Int] ?? [:]
+    }
+
+    func setLearnedTrigrams(_ triples: [String: Int], for languageCode: String) {
+        put(triples, SettingKey.trigramPrefix + languageCode)
+    }
+
+    /// Last day (days since 1970) each learned word / pair / triple was used, for recency weighting.
+    func learnedUsage(for languageCode: String) -> [String: Int] {
+        return value(SettingKey.usagePrefix + languageCode) as? [String: Int] ?? [:]
+    }
+
+    func setLearnedUsage(_ days: [String: Int], for languageCode: String) {
+        put(days, SettingKey.usagePrefix + languageCode)
+    }
+
     func clearLearnedWords() {
         for language in Language.allCases {
+            put(nil, SettingKey.trigramPrefix + language.rawValue)
+            put(nil, SettingKey.usagePrefix + language.rawValue)
             put(nil, SettingKey.learnedPrefix + language.rawValue)
             put(nil, SettingKey.bigramPrefix + language.rawValue)
         }
