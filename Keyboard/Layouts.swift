@@ -234,8 +234,8 @@ enum LayoutBuilder {
 
     /// Long-press options of the comma key.
     private static func commaAlternates(_ language: Language) -> [String] {
-        let common = [";", ":", "!", "?", "'", "\"", "-", "_", "(", ")", "@", "#", "&", "/"]
-        return common + language.commaExtras
+        let common = ["?", "!", ";", ":", "'", "\""]
+        return common + Array(language.commaExtras.prefix(2))
     }
 
     // MARK: Numbers
