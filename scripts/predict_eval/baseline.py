@@ -127,6 +127,16 @@ class WordStore:
         self.prefix_cache[prefix] = top
         return top
 
+    def entry_exact(self, word):
+        """True if the dictionary has this exact spelling (WordStore.noteUse's check)."""
+        key = match_key(word)
+        index = self.lower_bound(key)
+        while index < len(self.keys) and self.keys[index] == key:
+            if self.entries[index].word == word:
+                return True
+            index += 1
+        return False
+
     def contains(self, key):
         index = self.lower_bound(key)
         return index < len(self.keys) and self.keys[index] == key

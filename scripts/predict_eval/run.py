@@ -161,6 +161,12 @@ def score_sentence(row):
         totals["typed"][1] += 1
         committed = _target(engine.on_space(before + typed, typed))
         right = committed == target
+        if _options.get("learn"):
+            # The keyboard learns what space committed; a wrong word is then fixed: an unwanted correction is
+            # taken back with backspace (which teaches the typed spelling), anything else retyped.
+            engine.learn(before, committed)
+            if not right:
+                engine.learn(before, target, explicit=(typed == target))
         totals["space"][0] += right
         totals["space"][1] += 1
         bucket = "slipped" if slipped else "clean"
@@ -198,12 +204,31 @@ def score_sentence(row):
 # Runs and reports
 # ---------------------------------------------------------------------------------------------------------------
 
+def score_block(block):
+    """One simulated user typing `block` in order, the keyboard learning as they go."""
+    _engine.personal = type(_engine.personal)()
+    totals = {m: [0, 0] for m in METRICS}
+    misses = []
+    for row in block:
+        part, missed = score_sentence(row)
+        for m in METRICS:
+            totals[m][0] += part[m][0]
+            totals[m][1] += part[m][1]
+        misses.extend(missed)
+    return totals, misses
+
+
 def run_config(engine_name, enabled, active, lang, args, workers):
     sentences = test_sentences(lang, args.sentences)
-    options = {"sigma": args.sigma, "swipe": not args.no_swipe, "swipe_sigma": args.swipe_sigma}
+    options = {"sigma": args.sigma, "swipe": not args.no_swipe, "swipe_sigma": args.swipe_sigma,
+               "learn": bool(args.learn)}
     started = time.time()
     with multiprocessing.Pool(workers, _init, (engine_name, enabled, active, active, options)) as pool:
-        results = pool.map(score_sentence, sentences, chunksize=1)
+        if args.learn:
+            blocks = [sentences[i:i + args.learn] for i in range(0, len(sentences), args.learn)]
+            results = pool.map(score_block, blocks, chunksize=1)
+        else:
+            results = pool.map(score_sentence, sentences, chunksize=1)
     totals = {m: [0, 0] for m in METRICS}
     misses = []
     for part, missed in results:
@@ -252,6 +277,8 @@ def main():
     parser.add_argument("--sigma", type=float, default=0.25, help="tap scatter in key widths")
     parser.add_argument("--swipe-sigma", type=float, default=0.30, help="swipe scatter in key widths")
     parser.add_argument("--no-swipe", action="store_true")
+    parser.add_argument("--learn", type=int, default=0,
+                        help="simulate users who each type this many sentences in order while the keyboard learns")
     parser.add_argument("--workers", type=int, default=max(1, min(16, (os.cpu_count() or 2) - 2)))
     parser.add_argument("--out", help="results file (default .eval/results/<engine>-<time>.json)")
     parser.add_argument("--compare", help="earlier results file to show the change against")

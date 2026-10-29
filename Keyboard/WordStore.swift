@@ -393,7 +393,7 @@ final class WordStore {
             }
         }
 
-        for (word, count) in learned {
+        for (word, count) in learned where count >= WordStore.learnAfter {
             guard let learnedKey = learnedKeys[word], learnedKey.hasPrefix(key) else { continue }
             if contractionsOnly && !word.contains("'") { continue }
             var score = 0.50 + min(0.35, log(effective(count, key: word) + 1) * 0.12)
@@ -602,7 +602,7 @@ final class WordStore {
     /// copy that is safe to hand to another thread.
     func personalStrengths() -> [String: Double] {
         var result: [String: Double] = [:]
-        for (word, count) in learned {
+        for (word, count) in learned where count >= WordStore.learnAfter {
             let key = learnedKeys[word] ?? TextFolding.key(word)
             let strength = effective(count, key: key)
             result[word] = min(1, log(1 + strength) / log(31))
@@ -624,7 +624,7 @@ final class WordStore {
     func learnedEntries() -> [WordEntry] {
         return learned.compactMap { (word, count) -> WordEntry? in
             let folded = learnedKeys[word] ?? TextFolding.key(word)
-            guard folded.count >= 2 else { return nil }
+            guard folded.count >= 2, count >= WordStore.learnAfter else { return nil }
             let norm = min(0.9, 0.35 + log(1 + Double(count)) / 12)
             return WordEntry(word: word, folded: folded, freq: count, norm: norm, length: folded.count)
         }
@@ -746,7 +746,8 @@ final class WordStore {
         let index = lowerBound(of: key)
         if !asTyped, index < entries.count, entries[index].folded == key { return }   // already known
 
-        learned[lower, default: 0] += 1
+        // Taking back an auto-correction is a deliberate choice: the word counts as the user's own at once.
+        learned[lower, default: 0] += asTyped ? WordStore.learnAfter : 1
         touch(lower)
         if learned.count > 1500 {
             let weakest = learned.sorted { $0.value < $1.value }.prefix(300)
@@ -880,14 +881,17 @@ extension WordStore {
         return log10(Double(max(entry.freq, 1)) / totalFreq)
     }
 
+    /// An unknown word counts as the user's own after this many uses: a slip typed once is not a word.
+    static let learnAfter = 2
+
     func isLearned(_ word: String) -> Bool {
-        return learned[word] != nil
+        return (learned[word] ?? 0) >= WordStore.learnAfter
     }
 
     /// log10 probability of a word the user taught the keyboard (names, slang), by how much they use it; nil if
     /// it is not one.
     func learnedLogProb(_ word: String) -> Double? {
-        guard let count = learned[word] else { return nil }
+        guard let count = learned[word], count >= WordStore.learnAfter else { return nil }
         return -5.5 + min(2.0, 0.6 * log(1 + effective(count, key: word)))
     }
 
