@@ -29,8 +29,11 @@ final class KeyboardViewController: UIInputViewController {
     private var loadingStores: Set<String> = []
     private var secondaryStoresAllowed = true
     private let maxSecondaryStores = 4
-    /// Words kept for all the other enabled languages together (split between them).
-    private let secondaryWordBudget = 160_000
+    /// Words kept for all the other enabled languages together (split between them); halved on a memory warning.
+    private var secondaryWordBudget = 160_000
+    private let minimumSecondaryWords = 20_000
+    /// Dictionaries load one at a time (the active language first), so two big lists never parse at once.
+    private let loadQueue = DispatchQueue(label: "hunkeys.load", qos: .userInitiated)
     private let decoder = SwipeDecoder()
     /// Swipe decoding runs here, one at a time (live previews, then the final word).
     private let swipeQueue = DispatchQueue(label: "hunkeys.swipe", qos: .userInitiated)
@@ -54,6 +57,8 @@ final class KeyboardViewController: UIInputViewController {
     private var lastShiftTap = Date.distantPast
     private var lastSwipeInserted: String?
     private var swipeAlternatives: [String] = []
+    /// The last auto-fix (what was typed, what replaced it plus its space), until the next key: backspace undoes it.
+    private var lastAutoFix: (typed: String, inserted: String)?
     private var refreshScheduled = false
     private var suggestionWork: DispatchWorkItem?
 
@@ -141,9 +146,15 @@ final class KeyboardViewController: UIInputViewController {
 
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
-        secondaryStoresAllowed = false
+        // Free the other languages now. They come back with half as many words, so every enabled language keeps
+        // working; only when that is already small are they given up.
         for (key, store) in stores where key != language { store.saveNow() }
         stores = stores.filter { $0.key == language }
+        if secondaryWordBudget >= 2 * minimumSecondaryWords {
+            secondaryWordBudget /= 2
+        } else {
+            secondaryStoresAllowed = false
+        }
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
@@ -326,7 +337,7 @@ final class KeyboardViewController: UIInputViewController {
         let store = stores[target] ?? WordStore(language: target)
         stores[target] = store
         loadingStores.insert(tag)
-        DispatchQueue.global(qos: .userInitiated).async {
+        loadQueue.async {
             let parsed = WordStore.parse(language: target, limit: limit)
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -346,7 +357,7 @@ final class KeyboardViewController: UIInputViewController {
         var wanted: Set<Language> = [language]
         if secondaryStoresAllowed {
             let others = Array(enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores))
-            let share = others.isEmpty ? 0 : max(30_000, secondaryWordBudget / others.count)
+            let share = others.isEmpty ? 0 : max(minimumSecondaryWords, secondaryWordBudget / others.count)
             for other in others {
                 wanted.insert(other)
                 loadStore(for: other, limit: share)
@@ -562,18 +573,21 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        // "dont" + space -> "don't ": words that only exist with an apostrophe get it automatically.
+        // "dont" + space -> "don't ", "koszonom" -> "köszönöm ": a word typed without its apostrophe or accents gets
+        // them, in any enabled language. Backspace right after takes it back.
         if Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true {
             let typedWord = currentPrefix(in: before)
             let fieldText = Predictor.fieldContext(before: before, after: textDocumentProxy.documentContextAfterInput ?? "")
-            // A word the writer keeps using as typed is left alone.
-            if !typedWord.isEmpty, !fieldText.uses(typedWord, atLeast: 2),
-               let fixed = Predictor.withApostrophe(typedWord, language: language) {
+            if !typedWord.isEmpty,
+               let fixed = Predictor.autoFix(typed: typedWord, before: before, active: language,
+                                             enabled: enabledLanguages, stores: stores, field: fieldText) {
                 let replacement = matchCase(of: typedWord, for: fixed)
                 recordBigram(contextBefore: before, next: fixed)
+                noteWordUse(fixed)
                 for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
                 textDocumentProxy.insertText(replacement + " ")
                 clearSwipeState()
+                lastAutoFix = (typed: typedWord, inserted: replacement + " ")
                 lastSpaceTime = Date()
                 afterTyping()
                 return
@@ -617,7 +631,13 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
-        if let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
+        if let fix = lastAutoFix, before.hasSuffix(fix.inserted) {
+            // Right after an auto-fix, backspace puts back what was typed, and that spelling is kept from now on.
+            for _ in 0..<fix.inserted.count { textDocumentProxy.deleteBackward() }
+            textDocumentProxy.insertText(fix.typed)
+            stores[language]?.learn(fix.typed, asTyped: true)
+            clearSwipeState()
+        } else if let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
             // Right after a swipe, backspace removes the whole swiped word (and takes back its use).
             for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
             noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
@@ -756,9 +776,7 @@ final class KeyboardViewController: UIInputViewController {
         if let first = typed.first, first.isUppercase {
             return capitalizedFirst(word)
         }
-        if language == .english && (word == "i" || word.hasPrefix("i'")) {
-            return capitalizedFirst(word)
-        }
+        if isEnglishI(word) { return capitalizedFirst(word) }
         return word
     }
 
@@ -767,9 +785,16 @@ final class KeyboardViewController: UIInputViewController {
         case .locked: return language.uppercase(word)
         case .once: return capitalizedFirst(word)
         case .off:
-            if language == .english && (word == "i" || word.hasPrefix("i'")) { return capitalizedFirst(word) }
+            if isEnglishI(word) { return capitalizedFirst(word) }
             return word
         }
+    }
+
+    /// English "i", "i'm", "i'll" ... take a capital I in any layout while English is enabled, unless the layout's
+    /// language has the word itself (Italian "i").
+    private func isEnglishI(_ word: String) -> Bool {
+        guard word == "i" || word.hasPrefix("i'"), enabledLanguages.contains(.english) else { return false }
+        return language == .english || stores[language]?.contains(key: TextFolding.key(word)) != true
     }
 
     // MARK: Suggestions
@@ -796,6 +821,7 @@ final class KeyboardViewController: UIInputViewController {
     private func clearSwipeState() {
         lastSwipeInserted = nil
         swipeAlternatives = []
+        lastAutoFix = nil
     }
 
     private func refreshSuggestions() {
@@ -822,7 +848,12 @@ final class KeyboardViewController: UIInputViewController {
 
         var emojis: [String] = []
         if Prefs.emojiSuggestions && !emojiWord.isEmpty && EmojiStore.shared.isReady {
-            emojis = EmojiStore.shared.suggestions(for: emojiWord, language: language, limit: 1)
+            // The word's own language first ("hat" is six in Hungarian, a hat in English), then the others.
+            let owners = Predictor.owners(of: emojiWord, stores: stores)
+            let order = owners + ([language] + enabledLanguages).filter { !owners.contains($0) }
+            var languages: [Language] = []
+            for candidate in order where !languages.contains(candidate) { languages.append(candidate) }
+            emojis = EmojiStore.shared.suggestions(for: emojiWord, languages: languages, limit: 1)
         }
 
         ensureStores()
@@ -1016,7 +1047,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar.isHidden = true
         searchBar.isHidden = false
         refreshEmojiSearch()
-        EmojiStore.shared.loadSearchIfNeeded(languages: [language, .english]) { [weak self] in
+        EmojiStore.shared.loadSearchIfNeeded(languages: enabledLanguages + [.english]) { [weak self] in
             self?.refreshEmojiSearch()
         }
     }
@@ -1052,6 +1083,7 @@ final class KeyboardViewController: UIInputViewController {
 
 extension KeyboardViewController: KeyboardViewDelegate {
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction) {
+        if action != .backspace { lastAutoFix = nil }   // an auto-fix can only be undone by the very next key
         switch action {
         case .character(let text): insert(text)
         case .space: handleSpace()
@@ -1178,10 +1210,11 @@ extension KeyboardViewController: KeyboardViewDelegate {
         for word in field.counts.keys { fieldBonuses[word] = field.bonus(for: word) }
 
         func likelihood(_ candidate: Language) -> Double {
+            // The layout's language only breaks near-ties; the language of the text decides.
             var value = 0.5 * (weights[candidate] ?? 0)
-            if candidate == language { value += foreignDominant == nil ? 0.45 : 0.15 }
-            if candidate == foreignDominant { value += 0.45 }
-            if candidate == lastOtherLanguage { value += 0.10 }
+            if candidate == language { value += foreignDominant == nil ? 0.12 : 0.04 }
+            if candidate == foreignDominant { value += 0.40 }
+            if candidate == lastOtherLanguage { value += 0.04 }
             return value
         }
         let candidates = ([language] + enabledLanguages.filter { $0 != language })

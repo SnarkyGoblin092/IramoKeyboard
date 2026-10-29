@@ -36,6 +36,9 @@ jobs:
             test -s "$f" || { echo "::error::$f is empty"; exit 1; }
           done
           ls Keyboard/Resources/words_*.tsv | wc -l
+          for f in Keyboard/Resources/pairs_*.tsv; do
+            test -s "$f" || echo "::warning::$f is empty; next-word suggestions for it only come from typing"
+          done
           python3 - <<'PY'
           import glob, json
           data = json.load(open("Keyboard/Resources/emoji.json"))

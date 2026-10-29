@@ -74,8 +74,8 @@ enum Predictor {
                 .filter { TextFolding.key($0).count >= 3 }
             guard sample.count >= 3, !loaded.isEmpty else { return nil }
             var hits: [Language: Int] = [:]
-            for (language, store) in loaded {
-                hits[language] = sample.filter { store.contains(key: TextFolding.key($0)) }.count
+            for word in sample {
+                for language in Predictor.owners(of: word, stores: loaded) { hits[language, default: 0] += 1 }
             }
             let activeHits = hits[active] ?? 0
             var winner = active
@@ -164,8 +164,22 @@ enum Predictor {
 
     // MARK: Language context
 
-    /// How strongly the recent text points at each language, 0...1. The active layout's weight is the
-    /// share of recent words it knows; another language only gets weight for words the active one does not know.
+    /// The loaded languages a word most likely belongs to: those where it is (nearly) as common as in the language
+    /// where it is most common ("the" -> English, "most" -> Hungarian, "is" -> both). Empty when none knows it.
+    /// Every language is judged the same way, whichever layout is showing.
+    static func owners(of word: String, stores: [Language: WordStore]) -> [Language] {
+        let key = TextFolding.key(word)
+        var frequencies: [Language: Double] = [:]
+        for (language, store) in stores where store.isLoaded {
+            let value = store.frequency(ofKey: key)
+            if value > 0 { frequencies[language] = value }
+        }
+        guard let top = frequencies.values.max() else { return [] }
+        return frequencies.filter { $0.value >= top - 0.08 }.map { $0.key }
+    }
+
+    /// How strongly the recent text points at each language, 0...1: the share of the last few words that belong
+    /// to it (see `owners(of:stores:)`).
     static func contextWeights(before: String,
                                currentPrefix: String,
                                active: Language,
@@ -176,18 +190,11 @@ enum Predictor {
         guard !words.isEmpty else { return [:] }
 
         var hits: [Language: Int] = [:]
-        for (language, store) in stores where store.isLoaded {
-            var count = 0
-            for word in words where store.contains(key: TextFolding.key(word)) { count += 1 }
-            hits[language] = count
+        for word in words {
+            for language in owners(of: word, stores: stores) { hits[language, default: 0] += 1 }
         }
         let total = Double(words.count)
-        let activeHits = hits[active] ?? 0
-        var weights: [Language: Double] = [active: Double(activeHits) / total]
-        for (language, count) in hits where language != active {
-            weights[language] = max(0, Double(count - activeHits)) / total
-        }
-        return weights
+        return hits.mapValues { Double($0) / total }
     }
 
     // MARK: Completions
@@ -213,9 +220,10 @@ enum Predictor {
         let dominant = field?.dominant(active: active, stores: stores)
         let foreignDominant: Language? = (dominant != nil && dominant != active) ? dominant : nil
         func languageBonus(_ language: Language) -> Double {
+            // The layout's language only breaks near-ties; the language of the text decides.
             var bonus = 0.5 * (weights[language] ?? 0)
-            if language == active { bonus += foreignDominant == nil ? 0.30 : 0.12 }
-            if language == foreignDominant { bonus += 0.35 }
+            if language == active { bonus += foreignDominant == nil ? 0.08 : 0.03 }
+            if language == foreignDominant { bonus += 0.30 }
             return bonus
         }
 
@@ -322,8 +330,9 @@ enum Predictor {
             .map { $0.key }
     }
 
-    // MARK: Missing apostrophes
+    // MARK: Auto-fix (missing accents and apostrophes)
 
+    /// Hand-picked English fixes that hold even though subtitles also spell them without the apostrophe.
     private static let englishApostrophes: [String: String] = [
         "dont": "don't", "cant": "can't", "doesnt": "doesn't", "didnt": "didn't", "isnt": "isn't",
         "arent": "aren't", "wasnt": "wasn't", "werent": "weren't", "hasnt": "hasn't", "havent": "haven't",
@@ -335,10 +344,38 @@ enum Predictor {
         "heres": "here's", "hows": "how's", "wheres": "where's",
     ]
 
-    /// "dont" -> "don't" for typed words that are not words without the apostrophe (English only).
-    static func withApostrophe(_ typed: String, language: Language) -> String? {
-        guard language == .english else { return nil }
-        return englishApostrophes[typed.lowercased()]
+    /// The spelling to put in place of a word that was just finished, or nil to leave it: its missing accents or
+    /// apostrophe, in whichever enabled language it belongs to ("dont" -> "don't", "koszonom" -> "köszönöm",
+    /// "deja" -> "déjà", "nao" -> "não"). Never when an enabled language has the word as typed, or the writer keeps
+    /// using it; when several languages could fix it, the language of the text decides.
+    static func autoFix(typed: String,
+                        before: String,
+                        active: Language,
+                        enabled: [Language],
+                        stores: [Language: WordStore],
+                        field: FieldContext?) -> String? {
+        let lower = TextFolding.normalizeApostrophes(typed).lowercased()
+        guard lower.count >= 2, field?.uses(lower, atLeast: 2) != true else { return nil }
+        let languages = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
+        let weights = contextWeights(before: before, currentPrefix: typed, active: active, stores: stores)
+        var best: (word: String, score: Double)?
+        for language in languages {
+            guard let store = stores[language] else { continue }
+            var fix: (word: String, norm: Double)?
+            if language == .english, let fixed = englishApostrophes[lower] {
+                fix = (fixed, 0.8)
+            } else {
+                switch store.spellingCheck(lower) {
+                case .keep: return nil
+                case .unknown: break
+                case .fix(let word, let norm): fix = (word, norm)
+                }
+            }
+            guard let candidate = fix else { continue }
+            let score = candidate.norm + 0.5 * (weights[language] ?? 0) + (language == active ? 0.08 : 0)
+            if score > (best?.score ?? -1) { best = (candidate.word, score) }
+        }
+        return best?.word
     }
 
     private static let elisionHeads: [Language: Set<String>] = [
@@ -381,7 +418,7 @@ enum Predictor {
             for language in languages {
                 guard let store = stores[language] else { continue }
                 for word in store.sentenceStarters(limit: limit) {
-                    let cased = capitalized(word)
+                    let cased = capitalized(word, language: language)
                     if !result.contains(cased) { result.append(cased) }
                 }
             }
@@ -395,13 +432,12 @@ enum Predictor {
         guard let previous = words.last, !previous.isEmpty else { return [] }
         let beforePrevious = words.count == 2 ? words[0] : nil
 
-        // The other enabled languages too, after a word only they know ("thank" in the Hungarian layout -> "you").
-        // A word the layout's language knows ("is" is Hungarian too) keeps its own followers.
-        let previousKey = TextFolding.key(previous)
-        if stores[active]?.contains(key: previousKey) != true {
-            for language in enabled
-            where !languages.contains(language) && stores[language]?.contains(key: previousKey) == true {
-                languages.append(language)
+        // The other enabled languages too, after a word that belongs to them ("thank" in the Hungarian layout ->
+        // "you"). A word that is just as much the layout's language's ("is" is Hungarian too) keeps its followers.
+        let previousOwners = owners(of: previous, stores: stores)
+        if !previousOwners.contains(active) {
+            for language in enabled where previousOwners.contains(language) && !languages.contains(language) {
+                languages.insert(language, at: 0)
             }
         }
 
@@ -414,7 +450,7 @@ enum Predictor {
         }
         // Too little context-specific knowledge: fill with common words of the language.
         if result.count < wide, let store = stores[active] {
-            for candidate in store.frequentWords(startingWith: Set("abcdefghijklmnopqrstuvwxyz"), limit: 12)
+            for candidate in store.frequentWords(startingWith: nil, limit: 12)
             where result.count < wide && candidate.word != previous && candidate.word.count >= 2 && !result.contains(candidate.word) {
                 result.append(candidate.word)
             }
@@ -449,9 +485,9 @@ enum Predictor {
         return last == "." || last == "!" || last == "?" || last == "…"
     }
 
-    static func capitalized(_ word: String) -> String {
+    static func capitalized(_ word: String, language: Language = .english) -> String {
         guard let first = word.first else { return word }
-        return String(first).uppercased() + word.dropFirst()
+        return language.uppercase(String(first)) + word.dropFirst()   // Turkish i -> İ
     }
 
     /// Applies the typed word's capitalisation (Title, ALLCAPS) to a suggestion.

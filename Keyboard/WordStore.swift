@@ -81,6 +81,8 @@ final class WordStore {
     /// "word" / "a b" / "a b c" -> last day it was used (days since 1970); older use counts for less.
     private var usage: [String: Int]
     private var prefixCache: [String: [Int]] = [:]
+    /// word -> common next words, space separated ("." -> sentence starters); see `Parsed.pairs`.
+    private var builtInPairs: [String: String] = [:]
     private let keyLetters: Set<Character>
     private let neighbors: [Character: Set<Character>]
     private var saveScheduled = false
@@ -111,6 +113,8 @@ final class WordStore {
         let maxLogFreq: Double
         let isFull: Bool
         let limit: Int?
+        /// word -> its most common next words, space separated ("." -> sentence starters), from `pairs_<lang>.tsv`.
+        let pairs: [String: String]
     }
 
     /// The layout key a word's letter is typed on ("é" -> "e" in Hungarian, but "ö" stays "ö" in German).
@@ -130,7 +134,8 @@ final class WordStore {
     static func parse(language: Language, limit: Int? = nil) -> Parsed {
         guard let url = Bundle.main.url(forResource: "words_\(language.rawValue)", withExtension: "tsv"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
-            return Parsed(entries: [], edges: [:], maxLogFreq: 1, isFull: limit == nil, limit: limit)
+            return Parsed(entries: [], edges: [:], maxLogFreq: 1, isFull: limit == nil, limit: limit,
+                          pairs: parsePairs(language: language))
         }
 
         // One pass: the file is sorted by frequency, so the first row has the highest count, and its second
@@ -180,7 +185,21 @@ final class WordStore {
         }
         // A limit the list never reached still loaded every word.
         let isFull = limit.map { list.count < $0 } ?? true
-        return Parsed(entries: list, edges: edges, maxLogFreq: maxLog, isFull: isFull, limit: limit)
+        return Parsed(entries: list, edges: edges, maxLogFreq: maxLog, isFull: isFull, limit: limit,
+                      pairs: parsePairs(language: language))
+    }
+
+    /// Reads `pairs_<lang>.tsv`: word <TAB> next words (space separated). Missing file = no built-in pairs.
+    private static func parsePairs(language: Language) -> [String: String] {
+        guard let url = Bundle.main.url(forResource: "pairs_\(language.rawValue)", withExtension: "tsv"),
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
+        var pairs: [String: String] = [:]
+        text.enumerateLines { line, _ in
+            let parts = line.split(separator: "\t", maxSplits: 1)
+            guard parts.count == 2 else { return }
+            pairs[String(parts[0])] = String(parts[1])
+        }
+        return pairs
     }
 
     func apply(_ parsed: Parsed) {
@@ -189,6 +208,7 @@ final class WordStore {
         maxLogFreq = parsed.maxLogFreq
         isFull = parsed.isFull
         loadedLimit = parsed.limit
+        builtInPairs = parsed.pairs
         prefixCache = [:]
         frequencyOrder = nil
         isLoaded = true
@@ -250,6 +270,61 @@ final class WordStore {
         let index = lowerBound(of: key)
         if index < entries.count, entries[index].folded == key { return true }
         return learnedKeySet.contains(key)
+    }
+
+    /// 0...1: how common the most common word with this match key is (a learned word counts as fairly common);
+    /// 0 when the language does not know it. Used to tell which language a word belongs to.
+    func frequency(ofKey key: String) -> Double {
+        guard !key.isEmpty else { return 0 }
+        var index = lowerBound(of: key)
+        var best = 0.0
+        while index < entries.count, entries[index].folded == key {
+            best = max(best, entries[index].norm)
+            index += 1
+        }
+        if best == 0 && learnedKeySet.contains(key) { best = 0.5 }
+        return best
+    }
+
+    enum SpellingCheck {
+        case unknown                          // neither the word nor another spelling of it
+        case keep                             // a word as typed
+        case fix(word: String, norm: Double)  // the usual spelling of what was typed
+    }
+
+    /// What this dictionary says about a finished word typed without its accents or apostrophe: `.fix` when a
+    /// spelling with the same letters is far more common ("koszonom" -> "köszönöm", "dont" -> "don't", "deja" ->
+    /// "déjà") and clearly the usual one ("ot" could be "őt" or "öt": not fixed); `.keep` when the word is fine
+    /// as typed (including the user's own words).
+    func spellingCheck(_ typed: String) -> SpellingCheck {
+        let lower = TextFolding.normalizeApostrophes(typed).lowercased()
+        let key = TextFolding.key(lower)
+        guard !key.isEmpty else { return .unknown }
+        if learned[lower] != nil || used[lower] != nil { return .keep }
+        var typedFreq = 0
+        var typedNorm = 0.0
+        var best: WordEntry?
+        var runnerUp = 0
+        var index = lowerBound(of: key)
+        while index < entries.count, entries[index].folded == key {
+            let entry = entries[index]
+            index += 1
+            if entry.word == lower {
+                typedFreq = entry.freq
+                typedNorm = entry.norm
+            } else if entry.freq > (best?.freq ?? 0) {
+                runnerUp = best?.freq ?? 0
+                best = entry
+            } else {
+                runnerUp = max(runnerUp, entry.freq)
+            }
+        }
+        guard let variant = best else { return typedFreq > 0 ? .keep : .unknown }
+        // 50x the typed spelling, which must not be a common word itself ("its" stays), and 3x any other spelling.
+        if variant.freq >= 50 * typedFreq && typedNorm < 0.65 && variant.freq >= 3 * runnerUp && variant.norm >= 0.15 {
+            return .fix(word: variant.word, norm: variant.norm)
+        }
+        return typedFreq > 0 ? .keep : .unknown
     }
 
     /// Words that start with what was typed (apostrophes, accents and case are ignored when matching,
@@ -424,8 +499,8 @@ final class WordStore {
 
     private var frequencyOrder: [Int]?
 
-    /// The most frequent words whose first letter is in `letters` (used after "l'", "j'", "dell'" ...).
-    func frequentWords(startingWith letters: Set<Character>, limit: Int) -> [WordCandidate] {
+    /// The most frequent words whose first letter is in `letters` (used after "l'", "j'", "dell'" ...); nil = any.
+    func frequentWords(startingWith letters: Set<Character>?, limit: Int) -> [WordCandidate] {
         if frequencyOrder == nil {
             let capped = min(entries.count, 6000)
             frequencyOrder = Array(0..<entries.count).sorted { entries[$0].freq > entries[$1].freq }.prefix(capped).map { $0 }
@@ -433,7 +508,8 @@ final class WordStore {
         var result: [WordCandidate] = []
         for index in frequencyOrder ?? [] {
             let entry = entries[index]
-            guard let letter = entry.folded.first, letters.contains(letter), !entry.word.contains("'"), entry.length >= 2 else { continue }
+            guard let letter = entry.folded.first, letters?.contains(letter) ?? letter.isLetter,
+                  !entry.word.contains("'"), entry.length >= 2 else { continue }
             result.append(WordCandidate(word: entry.word, score: entry.norm))
             if result.count >= limit { break }
         }
@@ -462,8 +538,7 @@ final class WordStore {
         let pairKey = prev + " " + following
         if let count = bigrams[pairKey] {
             bonus = max(bonus, pairStrength(count, key: pairKey))
-        } else if bonus == 0, let list = WordStore.commonPairs[language.rawValue]?[prev],
-                  let position = list.firstIndex(of: following) {
+        } else if bonus == 0, let position = builtInFollowers(of: prev).firstIndex(of: following) {
             bonus = 0.35 - 0.05 * Double(position)
         }
         return bonus
@@ -540,10 +615,8 @@ final class WordStore {
         for (pair, count) in bigrams where pair.hasPrefix(prefix) {
             result[String(pair.dropFirst(prefix.count))] = pairStrength(count, key: pair)
         }
-        if let list = WordStore.commonPairs[language.rawValue]?[prev] {
-            for (position, word) in list.enumerated() where result[word] == nil {
-                result[word] = 0.35 - 0.05 * Double(position)
-            }
+        for (position, word) in builtInFollowers(of: prev).enumerated() where result[word] == nil {
+            result[word] = 0.35 - 0.05 * Double(position)
         }
         if let before2 = before2 {
             let triplePrefix = TextFolding.normalizeApostrophes(before2).lowercased() + " " + prefix
@@ -565,8 +638,8 @@ final class WordStore {
             scored[word] = bonus
         }
         var result = scored.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
-        if result.count < limit, let builtIn = WordStore.commonPairs[language.rawValue]?[prev] {
-            for word in builtIn where !result.contains(word) && word != prev {
+        if result.count < limit {
+            for word in builtInFollowers(of: prev) where !result.contains(word) && word != prev {
                 result.append(word)
                 if result.count >= limit { break }
             }
@@ -581,12 +654,13 @@ final class WordStore {
             .sorted { $0.value > $1.value }
             .map { String($0.key.dropFirst(2)) }
         for word in learnedStarts where result.count < limit { result.append(word) }
-        for word in WordStore.starters[language.rawValue] ?? [] where result.count < limit && !result.contains(word) {
+        let builtIn = (WordStore.starters[language.rawValue] ?? []) + builtInFollowers(of: ".")
+        for word in builtIn where result.count < limit && !result.contains(word) {
             result.append(word)
         }
         if result.count < limit {
             let blocked: Set<String> = ["the", "a", "an", "of", "to", "and"]
-            for candidate in frequentWords(startingWith: Set("abcdefghijklmnopqrstuvwxyz"), limit: 40)
+            for candidate in frequentWords(startingWith: nil, limit: 40)
             where result.count < limit && !result.contains(candidate.word) && candidate.word.count >= 2 && !blocked.contains(candidate.word) {
                 result.append(candidate.word)
             }
@@ -604,6 +678,17 @@ final class WordStore {
         "pt": ["olá", "obrigado", "eu", "não", "sim", "o", "que", "bom", "tudo", "oi"],
         "nl": ["hoi", "dank", "ik", "het", "wat", "ja", "nee", "we", "je", "goed"],
     ]
+
+    /// The usual next words after `prev`: the hand-picked ones below, then the ones from example sentences.
+    private func builtInFollowers(of prev: String) -> [String] {
+        var result = WordStore.commonPairs[language.rawValue]?[prev] ?? []
+        if let line = builtInPairs[prev] {
+            for word in line.split(separator: " ") where !result.contains(String(word)) {
+                result.append(String(word))
+            }
+        }
+        return result
+    }
 
     private static let commonPairs: [String: [String: [String]]] = [
         "en": [
@@ -628,12 +713,14 @@ final class WordStore {
     // MARK: Learning
 
     /// Remembers a word the dictionary does not know (names, slang) so it can be suggested later.
-    func learn(_ word: String) {
+    /// - Parameter asTyped: keep this exact spelling even though the dictionary has the word with accents (an
+    ///   auto-fix the user took back), so it is never fixed again.
+    func learn(_ word: String, asTyped: Bool = false) {
         let lower = TextFolding.normalizeApostrophes(word).lowercased()
-        guard lower.count >= 3, lower.count <= 24 else { return }
+        guard lower.count >= (asTyped ? 2 : 3), lower.count <= 24 else { return }
         let key = TextFolding.key(lower)
         let index = lowerBound(of: key)
-        if index < entries.count, entries[index].folded == key { return }   // already known
+        if !asTyped, index < entries.count, entries[index].folded == key { return }   // already known
 
         learned[lower, default: 0] += 1
         touch(lower)

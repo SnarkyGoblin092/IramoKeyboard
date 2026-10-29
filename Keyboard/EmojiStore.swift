@@ -210,7 +210,7 @@ final class EmojiStore {
         }
     }
 
-    /// Loads the search words for the given languages (the typing language and English, so the memory use stays small).
+    /// Loads the search words for the given languages (the enabled languages and English).
     /// Calls back on the main thread.
     func loadSearchIfNeeded(languages: [Language], completion: @escaping () -> Void) {
         let wanted = Set(languages)
@@ -271,7 +271,19 @@ final class EmojiStore {
         return result
     }
 
-    /// Emoji whose names / keywords start with every word of `query` (English and Hungarian).
+    /// Up to `limit` emoji that match a complete word in any of `languages` (earlier languages first).
+    func suggestions(for word: String, languages: [Language], limit: Int) -> [String] {
+        var result: [String] = []
+        for language in languages where result.count < limit {
+            for emoji in suggestions(for: word, language: language, limit: limit)
+            where result.count < limit && !result.contains(emoji) {
+                result.append(emoji)
+            }
+        }
+        return result
+    }
+
+    /// Emoji whose names / keywords start with every word of `query` (in the languages loaded for search).
     func search(_ query: String, limit: Int = 80) -> [String] {
         guard searchReady else { return [] }
         let tokens = TextFolding.fold(query)
