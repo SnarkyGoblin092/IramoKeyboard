@@ -7,9 +7,13 @@ on:
 
 jobs:
   build:
-    # macOS 26 runners carry Xcode 26+, which has the Liquid Glass APIs (UIGlassEffect).
-    runs-on: macos-15-intel   # macOS arm64 runners were capacity-limited; swap back to macos-26 if you prefer
+    # macOS 26 runners carry Xcode 26+, which has the Liquid Glass APIs (UIGlassEffect). They run on Apple
+    # silicon, which builds far faster than the Intel runners; if jobs sit queued, use macos-15-intel.
+    runs-on: macos-26
     timeout-minutes: 45
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +28,21 @@ jobs:
           xcodebuild -version
           swift --version
 
+      # The generated data only changes when the script does (or the sources update), so reuse it for a
+      # week instead of downloading and processing ~400 MB of word lists and sentences on every push.
+      - name: Week number (refreshes the cached data weekly)
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore generated data
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: Keyboard/Resources
+          key: data-${{ hashFiles('scripts/build_data.py') }}-${{ steps.week.outputs.week }}
+
       - name: Download words, emoji and keywords
+        if: steps.data-cache.outputs.cache-hit != 'true'
         run: python3 scripts/build_data.py
 
       - name: Check generated data
@@ -52,8 +70,8 @@ jobs:
                   print(f"::warning::{path} looks thin; emoji search will be weak")
           PY
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen and ldid
+        run: brew install xcodegen ldid
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -78,7 +96,6 @@ jobs:
       # reach the keyboard.
       - name: Package IPA
         run: |
-          brew install ldid
           command -v ldid
           rm -rf Payload HunKeys.ipa
           mkdir Payload

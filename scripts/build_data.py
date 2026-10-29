@@ -42,6 +42,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -111,7 +112,15 @@ def download(url: str, dest: Path) -> None:
     raise RuntimeError(f"download failed: {url}\n{last_error}")
 
 
+# Files already downloaded during this run (see prefetch), so fetch doesn't download them twice.
+fetched = {}
+
+
 def fetch(name: str, optional: bool = False):
+    if name in fetched:
+        if fetched[name] is None and not optional:
+            raise RuntimeError(f"download failed earlier: {name}")
+        return fetched[name]
     fixtures = os.environ.get("HUNKEYS_FIXTURES")
     if fixtures:
         path = Path(fixtures) / name
@@ -129,6 +138,22 @@ def fetch(name: str, optional: bool = False):
             return None
         raise
     return dest
+
+
+def prefetch(names) -> None:
+    """Downloads the big files side by side; most of a CI run was spent waiting on them one at a time."""
+    if os.environ.get("HUNKEYS_FIXTURES"):
+        return
+
+    def get(name):
+        try:
+            download(url_for(name), CACHE / name)
+            return name, CACHE / name
+        except RuntimeError:
+            return name, None    # fetch decides later whether it was optional
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        fetched.update(pool.map(get, names))
 
 
 # ----------------------------------------------------------------------------
@@ -484,7 +509,7 @@ def read_counts(path: Path, lang: str):
                 continue
             word, count = repair(lower(parts[0], lang), lang), int(parts[1])
             if count < MIN_COUNT:
-                continue
+                break    # the lists are sorted by count, so the rest is the rare tail
             if not word_re.match(word) or word in blocked:
                 continue
             if len(word) == 1 and word not in singles:
@@ -723,6 +748,9 @@ def build_language(lang: str, groups) -> None:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
+
+    print("Downloading …")
+    prefetch([f"{lang}_full.txt" for lang in LANGS] + [f"sentences_{lang}.tsv.bz2" for lang in LANGS])
 
     print("Emoji …")
     version, raw_groups = parse_emoji_test(fetch("emoji-test.txt"))
