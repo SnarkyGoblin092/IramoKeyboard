@@ -24,6 +24,7 @@ SLIP = 3.5              # log10 cost of one typing mistake (a neighbouring key c
 FIRST_LETTER = 0.6      # extra cost when the first letter is wrong (people rarely miss it)
 UNKNOWN_WORD = -10.0    # log10 probability of a word no dictionary has (a name, slang)
 CORRECT_MARGIN = 1.0    # log10 margin a correction needs over the text as typed
+SHAPE = 10.0            # log10 cost of one unit of swipe shape mismatch (see baseline.decode_swipe)
 CANDIDATES = 30
 
 
@@ -129,7 +130,24 @@ class Engine(baseline.Engine):
 
     # -- the keyboard's questions ---------------------------------------------------------------------------------
 
-    params = {"slip": SLIP, "first": FIRST_LETTER, "unknown": UNKNOWN_WORD, "margin": CORRECT_MARGIN}
+    params = {"slip": SLIP, "first": FIRST_LETTER, "unknown": UNKNOWN_WORD, "margin": CORRECT_MARGIN, "shape": SHAPE}
+
+    def swipe_features(self, before, path):
+        """(word, shape cost, log10 P(word | context)) for every word the swipe could be."""
+        context = self._context(before)
+        layout = self.stores[self.active].layout
+        shapes = {}
+
+        def collect(_store, entry, geometry):
+            if geometry < shapes.get(entry.word, float("inf")):
+                shapes[entry.word] = geometry
+
+        for lang in self.ordered:
+            baseline.decode_swipe(path, layout.centers, layout.key_width, [(self.stores[lang], 0, {}, {})], 0, collect)
+        return [(word, shape, self._lm(word, context)) for word, shape in shapes.items()]
+
+    def swipe(self, before, path, limit=4):
+        return swipe_ranking(self.swipe_features(before, path), self.params)[:limit]
 
     def suggest(self, before, typed, limit=4):
         rows, lower, _ = self.features(before, typed)
@@ -170,3 +188,9 @@ def correction(rows, lower, typed_lm, params):
         return best
     return lower
 
+
+
+def swipe_ranking(rows, params):
+    """Swiped words best first: log10 P(word | context) minus the cost of the path's mismatch with the word."""
+    scored = sorted(((lm - params["shape"] * shape, word) for word, shape, lm in rows), reverse=True)
+    return [w for _, w in scored]

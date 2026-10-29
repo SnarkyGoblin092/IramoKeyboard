@@ -33,6 +33,19 @@ final class SwipeDecoder {
         /// word -> bonus (0...0.35) for words already used in the text field.
         var fieldBonuses: [String: Double]
 
+        // Language model scoring (see Decoder): when any source has a model, words are ranked by
+        // log10 P(word | context) - shapeWeight * shape cost instead of the frequency mix below.
+        /// This language's trigram model and its share of the text (Decoder.Context.weights).
+        var model: LanguageModel? = nil
+        var weight: Double = 1
+        /// The last two language model ids before the swipe.
+        var previousId: Int32 = LanguageModel.start
+        var beforeId: Int32? = nil
+        /// log10 probabilities of the user's own words (`WordStore.learnedLogProb`).
+        var learnedLogProbs: [String: Double] = [:]
+        /// log10 boosts for the user's habits (words they write, words they put after the previous one).
+        var boosts: [String: Double] = [:]
+
         init(store: WordStore,
              penalty: Double = 0,
              contextBonuses: [String: Double] = [:],
@@ -61,6 +74,10 @@ final class SwipeDecoder {
         }
     }
 
+    /// log10 cost of one unit of shape mismatch when words are scored with the language models. Tuned with
+    /// scripts/predict_eval/tune.py --swipe (decoder.py SHAPE).
+    static let shapeWeight = 10.0
+
     func decode(path rawPath: [CGPoint],
                 keyCenters: [Character: CGPoint],
                 keySize: CGSize,
@@ -88,6 +105,9 @@ final class SwipeDecoder {
 
         var scored: [(word: String, score: Double)] = []
         var seen = Set<String>()
+        // Language model scoring: word -> (best shape cost, summed weighted probability, best personal boost).
+        let usesModels = sources.contains { $0.model != nil }
+        var found: [String: (shape: Double, probability: Double, boost: Double)] = [:]
 
         func consider(_ entry: WordEntry, source: Source, keyFor: (Character) -> Character?) {
             if seen.contains(entry.word) { return }
@@ -143,6 +163,25 @@ final class SwipeDecoder {
             }
             excess /= Double(sampleCount) * Double(keyWidth)
 
+            if usesModels {
+                let shapeCost = 0.45 * shape + 0.40 * coverage + 0.35 * excess
+                    + 0.50 * (startMiss + endMiss) + 0.35 * max(0, worstLetter - 0.9)
+                var logProb: Double
+                if let model = source.model, entry.rank >= 0 {
+                    logProb = model.logProb(entry.rank + LanguageModel.firstWord, previous: source.previousId, before: source.beforeId)
+                } else {
+                    logProb = -7 + 5 * entry.norm   // no model for this language: frequency only
+                }
+                if let learned = source.learnedLogProbs[entry.word] { logProb = max(logProb, learned) }
+                seen.insert(entry.word)
+                var item = found[entry.word] ?? (shape: Double.greatestFiniteMagnitude, probability: 0, boost: 0)
+                item.shape = min(item.shape, shapeCost)
+                item.probability += source.weight * pow(10, logProb)
+                item.boost = max(item.boost, (source.boosts[entry.word] ?? 0) + 2 * (source.fieldBonuses[entry.word] ?? 0))
+                found[entry.word] = item
+                return
+            }
+
             let frequency = entry.norm
             let context = source.contextBonuses[entry.word] ?? 0
             let personal = source.personal[entry.word] ?? 0
@@ -156,6 +195,8 @@ final class SwipeDecoder {
         }
 
         for source in sources {
+            // With the language models every language scores its own words (their probabilities add up).
+            if usesModels { seen = [] }
             // Letter -> key, remembered: accented letters need Unicode folding, far too slow per word.
             var keyMemo: [Character: Character?] = [:]
             func keyFor(_ character: Character) -> Character? {
@@ -170,6 +211,14 @@ final class SwipeDecoder {
             for entry in source.extras { consider(entry, source: source, keyFor: keyFor) }
         }
 
+        if usesModels {
+            let ranked = found.map { word, item -> (word: String, score: Double) in
+                let logProb = item.probability > 0 ? log10(item.probability) : -99
+                return (word, logProb + item.boost - SwipeDecoder.shapeWeight * item.shape)
+            }
+            return ranked.sorted { $0.score == $1.score ? $0.word < $1.word : $0.score > $1.score }
+                .prefix(limit).map { $0.word }
+        }
         scored.sort { $0.score < $1.score }
         return scored.prefix(limit).map { $0.word }
     }

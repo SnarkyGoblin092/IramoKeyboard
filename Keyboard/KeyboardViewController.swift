@@ -1243,6 +1243,31 @@ extension KeyboardViewController: KeyboardViewDelegate {
             sources = [SwipeDecoder.Source(store: store, penalty: 0, contextBonuses: bonuses,
                                            personal: store.personalStrengths(), extras: store.learnedEntries())]
         }
+        // With the language models, swiped words are scored like typed ones (see Decoder): each language by its
+        // share of the text and the probability of the word after the previous ones.
+        if Decoder.isAvailable(stores) {
+            let context = Decoder.context(before: before, active: language, stores: stores)
+            for index in sources.indices {
+                let source = sources[index].store
+                guard let candidate = stores.first(where: { $0.value === source })?.key else { continue }
+                let history = context.histories[candidate] ?? [LanguageModel.start]
+                sources[index].model = source.model
+                sources[index].weight = context.weights[candidate] ?? 0
+                sources[index].previousId = history[history.count - 1]
+                sources[index].beforeId = history.count >= 2 ? history[history.count - 2] : nil
+                var learned: [String: Double] = [:]
+                for entry in sources[index].extras {
+                    if let value = source.learnedLogProb(entry.word) { learned[entry.word] = value }
+                }
+                sources[index].learnedLogProbs = learned
+                var boosts: [String: Double] = [:]
+                for (word, strength) in sources[index].personal { boosts[word] = 0.8 * strength }
+                for follower in source.userFollowers(of: context.previous ?? ".") {
+                    boosts[follower.word, default: 0] += follower.strength
+                }
+                sources[index].boosts = boosts
+            }
+        }
         return SwipeContext(sources: sources, centers: keyboardView.letterCenters(), keySize: keyboardView.letterKeySize())
     }
 }

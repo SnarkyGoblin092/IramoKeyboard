@@ -805,7 +805,9 @@ def nearest_keys(point, centers, within, count):
     return [k for d, k in ranked if d <= within][:count]
 
 
-def decode_swipe(raw_path, centers, key_width, sources, limit):
+def decode_swipe(raw_path, centers, key_width, sources, limit, collect=None):
+    """The current swipe decoder. With `collect`, every plausible word is passed to collect(store, entry, shape
+    cost) instead of being scored (the new decoder adds its own word probabilities)."""
     path = thinned(raw_path, 2)
     if len(path) < 2:
         return []
@@ -875,8 +877,13 @@ def decode_swipe(raw_path, centers, key_width, sources, limit):
                         continue
                     excess = sum(min(distance_to_polyline(p, template), key_width * 2.5) for p in sampled)
                     excess /= SAMPLES * key_width
-                    cost = (0.45 * shape + 0.40 * coverage + 0.35 * excess + 0.50 * (start_miss + end_miss)
-                            + 0.35 * max(0, worst - 0.9) + penalty)
+                    geometry = (0.45 * shape + 0.40 * coverage + 0.35 * excess + 0.50 * (start_miss + end_miss)
+                                + 0.35 * max(0, worst - 0.9))
+                    if collect is not None:
+                        seen.add(entry.word)
+                        collect(store, entry, geometry)
+                        continue
+                    cost = geometry + penalty
                     score = cost - 0.55 * entry.norm - 0.8 * context.get(entry.word, 0) - 0.9 * field_bonuses.get(entry.word, 0)
                     seen.add(entry.word)
                     scored.append((score, entry.word))
