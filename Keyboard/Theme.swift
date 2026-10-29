@@ -25,8 +25,8 @@ enum Theme {
         var text: UIColor
         /// Label colour on the keys (differs from `text` on coloured keys, since the strip sits on the system background).
         var keyText: UIColor
-        var keySecondaryText: UIColor
         var secondaryText: UIColor
+        var keySecondaryText: UIColor
         var letterKey: UIColor
         var functionKey: UIColor
         var letterKeyPressed: UIColor
