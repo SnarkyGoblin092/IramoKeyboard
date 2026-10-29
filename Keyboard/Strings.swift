@@ -103,3 +103,26 @@ extension Language {
         }
     }
 }
+
+extension Language {
+    /// Name of the separate "People" tab (the other category names come from `LanguageStrings.categories`).
+    var peopleCategoryTitle: String {
+        switch self {
+        case .english: return "People"
+        case .hungarian: return "Emberek"
+        case .spanish: return "Personas"
+        case .french: return "Personnes"
+        case .german: return "Personen"
+        case .italian: return "Persone"
+        case .portuguese: return "Pessoas"
+        case .dutch: return "Mensen"
+        case .polish: return "Ludzie"
+        case .czech: return "Lidé"
+        case .romanian: return "Oameni"
+        case .turkish: return "İnsanlar"
+        case .russian: return "Люди"
+        case .ukrainian: return "Люди"
+        case .swedish: return "Personer"
+        }
+    }
+}

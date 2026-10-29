@@ -413,7 +413,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         tabImages = [:]
         for (index, section) in sections.enumerated() {
             let button = HitButton(type: .system)
-            if let image = UIImage(systemName: section.symbol,
+            if let drawn = EmojiTabIcons.icons(forKey: section.key) {
+                button.setImage(drawn.outline, for: .normal)
+                tabImages[index] = (drawn.outline, drawn.filled)
+            } else if let image = UIImage(systemName: section.symbol,
                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 14.4, weight: .light)) {
                 button.setImage(image, for: .normal)
                 // Outline by default, filled while this is the active tab.
@@ -543,22 +546,33 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             abcButton.contentHorizontalAlignment = .left
             abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
         }
-        let deleteCentre: CGFloat = compact ? 402 : 411
+        let deleteCentre: CGFloat = slotLayout().delete
         backspaceButton.frame = CGRect(x: deleteCentre * xf - 26, y: tabCentreY - 22, width: 52, height: 44)
         layoutTabs()
         positionTabSelection(animated: false)
         applyInitialScrollIfPossible()
     }
 
+    /// Equally spaced slots (in 440pt-wide units): compact = ABC, every tab, delete; full = every tab, delete
+    /// (ABC has its own row there).
+    private func slotLayout() -> (abc: CGFloat, first: CGFloat, step: CGFloat, delete: CGFloat) {
+        let tabs = max(1, tabButtons.count)
+        if compact {
+            let step = (402 - 38) / CGFloat(tabs + 1)
+            return (38, 38 + step, step, 402)
+        }
+        let step = (411 - 37.7) / CGFloat(tabs)
+        return (27.7, 37.7, step, 411)
+    }
+
     private func layoutTabs() {
         guard !tabButtons.isEmpty else { return }
         let xf = bounds.width / 440
         let area = tabGlass.bounds
-        let first: CGFloat = compact ? 74.4 : 37.7
-        let step: CGFloat = compact ? 36.4 : 39.8
-        let pitch = step * xf
+        let slots = slotLayout()
+        let pitch = slots.step * xf
         for (index, button) in tabButtons.enumerated() {
-            let centre = (first + step * CGFloat(index)) * xf
+            let centre = (slots.first + slots.step * CGFloat(index)) * xf
             button.frame = CGRect(x: centre - pitch / 2, y: 0, width: pitch, height: area.height)
         }
     }
@@ -576,8 +590,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if point.y < searchGlass.frame.maxY + 4 { return searchButton }
         if compact {
             if point.y >= tabBandTop {
-                if point.x < 56 * bounds.width / 440 { return abcButton }
-                if point.x > bounds.width - 44 * bounds.width / 440 { return backspaceButton }
+                let slots = slotLayout()
+                if point.x < (slots.abc + slots.step / 2) * bounds.width / 440 { return abcButton }
+                if point.x > (slots.delete - slots.step / 2) * bounds.width / 440 { return backspaceButton }
                 if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
             }
             return super.hitTest(point, with: event)
@@ -586,7 +601,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             return point.x < bounds.width * 0.4 ? abcButton : super.hitTest(point, with: event)
         }
         if point.y >= tabBandTop {
-            if point.x > bounds.width - 44 * bounds.width / 440 { return backspaceButton }
+            if point.x > (slotLayout().delete - slotLayout().step / 2) * bounds.width / 440 { return backspaceButton }
             if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
         }
         return super.hitTest(point, with: event)

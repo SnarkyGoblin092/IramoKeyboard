@@ -253,9 +253,7 @@ final class KeyboardViewController: UIInputViewController {
             let width = view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width
             total = max(total, EmojiPanel.requiredHeight(forWidth: width))
         }
-        if isSearchingEmoji { total += 6 }
-        // While searching for an emoji the strip gets 6pt of top inset so its pill sits inside the keyboard's corner.
-        let suggestions: CGFloat = (isLandscape ? 36 : 44) + (isSearchingEmoji ? 6 : 0)
+        let suggestions: CGFloat = isLandscape ? 36 : 44
 
         if let constraint = totalHeight {
             if constraint.constant != total { constraint.constant = total }

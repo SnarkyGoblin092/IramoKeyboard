@@ -14,14 +14,16 @@ struct EmojiCategory {
     let items: [EmojiItem]
 
     func title(for language: Language) -> String {
+        if key == "people" { return language.peopleCategoryTitle }
         return language.strings.categoryTitle(key) ?? key
     }
 
     /// Display order, names, and tab icons - the same order as the system emoji keyboard.
     static let layout: [(key: String, symbol: String, fallback: String)] = [
         ("smileys", "face.smiling", "😀"),
-        ("animals", "leaf", "🐻"),
-        ("food", "fork.knife", "🍔"),
+        ("people", "person", "🧑"),
+        ("animals", "pawprint", "🐶"),
+        ("food", "fork.knife", "🍎"),
         ("activity", "sportscourt", "⚽"),
         ("travel", "car", "🚗"),
         ("objects", "lightbulb", "💡"),
@@ -322,10 +324,10 @@ final class EmojiStore {
             return ([], "", 0, 0)
         }
 
-        // Unicode groups -> the system keyboard's tabs (People & Body joins Smileys, like iOS).
+        // Unicode groups -> the picker's tabs (one tab per Unicode group).
         let tabForGroup: [String: String] = [
             "Smileys & Emotion": "smileys",
-            "People & Body": "smileys",
+            "People & Body": "people",
             "Animals & Nature": "animals",
             "Food & Drink": "food",
             "Activities": "activity",
