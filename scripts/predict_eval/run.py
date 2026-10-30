@@ -36,6 +36,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(1, str(HERE))
 
 from keyboard import Layout, normalize_apostrophes, swipe_path, tap_word_points, APOSTROPHES  # noqa: E402
 

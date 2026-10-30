@@ -94,6 +94,8 @@ final class WordStore {
     let neighbors: [Character: Set<Character>]
     /// The word trigram model (nil when the app was built without it).
     private(set) var model: LanguageModel?
+    /// Restores accents on words the dictionary lacks (nil for languages without keyless accents).
+    private(set) var accentModel: AccentModel?
     private var saveScheduled = false
 
     init(language: Language) {
@@ -123,6 +125,7 @@ final class WordStore {
         /// word -> its most common next words, space separated ("." -> sentence starters), from `pairs_<lang>.tsv`.
         let pairs: [String: String]
         var model: LanguageModel? = nil
+        var accents: AccentModel? = nil
     }
 
     /// The layout key a word's letter is typed on ("é" -> "e" in Hungarian, but "ö" stays "ö" in German).
@@ -143,7 +146,8 @@ final class WordStore {
     static func parse(language: Language, limit: Int? = nil) -> Parsed {
         if let lexicon = Lexicon(language: language) {
             return Parsed(entries: Entries(lexicon: lexicon), isFull: true, limit: nil,
-                          pairs: parsePairs(language: language), model: LanguageModel(language: language))
+                          pairs: parsePairs(language: language), model: LanguageModel(language: language),
+                          accents: AccentModel(language: language))
         }
         guard let url = Bundle.main.url(forResource: "words_\(language.rawValue)", withExtension: "tsv"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
@@ -230,6 +234,7 @@ final class WordStore {
         entries = .empty
         builtInPairs = [:]
         model = nil
+        accentModel = nil
         prefixCache = [:]
         frequencyOrder = nil
         loadedLimit = nil
@@ -243,6 +248,7 @@ final class WordStore {
         loadedLimit = parsed.limit
         builtInPairs = parsed.pairs
         model = parsed.model
+        accentModel = parsed.accents
         prefixCache = [:]
         frequencyOrder = nil
         isLoaded = true

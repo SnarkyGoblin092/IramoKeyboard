@@ -46,8 +46,10 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import accents
 import language_model
 import lexicon
+from keyboard import LETTER_ROWS   # scripts/predict_eval/keyboard.py (on the path through lexicon)
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(os.environ.get("HUNKEYS_OUT", ROOT / "Keyboard" / "Resources"))
@@ -414,7 +416,7 @@ VOWELS = {
     "ru": "аеёиоуыэюя", "uk": "аеєиіїоуюя", "sv": "aeiouyåäö",
 }
 SINGLES = {
-    "en": {"a", "i"}, "hu": {"a", "e", "s"}, "es": {"a", "y", "o", "e", "u"}, "fr": {"a", "y", "à"},
+    "en": {"a", "i"}, "hu": {"a", "e", "s", "ő", "ó", "é"}, "es": {"a", "y", "o", "e", "u"}, "fr": {"a", "y", "à"},
     "de": set(), "it": {"a", "e", "i", "o"}, "pt": {"a", "e", "o"}, "nl": {"u", "e", "o"},
     "pl": {"a", "i", "o", "u", "w", "z"}, "cs": {"a", "i", "k", "o", "s", "u", "v", "z"}, "ro": {"a"},
     "tr": {"o", "e"}, "ru": {"а", "в", "и", "к", "о", "с", "у", "я"}, "uk": {"а", "в", "і", "й", "и", "о", "с", "у", "я", "з"},
@@ -772,6 +774,7 @@ def build_dictionary(lang: str) -> None:
         if word_file is None:
             raise RuntimeError("word list not available")
         counts = read_counts(word_file, lang)
+        build_accent_model(lang, counts)
         if lang in {"en", "ru"}:
             reference_counts[lang] = counts
         if lang != "en":
@@ -816,6 +819,32 @@ def build_dictionary(lang: str) -> None:
     with open(OUT / f"pairs_{lang}.tsv", "w", encoding="utf-8") as handle:
         for word, followers in pairs:
             handle.write(f"{word}\t{' '.join(followers)}\n")
+
+
+def alphabet_letters(lang: str):
+    """The letters of ALPHABETS[lang], ranges ("a-z") spelled out."""
+    spec = ALPHABETS[lang]
+    letters = []
+    i = 0
+    while i < len(spec):
+        if i + 2 < len(spec) and spec[i + 1] == "-":
+            letters += [chr(c) for c in range(ord(spec[i]), ord(spec[i + 2]) + 1)]
+            i += 3
+        else:
+            letters.append(spec[i])
+            i += 1
+    return letters
+
+
+def build_accent_model(lang: str, counts) -> None:
+    """accents_<lang>.bin: restores accents the keyboard has no keys for on words the dictionary lacks (see
+    scripts/accents.py), learned from every word form of the full list."""
+    groups = accents.accented_letters(alphabet_letters(lang), set("".join(LETTER_ROWS[lang])))
+    if not groups:
+        return
+    table = accents.train(counts, groups)
+    accents.write(OUT / f"accents_{lang}.bin", table)
+    print(f"  accent model: {len(table):,} windows for {', '.join(sorted(groups))}")
 
 
 def build_language_model(lang: str, words):

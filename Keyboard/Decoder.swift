@@ -18,6 +18,7 @@ enum Decoder {
     static let firstLetter = 0.6        // extra log10 cost when the first letter is wrong
     static let unknownWord = -10.0      // log10 probability of a word no dictionary has (a name, slang)
     static let correctMargin = 1.0      // log10 margin a correction needs over the text as typed
+    static let restoredLogProb = -8.5   // log10 probability of an unknown word with its accents restored
     private static let candidateLimit = 30
     private static let maxCost = 2.0
     private static let weightFloor = 0.02
@@ -396,6 +397,18 @@ enum Decoder {
                               prefixCost: cost.prefix,
                               wholeCost: cost.whole,
                               firstWrong: wordKey[0] != first))
+        }
+        // A word no dictionary has, typed without accents: its accents restored (AccentModel), in the languages of
+        // the text ("unokadbol" -> "unokádból").
+        if keyString == lower && !stores.values.contains(where: { $0.isLoaded && $0.contains(key: keyString) }) {
+            for (language, weight) in context.weights where weight >= 0.1 {
+                guard let model = stores[language]?.accentModel else { continue }
+                let restored = model.restore(keyString)
+                if restored != keyString {
+                    result.append(Row(word: restored, logProb: restoredLogProb + log10(weight),
+                                      prefixCost: 0, wholeCost: 0, firstWrong: false))
+                }
+            }
         }
         return (result, lower, context)
     }

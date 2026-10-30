@@ -16,6 +16,7 @@ known continuations of the context; the probability decides among them.
 import math
 import os
 
+import accents
 import baseline
 from keyboard import ROW_PITCH, fold, key as match_key, normalize_apostrophes
 from lm import LanguageModel, Mixture, COMMA, UNKNOWN
@@ -32,6 +33,7 @@ LEARNED_CAP = 2.0
 LEARN_AFTER = 2         # an unknown word counts as the user's own after this many uses (one slip is not a word)
 USED_SLOPE, USED_CAP = 0.25, 0.8        # dictionary words the user writes
 PAIR_SLOPE, PAIR_CAP = 0.5, 1.2         # words the user put after the previous word
+RESTORED = -8.5         # log10 probability of an unknown word with its accents restored (see accents.py)
 SPATIAL = 0.5           # tap positions: cost per squared key-width of extra distance to the intended key
 SHAPE = 10.0            # log10 cost of one unit of swipe shape mismatch (see baseline.decode_swipe)
 CANDIDATES = 30
@@ -102,6 +104,13 @@ class Engine(baseline.Engine):
         self.lm_keys = {lang: [match_key(w) for w in model.words] for lang, model in self.models.items()}
         self.personal = Personal()
         self.params = dict(Engine.params)
+        self.accent_models = {}
+        for lang in self.ordered:
+            path = data_dir / f"accents_{lang}.bin"
+            if path.exists():
+                self.accent_models[lang] = accents.read(path)
+        if os.environ.get("HUNKEYS_RESTORED"):
+            self.params["restored"] = float(os.environ["HUNKEYS_RESTORED"])
         if os.environ.get("HUNKEYS_SPATIAL"):
             self.params["spatial"] = float(os.environ["HUNKEYS_SPATIAL"])
         # Key centres by folded letter ("o" is the o key, not German's "ö" key).
@@ -254,13 +263,20 @@ class Engine(baseline.Engine):
             if prefix_cost > 2.0:
                 continue
             rows.append((word, self._lm(word, context), prefix_cost, whole_cost, word_key[0] != key[0]))
+        # A word no dictionary has, typed without accents: its accents restored, in the languages of the text.
+        if key and key == lower and not any(store.contains(key) for store in self.stores.values()):
+            for lang, model in self.accent_models.items():
+                weight = context[lang][0]
+                restored = model.restore(key) if weight >= 0.1 else key
+                if restored != key:
+                    rows.append((restored, self.params["restored"] + math.log10(weight), 0.0, 0.0, False))
         return rows, lower, self._lm(lower, context)
 
     # -- the keyboard's questions ---------------------------------------------------------------------------------
 
     params = {"slip": SLIP, "first": FIRST_LETTER, "unknown": UNKNOWN_WORD, "margin": CORRECT_MARGIN, "shape": SHAPE,
               "learn_after": LEARN_AFTER, "learned_base": LEARNED_BASE, "learned_slope": LEARNED_SLOPE,
-              "spatial": SPATIAL}
+              "spatial": SPATIAL, "restored": RESTORED}
 
     def swipe_features(self, before, path):
         """(word, shape cost, log10 P(word | context)) for every word the swipe could be."""
