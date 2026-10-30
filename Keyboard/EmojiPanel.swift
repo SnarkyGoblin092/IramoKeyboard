@@ -410,12 +410,20 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         } else if store.categories.isEmpty {
             emptyLabel.text = "No emoji data found in this build."
             emptyLabel.isHidden = false
-        } else if let first = sections.first, first.items.isEmpty, collectionView.contentOffset.x <= 1 {
+        } else if let first = sections.first, first.items.isEmpty {
             emptyLabel.text = language.strings.emptyRecents
             emptyLabel.isHidden = false
         } else {
             emptyLabel.isHidden = true     // never covers emoji that are on screen
         }
+        positionEmptyLabel()
+    }
+
+    /// The empty-recents hint sits on the Recently Used page and scrolls with it; other messages stay put.
+    private func positionEmptyLabel() {
+        let isRecentsHint = emptyLabel.text == language.strings.emptyRecents && EmojiStore.shared.isReady
+        let shift = isRecentsHint ? collectionView.contentOffset.x : 0
+        emptyLabel.frame = collectionView.frame.insetBy(dx: 30, dy: 0).offsetBy(dx: -shift, dy: 0)
     }
 
     private func rebuildTabs() {
@@ -552,7 +560,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             collectionView.reloadData()       // cell fonts follow the cell size
         }
         if collectionView.bounds.width > 0 { collectionView.layoutIfNeeded() }
-        emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
+        positionEmptyLabel()
 
         tabGlass.frame = CGRect(x: 0, y: tabCentreY - 18 * f, width: width, height: 36 * f)
         if compact {

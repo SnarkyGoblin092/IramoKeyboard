@@ -622,6 +622,7 @@ final class KeyboardViewController: UIInputViewController {
         // A swiped / suggested word already has its space: the first space tap keeps just that one.
         // Further taps add spaces as usual.
         if let marker = pendingMarker, !marker.isEmpty, before.hasSuffix(marker), before.hasSuffix(" ") {
+            clearSwipeState()     // the swiped word is accepted: its alternatives leave the bar
             lastSpaceTime = Date.distantPast
             scheduleRefresh()
             return
@@ -941,7 +942,9 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        // Right after a swipe the bar offers other readings of the swiped word, the one inserted in the centre.
+        // Right after a swipe the bar offers other readings of the swiped word, the one inserted in the centre
+        // (only while that word is still the last thing in the field).
+        if let inserted = lastSwipeInserted, !before.hasSuffix(inserted) { clearSwipeState() }
         if lastSwipeInserted != nil && swipeAlternatives.count > 1 {
             var shown = swipeAlternatives.prefix(3).map { Suggestion(text: $0, kind: .swipeAlternative) }
             shown.swapAt(0, 1)
