@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// A miniature keyboard drawn from a `ThemeDefinition`, so the picker shows what the keyboard will look like.
-/// Every theme uses the same translucent look (thin border, soft fills); only the colours differ.
+/// It is drawn with the keyboard's own measurements, fonts and colours (light or dark, like the phone), as the
+/// keyboard looks at the start of a sentence: shift on, capital letters.
 struct ThemePreview: View {
     let theme: ThemeDefinition
     let accent: Color
@@ -9,6 +10,7 @@ struct ThemePreview: View {
     var cornerRadius: CGFloat = 14
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
     @AppStorage(SettingKey.keyBorders, store: SharedStore.defaults) private var keyBorders = SettingDefault.keyBorders
+    @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
 
     @Environment(\.colorScheme) private var systemScheme
 
@@ -17,7 +19,9 @@ struct ThemePreview: View {
 
     private var shownLanguage: Language {
         if let language = language { return language }
-        return Language.list(from: Settings.shared.enabledLanguages).first ?? .english
+        let enabled = Language.list(from: Settings.shared.enabledLanguages)
+        if let current = Language(rawValue: Settings.shared.languageCode), enabled.contains(current) { return current }
+        return enabled.first ?? .english
     }
 
     // Mirrors `Language.letterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
@@ -87,7 +91,8 @@ struct ThemePreview: View {
     private var keyRows: [[PreviewKey]] {
         let letters = letterRows
         let top = letters[0].count
-        func letterKey(_ l: String) -> PreviewKey { return PreviewKey(title: l) }
+        let locale = Locale(identifier: shownLanguage.rawValue)
+        func letterKey(_ l: String) -> PreviewKey { return PreviewKey(title: l.uppercased(with: locale)) }
         let side = CGFloat(max(0, top - letters[1].count)) / 2
         var row2: [PreviewKey] = []
         if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
@@ -128,7 +133,7 @@ struct ThemePreview: View {
         case .native: return pick(.white, Color(white: 0.42))
         case .colored: return Color(theme.key)
         case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
-        case .liquidGlass: return pick(Color.white.opacity(0.22), Color.white.opacity(0.10))
+        case .liquidGlass: return pick(Color.white, Color.white.opacity(0.16))
         }
     }
 
@@ -161,43 +166,45 @@ struct ThemePreview: View {
     @ViewBuilder private var backdrop: some View {
         if onSystemBackground {
             Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
-        } else if theme.gradientStops.count > 1 {
-            // A stand-in for what shows through the clear keyboard, darker in dark mode.
-            LinearGradient(colors: theme.gradientStops.map { Color($0) },
-                           startPoint: UnitPoint(x: theme.gradientStart.x, y: theme.gradientStart.y),
-                           endPoint: UnitPoint(x: theme.gradientEnd.x, y: theme.gradientEnd.y))
-                .overlay(Color.black.opacity(dark ? 0.55 : 0))
+        } else if theme.kind == .transparent {
+            // The keyboard's frosted panel over the app (Theme.panelBackground).
+            Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
         } else {
-            Rectangle().fill(pick(Color(white: 0.6), Color(white: 0.2)))
+            // Liquid Glass has no panel: the app shows straight through.
+            Rectangle().fill(pick(Color(white: 0.97), Color(white: 0.05)))
         }
     }
 
     // MARK: Body
 
+    /// The real keyboard's size in points (Keyboard/KeyboardViewController.applyHeight): 440 wide, a 44pt strip
+    /// over 232pt of keys. Callers use these ratios so the preview has the keyboard's proportions.
+    static let aspectWithStrip: CGFloat = 440 / 276
+    static let aspectKeysOnly: CGFloat = 440 / 232
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let height = proxy.size.height
-            let gap = max(1.5, width * 0.012)
-            let sidePad = gap * 1.5
-            let stripHeight = showsStrip ? height * 0.14 : 0
-            let rowCount: CGFloat = 4
-            let keyHeight = max(1, (height - stripHeight - gap * (rowCount + 1) - (showsStrip ? gap : 0)) / rowCount)
-            let rowWidth = width - sidePad * 2
-            let unit = max(1, (rowWidth - gap * 9) / 10)
-            let radius = max(0, roundness * min(unit, keyHeight) / 2)
+            // Everything is measured in the keyboard's points and scaled to the preview's width.
+            let s = width / 440
+            let stripHeight = showsStrip ? 44 * s : 0
+            let verticalPadding = 4 * s
+            let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / 4)
+            let keyHeight = max(1, rowHeight - 11 * s)
+            let rowWidth = width - 2 * s
 
-            ZStack {
+            ZStack(alignment: .top) {
                 backdrop
-                VStack(spacing: gap) {
-                    if showsStrip { strip(height: stripHeight) }
-                    ForEach(0..<keyRows.count, id: \.self) { index in
-                        row(keyRows[index], rowWidth: rowWidth, gap: gap, height: keyHeight, radius: radius,
-                            hintsOn: showsStrip)
+                VStack(spacing: 0) {
+                    if showsStrip { strip(height: stripHeight, scale: s) }
+                    VStack(spacing: 0) {
+                        ForEach(0..<keyRows.count, id: \.self) { index in
+                            row(keyRows[index], rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
+                        }
                     }
+                    .padding(.vertical, verticalPadding)
                 }
-                .padding(.horizontal, sidePad)
-                .padding(.vertical, gap)
             }
             .frame(width: width, height: height)
         }
@@ -208,81 +215,104 @@ struct ThemePreview: View {
 
     // MARK: Pieces
 
-    /// A row scaled to the full width by key weights, like the real keyboard.
-    private func row(_ keys: [PreviewKey], rowWidth: CGFloat, gap: CGFloat, height: CGFloat,
-                     radius: CGFloat, hintsOn: Bool) -> some View {
+    /// A row as KeyboardView lays it out: each key's touch cell is its share of the width by weight, and the
+    /// key is drawn 3pt in from each side of its cell and 5.5pt from the top and bottom.
+    private func row(_ keys: [PreviewKey], rowWidth: CGFloat, rowHeight: CGFloat, keyHeight: CGFloat,
+                     scale s: CGFloat) -> some View {
         let total = keys.reduce(CGFloat(0)) { $0 + $1.weight }
-        let usable = rowWidth - gap * CGFloat(keys.count - 1)
-        return HStack(spacing: gap) {
+        let unit = rowWidth / max(total, 1)
+        return HStack(spacing: 0) {
             ForEach(0..<keys.count, id: \.self) { i in
                 let k = keys[i]
-                let w = max(1, usable * k.weight / total)
-                if k.spacer {
-                    Color.clear.frame(width: w, height: height)
-                } else {
-                    key(k, width: w, height: height, radius: radius, hint: hintsOn ? hints[k.title] : nil)
+                let cell = unit * k.weight
+                Group {
+                    if k.spacer {
+                        Color.clear
+                    } else {
+                        key(k, width: max(1, cell - 6 * s), height: keyHeight, scale: s)
+                    }
                 }
+                .frame(width: cell, height: rowHeight)
             }
         }
+        .frame(width: rowWidth)
     }
 
-    /// Flat strip: no border, three slots with thin dividers and the hide-keyboard slot.
-    private func strip(height: CGFloat) -> some View {
-        let words = ["the", "that", "this"]
-        let size = max(6, height * 0.42)
+    /// The suggestion strip: three slots with thin dividers and the accent-coloured hide-keyboard button.
+    private func strip(height: CGFloat, scale s: CGFloat) -> some View {
+        let words = shownLanguage == .hungarian ? ["A", "Én", "Nem"] : ["I", "The", "It"]
         return HStack(spacing: 0) {
             ForEach(0..<words.count, id: \.self) { i in
                 Text(words[i])
-                    .font(.system(size: size))
+                    .font(.system(size: 17 * s))
                     .foregroundColor(stripText)
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity)
-                    .overlay(
-                        Rectangle().fill(separatorColor).frame(width: 0.5).padding(.vertical, height * 0.22),
-                        alignment: .trailing)
+                    .overlay(alignment: .trailing) {
+                        if i < words.count - 1 {
+                            Rectangle().fill(separatorColor).frame(width: max(0.5, s), height: height * 0.5)
+                        }
+                    }
             }
             Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: size))
-                .foregroundColor(stripText.opacity(0.6))
-                .frame(width: height * 1.4)
+                .font(.system(size: 18 * s))
+                .foregroundColor(accentColor)
+                .frame(width: 52 * s)
         }
+        .padding(.leading, 8 * s)
+        .padding(.top, 9 * s)
         .frame(height: height)
     }
 
-    private var separatorColor: Color { return stripText.opacity(0.2) }
+    private var separatorColor: Color { return pick(Color.black.opacity(0.12), Color.white.opacity(0.20)) }
 
-    private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, radius: CGFloat, hint: String?) -> some View {
+    private var keyShadow: Color {
+        return theme.kind == .native ? pick(Color(red: 0.53, green: 0.55, blue: 0.58), Color.black.opacity(0.55)) : .clear
+    }
+
+    private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
+        // Theme.keyCornerRadius: the roundness share of half the key's shorter side.
+        let radius = CGFloat(min(1, max(0, roundness))) * min(width, height) / 2
         let fill = k.accent ? accentColor : (k.function ? functionFill : keyFill)
-        let tint: Color = k.accent ? onAccent : (k.active ? accentColor : textColor)
+        let tint: Color = k.accent ? onAccent : textColor
+        let hint = keyHints && k.title.count == 1 ? hints[k.title.lowercased()] : nil
         return ZStack {
-            shape(radius, fill: fill)
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(fill)
+                .shadow(color: keyShadow, radius: 0, x: 0, y: s)
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(borderColor, lineWidth: drawsBorder ? 0.5 : 0))
             if let symbol = k.symbol {
                 Image(systemName: symbol)
-                    .font(.system(size: max(5, height * 0.38)))
+                    .font(.system(size: 20 * s))
                     .foregroundColor(tint)
             } else if !k.title.isEmpty {
                 Text(k.title)
-                    .font(.system(size: max(6, height * (k.title.count > 2 ? 0.3 : 0.5))))
+                    .font(k.title.count == 1 ? .system(size: 23 * s, weight: .light) : .system(size: 16 * s))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundColor(tint)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, 2 * s)
             }
             if let hint = hint {
                 Text(hint)
-                    .font(.system(size: max(4, height * 0.2)))
+                    .font(.system(size: (radius > 12 * s ? 9 : 10) * s))
                     .foregroundColor(textColor.opacity(0.55))
-                    .padding(.trailing, 2 + radius * 0.3)
-                    .padding(.top, 1)
+                    .padding(.trailing, 4 * s + radius * 0.3)
+                    .padding(.top, 2 * s)
                     .frame(width: width, height: height, alignment: .topTrailing)
             }
         }
         .frame(width: width, height: height)
     }
 
-    private func shape(_ radius: CGFloat, fill: Color) -> some View {
-        let rounded = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return rounded
-            .fill(fill)
-            .overlay(rounded.stroke(borderColor, lineWidth: keyBorders ? 0.5 : 0))
+    /// Outlines: every theme but Native (and real Liquid Glass) when Key borders is on.
+    private var drawsBorder: Bool {
+        guard keyBorders, theme.kind != .native else { return false }
+        if theme.kind == .liquidGlass {
+            if #available(iOS 26, *) { return false }
+        }
+        return true
     }
 }

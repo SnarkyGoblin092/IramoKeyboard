@@ -29,7 +29,7 @@ struct ThemesView: View {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(spacing: 8) {
                     ThemePreview(theme: selected, accent: accent, cornerRadius: 20)
-                        .aspectRatio(1.55, contentMode: .fit)
+                        .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
                         .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 6)
                     Text(selected.name)
                         .font(.title3.weight(.semibold))
@@ -82,7 +82,7 @@ private struct ThemeCard: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                    .aspectRatio(1.45, contentMode: .fit)
+                    .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(isSelected ? accent : Color.primary.opacity(0.12),

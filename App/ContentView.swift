@@ -209,7 +209,7 @@ private struct AppearanceSection: View {
             } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     ThemePreview(theme: theme, accent: accent, cornerRadius: 12)
-                        .aspectRatio(1.7, contentMode: .fit)
+                        .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
                     HStack {
                         Text("Theme")
                         Spacer()
@@ -532,25 +532,30 @@ private struct SwipeToDeleteRow<Content: View>: View {
     @State private var offset: CGFloat = 0
     @State private var settled: CGFloat = 0
     private let buttonWidth: CGFloat = 84
+    /// How far the Delete button may grow: a long swipe that reaches it deletes at once.
+    private let maxReveal: CGFloat = 200
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            Button(action: delete) {
-                Text("Delete")
-                    .font(.body.weight(.semibold))
-                    .foregroundColor(.white)
-                    .frame(width: max(buttonWidth, -offset))
-                    .frame(maxHeight: .infinity)
-                    .background(Color.red)
+        // The row stays put (the name never slides off screen); the Delete button grows in from the right edge.
+        content()
+            .background(Color(.secondarySystemGroupedBackground))
+            .onTapGesture { close() }
+            .overlay(alignment: .trailing) {
+                if offset < 0 {
+                    Button(action: delete) {
+                        Text("Delete")
+                            .font(.body.weight(.semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .frame(width: -offset)
+                            .frame(maxHeight: .infinity)
+                            .background(Color.red)
+                            .clipped()
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
-            .opacity(offset < 0 ? 1 : 0)
-
-            content()
-                .background(Color(.secondarySystemGroupedBackground))
-                .offset(x: offset)
-                .onTapGesture { close() }
-        }
         .gesture(drag, including: canDelete ? .all : .subviews)
     }
 
@@ -558,11 +563,12 @@ private struct SwipeToDeleteRow<Content: View>: View {
         DragGesture(minimumDistance: 12)
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                offset = min(0, settled + value.translation.width)
+                // At most up to a short distance from the name, so it always stays readable.
+                offset = max(-maxReveal, min(0, settled + value.translation.width))
             }
             .onEnded { value in
                 let end = min(0, settled + value.translation.width)
-                if end < -buttonWidth * 2.5 {
+                if end <= -maxReveal {
                     delete()
                 } else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
