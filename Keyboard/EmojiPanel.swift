@@ -87,6 +87,8 @@ private final class EmojiGridLayout: UICollectionViewLayout {
     var gapAfterRecents: CGFloat = 0
     /// Square cells sized by the height (iPad), instead of the phone's eight columns across.
     var squareCells = false
+    /// Width an empty Recently Used block keeps (nine columns, at most one screen), for its hint.
+    private(set) var emptyRecentsWidth: CGFloat = 0
 
     private(set) var cellSize = CGSize(width: 40, height: 40)
     /// The content offset that puts each category's first column at the left edge.
@@ -137,7 +139,9 @@ private final class EmojiGridLayout: UICollectionViewLayout {
                 byPath[path] = attributes
             }
             if count == 0 {
-                x += viewWidth - edgeInset * 2          // an empty tab (Recently Used) still owns one screen
+                // An empty tab (Recently Used) still owns nine columns (it holds 36 emoji), at most one screen.
+                emptyRecentsWidth = min(viewWidth - edgeInset * 2, 9 * cellSize.width)
+                x += emptyRecentsWidth
             } else {
                 let columns = (count + rows - 1) / rows
                 x += CGFloat(columns) * cellSize.width
@@ -227,6 +231,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var compact = false
     /// iPad width: the compact layout (tabs, ABC and delete in one row) with a dense grid of square cells.
     private var wide = false
+    /// The `wide` the tab icons were drawn for.
+    private var tabsDrawnWide: Bool?
     private var tabImages: [Int: (outline: UIImage, filled: UIImage)] = [:]
     private var tabCentreY: CGFloat = 302
     private var tabBandTop: CGFloat = 282
@@ -295,6 +301,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         emptyLabel.textColor = EmojiLook.secondary
         emptyLabel.font = UIFont.systemFont(ofSize: 15)
         emptyLabel.numberOfLines = 0
+        emptyLabel.adjustsFontSizeToFitWidth = true
+        emptyLabel.minimumScaleFactor = 0.6
         emptyLabel.isHidden = true
         emptyLabel.isUserInteractionEnabled = false
         addSubview(emptyLabel)
@@ -339,7 +347,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let store = EmojiStore.shared
         var built: [Section] = []
 
-        let recents = Settings.shared.recentEmoji.prefix(32).map { EmojiItem(base: $0, variants: []) }
+        let recents = Settings.shared.recentEmoji.prefix(36).map { EmojiItem(base: $0, variants: []) }
         built.append(Section(key: "recent",
                              symbol: EmojiCategory.recentSymbol,
                              fallback: EmojiCategory.recentFallback,
@@ -422,24 +430,34 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     /// The empty-recents hint sits on the Recently Used page and scrolls with it; other messages stay put.
     private func positionEmptyLabel() {
         let isRecentsHint = emptyLabel.text == language.strings.emptyRecents && EmojiStore.shared.isReady
-        let shift = isRecentsHint ? collectionView.contentOffset.x : 0
-        emptyLabel.frame = collectionView.frame.insetBy(dx: 30, dy: 0).offsetBy(dx: -shift, dy: 0)
+        let grid = collectionView.frame
+        if isRecentsHint && gridLayout.emptyRecentsWidth > 0 {
+            // Inside the nine empty columns, scrolling with them.
+            emptyLabel.frame = CGRect(x: grid.minX + gridLayout.edgeInset + 10 - collectionView.contentOffset.x,
+                                      y: grid.minY,
+                                      width: max(0, gridLayout.emptyRecentsWidth - 20),
+                                      height: grid.height)
+        } else {
+            emptyLabel.frame = grid.insetBy(dx: 30, dy: 0)
+        }
     }
 
     private func rebuildTabs() {
         for button in tabButtons { button.removeFromSuperview() }
         tabButtons = []
         tabImages = [:]
+        tabsDrawnWide = wide
+        let iconScale: CGFloat = wide ? 1.3 : 1
         for (index, section) in sections.enumerated() {
             let button = HitButton(type: .system)
-            if let drawn = EmojiTabIcons.icons(forKey: section.key) {
+            if let drawn = EmojiTabIcons.icons(forKey: section.key, side: 80.0 / 3.0 * iconScale) {
                 button.setImage(drawn.outline, for: .normal)
                 tabImages[index] = (drawn.outline, drawn.filled)
             } else if let image = UIImage(systemName: section.symbol,
-                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 14.4, weight: .light)) {
+                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 14.4 * iconScale, weight: .light)) {
                 button.setImage(image, for: .normal)
                 // Outline by default, filled while this is the active tab.
-                let filledConfig = UIImage.SymbolConfiguration(pointSize: 14.4, weight: .regular)
+                let filledConfig = UIImage.SymbolConfiguration(pointSize: 14.4 * iconScale, weight: .regular)
                 let filled = UIImage(systemName: section.symbol + ".fill", withConfiguration: filledConfig) ?? image
                 if section.key == "smileys" {
                     // On iOS the plain smiley symbol is the solid one, so the roles are swapped for this tab.
@@ -481,9 +499,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             return
         }
         tabSelection.isHidden = false
-        tabSelection.layer.cornerRadius = 15 * EmojiPanel.scale(forWidth: bounds.width)
         let buttonFrame = tabButtons[selectedTabIndex].frame
-        let circle = 30 * EmojiPanel.scale(forWidth: bounds.width)
+        // Clear of the icon all round: 44pt on iPad, 33pt (scaled) on the phone.
+        let circle = wide ? 44 : 33 * EmojiPanel.scale(forWidth: bounds.width)
+        tabSelection.layer.cornerRadius = circle / 2
         let target = CGRect(x: buttonFrame.midX - circle / 2, y: buttonFrame.midY - circle / 2, width: circle, height: circle)
         tabGlass.contentView.sendSubviewToBack(tabSelection)
         if animated && tabSelection.frame != .zero {
@@ -538,10 +557,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let gridTop: CGFloat
         let gridHeight: CGFloat
         if compact {
-            tabCentreY = height - 24 * f
+            let tabHalf = wide ? 27 : 22 * f
+            tabCentreY = height - (wide ? 30 : 24 * f)
             gridTop = pillTop + searchHeight + 3 * f
-            gridHeight = max(120, (tabCentreY - 22 * f) - gridTop)
-            tabBandTop = tabCentreY - 22 * f
+            gridHeight = max(120, (tabCentreY - tabHalf) - gridTop)
+            tabBandTop = tabCentreY - tabHalf
         } else {
             tabCentreY = 302 * f
             gridTop = 61.6 * f
@@ -562,7 +582,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if collectionView.bounds.width > 0 { collectionView.layoutIfNeeded() }
         positionEmptyLabel()
 
-        tabGlass.frame = CGRect(x: 0, y: tabCentreY - 18 * f, width: width, height: 36 * f)
+        let tabBand = wide ? 50 : 36 * f
+        tabGlass.frame = CGRect(x: 0, y: tabCentreY - tabBand / 2, width: width, height: tabBand)
+        if tabsDrawnWide != nil && tabsDrawnWide != wide { rebuildTabs() }
         if compact {
             // ABC sits at the left of the tab row.
             // ABC is centred between the screen edge and the first (recents) icon at x = 84.

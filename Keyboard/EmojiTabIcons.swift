@@ -80,12 +80,12 @@ enum EmojiTabIcons {
         return path
     }
 
-    static func icon(forKey rawKey: String) -> UIImage? {
+    static func icon(forKey rawKey: String, side: CGFloat = 80.0 / 3.0) -> UIImage? {
         let key = (rawKey == "recent") ? "recents" : rawKey
-        if let cached = cache[key] { return cached }
+        let cacheKey = key + "@\(side)"
+        if let cached = cache[cacheKey] { return cached }
         guard let outlines = shapes[key] else { return nil }
         let path = path(for: outlines)
-        let side: CGFloat = 80.0 / 3.0
         let size = CGSize(width: side, height: side)
         path.apply(CGAffineTransform(scaleX: side / 80, y: side / 80))
         let format = UIGraphicsImageRendererFormat.default()
@@ -95,13 +95,13 @@ enum EmojiTabIcons {
             UIColor.black.setFill()
             path.fill()
         }.withRenderingMode(.alwaysTemplate)
-        cache[key] = image
+        cache[cacheKey] = image
         return image
     }
 
     /// Kept for the panel: the same image is used for the normal and the selected state.
-    static func icons(forKey key: String) -> (outline: UIImage, filled: UIImage)? {
-        guard let image = icon(forKey: key) else { return nil }
+    static func icons(forKey key: String, side: CGFloat = 80.0 / 3.0) -> (outline: UIImage, filled: UIImage)? {
+        guard let image = icon(forKey: key, side: side) else { return nil }
         return (image, image)
     }
 }
