@@ -267,14 +267,16 @@ final class KeyboardViewController: UIInputViewController {
     /// or the app is in dark mode (so a dark mode phone keeps dark keys in an app that stays light), while the
     /// rest (suggestions, emoji picker) keeps the app's style, which the system-drawn keyboard backdrop follows.
     /// Dark keys on that light backdrop get lighter fills (Theme.contrastKeys) so they stand out.
-    /// The keys' style for updateKeyStyle: dark when the phone or the app is dark, else the app's.
+    /// The keys' style for updateKeyStyle: dark when the phone is dark but the app light, else the app's.
     private var keyInterfaceStyle: UIUserInterfaceStyle {
         guard Theme.interfaceStyle == .unspecified else { return .unspecified }
         var phone = UIScreen.main.traitCollection.userInterfaceStyle
         if let hint = phoneStyleHint {
             if phone == hint { phoneStyleHint = nil } else { phone = hint }
         }
-        return phone == .dark || view.traitCollection.userInterfaceStyle == .dark ? .dark : .unspecified
+        // Only the dark-phone-in-a-light-app case needs forcing; otherwise the keys inherit the app's style, so
+        // they change together with the system (forcing dark kept them dark until we noticed the switch).
+        return phone == .dark && view.traitCollection.userInterfaceStyle == .light ? .dark : .unspecified
     }
 
     /// The phone's style taken from the app when the app's style just changed: the screen's own style catches
