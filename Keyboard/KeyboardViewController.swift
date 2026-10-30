@@ -58,6 +58,8 @@ final class KeyboardViewController: UIInputViewController {
     private var swipeAlternatives: [String] = []
     /// The last auto-fix (what was typed, what replaced it plus its space), until the next key: backspace undoes it.
     private var lastAutoFix: (typed: String, inserted: String)?
+    /// The correction the bar shows for the word being typed, so space makes exactly that one.
+    private var shownFix: (before: String, fix: String?)?
     private var refreshScheduled = false
     private var suggestionWork: DispatchWorkItem?
 
@@ -651,15 +653,19 @@ final class KeyboardViewController: UIInputViewController {
         // Auto-correction: "vsgyok" + space -> "vagyok ", "koszonom" -> "köszönöm ", "dont" -> "don't ", in any enabled
         // language (see Decoder.autoCorrect). Backspace right after takes it back. Fields that ask for no
         // correction (addresses, codes) are left alone.
-        if Prefs.suggestions, Prefs.autoCorrect, textDocumentProxy.isSecureTextEntry != true,
-           textDocumentProxy.autocorrectionType != .no,
-           ![UIKeyboardType.URL, .emailAddress].contains(textDocumentProxy.keyboardType ?? .default) {
+        if autoCorrectAllowed {
             let typedWord = currentPrefix(in: before)
             let fieldText = Predictor.fieldContext(before: before, after: textDocumentProxy.documentContextAfterInput ?? "")
-            if !typedWord.isEmpty,
-               let fixed = Predictor.autoFix(typed: typedWord, before: before, active: language,
-                                             enabled: enabledLanguages, stores: stores, field: fieldText,
-                                             taps: currentTaps(for: typedWord)) {
+            let fix: String?
+            if let shown = shownFix, shown.before == before {
+                fix = shown.fix
+            } else if !typedWord.isEmpty {
+                fix = Predictor.autoFix(typed: typedWord, before: before, active: language, enabled: enabledLanguages,
+                                        stores: stores, field: fieldText, taps: currentTaps(for: typedWord))
+            } else {
+                fix = nil
+            }
+            if !typedWord.isEmpty, let fixed = fix {
                 let replacement = matchCase(of: typedWord, for: fixed)
                 recordBigram(contextBefore: before, next: fixed)
                 noteWordUse(fixed)
@@ -679,6 +685,13 @@ final class KeyboardViewController: UIInputViewController {
         afterTyping()
         // Learning the finished word is not needed to show the space, so it runs right after.
         DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
+    }
+
+    /// Auto-correction is on and the field accepts it (not passwords, addresses or codes).
+    private var autoCorrectAllowed: Bool {
+        return Prefs.suggestions && Prefs.autoCorrect && textDocumentProxy.isSecureTextEntry != true
+            && textDocumentProxy.autocorrectionType != .no
+            && ![UIKeyboardType.URL, .emailAddress].contains(textDocumentProxy.keyboardType ?? .default)
     }
 
     private func handleEnter() {
@@ -918,6 +931,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshSuggestions() {
+        shownFix = nil
         if isSearchingEmoji { return }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
@@ -927,9 +941,11 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
 
-        // Right after a swipe the bar offers other readings of the swiped word.
+        // Right after a swipe the bar offers other readings of the swiped word, the one inserted in the centre.
         if lastSwipeInserted != nil && swipeAlternatives.count > 1 {
-            suggestionBar.update(swipeAlternatives.map { Suggestion(text: $0, kind: .swipeAlternative) })
+            var shown = swipeAlternatives.prefix(3).map { Suggestion(text: $0, kind: .swipeAlternative) }
+            shown.swapAt(0, 1)
+            suggestionBar.update(shown)
             return
         }
 
@@ -953,17 +969,22 @@ final class KeyboardViewController: UIInputViewController {
         let after = textDocumentProxy.documentContextAfterInput ?? ""
         let field = Predictor.fieldContext(before: before, after: after)
         var words: [String] = []
+        var fix: String? = nil
         if Prefs.suggestions && stores[language]?.isLoaded == true {
             if !prefix.isEmpty {
-                words = Predictor.suggest(typed: prefix,
-                                          before: before,
-                                          active: language,
-                                          enabled: enabledLanguages,
-                                          stores: stores,
-                                          limit: 4,
-                                          field: field,
-                                          taps: currentTaps(for: prefix))
-                    .map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
+                let found = Predictor.suggestAndFix(typed: prefix,
+                                                    before: before,
+                                                    active: language,
+                                                    enabled: enabledLanguages,
+                                                    stores: stores,
+                                                    limit: 4,
+                                                    field: field,
+                                                    taps: currentTaps(for: prefix))
+                words = found.words.map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
+                if autoCorrectAllowed {
+                    fix = found.fix
+                    shownFix = (before, found.fix)
+                }
             } else if before.isEmpty || before.hasSuffix(" ") {
                 words = Predictor.nextWords(before: before,
                                             active: language,
@@ -977,15 +998,24 @@ final class KeyboardViewController: UIInputViewController {
 
         // Layout is [left, CENTRE, right]; the most probable word sits in the centre (as on iOS).
         var ranked: [String] = []
-        if !prefix.isEmpty, let phrase = settings.shortcutPhrase(for: prefix) ?? systemShortcuts[prefix.lowercased()] {
-            ranked.append(phrase)
-        }
+        let phrase = shortcutExpansion(in: before)
+        if let phrase = phrase { ranked.append(phrase) }
         for word in words where word != prefix && !ranked.contains(word) { ranked.append(word) }
         var result: [Suggestion] = []
+        var highlighted: Int? = nil
         if !prefix.isEmpty {
+            // Left: exactly what was typed (never auto-"corrected" away); centre: what space will write when it
+            // corrects (highlighted), else the best word; right: runner-up or emoji.
+            if phrase != nil {
+                highlighted = 1   // space expands the shortcut
+            } else if let fix = fix {
+                let shown = matchCase(of: prefix, for: fix)
+                ranked.removeAll { $0 == shown }
+                ranked.insert(shown, at: 0)
+                highlighted = 1
+            }
             let best = ranked.first
             let second = ranked.dropFirst().first
-            // Left: exactly what was typed (never auto-"corrected" away); centre: best word; right: runner-up or emoji.
             result.append(Suggestion(text: prefix, kind: .literal))
             result.append(Suggestion(text: best ?? "", kind: .word))
             if let emoji = emojis.first {
@@ -1008,7 +1038,7 @@ final class KeyboardViewController: UIInputViewController {
                 result.append(Suggestion(text: emoji, kind: .emoji))
             }
         }
-        suggestionBar.update(result)
+        suggestionBar.update(result, highlighted: highlighted)
     }
 
     private func replacePrefix(with replacement: String) {

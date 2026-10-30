@@ -85,6 +85,8 @@ private final class EmojiGridLayout: UICollectionViewLayout {
     var headerHeight: CGFloat = 0
     /// Empty space after the Recently Used block, before the smileys begin.
     var gapAfterRecents: CGFloat = 0
+    /// Square cells sized by the height (iPad), instead of the phone's eight columns across.
+    var squareCells = false
 
     private(set) var cellSize = CGSize(width: 40, height: 40)
     /// The content offset that puts each category's first column at the left edge.
@@ -108,9 +110,14 @@ private final class EmojiGridLayout: UICollectionViewLayout {
         guard viewWidth > 0, height > 0, rows > 0 else { return }
 
         let side = max(1, (height - headerHeight) / CGFloat(rows))
-        // Stock metrics (measured on 440pt): 54.8pt pitch, 7.3pt left inset, eight columns across.
-        cellSize = CGSize(width: viewWidth * 54.8 / 440, height: side)
-        edgeInset = viewWidth * 7.3 / 440
+        if squareCells {
+            cellSize = CGSize(width: side, height: side)
+            edgeInset = side * 0.2
+        } else {
+            // Stock metrics (measured on 440pt): 54.8pt pitch, 7.3pt left inset, eight columns across.
+            cellSize = CGSize(width: viewWidth * 54.8 / 440, height: side)
+            edgeInset = viewWidth * 7.3 / 440
+        }
         gapAfterRecents = cellSize.width * 0.75
 
         var x = edgeInset
@@ -218,6 +225,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var tabButtons: [HitButton] = []
     private var currentSection = 0
     private var compact = false
+    /// iPad width: the compact layout (tabs, ABC and delete in one row) with a dense grid of square cells.
+    private var wide = false
     private var tabImages: [Int: (outline: UIImage, filled: UIImage)] = [:]
     private var tabCentreY: CGFloat = 302
     private var tabBandTop: CGFloat = 282
@@ -401,7 +410,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         } else if store.categories.isEmpty {
             emptyLabel.text = "No emoji data found in this build."
             emptyLabel.isHidden = false
-        } else if currentSection == 0, let first = sections.first, first.items.isEmpty {
+        } else if let first = sections.first, first.items.isEmpty, collectionView.contentOffset.x <= 1 {
             emptyLabel.text = language.strings.emptyRecents
             emptyLabel.isHidden = false
         } else {
@@ -506,15 +515,17 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // Full stock layout (440 x 402pt) when the keyboard is tall enough, otherwise a compact layout that
         // is anchored to the real height so the tab row, ABC and delete are never cut off.
         let height = bounds.height
-        compact = height < 390 * f
+        wide = width > 500 && height > 250
+        compact = wide || height < 390 * f
         // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
         let pillTop: CGFloat = compact ? 5 * f : 6 * f
         searchHeight = (compact ? 44 : 46) * f
         searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
-        searchIcon.frame = CGRect(x: 13 * xf, y: (searchHeight - 17 * f) / 2, width: 17 * f, height: 17 * f)
+        let ix = wide ? f : xf      // the icon and placeholder keep their spacing on iPad
+        searchIcon.frame = CGRect(x: 13 * ix, y: (searchHeight - 17 * f) / 2, width: 17 * f, height: 17 * f)
         searchLabel.font = UIFont.systemFont(ofSize: 20 * f)
-        searchLabel.frame = CGRect(x: 37 * xf, y: 0, width: max(0, searchGlass.bounds.width - 50 * xf), height: searchHeight)
+        searchLabel.frame = CGRect(x: 37 * ix, y: 0, width: max(0, searchGlass.bounds.width - 50 * ix), height: searchHeight)
 
         let gridTop: CGFloat
         let gridHeight: CGFloat
@@ -530,10 +541,15 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             tabBandTop = 282 * f
         }
         let newGridFrame = CGRect(x: 0, y: gridTop, width: width, height: gridHeight)
-        if collectionView.frame != newGridFrame {
+        // iPad: emoji at most twice the size they had in the scaled phone layout (cells up to 82pt), more rows
+        // when the keyboard is taller.
+        let rows = wide ? max(4, Int((gridHeight / 82).rounded(.up))) : 4
+        if collectionView.frame != newGridFrame || gridLayout.rows != rows || gridLayout.squareCells != wide {
             collectionView.frame = newGridFrame
-            gridLayout.rows = 4
+            gridLayout.rows = rows
+            gridLayout.squareCells = wide
             gridLayout.invalidateLayout()
+            collectionView.reloadData()       // cell fonts follow the cell size
         }
         if collectionView.bounds.width > 0 { collectionView.layoutIfNeeded() }
         emptyLabel.frame = newGridFrame.insetBy(dx: 30, dy: 0)
@@ -544,40 +560,47 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             // ABC is centred between the screen edge and the first (recents) icon at x = 84.
             // ABC, the nine tabs and delete share eleven equally spaced slots (centres 38 ... 402).
             abcButton.contentHorizontalAlignment = .center
-            abcButton.frame = CGRect(x: (38 - 28) * xf, y: tabCentreY - 22, width: 56 * xf, height: 44)
+            let abcWidth = min(56 * xf, 80)
+            abcButton.frame = CGRect(x: slotLayout().abc - abcWidth / 2, y: tabCentreY - 22, width: abcWidth, height: 44)
         } else {
             abcButton.contentHorizontalAlignment = .left
             abcButton.frame = CGRect(x: 27.7 * xf, y: 369 * f - 22, width: 80, height: 44)
         }
         let deleteCentre: CGFloat = slotLayout().delete
-        backspaceButton.frame = CGRect(x: deleteCentre * xf - 26, y: tabCentreY - 22, width: 52, height: 44)
+        backspaceButton.frame = CGRect(x: deleteCentre - 26, y: tabCentreY - 22, width: 52, height: 44)
         layoutTabs()
         positionTabSelection(animated: false)
         applyInitialScrollIfPossible()
     }
 
-    /// Equally spaced slots (in 440pt-wide units): compact = ABC, every tab, delete; full = every tab, delete
-    /// (ABC has its own row there).
+    /// Equally spaced slots (in points; measured on 440pt and scaled by the width): compact = ABC, every tab,
+    /// delete; full = every tab, delete (ABC has its own row there). On iPad, ABC and delete stay near the edges
+    /// and the tabs keep a modest pitch in the middle.
     private func slotLayout() -> (abc: CGFloat, first: CGFloat, step: CGFloat, delete: CGFloat) {
         let tabs = max(1, tabButtons.count)
+        let xf = bounds.width / 440
+        if wide {
+            let step = min(32 * xf, 64)
+            let abc: CGFloat = 50, delete = bounds.width - 50
+            return (abc, (abc + delete) / 2 - step * CGFloat(tabs - 1) / 2, step, delete)
+        }
         let step: CGFloat = 32
         // The tab group is centred between ABC and delete.
         if compact {
             let first = (38 + 402) / 2 - step * CGFloat(tabs - 1) / 2
-            return (38, first, step, 402)
+            return (38 * xf, first * xf, step * xf, 402 * xf)
         }
         let first = (37.7 + 411) / 2 - step * CGFloat(tabs - 1) / 2
-        return (27.7, first, step, 411)
+        return (27.7 * xf, first * xf, step * xf, 411 * xf)
     }
 
     private func layoutTabs() {
         guard !tabButtons.isEmpty else { return }
-        let xf = bounds.width / 440
         let area = tabGlass.bounds
         let slots = slotLayout()
-        let pitch = slots.step * xf
+        let pitch = slots.step
         for (index, button) in tabButtons.enumerated() {
-            let centre = (slots.first + slots.step * CGFloat(index)) * xf
+            let centre = slots.first + slots.step * CGFloat(index)
             button.frame = CGRect(x: centre - pitch / 2, y: 0, width: pitch, height: area.height)
         }
     }
@@ -596,8 +619,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         if compact {
             if point.y >= tabBandTop {
                 let slots = slotLayout()
-                if point.x < (slots.abc + slots.step / 2) * bounds.width / 440 { return abcButton }
-                if point.x > (slots.delete - slots.step / 2) * bounds.width / 440 { return backspaceButton }
+                if point.x < slots.abc + slots.step / 2 { return abcButton }
+                if point.x > slots.delete - slots.step / 2 { return backspaceButton }
                 if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
             }
             return super.hitTest(point, with: event)
@@ -606,7 +629,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             return point.x < bounds.width * 0.4 ? abcButton : super.hitTest(point, with: event)
         }
         if point.y >= tabBandTop {
-            if point.x > (slotLayout().delete - slotLayout().step / 2) * bounds.width / 440 { return backspaceButton }
+            if point.x > slotLayout().delete - slotLayout().step / 2 { return backspaceButton }
             if let tab = HitTesting.nearestByX(point.x, in: tabButtons, relativeTo: self) { return tab }
         }
         return super.hitTest(point, with: event)
@@ -715,7 +738,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView, !needsInitialScroll, !isProgrammaticScroll else { return }
+        guard scrollView === collectionView else { return }
+        updateEmptyState()
+        guard !needsInitialScroll, !isProgrammaticScroll else { return }
         dismissVariantPopup()
 
         // The current category is the last one whose first column has reached the left edge.

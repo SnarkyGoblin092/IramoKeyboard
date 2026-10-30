@@ -351,6 +351,25 @@ enum Predictor {
         "heres": "here's", "hows": "how's", "wheres": "where's",
     ]
 
+    /// `suggest` and `autoFix` together (one decoder pass when the language models are there).
+    static func suggestAndFix(typed: String,
+                              before: String,
+                              active: Language,
+                              enabled: [Language],
+                              stores: [Language: WordStore],
+                              limit: Int,
+                              field: FieldContext?,
+                              taps: Decoder.Taps? = nil) -> (words: [String], fix: String?) {
+        if Decoder.isAvailable(stores) && !TextFolding.normalizeApostrophes(typed).contains("'") {
+            return Decoder.suggestAndCorrect(typed: typed, before: before, active: active, enabled: enabled,
+                                             stores: stores, limit: limit, field: field, taps: taps)
+        }
+        return (suggest(typed: typed, before: before, active: active, enabled: enabled, stores: stores, limit: limit,
+                        field: field, taps: taps),
+                autoFix(typed: typed, before: before, active: active, enabled: enabled, stores: stores, field: field,
+                        taps: taps))
+    }
+
     /// The spelling to put in place of a word that was just finished, or nil to leave it: its missing accents or
     /// apostrophe, in whichever enabled language it belongs to ("dont" -> "don't", "koszonom" -> "köszönöm",
     /// "deja" -> "déjà", "nao" -> "não"). Never when an enabled language has the word as typed, or the writer keeps

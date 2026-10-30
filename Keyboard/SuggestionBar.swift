@@ -120,15 +120,14 @@ final class SuggestionBar: UIView {
 
     // MARK: Content
 
-    func update(_ newSuggestions: [Suggestion]) {
+    /// `highlighted`: the slot space will write (the auto-correction), shown in the accent colour.
+    func update(_ newSuggestions: [Suggestion], highlighted: Int? = nil) {
         suggestions = Array(newSuggestions.prefix(slotCount))
-        let bestIndex = suggestions.firstIndex(where: { !$0.text.isEmpty && ($0.kind == .word || $0.kind == .swipeAlternative) })
         for (index, label) in slotLabels.enumerated() {
             if index < suggestions.count {
                 let item = suggestions[index]
                 label.text = item.text
-                // The first real completion/correction is the one space will accept: show it in the accent colour.
-                let isBest = (index == bestIndex)
+                let isBest = (index == highlighted)
                 label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17, weight: isBest ? .semibold : .regular)
                 label.textColor = isBest ? Theme.accent : Theme.text
             } else {

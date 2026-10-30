@@ -479,16 +479,46 @@ enum Decoder {
                             stores: [Language: WordStore],
                             field: Predictor.FieldContext?,
                             taps: Taps? = nil) -> String? {
-        let lower = TextFolding.normalizeApostrophes(typed).lowercased()
-        guard !lower.isEmpty, lower.allSatisfy({ Predictor.isWordCharacter($0) }) else { return nil }
-        // ALLCAPS, iPhone: deliberate spellings.
-        guard typed.filter({ $0.isUppercase }).count < 2 else { return nil }
-        if field?.uses(lower, atLeast: 2) == true { return nil }
-        if stores.values.contains(where: { $0.isLearned(lower) }) { return nil }
-
+        guard mayCorrect(typed, stores: stores, field: field) else { return nil }
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
         let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field,
                          taps: taps)
+        return correction(typed: typed, found: found, stores: stores, field: field)
+    }
+
+    /// The completions (as `suggest`) and the auto-correction (as `autoCorrect`) from one pass over the candidates.
+    static func suggestAndCorrect(typed: String,
+                                  before: String,
+                                  active: Language,
+                                  enabled: [Language],
+                                  stores: [Language: WordStore],
+                                  limit: Int,
+                                  field: Predictor.FieldContext?,
+                                  taps: Taps? = nil) -> (words: [String], fix: String?) {
+        let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
+        let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field,
+                         taps: taps)
+        let words = Array(ranked(found.rows, whole: false).map { $0.word }.filter { $0 != found.lower }.prefix(limit))
+            .map { written($0, context: found.context, stores: stores) }
+        let fix = mayCorrect(typed, stores: stores, field: field)
+            ? correction(typed: typed, found: found, stores: stores, field: field) : nil
+        return (words, fix)
+    }
+
+    /// False for spellings that are never corrected: ALLCAPS and iPhone, words the user taught or keeps using.
+    private static func mayCorrect(_ typed: String, stores: [Language: WordStore], field: Predictor.FieldContext?) -> Bool {
+        let lower = TextFolding.normalizeApostrophes(typed).lowercased()
+        guard !lower.isEmpty, lower.allSatisfy({ Predictor.isWordCharacter($0) }) else { return false }
+        guard typed.filter({ $0.isUppercase }).count < 2 else { return false }
+        if field?.uses(lower, atLeast: 2) == true { return false }
+        return !stores.values.contains(where: { $0.isLearned(lower) })
+    }
+
+    private static func correction(typed: String,
+                                   found: (rows: [Row], lower: String, context: Context),
+                                   stores: [Language: WordStore],
+                                   field: Predictor.FieldContext?) -> String? {
+        let lower = found.lower
         var choice = lower
         if let best = ranked(found.rows, whole: true).first, best.word != lower {
             let typedScore = max(logProb(lower, context: found.context, stores: stores, field: field), unknownWord)
