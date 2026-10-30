@@ -92,7 +92,8 @@ final class EmojiSearchBar: UIView {
         super.layoutSubviews()
         // Same thickness and curve as the picker's search pill.
         let topInset = min(bounds.height - 30, EmojiSearchBar.topInset)
-        glass.frame = CGRect(x: 6, y: topInset, width: max(0, bounds.width - 12), height: bounds.height - topInset)
+        let side = 6 * bounds.width / 440      // the picker's side inset
+        glass.frame = CGRect(x: side, y: topInset, width: max(0, bounds.width - 2 * side), height: bounds.height - topInset)
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)

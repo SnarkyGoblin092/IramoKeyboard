@@ -364,7 +364,9 @@ final class KeyboardViewController: UIInputViewController {
         if isSearchingEmoji {
             // Same height and top gap as the picker, so the search field stays exactly where it was.
             EmojiSearchBar.topInset = (5 * panelScale).rounded()
-            suggestions = 44 * panelScale + EmojiSearchBar.topInset
+            // (The picker's pill is a full 44pt on iPad.)
+            let wide = isPad && view.bounds.width > 500
+            suggestions = (wide ? 44 : 44 * panelScale) + EmojiSearchBar.topInset
         }
 
         if let constraint = totalHeight {
