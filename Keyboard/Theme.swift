@@ -222,21 +222,23 @@ enum Theme {
                 separator: pick(black(0.12), white(0.20)))
 
         case .colored:
+            // A lighter shade in light mode (ThemeDefinition.lightModeVariant), the theme's own colours in dark.
+            let light = theme.lightModeVariant
             return Palette(
                 accent: gradientAccent,
                 onAccent: gradientOnAccent,
                 text: UIColor.label,
-                keyText: theme.text.uiColor,
+                keyText: pick(light.text.uiColor, theme.text.uiColor),
                 secondaryText: UIColor.secondaryLabel,
-                keySecondaryText: theme.secondaryText.uiColor,
-                letterKey: theme.key.uiColor,
-                functionKey: theme.function.uiColor,
-                letterKeyPressed: theme.keyPressed.uiColor,
-                functionKeyPressed: theme.functionPressed.uiColor,
+                keySecondaryText: pick(light.secondaryText.uiColor, theme.secondaryText.uiColor),
+                letterKey: pick(light.key.uiColor, theme.key.uiColor),
+                functionKey: pick(light.function.uiColor, theme.function.uiColor),
+                letterKeyPressed: pick(light.keyPressed.uiColor, theme.keyPressed.uiColor),
+                functionKeyPressed: pick(light.functionPressed.uiColor, theme.functionPressed.uiColor),
                 activeKey: white(0.92),
                 keyShadow: UIColor.clear,
                 keyBorder: pick(white(0.60), white(0.28)),
-                popupFill: theme.popup.uiColor,
+                popupFill: pick(light.popup.uiColor, theme.popup.uiColor),
                 panelBackground: pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), grey(0.17)),
                 stripFill: UIColor.clear,
                 searchField: pick(black(0.08), white(0.16)),
@@ -273,7 +275,7 @@ enum Theme {
             p.letterKeyPressed = black(0.22)
             p.functionKeyPressed = black(0.06)
         case .colored:
-            break   // coloured themes set light/dark themselves, so they never differ from the backdrop
+            break   // dark keys keep the theme's own colours, which stand out on the light backdrop too
         }
         return p
     }

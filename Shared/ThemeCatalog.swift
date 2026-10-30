@@ -72,25 +72,25 @@ struct ThemeDefinition: Hashable {
     // ---- Colours (used by .gradient, and as the base for .liquidGlass tints) ----
 
     /// Fill of a letter/number key.
-    let key: ThemeRGBA
+    var key: ThemeRGBA
     /// Fill of a function key (shift, delete, 123, return, emoji...).
-    let function: ThemeRGBA
+    var function: ThemeRGBA
     /// Fill of a key while it is pressed.
-    let keyPressed: ThemeRGBA
+    var keyPressed: ThemeRGBA
     /// Fill of the pressed function key.
-    let functionPressed: ThemeRGBA
+    var functionPressed: ThemeRGBA
     /// Hairline outline around keys (alpha 0 = none).
     let keyBorder: ThemeRGBA
     /// Colour of key labels, suggestions and icons.
-    let text: ThemeRGBA
+    var text: ThemeRGBA
     /// Secondary labels (key hints, placeholders).
-    let secondaryText: ThemeRGBA
+    var secondaryText: ThemeRGBA
     /// Accent: active shift, prominent return key, selected tab, swipe trail.
     let accent: ThemeRGBA
     /// Text/icon colour on top of the accent colour.
     let onAccent: ThemeRGBA
     /// Fill of popups (key balloon, long-press strip, skin-tone strip). Keep it nearly opaque.
-    let popup: ThemeRGBA
+    var popup: ThemeRGBA
     /// Fill of the suggestion strip and emoji search field / tab bar.
     let panel: ThemeRGBA
 
@@ -124,6 +124,31 @@ struct ThemeDefinition: Hashable {
 
     /// Heading the theme is listed under in the picker ("" for the basic, non-colour themes).
     var group: String = ""
+}
+
+extension ThemeDefinition {
+    /// A key-colour theme as shown in light mode: a lighter shade of the same colours (dark keys lightened most,
+    /// pastels barely), with dark labels where the theme's own would no longer stand out. Dark mode, and every
+    /// other kind of theme, uses the colours as defined. The keyboard and the theme previews both use this.
+    var lightModeVariant: ThemeDefinition {
+        guard kind == .colored else { return self }
+        func luminance(_ c: ThemeRGBA) -> Double { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b }
+        func lighter(_ c: ThemeRGBA) -> ThemeRGBA {
+            let t = 0.35 * (1 - luminance(c))
+            return ThemeRGBA(c.r + (1 - c.r) * t, c.g + (1 - c.g) * t, c.b + (1 - c.b) * t, c.a)
+        }
+        var light = self
+        light.key = lighter(key)
+        light.function = lighter(function)
+        light.keyPressed = lighter(keyPressed)
+        light.functionPressed = lighter(functionPressed)
+        light.popup = lighter(popup)
+        if abs(luminance(text) - luminance(light.key)) < 0.4 {
+            light.text = luminance(light.key) > 0.55 ? ThemeRGBA(0.08, 0.08, 0.10, 1) : ThemeRGBA(1, 1, 1, 1)
+            light.secondaryText = ThemeRGBA(light.text.r, light.text.g, light.text.b, 0.65)
+        }
+        return light
+    }
 }
 
 // MARK: - Catalog

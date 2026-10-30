@@ -125,15 +125,18 @@ struct ThemePreview: View {
 
     private func pick(_ light: Color, _ darkColor: Color) -> Color { return dark ? darkColor : light }
 
+    /// Key-colour themes are a lighter shade in light mode (as on the keyboard).
+    private var colors: ThemeDefinition { return dark ? theme : theme.lightModeVariant }
+
     /// Labels on the keys: the theme's own on key-colour themes, the system label colour on the others.
-    private var textColor: Color { return theme.kind == .colored ? Color(theme.text) : pick(.black, .white) }
+    private var textColor: Color { return theme.kind == .colored ? Color(colors.text) : pick(.black, .white) }
     /// Strip text sits on the background, not on a key.
     private var stripText: Color { return pick(Color(white: 0.08), .white) }
 
     private var keyFill: Color {
         switch theme.kind {
         case .native: return pick(.white, Color(white: 0.42))
-        case .colored: return Color(theme.key)
+        case .colored: return Color(colors.key)
         case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
         case .liquidGlass: return pick(Color.white, Color.white.opacity(0.16))
         }
@@ -142,7 +145,7 @@ struct ThemePreview: View {
     private var functionFill: Color {
         switch theme.kind {
         case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
-        case .colored: return Color(theme.function)
+        case .colored: return Color(colors.function)
         case .transparent: return pick(Color.black.opacity(0.12), Color.black.opacity(0.28))
         case .liquidGlass: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
         }
