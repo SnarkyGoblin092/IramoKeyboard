@@ -92,7 +92,7 @@ enum EmojiTabIcons {
     }
 
     /// Line thickness of every tab icon, in points: the delete icon's (SF Symbol "delete.left", 20pt, light).
-    private static let lineWeight: CGFloat = 1.15
+    static let lineWeight: CGFloat = 1.15
 
     /// The tab icons (Iconify; the set and licence of each above it). The traced shapes are kept as a fallback.
     private static let vectorIcons: [String: VectorIcon] = [
@@ -237,9 +237,10 @@ enum EmojiTabIcons {
         return path
     }
 
-    static func icon(forKey rawKey: String, side: CGFloat = 80.0 / 3.0) -> UIImage? {
+    /// `weight`: line thickness in points (the tabs use the delete icon's; the keyboard's emoji key a bolder one).
+    static func icon(forKey rawKey: String, side: CGFloat = 80.0 / 3.0, weight: CGFloat = lineWeight) -> UIImage? {
         let key = (rawKey == "recent") ? "recents" : rawKey
-        let cacheKey = key + "@\(side)"
+        let cacheKey = key + "@\(side)/\(weight)"
         if let cached = cache[cacheKey] { return cached }
         let vector = vectorIcons[key]
         guard vector != nil || shapes[key] != nil else { return nil }
@@ -254,7 +255,7 @@ enum EmojiTabIcons {
             path.lineCapStyle = .round
             if let vector = vector, vector.stroked {
                 UIColor.black.setStroke()
-                path.lineWidth = lineWeight
+                path.lineWidth = weight
                 path.stroke()
             } else if let vector = vector {
                 // A filled icon's lines are brought to the same weight: grown by outlining them, or thinned by
@@ -263,7 +264,7 @@ enum EmojiTabIcons {
                 UIColor.black.setFill()
                 UIColor.black.setStroke()
                 path.fill()
-                let difference = lineWeight - vector.band * side / 80
+                let difference = weight - vector.band * side / 80
                 if abs(difference) > 0.05 {
                     path.lineWidth = abs(difference)
                     path.stroke(with: difference > 0 ? .normal : .clear, alpha: 1)
