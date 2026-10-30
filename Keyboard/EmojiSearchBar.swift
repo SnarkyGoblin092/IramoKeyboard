@@ -100,7 +100,7 @@ final class EmojiSearchBar: UIView {
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
         // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).
-        let isWide = traitCollection.userInterfaceIdiom == .pad && bounds.width > 500
+        let isWide = bounds.width > 500   // the picker's wide layout (iPad, iPhone in landscape)
         let f = EmojiPanel.scale(forWidth: bounds.width)
         let iconSide = isWide ? 16 : 17 * f
         queryLabel.font = UIFont.systemFont(ofSize: isWide ? 16 : 20 * f)

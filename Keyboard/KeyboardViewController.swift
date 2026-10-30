@@ -360,19 +360,20 @@ final class KeyboardViewController: UIInputViewController {
         var total: CGFloat = isPad ? 340 : (isLandscape ? 208 : 276)
         if Prefs.numberRow { total += isLandscape ? 26 : 40 }
         total *= CGFloat(Prefs.heightScale)
-        // The emoji picker always shows four full rows: the keyboard grows to fit while it is open.
-        let panelScale = EmojiPanel.scale(forWidth: view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width)
-        if emojiPanel != nil || isSearchingEmoji {
-            // The view may not have its final width yet when the picker opens, so fall back to the screen width.
-            let width = view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width
+        // The emoji picker always shows four full rows: the keyboard grows to fit while it is open. An iPhone in
+        // landscape always has that height, so the keyboard never jumps between letters, picker and search.
+        // (The view may not have its final width yet when the picker opens, so fall back to the screen width.)
+        let width = view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width
+        let panelScale = EmojiPanel.scale(forWidth: width)
+        if emojiPanel != nil || isSearchingEmoji || isLandscape {
             total = max(total, EmojiPanel.requiredHeight(forWidth: width))
         }
         var suggestions: CGFloat = isLandscape ? 36 : 44
         if isSearchingEmoji {
             // Same height and top gap as the picker, so the search field stays exactly where it was.
             EmojiSearchBar.topInset = (5 * panelScale).rounded()
-            // (The picker's pill is a full 44pt on iPad.)
-            let wide = isPad && view.bounds.width > 500
+            // (The picker's pill is a full 44pt in its wide layout: iPad, iPhone in landscape.)
+            let wide = EmojiPanel.usesWideLayout(width: width, height: total)
             suggestions = (wide ? 44 : 44 * panelScale) + EmojiSearchBar.topInset
         }
 

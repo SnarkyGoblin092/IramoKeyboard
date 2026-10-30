@@ -246,6 +246,14 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         return width > 500 ? 0.75 : min(1, max(0.6, width / 440))
     }
 
+    /// iPad, and iPhone in landscape: one bottom row (ABC, tabs, delete) under a dense grid of square cells.
+    static func usesWideLayout(width: CGFloat, height: CGFloat) -> Bool {
+        return width > 500 && height > 250
+    }
+
+    /// Bigger tab icons and selection circle: only on iPad (an iPhone in landscape keeps the phone's sizes).
+    private var bigTabs: Bool { return wide && traitCollection.userInterfaceIdiom == .pad }
+
     /// Keyboard height needed to show the whole picker.
     static func requiredHeight(forWidth width: CGFloat) -> CGFloat {
         return (337 * scale(forWidth: width)).rounded()
@@ -447,7 +455,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         tabButtons = []
         tabImages = [:]
         tabsDrawnWide = wide
-        let iconScale: CGFloat = wide ? 1.3 : 1
+        let iconScale: CGFloat = bigTabs ? 1.3 : 1
         for (index, section) in sections.enumerated() {
             let button = HitButton(type: .system)
             if let drawn = EmojiTabIcons.icons(forKey: section.key, side: 80.0 / 3.0 * iconScale) {
@@ -501,7 +509,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         tabSelection.isHidden = false
         let buttonFrame = tabButtons[selectedTabIndex].frame
         // iPad: clear of the bigger icon all round.
-        let circle = wide ? 44 : 30 * EmojiPanel.scale(forWidth: bounds.width)
+        let circle: CGFloat = bigTabs ? 44 : (wide ? 32 : 30 * EmojiPanel.scale(forWidth: bounds.width))
         tabSelection.layer.cornerRadius = circle / 2
         let target = CGRect(x: buttonFrame.midX - circle / 2, y: buttonFrame.midY - circle / 2, width: circle, height: circle)
         tabGlass.contentView.sendSubviewToBack(tabSelection)
@@ -542,7 +550,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // Full stock layout (440 x 402pt) when the keyboard is tall enough, otherwise a compact layout that
         // is anchored to the real height so the tab row, ABC and delete are never cut off.
         let height = bounds.height
-        wide = width > 500 && height > 250
+        wide = EmojiPanel.usesWideLayout(width: width, height: height)
         compact = wide || height < 390 * f
         // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
         let pillTop: CGFloat = compact ? 5 * f : 6 * f
