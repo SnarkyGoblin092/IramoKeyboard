@@ -263,17 +263,17 @@ final class KeyboardViewController: UIInputViewController {
     /// Light or dark. A theme that forces one sets the whole keyboard. Otherwise the keys follow the phone's
     /// setting, even in an app that keeps itself the other way, while the rest (suggestions, emoji picker) keeps
     /// the app's style, which the system-drawn keyboard backdrop follows. Keys whose style differs from that
-    /// backdrop get solid fills (Theme.solidKeys) so they and their letters stay readable.
-    /// Returns true when solidKeys changed (the keys must then be rebuilt).
+    /// backdrop get stronger fills (Theme.contrastKeys) so they and their letters stay readable.
+    /// Returns true when contrastKeys changed (the keys must then be rebuilt).
     private func updateKeyStyle() -> Bool {
         view.overrideUserInterfaceStyle = Theme.interfaceStyle
         let phone = UIScreen.main.traitCollection.userInterfaceStyle
         let keys: UIUserInterfaceStyle = Theme.interfaceStyle == .unspecified ? phone : .unspecified
         keyboardView.overrideUserInterfaceStyle = keys
         let app = view.traitCollection.userInterfaceStyle
-        let solid = keys != .unspecified && app != .unspecified && keys != app
-        guard solid != Theme.solidKeys else { return false }
-        Theme.solidKeys = solid
+        let differs = keys != .unspecified && app != .unspecified && keys != app
+        guard differs != Theme.contrastKeys else { return false }
+        Theme.contrastKeys = differs
         return true
     }
 

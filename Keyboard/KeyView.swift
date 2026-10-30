@@ -163,6 +163,8 @@ final class KeyView: UIView {
             tint = Theme.letterKeyPressed
         } else if spec.isFunction {
             tint = Theme.functionKey
+        } else if Theme.contrastKeys {
+            tint = Theme.letterKey   // on a backdrop of the other style, clear glass would vanish
         } else {
             tint = nil
         }

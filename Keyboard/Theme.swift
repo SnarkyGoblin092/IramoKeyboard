@@ -56,6 +56,7 @@ enum Theme {
         let theme = ThemeCatalog.theme(id: storedID())
         definition = theme
         palette = makePalette(for: theme)
+        contrastPalette = makeContrastPalette(from: palette, kind: theme.kind)
     }
 
     // MARK: Flags
@@ -66,7 +67,7 @@ enum Theme {
     static var isLiquidGlass: Bool { return kind == .liquidGlass }
 
     /// Real Liquid Glass (iOS 26 SDK + iOS 26 phone + the Liquid Glass theme).
-    static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable && !solidKeys }
+    static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable }
 
     /// Keys are blurred / see-through rather than solid.
     static var wantsClearBackdrop: Bool { return kind != .native && kind != .colored }
@@ -110,11 +111,11 @@ enum Theme {
     static var letterKeyPressed: UIColor { return keyPalette.letterKeyPressed }
     static var functionKeyPressed: UIColor { return keyPalette.functionKeyPressed }
 
-    /// Set while the keys are dark on the app's light keyboard backdrop (or light on a dark one): they then get
-    /// the native keyboard's solid fills instead of the theme's see-through ones, so they stay readable.
-    static var solidKeys = false
-    private static let solidPalette = makePalette(for: ThemeCatalog.native)
-    private static var keyPalette: Palette { return solidKeys ? solidPalette : palette }
+    /// Set while the keys' light/dark differs from the app's, whose style the system keyboard backdrop follows
+    /// (dark keys on a light backdrop, or light keys on a dark one). The keys then use `contrastPalette`.
+    static var contrastKeys = false
+    private static var contrastPalette = palette
+    private static var keyPalette: Palette { return contrastKeys ? contrastPalette : palette }
     static var activeKey: UIColor { return palette.activeKey }
     static var keyShadow: UIColor { return palette.keyShadow }
     static var keyBorder: UIColor { return palette.keyBorder }
@@ -241,6 +242,35 @@ enum Theme {
                 searchField: pick(black(0.08), white(0.16)),
                 separator: pick(black(0.12), white(0.20)))
         }
+    }
+
+    /// The theme's key fills for a backdrop of the other style: the same look, but standing out from it. Dark
+    /// keys (on a light backdrop) are a lighter grey than in dark mode; the see-through themes stay see-through
+    /// with a stronger tint. (`pick`: light keys on a dark backdrop, dark keys on a light one.)
+    private static func makeContrastPalette(from base: Palette, kind: ThemeDefinition.Kind) -> Palette {
+        var p = base
+        switch kind {
+        case .native:
+            let nativeFunction = UIColor(red: 0.675, green: 0.702, blue: 0.745, alpha: 1)
+            p.letterKey = pick(UIColor.white, grey(0.53))
+            p.functionKey = pick(nativeFunction, grey(0.40))
+            p.letterKeyPressed = pick(nativeFunction, grey(0.40))
+            p.functionKeyPressed = pick(UIColor.white, grey(0.53))
+        case .transparent:
+            p.letterKey = pick(white(0.55), black(0.38))
+            p.functionKey = pick(white(0.38), black(0.52))
+            p.letterKeyPressed = pick(white(0.75), black(0.52))
+            p.functionKeyPressed = pick(white(0.62), black(0.38))
+        case .liquidGlass:
+            // Tints on the glass (letter keys too, which are otherwise left clear).
+            p.letterKey = pick(white(0.45), black(0.32))
+            p.functionKey = pick(white(0.30), black(0.45))
+            p.letterKeyPressed = pick(white(0.65), black(0.45))
+            p.functionKeyPressed = pick(white(0.55), black(0.32))
+        case .colored:
+            break   // coloured themes set light/dark themselves, so they never differ from the backdrop
+        }
+        return p
     }
 
     /// Text colour on top of the shift key when it is on (always dark: the key turns near-white).
