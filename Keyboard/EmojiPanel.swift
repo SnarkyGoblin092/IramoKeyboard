@@ -369,10 +369,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         collectionView.reloadData()
         collectionView.collectionViewLayout.invalidateLayout()
 
-        // Always start on Recently Used (its hint is shown while it is empty).
         // The grid can only scroll once it has a real size, so the scroll is done in layoutSubviews
         // (this was the "empty until I tap a tab" bug: reload() ran while the panel still had zero size).
-        startSection = 0
+        // Recently Used when it has emoji, otherwise straight to the first category.
+        startSection = (recents.isEmpty && sections.count > 1) ? 1 : 0
         currentSection = startSection
         needsInitialScroll = true
         refreshTabHighlight()
@@ -547,7 +547,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         compact = wide || height < 390 * f
         // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
         let pillTop: CGFloat = compact ? 5 * f : 6 * f
-        searchHeight = (compact ? 44 : 46) * f
+        searchHeight = wide ? 44 : (compact ? 44 : 46) * f
         searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         let ix = wide ? f : xf      // the icon and placeholder keep their spacing on iPad

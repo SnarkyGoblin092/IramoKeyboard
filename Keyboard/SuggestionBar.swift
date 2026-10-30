@@ -103,7 +103,7 @@ final class SuggestionBar: UIView {
         dismissIcon.tintColor = Theme.accent
         dismissIcon.contentMode = .center
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
 
         // Nothing inside the strip takes touches itself: the bar decides from the x position.
@@ -158,8 +158,11 @@ final class SuggestionBar: UIView {
         slotWidth = contentWidth / CGFloat(slotCount)
         dismissMinX = area.width - dismissWidth
 
-        dismissHighlight.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
-        dismissIcon.frame = dismissHighlight.frame
+        dismissIcon.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
+        // The pressed state is a circle around the icon.
+        let circle = min(area.height - 2, dismissWidth - 6)
+        dismissHighlight.frame = CGRect(x: dismissIcon.frame.midX - circle / 2, y: (area.height - circle) / 2,
+                                        width: circle, height: circle)
         hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
 
         let radius = Theme.keyCornerRadius(for: CGSize(width: slotWidth, height: area.height))
@@ -169,7 +172,7 @@ final class SuggestionBar: UIView {
             slotHighlights[index].layer.cornerRadius = radius
             slotLabels[index].frame = frame.insetBy(dx: 6, dy: 0)
         }
-        dismissHighlight.layer.cornerRadius = radius
+        dismissHighlight.layer.cornerRadius = circle / 2
         for (index, line) in separators.enumerated() {
             line.frame = CGRect(x: slotMinX + CGFloat(index + 1) * slotWidth - 0.5,
                                 y: area.height * 0.25,

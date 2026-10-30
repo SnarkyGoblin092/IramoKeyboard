@@ -1,6 +1,6 @@
-name: Build HunKeys IPA
+name: Build TempoKeyboard IPA
 
-# Runs on every push and can also be started by hand (Actions tab > Build HunKeys IPA > Run workflow).
+# Runs on every push and can also be started by hand (Actions tab > Build TempoKeyboard IPA > Run workflow).
 on:
   push:
   workflow_dispatch:
@@ -103,7 +103,7 @@ jobs:
       - name: Package IPA
         run: |
           command -v ldid
-          rm -rf Payload HunKeys.ipa
+          rm -rf Payload TempoKeyboard.ipa
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/HunKeys.app Payload/
           APP=Payload/HunKeys.app
@@ -113,14 +113,14 @@ jobs:
           ldid -e "$APP/HunKeys" | tee app-ent.txt
           grep -q "group.com.hunkeys.k9x4.shared" appex-ent.txt
           grep -q "group.com.hunkeys.k9x4.shared" app-ent.txt
-          zip -qry HunKeys.ipa Payload
-          ls -la HunKeys.ipa
+          zip -qry TempoKeyboard.ipa Payload
+          ls -la TempoKeyboard.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: HunKeys-ipa
-          path: HunKeys.ipa
+          name: TempoKeyboard
+          path: TempoKeyboard.ipa
           if-no-files-found: error
 
       - name: Show compiler errors (only if something failed)
