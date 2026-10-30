@@ -174,7 +174,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if updateKeyStyle() { buildInterface() }
+        refreshKeyStyle()
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
@@ -203,7 +203,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if updateKeyStyle() { buildInterface() }
+        refreshKeyStyle()
         // Touches near the screen edges and the bottom are normally held back for a moment by the system's
         // own gestures, which makes edge keys feel dead. Ask the window's recognisers not to delay touches.
         view.window?.gestureRecognizers?.forEach {
@@ -218,6 +218,8 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
+        // Catches a style read wrongly earlier; rebuilding is left until after this layout pass.
+        DispatchQueue.main.async { [weak self] in self?.refreshKeyStyle() }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -264,7 +266,6 @@ final class KeyboardViewController: UIInputViewController {
     /// or the app is in dark mode (so a dark mode phone keeps dark keys in an app that stays light), while the
     /// rest (suggestions, emoji picker) keeps the app's style, which the system-drawn keyboard backdrop follows.
     /// Dark keys on that light backdrop get lighter fills (Theme.contrastKeys) so they stand out.
-    /// Returns true when contrastKeys changed (the keys must then be rebuilt).
     /// The keys' style for updateKeyStyle: dark when the phone or the app is dark, else the app's.
     private var keyInterfaceStyle: UIUserInterfaceStyle {
         guard Theme.interfaceStyle == .unspecified else { return .unspecified }
@@ -272,20 +273,34 @@ final class KeyboardViewController: UIInputViewController {
         return phone == .dark || view.traitCollection.userInterfaceStyle == .dark ? .dark : .unspecified
     }
 
+    /// Returns true when contrastKeys changed (the keys must then be rebuilt).
     private func updateKeyStyle() -> Bool {
         view.overrideUserInterfaceStyle = Theme.interfaceStyle
         let keys = keyInterfaceStyle
         keyboardView.overrideUserInterfaceStyle = keys
         let app = view.traitCollection.userInterfaceStyle
-        let differs = keys != .unspecified && app != .unspecified && keys != app
+        guard app != .unspecified else { return false }   // not known yet (e.g. mid-rotation): keep what we have
+        let differs = keys != .unspecified && keys != app
         guard differs != Theme.contrastKeys else { return false }
         Theme.contrastKeys = differs
         return true
     }
 
+    /// updateKeyStyle, rebuilding the keys when their fills changed.
+    private func refreshKeyStyle() {
+        if updateKeyStyle() { buildInterface() }
+    }
+
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        if updateKeyStyle() { buildInterface() }
+        refreshKeyStyle()
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        // The app's style can read wrong while rotating, and no trait change follows to correct it: check again
+        // once the rotation is done.
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.refreshKeyStyle() }
     }
 
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
