@@ -212,14 +212,18 @@ def parse_emoji_test(path: Path):
     version = "unknown"
     groups = []
     current = None
+    subgroup = ""
     seen_lines = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith("# Version:"):
             version = line.split(":", 1)[1].strip()
             continue
         if line.startswith("# group:"):
-            current = {"name": line.split(":", 1)[1].strip(), "entries": []}
+            current = {"name": line.split(":", 1)[1].strip(), "entries": [], "subgroups": []}
             groups.append(current)
+            continue
+        if line.startswith("# subgroup:"):
+            subgroup = line.split(":", 1)[1].strip()
             continue
         if not line.strip() or line.startswith("#") or current is None or ";" not in line:
             continue
@@ -237,9 +241,49 @@ def parse_emoji_test(path: Path):
         pieces = comment.strip().split(None, 2)
         name = pieces[2].strip() if len(pieces) == 3 else (pieces[-1] if pieces else "")
         current["entries"].append((emoji, name))
+        current["subgroups"].append(subgroup)
     kept = sum(len(g["entries"]) for g in groups)
     print(f"  emoji-test.txt: {seen_lines} fully-qualified lines, {kept} kept")
-    return version, groups
+    return version, regroup(groups)
+
+
+# Unicode subgroups that belong under another tab's icon (the picker shows one tab per group):
+# (group, subgroup) -> (target group, "front" or "back" of it). Hearts go to the heart tab (Symbols) like on iOS,
+# sports people to the ball tab, weather to the nature (paw) tab and clocks to the objects (bulb) tab.
+SUBGROUP_MOVES = {
+    ("Smileys & Emotion", "heart"): ("Symbols", "front"),
+    ("Smileys & Emotion", "emotion"): ("Symbols", "front"),
+    ("People & Body", "person-sport"): ("Activities", "back"),
+    ("Travel & Places", "sky & weather"): ("Animals & Nature", "back"),
+    ("Travel & Places", "time"): ("Objects", "back"),
+}
+KEEP_IN_PLACE = {"\U0001F48B"}   # the kiss mark stays with the faces
+
+
+def regroup(groups):
+    """Moves the SUBGROUP_MOVES subgroups to their tab; everything else keeps its Unicode group and order."""
+    front, back = {}, {}
+    result = []
+    for group in groups:
+        kept = []
+        for entry, subgroup in zip(group["entries"], group["subgroups"]):
+            move = SUBGROUP_MOVES.get((group["name"], subgroup))
+            if move and entry[0] not in KEEP_IN_PLACE:
+                (front if move[1] == "front" else back).setdefault(move[0], []).append(entry)
+            else:
+                kept.append(entry)
+        result.append({"name": group["name"], "entries": kept})
+    # The plain colour hearts lead the heart tab (red first), as on iOS.
+    first = {emoji: rank for rank, emoji in enumerate(PLAIN_HEARTS)}
+    for moved in front.values():
+        moved.sort(key=lambda entry: first.get(entry[0].replace("️", ""), len(first)))
+    for group in result:
+        group["entries"] = front.get(group["name"], []) + group["entries"] + back.get(group["name"], [])
+    return result
+
+
+PLAIN_HEARTS = ["❤", "🩷", "🧡", "💛", "💚", "🩵", "💙",
+                "💜", "🖤", "🩶", "🤍", "🤎"]
 
 
 def build_emoji_groups(raw_groups):
