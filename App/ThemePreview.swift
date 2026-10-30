@@ -110,39 +110,65 @@ struct ThemePreview: View {
         ]
     }
 
-    // MARK: Palette (straight from the theme)
+    // MARK: Palette (mirrors Keyboard/Theme.swift, in the iPhone's light or dark mode)
 
-    /// Native follows the system, so its dark variant is swapped in here; every other theme is fixed.
-    private var nativeDark: Bool { return (theme.kind == .native || theme.kind == .colored) && systemScheme == .dark }
+    private var dark: Bool { return systemScheme == .dark }
     /// Themes that sit on the normal system keyboard background.
     private var onSystemBackground: Bool { return theme.kind == .native || theme.kind == .colored }
 
-    private var textColor: Color { return nativeDark && theme.kind == .native ? .white : Color(theme.text) }
-    /// Strip text sits on the background, not on a key.
-    private var stripText: Color { return theme.kind == .colored ? (nativeDark ? .white : Color(white: 0.08)) : textColor }
-    private var keyFill: Color { return nativeDark && theme.kind == .native ? Color(white: 0.42) : Color(theme.key) }
-    private var functionFill: Color { return nativeDark && theme.kind == .native ? Color(white: 0.27) : Color(theme.function) }
-    private var borderColor: Color { return theme.kind == .colored ? Color.white.opacity(0.3) : Color(theme.keyBorder) }
-    private var panelFill: Color { return nativeDark ? Color(white: 0.20) : Color(theme.panel) }
+    private func pick(_ light: Color, _ darkColor: Color) -> Color { return dark ? darkColor : light }
 
-    /// Gradient themes carry their own accent; the others use the accent chosen in the app.
-    /// A custom accent from the colour picker wins over a gradient theme's own accent (as on the keyboard).
+    /// Labels on the keys: the theme's own on key-colour themes, the system label colour on the others.
+    private var textColor: Color { return theme.kind == .colored ? Color(theme.text) : pick(.black, .white) }
+    /// Strip text sits on the background, not on a key.
+    private var stripText: Color { return pick(Color(white: 0.08), .white) }
+
+    private var keyFill: Color {
+        switch theme.kind {
+        case .native: return pick(.white, Color(white: 0.42))
+        case .colored: return Color(theme.key)
+        case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
+        case .liquidGlass: return pick(Color.white.opacity(0.22), Color.white.opacity(0.10))
+        }
+    }
+
+    private var functionFill: Color {
+        switch theme.kind {
+        case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
+        case .colored: return Color(theme.function)
+        case .transparent: return pick(Color.black.opacity(0.12), Color.black.opacity(0.28))
+        case .liquidGlass: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
+        }
+    }
+
+    private var borderColor: Color {
+        switch theme.kind {
+        case .native: return .clear
+        case .liquidGlass: return pick(Color.white.opacity(0.60), Color.white.opacity(0.25))
+        default: return pick(Color.white.opacity(0.60), Color.white.opacity(0.28))
+        }
+    }
+
+    /// Key-colour themes keep their own accent until the user picks one (as on the keyboard).
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-    private var usesThemeAccent: Bool { return theme.kind == .colored && accentHex.isEmpty }
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    private var usesThemeAccent: Bool {
+        return theme.kind == .colored && accentHex.isEmpty && accentName == SettingDefault.accent
+    }
     private var accentColor: Color { return usesThemeAccent ? Color(theme.accent) : accent }
     private var onAccent: Color { return usesThemeAccent ? Color(theme.onAccent) : .white }
 
     @ViewBuilder private var backdrop: some View {
-        if nativeDark {
-            Rectangle().fill(Color(white: 0.13))
-        } else if onSystemBackground {
-            Rectangle().fill(Color(red: 0.82, green: 0.84, blue: 0.86))
+        if onSystemBackground {
+            Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
         } else if theme.gradientStops.count > 1 {
+            // A stand-in for what shows through the clear keyboard, darker in dark mode.
             LinearGradient(colors: theme.gradientStops.map { Color($0) },
                            startPoint: UnitPoint(x: theme.gradientStart.x, y: theme.gradientStart.y),
                            endPoint: UnitPoint(x: theme.gradientEnd.x, y: theme.gradientEnd.y))
+                .overlay(Color.black.opacity(dark ? 0.55 : 0))
         } else {
-            Rectangle().fill(Color(white: 0.6))
+            Rectangle().fill(pick(Color(white: 0.6), Color(white: 0.2)))
         }
     }
 

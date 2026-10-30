@@ -437,49 +437,152 @@ struct ShortcutsView: View {
 
 // MARK: - Languages
 
-/// The enabled languages only; more are added from a separate list.
+/// The enabled languages only; more are added from a separate list. Drawn as its own grouped card (not a List)
+/// so the swipe-to-delete button sits inside the row and the card keeps its corners while swiping.
 struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
 
     private var languages: [Language] { return enabled.compactMap { Language(rawValue: $0) } }
 
     var body: some View {
-        List {
-            Section {
-                ForEach(languages, id: \.rawValue) { language in
-                    Text(language.displayName)
-                }
-                .onDelete { offsets in
-                    guard enabled.count > 1 else { return }
-                    var list = enabled
-                    list.remove(atOffsets: offsets)
-                    save(list)
-                }
-                .deleteDisabled(enabled.count <= 1)
-            } footer: {
-                Text("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
-            }
-            Section {
-                NavigationLink {
-                    AddLanguageView(enabled: enabled) { language in
-                        save(enabled + [language.rawValue])
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: 0) {
+                    ForEach(Array(languages.enumerated()), id: \.element.rawValue) { index, language in
+                        SwipeToDeleteRow(canDelete: languages.count > 1) {
+                            remove(language)
+                        } content: {
+                            Text(language.displayName)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 48)
+                        }
+                        if index < languages.count - 1 {
+                            Divider().padding(.leading, 16)
+                        }
                     }
-                } label: {
-                    Label("Add a language", systemImage: "plus")
                 }
-                .disabled(enabled.count == Language.allCases.count)
+                .groupedCard()
+
+                Text("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+
+                if enabled.count < Language.allCases.count {
+                    NavigationLink {
+                        AddLanguageView(enabled: enabled) { language in
+                            save(enabled + [language.rawValue])
+                        }
+                    } label: {
+                        HStack {
+                            Label("Add a language", systemImage: "plus")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundColor(Color(.tertiaryLabel))
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
+                    }
+                    .groupedCard()
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Languages")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func remove(_ language: Language) {
+        guard enabled.count > 1 else { return }
+        save(enabled.filter { $0 != language.rawValue })
     }
 
     private func save(_ list: [String]) {
         let ordered = Language.allCases.map { $0.rawValue }.filter { list.contains($0) }
         guard !ordered.isEmpty, ordered != enabled else { return }
         Feedback.tick()
-        enabled = ordered
+        withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
+    }
+}
+
+private extension View {
+    /// The white (dark: grey) rounded card of a grouped list.
+    func groupedCard() -> some View {
+        let radius: CGFloat
+        if #available(iOS 26, *) { radius = 26 } else { radius = 10 }
+        return self
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+}
+
+/// A row that slides left to show a red Delete button inside the row itself; a long swipe deletes at once.
+private struct SwipeToDeleteRow<Content: View>: View {
+    let canDelete: Bool
+    let onDelete: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var offset: CGFloat = 0
+    @State private var settled: CGFloat = 0
+    private let buttonWidth: CGFloat = 84
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Button(action: delete) {
+                Text("Delete")
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(width: max(buttonWidth, -offset))
+                    .frame(maxHeight: .infinity)
+                    .background(Color.red)
+            }
+            .buttonStyle(.plain)
+            .opacity(offset < 0 ? 1 : 0)
+
+            content()
+                .background(Color(.secondarySystemGroupedBackground))
+                .offset(x: offset)
+                .onTapGesture { close() }
+        }
+        .gesture(drag, including: canDelete ? .all : .subviews)
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                offset = min(0, settled + value.translation.width)
+            }
+            .onEnded { value in
+                let end = min(0, settled + value.translation.width)
+                if end < -buttonWidth * 2.5 {
+                    delete()
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        offset = end < -buttonWidth / 2 ? -buttonWidth : 0
+                    }
+                    settled = offset
+                }
+            }
+    }
+
+    private func close() {
+        guard offset != 0 else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { offset = 0 }
+        settled = 0
+    }
+
+    private func delete() {
+        offset = 0
+        settled = 0
+        onDelete()
     }
 }
 
