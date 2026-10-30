@@ -99,8 +99,14 @@ final class EmojiSearchBar: UIView {
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
-        iconView.frame = CGRect(x: 44, y: (area.height - 16) / 2, width: 16, height: 16)
-        queryLabel.frame = CGRect(x: 66, y: 0, width: queryWidth - 24, height: area.height)
+        // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).
+        let isWide = traitCollection.userInterfaceIdiom == .pad && bounds.width > 500
+        let f = EmojiPanel.scale(forWidth: bounds.width)
+        let iconSide = isWide ? 16 : 17 * f
+        queryLabel.font = UIFont.systemFont(ofSize: isWide ? 16 : 20 * f)
+        iconView.frame = CGRect(x: 44, y: (area.height - iconSide) / 2, width: iconSide, height: iconSide)
+        let queryX = 44 + iconSide + 6
+        queryLabel.frame = CGRect(x: queryX, y: 0, width: queryWidth - (queryX - 44) - 2, height: area.height)
 
         let dividerX = 44 + queryWidth
         divider.frame = CGRect(x: dividerX, y: area.height * 0.25, width: 1, height: area.height * 0.5)

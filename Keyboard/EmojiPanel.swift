@@ -551,9 +551,12 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         let ix = wide ? f : xf      // the icon and placeholder keep their spacing on iPad
-        searchIcon.frame = CGRect(x: 13 * ix, y: (searchHeight - 17 * f) / 2, width: 17 * f, height: 17 * f)
-        searchLabel.font = UIFont.systemFont(ofSize: 20 * f)
-        searchLabel.frame = CGRect(x: 37 * ix, y: 0, width: max(0, searchGlass.bounds.width - 50 * ix), height: searchHeight)
+        // iPad: the same icon and text size as the active search field (EmojiSearchBar).
+        let iconSide = wide ? 16 : 17 * f
+        searchIcon.frame = CGRect(x: 13 * ix, y: (searchHeight - iconSide) / 2, width: iconSide, height: iconSide)
+        searchLabel.font = UIFont.systemFont(ofSize: wide ? 16 : 20 * f)
+        let labelX = wide ? 13 * ix + iconSide + 6 : 37 * ix
+        searchLabel.frame = CGRect(x: labelX, y: 0, width: max(0, searchGlass.bounds.width - labelX - 13 * ix), height: searchHeight)
 
         let gridTop: CGFloat
         let gridHeight: CGFloat
