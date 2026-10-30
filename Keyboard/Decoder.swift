@@ -19,6 +19,7 @@ enum Decoder {
     static let unknownWord = -10.0      // log10 probability of a word no dictionary has (a name, slang)
     static let correctMargin = 1.0      // log10 margin a correction needs over the text as typed
     static let restoredLogProb = -8.5   // log10 probability of an unknown word with its accents restored
+    static let taughtBonus = 2.0        // log10 boost for the word the user taught for a typo of theirs
     private static let candidateLimit = 30
     private static let maxCost = 2.0
     private static let weightFloor = 0.02
@@ -380,6 +381,12 @@ enum Decoder {
         }
         // Contacts' names.
         for (lower, name) in names where name.key.hasPrefix(keyString) { words.insert(lower) }
+        // The user's own typos: what they usually mean by exactly this.
+        var taught = Set<String>()
+        for store in stores.values where store.isLoaded {
+            if let meant = store.correction(for: lower) { taught.insert(meant) }
+        }
+        words.formUnion(taught)
         // Words already in the field complete too, even when no dictionary has them.
         if let field = field {
             for word in field.counts.keys where TextFolding.key(word).hasPrefix(keyString) { words.insert(word) }
@@ -390,6 +397,13 @@ enum Decoder {
         for word in words {
             let wordKey = Array(TextFolding.key(word))
             guard !wordKey.isEmpty else { continue }
+            if taught.contains(word) {
+                // Taught by the user: no typing cost, and well ahead of what the language alone would say.
+                result.append(Row(word: word,
+                                  logProb: logProb(word, context: context, stores: stores, field: field) + taughtBonus,
+                                  prefixCost: 0, wholeCost: 0, firstWrong: false))
+                continue
+            }
             let cost = typingCost(key, wordKey, costs: costs)
             guard cost.prefix <= maxCost else { continue }
             result.append(Row(word: word,

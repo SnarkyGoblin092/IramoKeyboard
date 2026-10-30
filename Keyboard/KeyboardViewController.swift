@@ -104,6 +104,23 @@ final class KeyboardViewController: UIInputViewController {
         Haptics.shared.prepare()
     }
 
+    /// The last finished word and the text before it, to notice a word deleted and written again differently.
+    private var lastCommitted: (head: String, word: String)?
+
+    /// True when `meant` is close enough to `typed` to be the same word typed right (a slip or two).
+    private func isLikelyRetype(_ typed: String, _ meant: String) -> Bool {
+        let typedKey = Array(TextFolding.key(typed))
+        let meantKey = Array(TextFolding.key(meant))
+        guard typedKey.count >= 2, meantKey.count >= 2, typedKey != meantKey || typed != meant else { return false }
+        let near = stores[language]?.neighbors ?? [:]
+        let costs = typedKey.map { letter -> [Character: Double] in
+            var table: [Character: Double] = [letter: 0]
+            for other in near[letter] ?? [] { table[other] = 0.5 }
+            return table
+        }
+        return Decoder.typingCost(typedKey, meantKey, costs: costs).whole <= 1.5
+    }
+
     /// Where each letter of the word being typed was tapped, for the typing decoder (nil = not tapped: pasted,
     /// picked from a popup...). Kept in step with the word by length; see `currentTaps(for:)`.
     private var wordTaps: [CGPoint?] = []
@@ -698,6 +715,7 @@ final class KeyboardViewController: UIInputViewController {
             for _ in 0..<fix.inserted.count { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(fix.typed)
             stores[language]?.learn(fix.typed, asTyped: true)
+            lastCommitted = nil   // the typed word was kept on purpose: no typo to learn here
             clearSwipeState()
         } else if let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
             // Right after a swipe, backspace removes the whole swiped word (and takes back its use).
@@ -774,6 +792,12 @@ final class KeyboardViewController: UIInputViewController {
             let typing = currentPrefix(in: head)
             if !typing.isEmpty { head = String(head.dropLast(typing.count)) }
             Decoder.noteLanguage(of: cleaned, before: head, active: language, stores: stores)
+            // A different word written where the last one was (the user deleted it): a typo of theirs to learn.
+            if let previous = lastCommitted, previous.head == head, previous.word != cleaned,
+               isLikelyRetype(previous.word, cleaned) {
+                stores[language]?.learnCorrection(from: previous.word, to: cleaned)
+            }
+            lastCommitted = (head, cleaned)
         }
         if stores[language]?.noteUse(cleaned, delta: delta) == true { return }
         for store in stores.values where store.language != language && store.isLoaded {
@@ -1014,6 +1038,7 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         recordBigram(contextBefore: before, next: first)
         noteWordUse(first)
+        lastCommitted = nil   // swiped words are not typed: a replacement in their place is no typo
 
         var leadingSpace = ""
         if let last = before.last, !last.isWhitespace, !"([{\"\u{201C}\u{2018}'".contains(last) {
@@ -1040,6 +1065,7 @@ final class KeyboardViewController: UIInputViewController {
         for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
         noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
         noteWordUse(replacement)
+        lastCommitted = nil
         let newText = replacement + " "
         textDocumentProxy.insertText(newText)
         lastSwipeInserted = newText

@@ -78,6 +78,8 @@ final class WordStore {
     /// The word limit the dictionary was loaded with (nil = none), for the languages that are not the active layout.
     private(set) var loadedLimit: Int?
     private var learned: [String: Int]
+    /// "typed\tmeant" -> how often the user replaced the typed word by the meant one (their own typos).
+    private var corrections: [String: Int]
     /// Dictionary words the user wrote -> how often, so their own vocabulary outranks the corpus's.
     private var used: [String: Int]
     private var learnedKeys: [String: String] = [:]   // learned word -> match key
@@ -102,6 +104,7 @@ final class WordStore {
         self.language = language
         self.keyLetters = language.keyLetterSet
         self.learned = Settings.shared.learnedWords(for: language.rawValue)
+        self.corrections = Settings.shared.corrections(for: language.rawValue)
         self.used = Settings.shared.usedWords(for: language.rawValue)
         self.bigrams = Settings.shared.learnedBigrams(for: language.rawValue)
         self.trigrams = Settings.shared.learnedTrigrams(for: language.rawValue)
@@ -834,6 +837,7 @@ final class WordStore {
 
     func forgetLearnedWords() {
         learned = [:]
+        corrections = [:]
         used = [:]
         bigrams = [:]
         trigrams = [:]
@@ -854,6 +858,7 @@ final class WordStore {
         guard saveScheduled else { return }
         saveScheduled = false
         Settings.shared.setLearnedWords(learned, for: language.rawValue)
+        Settings.shared.setCorrections(corrections, for: language.rawValue)
         Settings.shared.setUsedWords(used, for: language.rawValue)
         Settings.shared.setLearnedBigrams(bigrams, for: language.rawValue)
         Settings.shared.setLearnedTrigrams(trigrams, for: language.rawValue)
@@ -953,5 +958,30 @@ extension WordStore {
         case .title: return Predictor.capitalized(entry.word, language: language)
         case .all: return language.uppercase(entry.word)
         }
+    }
+}
+
+// MARK: - The user's own typos
+
+extension WordStore {
+    /// The user deleted `typed` and wrote `meant` in its place: after `learnAfter` times, typing `typed` offers
+    /// (and corrects to) `meant`.
+    func learnCorrection(from typed: String, to meant: String) {
+        let key = typed + "\t" + meant
+        corrections[key, default: 0] += 1
+        if corrections.count > 400 {
+            for (weak, _) in corrections.sorted(by: { $0.value < $1.value }).prefix(100) { corrections.removeValue(forKey: weak) }
+        }
+        scheduleSave()
+    }
+
+    /// The word the user usually means when they type `typed`, if they taught one.
+    func correction(for typed: String) -> String? {
+        let prefix = typed + "\t"
+        var best: (word: String, count: Int)? = nil
+        for (key, count) in corrections where count >= WordStore.learnAfter && key.hasPrefix(prefix) {
+            if count > (best?.count ?? 0) { best = (String(key.dropFirst(prefix.count)), count) }
+        }
+        return best?.word
     }
 }

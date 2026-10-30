@@ -29,6 +29,7 @@ File layout (little-endian), lm_<lang>.bin:
 import collections
 import gzip
 import math
+import os
 import re
 import struct
 
@@ -41,9 +42,9 @@ TOKENS = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*|[.!?…]+|,|\S")
 SENTENCE_END = re.compile(r"^[.!?…]+$")
 
 # How much text and how big the model may get (the app ships every language).
-SUBTITLE_BYTES = 60_000_000      # compressed bytes read from the start of the subtitles file (~25M words)
-MAX_BIGRAMS = 700_000
-MAX_TRIGRAMS = 350_000
+SUBTITLE_BYTES = int(os.environ.get("HUNKEYS_SUBTITLE_BYTES", 60_000_000))   # compressed bytes read from the start of the subtitles file (~25M words)
+MAX_BIGRAMS = int(os.environ.get("HUNKEYS_MAX_BIGRAMS", 700_000))
+MAX_TRIGRAMS = int(os.environ.get("HUNKEYS_MAX_TRIGRAMS", 350_000))
 MIN_COUNT = 2
 DISCOUNT2 = 0.75
 DISCOUNT3 = 0.80

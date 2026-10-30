@@ -36,6 +36,8 @@ enum SettingKey {
     /// The learned key-offset model (data written by the keyboard; not a preference).
     static let touchModel = "hunkeys.touchModel"
     static let learnedPrefix = "hunkeys.learned."
+    /// "typed\tmeant" -> how often the user deleted the typed word and wrote the meant one in its place.
+    static let correctionsPrefix = "hunkeys.corrections."
     static let bigramPrefix = "hunkeys.bigrams."
     static let trigramPrefix = "hunkeys.trigrams."
     static let usagePrefix = "hunkeys.learnedDays."
@@ -391,6 +393,14 @@ final class Settings {
         put(words, SettingKey.learnedPrefix + languageCode)
     }
 
+    func corrections(for languageCode: String) -> [String: Int] {
+        return value(SettingKey.correctionsPrefix + languageCode) as? [String: Int] ?? [:]
+    }
+
+    func setCorrections(_ corrections: [String: Int], for languageCode: String) {
+        put(corrections, SettingKey.correctionsPrefix + languageCode)
+    }
+
     /// Word pairs ("thank you") the user typed, as "first second" -> count, used for next-word suggestions.
     func learnedBigrams(for languageCode: String) -> [String: Int] {
         return value(SettingKey.bigramPrefix + languageCode) as? [String: Int] ?? [:]
@@ -442,6 +452,7 @@ final class Settings {
             put(nil, SettingKey.trigramPrefix + language.rawValue)
             put(nil, SettingKey.usagePrefix + language.rawValue)
             put(nil, SettingKey.learnedPrefix + language.rawValue)
+            put(nil, SettingKey.correctionsPrefix + language.rawValue)
             put(nil, SettingKey.bigramPrefix + language.rawValue)
         }
     }
