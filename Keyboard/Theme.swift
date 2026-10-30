@@ -66,7 +66,7 @@ enum Theme {
     static var isLiquidGlass: Bool { return kind == .liquidGlass }
 
     /// Real Liquid Glass (iOS 26 SDK + iOS 26 phone + the Liquid Glass theme).
-    static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable }
+    static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable && !solidKeys }
 
     /// Keys are blurred / see-through rather than solid.
     static var wantsClearBackdrop: Bool { return kind != .native && kind != .colored }
@@ -103,12 +103,18 @@ enum Theme {
     static var onAccent: UIColor { return palette.onAccent }
     static var text: UIColor { return palette.text }
     static var secondaryText: UIColor { return palette.secondaryText }
-    static var keyText: UIColor { return palette.keyText }
-    static var keySecondaryText: UIColor { return palette.keySecondaryText }
-    static var letterKey: UIColor { return palette.letterKey }
-    static var functionKey: UIColor { return palette.functionKey }
-    static var letterKeyPressed: UIColor { return palette.letterKeyPressed }
-    static var functionKeyPressed: UIColor { return palette.functionKeyPressed }
+    static var keyText: UIColor { return keyPalette.keyText }
+    static var keySecondaryText: UIColor { return keyPalette.keySecondaryText }
+    static var letterKey: UIColor { return keyPalette.letterKey }
+    static var functionKey: UIColor { return keyPalette.functionKey }
+    static var letterKeyPressed: UIColor { return keyPalette.letterKeyPressed }
+    static var functionKeyPressed: UIColor { return keyPalette.functionKeyPressed }
+
+    /// Set while the keys are dark on the app's light keyboard backdrop (or light on a dark one): they then get
+    /// the native keyboard's solid fills instead of the theme's see-through ones, so they stay readable.
+    static var solidKeys = false
+    private static let solidPalette = makePalette(for: ThemeCatalog.native)
+    private static var keyPalette: Palette { return solidKeys ? solidPalette : palette }
     static var activeKey: UIColor { return palette.activeKey }
     static var keyShadow: UIColor { return palette.keyShadow }
     static var keyBorder: UIColor { return palette.keyBorder }

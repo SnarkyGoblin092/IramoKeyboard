@@ -174,7 +174,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        applyInterfaceStyle()
+        if updateKeyStyle() { buildInterface() }
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
@@ -203,6 +203,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        if updateKeyStyle() { buildInterface() }
         // Touches near the screen edges and the bottom are normally held back for a moment by the system's
         // own gestures, which makes edge keys feel dead. Ask the window's recognisers not to delay touches.
         view.window?.gestureRecognizers?.forEach {
@@ -259,25 +260,33 @@ final class KeyboardViewController: UIInputViewController {
         ].joined(separator: "|")
     }
 
-    /// Light or dark: the theme's when it forces one; dark whenever the phone is in dark mode, even in an app that
-    /// keeps itself light; otherwise the app's. (The screen's style is only trusted to say dark: it has reported
-    /// light in dark mode, which then just leaves the app's style.)
-    private func applyInterfaceStyle() {
-        var style = Theme.interfaceStyle
-        if style == .unspecified && UIScreen.main.traitCollection.userInterfaceStyle == .dark { style = .dark }
-        if view.overrideUserInterfaceStyle != style { view.overrideUserInterfaceStyle = style }
+    /// Light or dark. A theme that forces one sets the whole keyboard. Otherwise the keys follow the phone's
+    /// setting, even in an app that keeps itself the other way, while the rest (suggestions, emoji picker) keeps
+    /// the app's style, which the system-drawn keyboard backdrop follows. Keys whose style differs from that
+    /// backdrop get solid fills (Theme.solidKeys) so they and their letters stay readable.
+    /// Returns true when solidKeys changed (the keys must then be rebuilt).
+    private func updateKeyStyle() -> Bool {
+        view.overrideUserInterfaceStyle = Theme.interfaceStyle
+        let phone = UIScreen.main.traitCollection.userInterfaceStyle
+        let keys: UIUserInterfaceStyle = Theme.interfaceStyle == .unspecified ? phone : .unspecified
+        keyboardView.overrideUserInterfaceStyle = keys
+        let app = view.traitCollection.userInterfaceStyle
+        let solid = keys != .unspecified && app != .unspecified && keys != app
+        guard solid != Theme.solidKeys else { return false }
+        Theme.solidKeys = solid
+        return true
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        applyInterfaceStyle()
+        if updateKeyStyle() { buildInterface() }
     }
 
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
     private func buildInterface() {
         Prefs.refresh()
         Theme.reload()
-        applyInterfaceStyle()
+        _ = updateKeyStyle()
         validateLanguage()
         hideEmojiPanel(refresh: false)
         isSearchingEmoji = false
@@ -318,6 +327,8 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar = SuggestionBar()
         searchBar = EmojiSearchBar()
         keyboardView = KeyboardView()
+        keyboardView.overrideUserInterfaceStyle = Theme.interfaceStyle == .unspecified
+            ? UIScreen.main.traitCollection.userInterfaceStyle : .unspecified
 
         suggestionBar.delegate = self
         searchBar.delegate = self
