@@ -103,7 +103,7 @@ final class KeyboardView: UIView {
     }
 
     func configure(rows newRows: [[KeySpec]], page newPage: KeyboardPage, shift newShift: ShiftState) {
-        cancelAllTouches()
+        endGesturesForRebuild()
         for row in keyViews {
             for key in row { key.removeFromSuperview() }
         }
@@ -302,10 +302,12 @@ final class KeyboardView: UIView {
     // MARK: Touches
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // A touch whose end was never delivered must not linger (it would block swipes and keep keys pressed).
+        // A touch that already ended must not linger (it would block swipes and keep keys pressed). In fast typing
+        // the next finger's touch-down is often delivered before the last finger's lift, so an ended touch is a
+        // normal tap here, never a cancelled one (cancelled taps that moved a bit were dropped).
         for (touch, state) in states where touch.phase == .ended || touch.phase == .cancelled {
             states.removeValue(forKey: touch)
-            finish(state, cancelled: true)
+            finish(state, cancelled: touch.phase == .cancelled)
         }
         for touch in touches {
             let point = touch.location(in: self)
@@ -350,7 +352,8 @@ final class KeyboardView: UIView {
                 if state.languageSwiped { continue }
                 let dx = point.x - state.startPoint.x
                 let dy = point.y - state.startPoint.y
-                if abs(dx) > 28 && abs(dx) > abs(dy) {
+                // A clear sideways swipe only: a fast thumb drifting on its way to the next key is still a space.
+                if abs(dx) > 44 && abs(dx) > 2 * abs(dy) {
                     state.languageSwiped = true
                     state.handledByHold = true
                     state.holdTimer?.invalidate()
@@ -576,12 +579,17 @@ final class KeyboardView: UIView {
         }
     }
 
-    private func cancelAllTouches() {
-        for state in states.values {
+    /// The keys are rebuilt (page or language change) while other fingers are down: their plain taps still type
+    /// the key they went down on when they lift; swipes, accent pop-ups and cursor moves end.
+    private func endGesturesForRebuild() {
+        let ending = states.filter { $0.value.isSwiping || $0.value.popupActive || $0.value.isCursorMode || $0.value.isWordDeleting }
+        for touch in ending.keys { states.removeValue(forKey: touch) }
+        for state in ending.values.map({ $0 }) + Array(states.values) {
             state.holdTimer?.invalidate()
+            state.holdTimer = nil
             state.repeatTimer?.invalidate()
+            state.repeatTimer = nil
         }
-        states.removeAll()
         hidePreview()
         hideAlternates()
         setCursorAppearance(false)
