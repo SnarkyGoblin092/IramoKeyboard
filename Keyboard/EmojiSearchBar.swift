@@ -108,7 +108,8 @@ final class EmojiSearchBar: UIView {
         let queryX = 44 + iconSide + 6
         queryLabel.frame = CGRect(x: queryX, y: 0, width: queryWidth - (queryX - 44) - 2, height: area.height)
 
-        let dividerX = 44 + queryWidth
+        // The divider sits as far from the text as from the first result emoji (about 10pt each side).
+        let dividerX = 44 + queryWidth + 8
         divider.frame = CGRect(x: dividerX, y: area.height * 0.25, width: 1, height: area.height * 0.5)
 
         scroll.frame = CGRect(x: dividerX + 4, y: 0, width: max(0, area.width - dividerX - 10), height: area.height)
