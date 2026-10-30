@@ -245,28 +245,32 @@ enum Theme {
     }
 
     /// The theme's key fills for a backdrop of the other style: the same look, but standing out from it. Dark
-    /// keys (on a light backdrop) are a lighter grey than in dark mode; the see-through themes stay see-through
+    /// keys (on a light backdrop) are a light grey with black letters; the see-through themes stay see-through
     /// with a stronger tint. (`pick`: light keys on a dark backdrop, dark keys on a light one.)
     private static func makeContrastPalette(from base: Palette, kind: ThemeDefinition.Kind) -> Palette {
         var p = base
+        if kind != .colored {
+            p.keyText = UIColor.black
+            p.keySecondaryText = black(0.55)
+        }
         switch kind {
         case .native:
             let nativeFunction = UIColor(red: 0.675, green: 0.702, blue: 0.745, alpha: 1)
-            p.letterKey = pick(UIColor.white, grey(0.53))
-            p.functionKey = pick(nativeFunction, grey(0.40))
-            p.letterKeyPressed = pick(nativeFunction, grey(0.40))
-            p.functionKeyPressed = pick(UIColor.white, grey(0.53))
+            p.letterKey = pick(UIColor.white, grey(0.78))
+            p.functionKey = pick(nativeFunction, grey(0.64))
+            p.letterKeyPressed = pick(nativeFunction, grey(0.64))
+            p.functionKeyPressed = pick(UIColor.white, grey(0.78))
         case .transparent:
-            p.letterKey = pick(white(0.55), black(0.38))
-            p.functionKey = pick(white(0.38), black(0.52))
-            p.letterKeyPressed = pick(white(0.75), black(0.52))
-            p.functionKeyPressed = pick(white(0.62), black(0.38))
+            p.letterKey = pick(white(0.55), black(0.14))
+            p.functionKey = pick(white(0.38), black(0.28))
+            p.letterKeyPressed = pick(white(0.75), black(0.28))
+            p.functionKeyPressed = pick(white(0.62), black(0.14))
         case .liquidGlass:
             // Tints on the glass (letter keys too, which are otherwise left clear).
-            p.letterKey = pick(white(0.45), black(0.32))
-            p.functionKey = pick(white(0.30), black(0.45))
-            p.letterKeyPressed = pick(white(0.65), black(0.45))
-            p.functionKeyPressed = pick(white(0.55), black(0.32))
+            p.letterKey = pick(white(0.45), black(0.12))
+            p.functionKey = pick(white(0.30), black(0.25))
+            p.letterKeyPressed = pick(white(0.65), black(0.25))
+            p.functionKeyPressed = pick(white(0.55), black(0.12))
         case .colored:
             break   // coloured themes set light/dark themselves, so they never differ from the backdrop
         }
