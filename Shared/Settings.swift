@@ -31,7 +31,6 @@ enum SettingKey {
     static let enabledLanguages = "hunkeys.enabledLanguages"
     static let recentEmoji = "hunkeys.recentEmoji"
     static let shortcuts = "hunkeys.shortcuts"
-    static let touchLearning = "hunkeys.touchLearning"
     static let keyBorders = "hunkeys.keyBorders"
     /// The learned key-offset model (data written by the keyboard; not a preference).
     static let touchModel = "hunkeys.touchModel"
@@ -55,7 +54,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, accentHex, keyboardHeight, keyRoundness, oneHanded, enabledLanguages, touchLearning, keyBorders
+        theme, accent, accentHex, keyboardHeight, keyRoundness, oneHanded, enabledLanguages, keyBorders
     ]
 }
 
@@ -77,7 +76,6 @@ enum SettingDefault {
     static let theme = "native"
     static let accent = "blue"
     static let accentHex = ""
-    static let touchLearning = true
     static let keyBorders = true
     static let keyboardHeight = 1.0
     static let keyRoundness = 0.26
@@ -219,7 +217,6 @@ final class Settings {
             SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,
             SettingKey.accentHex: SettingDefault.accentHex,
-            SettingKey.touchLearning: SettingDefault.touchLearning,
             SettingKey.keyBorders: SettingDefault.keyBorders,
             SettingKey.keyboardHeight: SettingDefault.keyboardHeight,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
@@ -299,20 +296,17 @@ final class Settings {
         set { put(newValue, SettingKey.deleteSwipe) }
     }
 
-    /// Adaptive key areas: the keyboard learns where you tend to tap and shifts hit areas accordingly.
     var keyBorders: Bool {
         get { return readBool(SettingKey.keyBorders) }
         set { put(newValue, SettingKey.keyBorders) }
     }
 
-    var touchLearning: Bool {
-        get { return readBool(SettingKey.touchLearning) }
-        set { put(newValue, SettingKey.touchLearning) }
-    }
-
-    /// Forgets everything the keyboard learned about where you tap.
-    func resetTouchModel() {
+    /// Removes what the old adaptive key areas stored (the feature is gone).
+    func removeTouchModel() {
+        guard SharedStore.defaults.object(forKey: SettingKey.touchModel) != nil
+                || SharedStore.defaults.object(forKey: "hunkeys.touchLearning") != nil else { return }
         put(nil, SettingKey.touchModel)
+        put(nil, "hunkeys.touchLearning")
     }
 
     // MARK: Layout and look

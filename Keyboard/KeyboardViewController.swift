@@ -183,7 +183,6 @@ final class KeyboardViewController: UIInputViewController {
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
-        TouchModel.shared.reload()
         if settingsSignature() != builtSignature {
             buildInterface()
         }
@@ -216,7 +215,6 @@ final class KeyboardViewController: UIInputViewController {
         var usage: [String: Double] = [:]
         for (language, value) in Decoder.languageUsage { usage[language.rawValue] = value }
         settings.setLanguageUsage(usage)
-        keyboardView.saveTouchModel()
     }
 
     override func didReceiveMemoryWarning() {

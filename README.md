@@ -20,4 +20,4 @@ Prediction quality is measured with `python3 scripts/predict_eval/run.py` (held-
 typing and swiping); see the script for options.
 
 - Adjustable key roundness (Appearance), larger touch targets, and a Liquid Glass theme alongside the gradient themes.
-- 12 accent presets plus a colour picker, key-colour themes (they only recolour the keys, never the background), and optional adaptive key areas that learn where you tap (reset in Data).
+- 12 accent presets plus a colour picker, key-colour themes (they only recolour the keys, never the background).

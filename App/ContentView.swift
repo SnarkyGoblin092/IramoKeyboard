@@ -8,9 +8,10 @@ struct ContentView: View {
             List {
                 HeaderSection()
                 TestFieldSection()
-                FeelSection()
                 TypingSection()
                 LanguagesSection()
+                GesturesSection()
+                FeedbackSection()
                 AppearanceSection()
                 ShortcutsSection()
                 DataSection()
@@ -21,7 +22,10 @@ struct ContentView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .modifier(AccentTint())
-        .onAppear { Feedback.prepare() }
+        .onAppear {
+            Feedback.prepare()
+            Settings.shared.removeTouchModel()
+        }
     }
 }
 
@@ -112,44 +116,62 @@ private struct TestFieldSection: View {
     }
 }
 
-private struct FeelSection: View {
+private struct TypingSection: View {
     var body: some View {
         Section {
-            SettingSlider("Hold delay",
-                          key: SettingKey.holdDelay,
-                          defaultValue: SettingDefault.holdDelay,
-                          range: Settings.holdDelayRange,
-                          step: 0.05) { String(format: "%.2f s", $0) }
-            SettingSlider("Vibration strength",
-                          key: SettingKey.vibration,
-                          defaultValue: SettingDefault.vibration,
-                          range: 0...1,
-                          step: 0.05,
-                          showsTest: true) { $0 < 0.01 ? "Off" : "\(Int(($0 * 100).rounded()))%" }
-            SettingToggle("Key click sound", key: SettingKey.clickSound, defaultValue: SettingDefault.clickSound)
-            SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups)
+            SettingToggle("Word suggestions", key: SettingKey.suggestions, defaultValue: SettingDefault.suggestions,
+                          subtitle: "Predictions above the keys as you type")
+            SettingToggle("Auto-correction", key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
+                          subtitle: "Fixes typos, missing accents and missing spaces when you press space")
+            SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions,
+                          subtitle: "Offers an emoji that matches the word you typed")
+            SettingToggle("Swipe typing", key: SettingKey.swipe, defaultValue: SettingDefault.swipe,
+                          subtitle: "Slide across the letters to type a word")
+            SettingToggle("Auto-capitalization", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
+                          subtitle: "Starts each sentence with a capital letter")
+            SettingToggle("\u{201C}.\u{201D} shortcut", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
+                          subtitle: "Tap the space bar twice to end a sentence")
         } header: {
-            SectionHeader("Feel", symbol: "hand.tap.fill", color: .pink)
+            SectionHeader("Typing", symbol: "keyboard", color: .blue)
         }
     }
 }
 
-private struct TypingSection: View {
+private struct GesturesSection: View {
     var body: some View {
         Section {
-            SettingToggle("Swipe typing", key: SettingKey.swipe, defaultValue: SettingDefault.swipe)
-            SettingToggle("Word suggestions", key: SettingKey.suggestions, defaultValue: SettingDefault.suggestions)
-            SettingToggle("Auto-correction", key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect)
-            SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions)
-            SettingToggle("Auto-capitalize", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize)
-            SettingToggle("Double space for period", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod)
-            SettingToggle("Space-bar cursor control", key: SettingKey.cursorControl, defaultValue: SettingDefault.cursorControl)
-            SettingToggle("Slide on delete to remove words", key: SettingKey.deleteSwipe, defaultValue: SettingDefault.deleteSwipe)
-            SettingToggle("Adaptive key areas", key: SettingKey.touchLearning, defaultValue: SettingDefault.touchLearning)
+            SettingToggle("Move the cursor", key: SettingKey.cursorControl, defaultValue: SettingDefault.cursorControl,
+                          subtitle: "Hold the space bar and slide")
+            SettingToggle("Delete whole words", key: SettingKey.deleteSwipe, defaultValue: SettingDefault.deleteSwipe,
+                          subtitle: "Slide left from the delete key")
+            SettingSlider("Hold delay",
+                          key: SettingKey.holdDelay,
+                          defaultValue: SettingDefault.holdDelay,
+                          range: Settings.holdDelayRange,
+                          step: 0.05,
+                          subtitle: "How long to hold a key before its accents appear") { String(format: "%.2f s", $0) }
         } header: {
-            SectionHeader("Typing", symbol: "keyboard", color: .blue)
-        } footer: {
-            Text("Hold the space bar and slide to move the cursor. Slide left from the delete key to delete word by word. Adaptive key areas slowly shift each key's tap area towards where you actually touch; it stays on this iPhone.")
+            SectionHeader("Gestures", symbol: "hand.draw.fill", color: .teal)
+        }
+    }
+}
+
+private struct FeedbackSection: View {
+    var body: some View {
+        Section {
+            SettingSlider("Vibration",
+                          key: SettingKey.vibration,
+                          defaultValue: SettingDefault.vibration,
+                          range: 0...1,
+                          step: 0.05,
+                          showsTest: true,
+                          subtitle: "Needs Full Access") { $0 < 0.01 ? "Off" : "\(Int(($0 * 100).rounded()))%" }
+            SettingToggle("Key clicks", key: SettingKey.clickSound, defaultValue: SettingDefault.clickSound,
+                          subtitle: "Muted by the silent switch")
+            SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
+                          subtitle: "Shows the letter above your finger")
+        } header: {
+            SectionHeader("Sound & haptics", symbol: "speaker.wave.2.fill", color: .pink)
         }
     }
 }
@@ -163,12 +185,14 @@ private struct LanguagesSection: View {
                 LanguagesView()
                     .onDisappear { summary = LanguagesSection.currentSummary() }
             } label: {
-                InfoRow("Enabled languages", summary)
+                VStack(alignment: .leading, spacing: 2) {
+                    InfoRow("Languages", summary)
+                    Text("Swipe the space bar left or right to switch")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
             }
         } header: {
             SectionHeader("Languages", symbol: "globe", color: .green)
-        } footer: {
-            Text("Swipe left or right on the space bar to switch between the enabled languages.")
         }
     }
 
@@ -206,6 +230,8 @@ private struct AppearanceSection: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Accent colour")
+                Text("The return key and highlights. Gradient themes use their own.")
+                    .font(.footnote).foregroundColor(.secondary)
                 AccentPicker()
             }
             .padding(.vertical, 2)
@@ -218,13 +244,13 @@ private struct AppearanceSection: View {
                           step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
             RoundnessSlider()
             SettingToggle("Key borders", key: SettingKey.keyBorders, defaultValue: SettingDefault.keyBorders,
-                          subtitle: "Thin outline around keys on the translucent themes")
-            SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow)
-            SettingToggle("Long-press hints on keys", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints)
+                          subtitle: "A thin outline around keys on translucent themes")
+            SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
+                          subtitle: "Numbers above the letters")
+            SettingToggle("Accent hints", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints,
+                          subtitle: "Shows a key's first accent in its corner")
         } header: {
             SectionHeader("Appearance", symbol: "paintpalette.fill", color: .purple)
-        } footer: {
-            Text("The accent colour is used for the return key and highlights. Gradient themes bring their own accent.")
         }
     }
 }
@@ -235,25 +261,26 @@ private struct ShortcutsSection: View {
             NavigationLink {
                 ShortcutsView()
             } label: {
-                Label("Text shortcuts", systemImage: "text.badge.plus")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Text shortcuts")
+                    Text("Type a trigger and press space to expand it")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
             }
         } header: {
             SectionHeader("Shortcuts", symbol: "bolt.fill", color: .orange)
-        } footer: {
-            Text("Type a short trigger, press space, and it expands to the full phrase.")
         }
     }
 }
 
 private struct DataSection: View {
     private enum Action: String {
-        case recents, learned, touch, reset
+        case recents, learned, reset
 
         var title: String {
             switch self {
             case .recents: return "Clear recent emoji?"
             case .learned: return "Forget learned words?"
-            case .touch: return "Reset touch learning?"
             case .reset: return "Reset all settings?"
             }
         }
@@ -262,7 +289,6 @@ private struct DataSection: View {
             switch self {
             case .recents: return "The Recently Used emoji tab will be empty."
             case .learned: return "Words the keyboard picked up while you type will be removed."
-            case .touch: return "The keyboard forgets how you tap and goes back to the standard key areas."
             case .reset: return "Your shortcuts, recent emoji and learned words are kept."
             }
         }
@@ -271,7 +297,6 @@ private struct DataSection: View {
             switch self {
             case .recents: return "Clear"
             case .learned: return "Forget"
-            case .touch: return "Reset"
             case .reset: return "Reset"
             }
         }
@@ -284,15 +309,14 @@ private struct DataSection: View {
         Section {
             Button { pending = .recents } label: { Label("Clear recent emoji", systemImage: "clock.arrow.circlepath") }
             Button { pending = .learned } label: { Label("Forget learned words", systemImage: "text.book.closed") }
-            Button { pending = .touch } label: { Label("Reset touch learning", systemImage: "hand.point.up.left") }
             Button(role: .destructive) { pending = .reset } label: { Label("Reset all settings", systemImage: "arrow.counterclockwise") }
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
             }
         } header: {
-            SectionHeader("Data", symbol: "internaldrive.fill", color: .gray)
+            SectionHeader("Privacy & data", symbol: "hand.raised.fill", color: .gray)
         } footer: {
-            Text("Everything stays on this iPhone.")
+            Text("Everything the keyboard learns stays on this device.")
         }
         .confirmationDialog(pending?.title ?? "",
                             isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
@@ -313,9 +337,6 @@ private struct DataSection: View {
         case .learned:
             Settings.shared.clearLearnedWords()
             note = "Learned words forgotten."
-        case .touch:
-            Settings.shared.resetTouchModel()
-            note = "Touch learning reset."
         case .reset:
             Settings.shared.resetPreferences()
             NotificationCenter.default.post(name: .hunKeysSettingsReset, object: nil)

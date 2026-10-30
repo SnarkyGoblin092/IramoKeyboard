@@ -102,6 +102,7 @@ struct SettingSlider: View {
     private let step: Double
     private let format: (Double) -> String
     private let showsTest: Bool
+    private let subtitle: String?
     private let key: String
     private let defaultValue: Double
 
@@ -114,8 +115,10 @@ struct SettingSlider: View {
          range: ClosedRange<Double>,
          step: Double,
          showsTest: Bool = false,
+         subtitle: String? = nil,
          format: @escaping (Double) -> String) {
         self.title = title
+        self.subtitle = subtitle
         self.key = key
         self.defaultValue = defaultValue
         self.range = range
@@ -140,6 +143,9 @@ struct SettingSlider: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }
+            }
+            if let subtitle = subtitle {
+                Text(subtitle).font(.footnote).foregroundColor(.secondary)
             }
             Slider(value: $local, in: range, step: step) { editing in
                 if !editing { stored = local }

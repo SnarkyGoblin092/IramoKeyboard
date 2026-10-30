@@ -93,14 +93,12 @@ extension Language {
         return text.uppercased()
     }
 
-    /// Extra options on the comma key's long-press (besides the common punctuation).
-    var commaExtras: [String] {
+    /// The language's own quotation marks (on the full stop's long-press: they open and close quoted sentences).
+    var quoteMarks: [String] {
         switch self {
-        case .spanish: return ["¿", "¡"]
         case .hungarian, .polish, .romanian, .czech: return ["\u{201E}", "\u{201D}", "\u{00BB}", "\u{00AB}"]
         case .german: return ["\u{201E}", "\u{201C}", "\u{00BB}", "\u{00AB}"]
-        case .french, .russian: return ["\u{00AB}", "\u{00BB}"]
-        case .ukrainian: return ["\u{00AB}", "\u{00BB}", "\u{02BC}"]
+        case .french, .russian, .ukrainian: return ["\u{00AB}", "\u{00BB}"]
         case .swedish: return ["\u{201D}"]
         default: return []
         }
@@ -225,17 +223,25 @@ enum LayoutBuilder {
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
             KeySpec(action: .character(","), title: ",", weight: 1.0, alternates: commaAlternates(language)),
             KeySpec(action: .space, title: language.displayName, weight: 3.9),
-            KeySpec(action: .character("."), title: ".", weight: 1.0,
-                    alternates: [",", "?", "!", "'", "\"", ":", ";", "-"]),
+            KeySpec(action: .character("."), title: ".", weight: 1.0, alternates: dotAlternates(language)),
             KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
         ])
         return result
     }
 
     /// Long-press options of the comma key.
+    /// The comma's long-press: marks used inside a sentence.
     private static func commaAlternates(_ language: Language) -> [String] {
-        let common = ["?", "!", ";", ":", "'", "\""]
-        return common + Array(language.commaExtras.prefix(2))
+        var marks = [";", ":", "'", "-", "\u{2013}", "(", ")"]
+        if language == .ukrainian { marks.insert("\u{02BC}", at: 3) }   // the Ukrainian apostrophe
+        return marks
+    }
+
+    /// The full stop's long-press: marks that end or start a sentence.
+    private static func dotAlternates(_ language: Language) -> [String] {
+        var marks = ["?", "!", "\u{2026}", "\""]
+        if language == .spanish { marks.insert(contentsOf: ["\u{00BF}", "\u{00A1}"], at: 2) }   // ¿ ¡
+        return marks + language.quoteMarks
     }
 
     // MARK: Numbers
