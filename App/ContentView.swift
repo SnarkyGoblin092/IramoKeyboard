@@ -15,6 +15,7 @@ struct ContentView: View {
                 AppearanceSection()
                 ShortcutsSection()
                 DataSection()
+                CreditsSection()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
@@ -343,6 +344,21 @@ private struct DataSection: View {
             note = "Settings reset to defaults."
         }
         Feedback.tick()
+    }
+}
+
+/// Credit for the icon sets the emoji picker's tabs use (two of them ask for it: CC BY 4.0).
+private struct CreditsSection: View {
+    var body: some View {
+        Section {
+            Text("Emoji tab icons: Codicons by Microsoft (CC BY 4.0), Basil by Craftwork (CC BY 4.0), "
+                 + "Font Awesome 4 by Dave Gandy (OFL 1.1), and Akar Icons, Famicons, Flowbite Icons, "
+                 + "Fluent UI System Icons and Boxicons (MIT).")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        } header: {
+            SectionHeader("Acknowledgements", symbol: "info.circle.fill", color: .gray)
+        }
     }
 }
 
