@@ -222,7 +222,7 @@ private struct AppearanceSection: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Accent colour")
-                Text("The return key and highlights. Gradient themes use their own.")
+                Text("The return key and highlights. Colour themes keep their own until you pick one.")
                     .font(.footnote).foregroundColor(.secondary)
                 AccentPicker()
             }

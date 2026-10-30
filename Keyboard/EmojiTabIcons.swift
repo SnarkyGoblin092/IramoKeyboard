@@ -1,8 +1,9 @@
 import UIKit
 
-/// Vector tab icons for the emoji picker. Each icon is a set of closed outlines on an 80 x 80 grid, filled with
-/// the even-odd rule (so holes stay holes) and rendered as a template image, so it takes the text colour.
-/// They look the same whether or not their tab is selected; the selection is shown by a circle behind the tab.
+/// Tab icons for the emoji picker, on an 80 x 80 grid and rendered as template images, so they take the text
+/// colour. The icons in use are from Iconify (`vectorIcons`, credited in the app); the older traced outlines in
+/// `shapes` (filled with the even-odd rule) are only a fallback. They look the same whether or not their tab is
+/// selected; the selection is shown by a circle behind the tab.
 enum EmojiTabIcons {
     private static let shapes: [String: [String]] = [
         "recents": [
