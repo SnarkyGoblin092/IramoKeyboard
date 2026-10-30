@@ -174,6 +174,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        phoneStyleHint = nil
         refreshKeyStyle()
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
@@ -269,9 +270,17 @@ final class KeyboardViewController: UIInputViewController {
     /// The keys' style for updateKeyStyle: dark when the phone or the app is dark, else the app's.
     private var keyInterfaceStyle: UIUserInterfaceStyle {
         guard Theme.interfaceStyle == .unspecified else { return .unspecified }
-        let phone = UIScreen.main.traitCollection.userInterfaceStyle
+        var phone = UIScreen.main.traitCollection.userInterfaceStyle
+        if let hint = phoneStyleHint {
+            if phone == hint { phoneStyleHint = nil } else { phone = hint }
+        }
         return phone == .dark || view.traitCollection.userInterfaceStyle == .dark ? .dark : .unspecified
     }
+
+    /// The phone's style taken from the app when the app's style just changed: the screen's own style catches
+    /// up a moment later, and reading it early kept the keys dark (and briefly in the contrast colours) for a
+    /// second after switching to light mode, then snapped them. Cleared once the screen agrees, or on appear.
+    private var phoneStyleHint: UIUserInterfaceStyle?
 
     /// Returns true when contrastKeys changed (the keys must then be rebuilt).
     private func updateKeyStyle() -> Bool {
@@ -293,6 +302,12 @@ final class KeyboardViewController: UIInputViewController {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
+        let app = view.traitCollection.userInterfaceStyle
+        if let previous = previousTraitCollection?.userInterfaceStyle, previous != .unspecified,
+           app != .unspecified, app != previous {
+            phoneStyleHint = app   // the phone was switched (an app rarely changes its own style while typing)
+        }
+        // Done here, inside the system's own light/dark change, so the keys fade along with it.
         refreshKeyStyle()
     }
 
