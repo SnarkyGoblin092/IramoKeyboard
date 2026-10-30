@@ -260,15 +260,21 @@ final class KeyboardViewController: UIInputViewController {
         ].joined(separator: "|")
     }
 
-    /// Light or dark. A theme that forces one sets the whole keyboard. Otherwise the keys follow the phone's
-    /// setting, even in an app that keeps itself the other way, while the rest (suggestions, emoji picker) keeps
-    /// the app's style, which the system-drawn keyboard backdrop follows. Keys whose style differs from that
-    /// backdrop get stronger fills (Theme.contrastKeys) so they and their letters stay readable.
+    /// Light or dark. A theme that forces one sets the whole keyboard. Otherwise the keys are dark when the phone
+    /// or the app is in dark mode (so a dark mode phone keeps dark keys in an app that stays light), while the
+    /// rest (suggestions, emoji picker) keeps the app's style, which the system-drawn keyboard backdrop follows.
+    /// Dark keys on that light backdrop get lighter fills (Theme.contrastKeys) so they stand out.
     /// Returns true when contrastKeys changed (the keys must then be rebuilt).
+    /// The keys' style for updateKeyStyle: dark when the phone or the app is dark, else the app's.
+    private var keyInterfaceStyle: UIUserInterfaceStyle {
+        guard Theme.interfaceStyle == .unspecified else { return .unspecified }
+        let phone = UIScreen.main.traitCollection.userInterfaceStyle
+        return phone == .dark || view.traitCollection.userInterfaceStyle == .dark ? .dark : .unspecified
+    }
+
     private func updateKeyStyle() -> Bool {
         view.overrideUserInterfaceStyle = Theme.interfaceStyle
-        let phone = UIScreen.main.traitCollection.userInterfaceStyle
-        let keys: UIUserInterfaceStyle = Theme.interfaceStyle == .unspecified ? phone : .unspecified
+        let keys = keyInterfaceStyle
         keyboardView.overrideUserInterfaceStyle = keys
         let app = view.traitCollection.userInterfaceStyle
         let differs = keys != .unspecified && app != .unspecified && keys != app
@@ -327,8 +333,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar = SuggestionBar()
         searchBar = EmojiSearchBar()
         keyboardView = KeyboardView()
-        keyboardView.overrideUserInterfaceStyle = Theme.interfaceStyle == .unspecified
-            ? UIScreen.main.traitCollection.userInterfaceStyle : .unspecified
+        keyboardView.overrideUserInterfaceStyle = keyInterfaceStyle
 
         suggestionBar.delegate = self
         searchBar.delegate = self
