@@ -1432,8 +1432,19 @@ extension KeyboardViewController: SuggestionBarDelegate {
             replaceSwipedWord(with: suggestion.text)
             scheduleRefresh()
         case .emoji:
+            // The emoji takes the place of the word it was suggested for: the one being typed, or the one just
+            // finished ("sad" or "sad " -> the emoji and a space).
             let before = textDocumentProxy.documentContextBeforeInput ?? ""
-            let needsSpace = (before.last?.isWhitespace == false)
+            let typing = currentPrefix(in: before)
+            var replaced = 0
+            if !typing.isEmpty {
+                replaced = typing.count
+            } else if before.hasSuffix(" ") {
+                let finished = currentPrefix(in: String(before.dropLast()))
+                if !finished.isEmpty { replaced = finished.count + 1 }
+            }
+            for _ in 0..<replaced { textDocumentProxy.deleteBackward() }
+            let needsSpace = replaced == 0 && (before.last?.isWhitespace == false)
             textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
             var recents = settings.recentEmoji.filter { $0 != suggestion.text }
             recents.insert(suggestion.text, at: 0)

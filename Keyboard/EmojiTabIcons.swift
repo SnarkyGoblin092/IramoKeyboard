@@ -80,10 +80,27 @@ enum EmojiTabIcons {
         return path
     }
 
+    /// Tabs drawn with outline SF Symbols instead (the traced shapes of these come out filled). The first name
+    /// the system has wins ("dog" and "soccerball" are newer than iOS 16).
+    private static let outlineSymbols: [String: [String]] = [
+        "smileys": ["face.smiling"],
+        "animals": ["dog", "pawprint"],
+        "activity": ["soccerball", "sportscourt"],
+        "travel": ["car"]
+    ]
+
     static func icon(forKey rawKey: String, side: CGFloat = 80.0 / 3.0) -> UIImage? {
         let key = (rawKey == "recent") ? "recents" : rawKey
         let cacheKey = key + "@\(side)"
         if let cached = cache[cacheKey] { return cached }
+        if let names = outlineSymbols[key] {
+            let config = UIImage.SymbolConfiguration(pointSize: side * 0.66, weight: .regular)
+            if let symbol = names.lazy.compactMap({ UIImage(systemName: $0, withConfiguration: config) }).first {
+                let image = symbol.withRenderingMode(.alwaysTemplate)
+                cache[cacheKey] = image
+                return image
+            }
+        }
         guard let outlines = shapes[key] else { return nil }
         let path = path(for: outlines)
         let size = CGSize(width: side, height: side)

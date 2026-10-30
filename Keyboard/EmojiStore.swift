@@ -283,6 +283,25 @@ final class EmojiStore {
         return result
     }
 
+    /// The most used emoji, most used first (rank by emoji -> index; variation selectors removed).
+    private static let popularity: [String: Int] = {
+        let list = (
+        "😂 ❤️ 🤣 👍 😭 🙏 😘 🥰 😍 😊 🎉 😁 💕 🥺 😅 🔥 ☺️ 🤦 🤷 🙄 " +
+        "😆 🤗 😉 🎂 🤔 👏 🙂 😳 🥳 😎 👌 💜 😔 💪 ✨ 💖 👀 😋 😏 😢 " +
+        "👉 💗 😩 💯 🌹 💞 🎈 💙 😃 😡 💐 😜 🙈 🤞 😄 🤤 🙌 🤪 😀 💋 " +
+        "💀 👇 💔 😌 💓 🤩 🙃 😬 😱 😴 🤭 😐 🌞 😒 😇 🌸 😈 🎶 ✌️ 🎊 " +
+        "🥵 😞 💚 ☀️ 🖤 💰 😚 👑 🎁 💥 🙋 ☹️ 😑 🥴 👈 💩 ✅ 🐶 🐱 ☕ " +
+        "🍕 🎄 😥 😓 😪 😠 🤬 😤 😮 😲 🤯 🥶 😷 🤒 🤢 🤮 🥱 👋 🤝 💃 " +
+        "🕺 🌈 ⭐ 🌙 ❄️ 🍀 🍷 🎵 ⚽ 🏆 🚗 ✈️ 🏠 📱 💻 📷 ⏰ 💡 🎮"
+        ).split(separator: " ")
+        var ranks: [String: Int] = [:]
+        for (index, emoji) in list.enumerated() {
+            let key = emoji.replacingOccurrences(of: "\u{FE0F}", with: "")
+            if ranks[key] == nil { ranks[key] = index }
+        }
+        return ranks
+    }()
+
     /// Emoji whose names / keywords start with every word of `query` (in the languages loaded for search).
     func search(_ query: String, limit: Int = 80) -> [String] {
         guard searchReady else { return [] }
@@ -291,18 +310,34 @@ final class EmojiStore {
             .map { String($0) }
         guard !tokens.isEmpty else { return [] }
 
-        var scored: [(emoji: String, score: Int, order: Int)] = []
+        // The first search word of every emoji is its full name ("eyes", "smiling face with heart eyes"): a word of
+        // the name counts more than a keyword, the whole name typed counts most, and among equals the emoji with the
+        // shorter name (the more specific one) comes first: "eyes" finds the eyes emoji before the faces with eyes.
+        // Emoji people use most also come first among equal matches ("heart" -> the red heart).
+        let query = tokens.joined(separator: " ")
+        var scored: [(emoji: String, score: Int, popularity: Int, nameLength: Int, order: Int)] = []
         for entry in searchIndex {
+            let name = entry.keywords.first ?? ""
+            let nameWords = name.split(separator: " ").map { String($0) }
             var total = 0
             var matchesAll = true
             for token in tokens {
                 var best = 0
-                for keyword in entry.keywords {
-                    if keyword == token {
-                        best = 3
+                for word in nameWords {
+                    if word == token {
+                        best = 6
                         break
                     }
-                    if keyword.hasPrefix(token) { best = max(best, 2) }
+                    if word.hasPrefix(token) { best = max(best, 4) }
+                }
+                if best < 6 {
+                    for keyword in entry.keywords.dropFirst() {
+                        if keyword == token {
+                            best = max(best, 3)
+                        } else if keyword.hasPrefix(token) {
+                            best = max(best, 2)
+                        }
+                    }
                 }
                 if best == 0 {
                     matchesAll = false
@@ -310,11 +345,22 @@ final class EmojiStore {
                 }
                 total += best
             }
-            if matchesAll { scored.append((emoji: entry.emoji, score: total, order: entry.order)) }
+            guard matchesAll else { continue }
+            if name == query {
+                total += 100
+            } else if name.hasPrefix(query) {
+                total += 20
+            }
+            let popularity = EmojiStore.popularity[entry.emoji.replacingOccurrences(of: "\u{FE0F}", with: "")]
+            if popularity != nil { total += 25 }
+            scored.append((emoji: entry.emoji, score: total, popularity: popularity ?? Int.max,
+                           nameLength: nameWords.count, order: entry.order))
         }
 
         scored.sort { left, right in
             if left.score != right.score { return left.score > right.score }
+            if left.popularity != right.popularity { return left.popularity < right.popularity }
+            if left.nameLength != right.nameLength { return left.nameLength < right.nameLength }
             return left.order < right.order
         }
 

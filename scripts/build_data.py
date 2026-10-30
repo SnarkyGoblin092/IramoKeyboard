@@ -351,15 +351,18 @@ def build_search(groups, annotations, per_emoji=16):
             annotation = annotations.get(strip_fe0f(base))
             if not annotation:
                 continue
-            words = []
-            phrases = list(annotation.get("tts", [])) + list(annotation.get("default", []))
+            # The full name comes first (EmojiStore.search ranks by it), then every single word.
+            tts = annotation.get("tts", [])
+            name = " ".join(w for w in (fold(p.strip(".")) for p in splitter.split(tts[0].lower())) if w) if tts else ""
+            words = [name] if name else []
+            phrases = list(tts) + list(annotation.get("default", []))
             for phrase in phrases:
                 for piece in splitter.split(phrase.lower()):
                     folded = fold(piece.strip("."))
                     if len(folded) >= 2 and folded not in words:
                         words.append(folded)
             if words:
-                result[base] = words[:per_emoji]
+                result[base] = words[:per_emoji + 1]
     return result
 
 
