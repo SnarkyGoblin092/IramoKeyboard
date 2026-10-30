@@ -87,7 +87,7 @@ private final class EmojiGridLayout: UICollectionViewLayout {
     var gapAfterRecents: CGFloat = 0
     /// Square cells sized by the height (iPad), instead of the phone's eight columns across.
     var squareCells = false
-    /// Width an empty Recently Used block keeps (nine columns, at most one screen), for its hint.
+    /// Width an empty Recently Used block keeps (eight columns, at most one screen), for its hint.
     private(set) var emptyRecentsWidth: CGFloat = 0
 
     private(set) var cellSize = CGSize(width: 40, height: 40)
@@ -139,8 +139,8 @@ private final class EmojiGridLayout: UICollectionViewLayout {
                 byPath[path] = attributes
             }
             if count == 0 {
-                // An empty tab (Recently Used) still owns nine columns (it holds 36 emoji), at most one screen.
-                emptyRecentsWidth = min(viewWidth - edgeInset * 2, 9 * cellSize.width)
+                // An empty tab (Recently Used) still owns eight columns (it holds 32 emoji), at most one screen.
+                emptyRecentsWidth = min(viewWidth - edgeInset * 2, 8 * cellSize.width)
                 x += emptyRecentsWidth
             } else {
                 let columns = (count + rows - 1) / rows
@@ -347,7 +347,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let store = EmojiStore.shared
         var built: [Section] = []
 
-        let recents = Settings.shared.recentEmoji.prefix(36).map { EmojiItem(base: $0, variants: []) }
+        let recents = Settings.shared.recentEmoji.prefix(32).map { EmojiItem(base: $0, variants: []) }
         built.append(Section(key: "recent",
                              symbol: EmojiCategory.recentSymbol,
                              fallback: EmojiCategory.recentFallback,
@@ -431,14 +431,15 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func positionEmptyLabel() {
         let isRecentsHint = emptyLabel.text == language.strings.emptyRecents && EmojiStore.shared.isReady
         let grid = collectionView.frame
-        if isRecentsHint && gridLayout.emptyRecentsWidth > 0 {
-            // Inside the nine empty columns, scrolling with them.
+        if wide && isRecentsHint && gridLayout.emptyRecentsWidth > 0 {
+            // iPad: inside the eight empty columns, scrolling with them.
             emptyLabel.frame = CGRect(x: grid.minX + gridLayout.edgeInset + 10 - collectionView.contentOffset.x,
                                       y: grid.minY,
                                       width: max(0, gridLayout.emptyRecentsWidth - 20),
                                       height: grid.height)
         } else {
-            emptyLabel.frame = grid.insetBy(dx: 30, dy: 0)
+            let shift = isRecentsHint ? collectionView.contentOffset.x : 0
+            emptyLabel.frame = grid.insetBy(dx: 30, dy: 0).offsetBy(dx: -shift, dy: 0)
         }
     }
 
@@ -500,8 +501,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         }
         tabSelection.isHidden = false
         let buttonFrame = tabButtons[selectedTabIndex].frame
-        // Clear of the icon all round: 44pt on iPad, 33pt (scaled) on the phone.
-        let circle = wide ? 44 : 33 * EmojiPanel.scale(forWidth: bounds.width)
+        // iPad: clear of the bigger icon all round.
+        let circle = wide ? 44 : 30 * EmojiPanel.scale(forWidth: bounds.width)
         tabSelection.layer.cornerRadius = circle / 2
         let target = CGRect(x: buttonFrame.midX - circle / 2, y: buttonFrame.midY - circle / 2, width: circle, height: circle)
         tabGlass.contentView.sendSubviewToBack(tabSelection)

@@ -1110,7 +1110,7 @@ final class KeyboardViewController: UIInputViewController {
         textDocumentProxy.insertText(emoji)
         var recents = settings.recentEmoji.filter { $0 != emoji }
         recents.insert(emoji, at: 0)
-        settings.recentEmoji = Array(recents.prefix(36))
+        settings.recentEmoji = Array(recents.prefix(32))
         lastSpaceTime = Date.distantPast
         clearSwipeState()
     }
@@ -1426,7 +1426,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
             textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
             var recents = settings.recentEmoji.filter { $0 != suggestion.text }
             recents.insert(suggestion.text, at: 0)
-            settings.recentEmoji = Array(recents.prefix(36))
+            settings.recentEmoji = Array(recents.prefix(32))
             lastSpaceTime = Date.distantPast
             clearSwipeState()
             afterTyping()
