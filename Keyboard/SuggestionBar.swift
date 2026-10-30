@@ -149,7 +149,9 @@ final class SuggestionBar: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        glass.frame = bounds.insetBy(dx: 2, dy: 3)
+        // Centred between the keyboard's top edge and the first row of keys (which starts ~9.5pt below the bar),
+        // not just within the bar.
+        glass.frame = bounds.insetBy(dx: 2, dy: 3).offsetBy(dx: 0, dy: 4.5)
         let area = glass.bounds
         let dismissWidth: CGFloat = 52
         let contentWidth = max(0, area.width - dismissWidth - 6)
