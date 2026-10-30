@@ -34,6 +34,7 @@ LEARN_AFTER = 2         # an unknown word counts as the user's own after this ma
 USED_SLOPE, USED_CAP = 0.25, 0.8        # dictionary words the user writes
 PAIR_SLOPE, PAIR_CAP = 0.5, 1.2         # words the user put after the previous word
 RESTORED = -8.5         # log10 probability of an unknown word with its accents restored (see accents.py)
+SPLIT = float(os.environ.get("HUNKEYS_SPLIT", 1.0))  # log10 cost of a missing space ("nemakarom" -> "nem akarom")
 SPATIAL = 0.5           # tap positions: cost per squared key-width of extra distance to the intended key
 SHAPE = 10.0            # log10 cost of one unit of swipe shape mismatch (see baseline.decode_swipe)
 CANDIDATES = 30
@@ -270,13 +271,49 @@ class Engine(baseline.Engine):
                 restored = model.restore(key) if weight >= 0.1 else key
                 if restored != key:
                     rows.append((restored, self.params["restored"] + math.log10(weight), 0.0, 0.0, False))
+        rows.extend(self._splits(key, lower, head, context))
         return rows, lower, self._lm(lower, context)
+
+    def _exact(self, part):
+        """Dictionary words whose key is exactly `part`."""
+        found = set()
+        for store in self.stores.values():
+            found.update(w for w, _ in store.completion_candidates(part, part, 8) if match_key(w) == part)
+        return found
+
+    def _splits(self, key, lower, head, context):
+        """Two words typed without the space between them ("nemakarom" -> "nem akarom"): every place the typed
+        letters split into a dictionary word and a word (or the start of one), scored as both words in a row. Only
+        when the typed letters are not a word themselves."""
+        if len(key) < 3 or any(store.contains(key) for store in self.stores.values()):
+            return []
+        rows = []
+        for i in range(1, len(key)):
+            left, right = key[:i], key[i:]
+            firsts = self._exact(left)
+            if not firsts:
+                continue
+            seconds = self._exact(right)
+            for store in self.stores.values():
+                seconds.update(w for w, _ in store.completion_candidates(right, right, 8))
+            if not seconds:
+                continue
+            for first in firsts:
+                p1 = self._lm(first, context)
+                if p1 < -6:
+                    continue
+                after = self._context(head + first + " ")
+                for second in seconds:
+                    exact = match_key(second) == right
+                    lm = p1 + self._lm(second, after) - self.params["split"]
+                    rows.append((first + " " + second, lm, 0.0, 0.0 if exact else 9.0, False))
+        return rows
 
     # -- the keyboard's questions ---------------------------------------------------------------------------------
 
     params = {"slip": SLIP, "first": FIRST_LETTER, "unknown": UNKNOWN_WORD, "margin": CORRECT_MARGIN, "shape": SHAPE,
               "learn_after": LEARN_AFTER, "learned_base": LEARNED_BASE, "learned_slope": LEARNED_SLOPE,
-              "spatial": SPATIAL, "restored": RESTORED}
+              "spatial": SPATIAL, "restored": RESTORED, "split": SPLIT}
 
     def swipe_features(self, before, path):
         """(word, shape cost, log10 P(word | context)) for every word the swipe could be."""

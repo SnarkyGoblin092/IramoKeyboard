@@ -833,7 +833,9 @@ final class KeyboardViewController: UIInputViewController {
         let typed = currentPrefix(in: text)
         if !typed.isEmpty, text.hasSuffix(typed) { text = String(text.dropLast(typed.count)) }
         guard let last = text.last, last == " " else { return }
+        // Two words put in for a missing space: the pair is the previous word and the first of them.
         let following = TextFolding.normalizeApostrophes(next).lowercased()
+            .split(separator: " ").first.map(String.init) ?? ""
         guard !following.isEmpty else { return }
         if Predictor.isSentenceStart(text) {
             stores[language]?.learnBigram(previous: ".", next: following)

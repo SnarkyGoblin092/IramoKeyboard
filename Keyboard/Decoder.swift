@@ -20,6 +20,7 @@ enum Decoder {
     static let correctMargin = 1.0      // log10 margin a correction needs over the text as typed
     static let restoredLogProb = -8.5   // log10 probability of an unknown word with its accents restored
     static let taughtBonus = 2.0        // log10 boost for the word the user taught for a typo of theirs
+    static let splitCost = 1.0          // log10 cost of a missing space ("nemakarom" -> "nem akarom")
     private static let candidateLimit = 30
     private static let maxCost = 2.0
     private static let weightFloor = 0.02
@@ -424,7 +425,59 @@ enum Decoder {
                 }
             }
         }
+        result.append(contentsOf: splitRows(key: keyString, head: head, active: active, ordered: ordered,
+                                            stores: stores, context: context, field: field))
         return (result, lower, context)
+    }
+
+    /// Two words typed without the space between them ("nemakarom" -> "nem akarom", "inthe" -> "in the"): every
+    /// place where the typed letters split into a dictionary word and a word (or the start of one), scored as the two
+    /// words in a row. Only when the typed letters are no word themselves.
+    private static func splitRows(key: String,
+                                  head: String,
+                                  active: Language,
+                                  ordered: [Language],
+                                  stores: [Language: WordStore],
+                                  context: Context,
+                                  field: Predictor.FieldContext?) -> [Row] {
+        let letters = Array(key)
+        guard letters.count >= 3, !ordered.contains(where: { stores[$0]?.contains(key: key) == true }) else { return [] }
+        func candidates(_ part: String, exactOnly: Bool) -> Set<String> {
+            var found = Set<String>()
+            for language in ordered {
+                guard let store = stores[language] else { continue }
+                for candidate in store.completionCandidates(forKey: part, typedLower: part, limit: 8)
+                where !exactOnly || TextFolding.key(candidate.word) == part {
+                    found.insert(candidate.word)
+                }
+            }
+            return found
+        }
+        var result: [Row] = []
+        for split in 1..<letters.count {
+            let left = String(letters[..<split])
+            let right = String(letters[split...])
+            let firsts = candidates(left, exactOnly: true)
+            if firsts.isEmpty { continue }
+            let seconds = candidates(right, exactOnly: false)
+            if seconds.isEmpty { continue }
+            for first in firsts {
+                let firstLogProb = logProb(first, context: context, stores: stores, field: field)
+                guard firstLogProb >= -6 else { continue }
+                let after = Decoder.context(before: head + first + " ", active: active, stores: stores)
+                for second in seconds {
+                    // A second word that only starts with the typed letters is a completion, never a correction.
+                    let isWhole = TextFolding.key(second) == right
+                    result.append(Row(word: first + " " + second,
+                                      logProb: firstLogProb + logProb(second, context: after, stores: stores, field: field)
+                                          - splitCost,
+                                      prefixCost: 0,
+                                      wholeCost: isWhole ? 0 : maxCost + 1,
+                                      firstWrong: false))
+                }
+            }
+        }
+        return result
     }
 
     private static func ranked(_ rows: [Row], whole: Bool) -> [(word: String, score: Double)] {
@@ -459,6 +512,11 @@ enum Decoder {
     /// How to write `word`: as the language that most likely produced it writes it ("i'm" -> "I'm", "london" ->
     /// "London", German "haus" -> "Haus"); unchanged when no dictionary has it.
     static func written(_ word: String, context: Context, stores: [Language: WordStore]) -> String {
+        if word.contains(" ") {
+            // Two words (a missing space): each written its own way ("i am" -> "I am").
+            return word.split(separator: " ").map { written(String($0), context: context, stores: stores) }
+                .joined(separator: " ")
+        }
         var best: (weight: Double, text: String)? = nil
         for (language, store) in stores where store.isLoaded {
             guard let text = store.written(word) else { continue }
