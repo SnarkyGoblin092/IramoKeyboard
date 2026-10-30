@@ -258,10 +258,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     override init(frame: CGRect) {
         super.init(frame: frame)
         // Native look: the system keyboard backdrop shows in the native theme; other themes get the native colour.
+        // Light or dark comes from the keyboard itself (the app's keyboard appearance, or the theme), like the keys.
+        // (UIScreen's style is not the keyboard's: in dark mode it could still say light, leaving black icons.)
         backgroundColor = UIColor.clear
-        let systemStyle = UIScreen.main.traitCollection.userInterfaceStyle
-        if systemStyle != .unspecified { overrideUserInterfaceStyle = systemStyle }
-        _ = 0   // the keyboard's own backdrop (system / gradient / glass) shows; the key stage is hidden while this is open
 
         // Search field
         searchGlass.capsule = true
