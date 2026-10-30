@@ -7,7 +7,18 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     private let basics = ThemeCatalog.all.filter { $0.kind != .colored }
-    private let gradients = ThemeCatalog.all.filter { $0.kind == .colored }
+    /// The key-colour themes by heading, in catalogue order.
+    private let colourGroups: [ThemeGroup] = {
+        var groups: [ThemeGroup] = []
+        for theme in ThemeCatalog.all where theme.kind == .colored {
+            if let index = groups.firstIndex(where: { $0.title == theme.group }) {
+                groups[index].themes.append(theme)
+            } else {
+                groups.append(ThemeGroup(title: theme.group, themes: [theme]))
+            }
+        }
+        return groups
+    }()
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
@@ -26,7 +37,9 @@ struct ThemesView: View {
                 .padding(.top, 8)
 
                 group("Basics", themes: basics)
-                group("Key colours", themes: gradients)
+                ForEach(colourGroups) { entry in
+                    group(entry.title, themes: entry.themes)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
@@ -50,6 +63,12 @@ struct ThemesView: View {
             }
         }
     }
+}
+
+private struct ThemeGroup: Identifiable {
+    let title: String
+    var themes: [ThemeDefinition]
+    var id: String { return title }
 }
 
 /// The whole card (preview, name, spacing around them) is one button.

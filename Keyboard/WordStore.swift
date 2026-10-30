@@ -835,6 +835,18 @@ final class WordStore {
         return true
     }
 
+    /// Reads the learned data again (the app removed words or cleared them); unsaved changes are dropped.
+    func reloadPersonal() {
+        learned = Settings.shared.learnedWords(for: language.rawValue)
+        corrections = Settings.shared.corrections(for: language.rawValue)
+        used = Settings.shared.usedWords(for: language.rawValue)
+        bigrams = Settings.shared.learnedBigrams(for: language.rawValue)
+        trigrams = Settings.shared.learnedTrigrams(for: language.rawValue)
+        usage = Settings.shared.learnedUsage(for: language.rawValue)
+        saveScheduled = false
+        rebuildLearnedKeys()
+    }
+
     func forgetLearnedWords() {
         learned = [:]
         corrections = [:]

@@ -58,6 +58,22 @@ struct ThemePreview: View {
         }
     }
 
+    /// Mirrors `returnKey` in Keyboard/Strings.swift.
+    private var returnTitle: String {
+        switch shownLanguage {
+        case .hungarian: return "Enter"
+        case .spanish: return "intro"
+        case .french: return "retour"
+        case .german: return "Return"
+        case .italian: return "invio"
+        case .portuguese: return "retorno"
+        case .russian: return "ввод"
+        case .ukrainian: return "ввід"
+        case .swedish: return "retur"
+        default: return "return"
+        }
+    }
+
     private struct PreviewKey {
         var title = ""
         var symbol: String? = nil
@@ -78,7 +94,7 @@ struct ThemePreview: View {
         row2 += letters[1].map(letterKey)
         if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
         let edge = min(1.8, max(1.0, CGFloat(top - letters[2].count) / 2))
-        var row3 = [PreviewKey(symbol: "shift", weight: edge, function: true, active: true)]
+        var row3 = [PreviewKey(symbol: "shift.fill", weight: edge, function: true, accent: true)]
         row3 += letters[2].map(letterKey)
         row3.append(PreviewKey(symbol: "delete.left", weight: edge, function: true))
         return [
@@ -90,7 +106,7 @@ struct ThemePreview: View {
              PreviewKey(title: ","),
              PreviewKey(title: shownLanguage.displayName, weight: 3.9),
              PreviewKey(title: "."),
-             PreviewKey(symbol: "return", weight: 1.8, function: true, accent: true)]
+             PreviewKey(title: returnTitle, weight: 1.8, function: true, accent: true)]
         ]
     }
 

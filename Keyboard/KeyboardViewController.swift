@@ -58,6 +58,8 @@ final class KeyboardViewController: UIInputViewController {
     private var swipeAlternatives: [String] = []
     /// The last auto-fix (what was typed, what replaced it plus its space), until the next key: backspace undoes it.
     private var lastAutoFix: (typed: String, inserted: String)?
+    /// `Settings.personalRevision` when the learned data was last read.
+    private var seenPersonalRevision: Int?
     /// The correction the bar shows for the word being typed, so space makes exactly that one.
     private var shownFix: (before: String, fix: String?)?
     private var refreshScheduled = false
@@ -180,6 +182,13 @@ final class KeyboardViewController: UIInputViewController {
             if let language = Language(rawValue: code) { usage[language] = value }
         }
         Decoder.languageUsage = usage
+
+        // Learned words changed in the app (removed or cleared) while the keyboard was away: read them again.
+        let revision = settings.personalRevision
+        if let seen = seenPersonalRevision, seen != revision {
+            for store in stores.values { store.reloadPersonal() }
+        }
+        seenPersonalRevision = revision
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()

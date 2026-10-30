@@ -177,16 +177,13 @@ private struct FeedbackSection: View {
 }
 
 private struct LanguagesSection: View {
-    @State private var summary = LanguagesSection.currentSummary()
-
     var body: some View {
         Section {
             NavigationLink {
                 LanguagesView()
-                    .onDisappear { summary = LanguagesSection.currentSummary() }
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    InfoRow("Languages", summary)
+                    Text("Languages")
                     Text("Swipe the space bar left or right to switch")
                         .font(.footnote).foregroundColor(.secondary)
                 }
@@ -194,12 +191,6 @@ private struct LanguagesSection: View {
         } header: {
             SectionHeader("Languages", symbol: "globe", color: .green)
         }
-    }
-
-    private static func currentSummary() -> String {
-        return Settings.shared.enabledLanguages
-            .compactMap { Language(rawValue: $0)?.shortCode }
-            .joined(separator: ", ")
     }
 }
 
@@ -307,6 +298,15 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
+            NavigationLink {
+                LearnedWordsView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Learned words")
+                    Text("Words the keyboard picked up from your typing")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
             Button { pending = .recents } label: { Label("Clear recent emoji", systemImage: "clock.arrow.circlepath") }
             Button { pending = .learned } label: { Label("Forget learned words", systemImage: "text.book.closed") }
             Button(role: .destructive) { pending = .reset } label: { Label("Reset all settings", systemImage: "arrow.counterclockwise") }
@@ -437,39 +437,123 @@ struct ShortcutsView: View {
 
 // MARK: - Languages
 
+/// The enabled languages only; more are added from a separate list.
 struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
+
+    private var languages: [Language] { return enabled.compactMap { Language(rawValue: $0) } }
 
     var body: some View {
         List {
             Section {
-                ForEach(Language.allCases, id: \.rawValue) { language in
-                    Toggle(language.displayName, isOn: binding(for: language))
+                ForEach(languages, id: \.rawValue) { language in
+                    Text(language.displayName)
                 }
+                .onDelete { offsets in
+                    guard enabled.count > 1 else { return }
+                    var list = enabled
+                    list.remove(atOffsets: offsets)
+                    save(list)
+                }
+                .deleteDisabled(enabled.count <= 1)
             } footer: {
-                Text("At least one language stays on. Swipe left or right on the space bar to switch between the enabled languages.")
+                Text("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
+            }
+            Section {
+                NavigationLink {
+                    AddLanguageView(enabled: enabled) { language in
+                        save(enabled + [language.rawValue])
+                    }
+                } label: {
+                    Label("Add a language", systemImage: "plus")
+                }
+                .disabled(enabled.count == Language.allCases.count)
             }
         }
         .navigationTitle("Languages")
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func binding(for language: Language) -> Binding<Bool> {
-        return Binding(
-            get: { enabled.contains(language.rawValue) },
-            set: { on in
-                var list = enabled
-                if on {
-                    if !list.contains(language.rawValue) { list.append(language.rawValue) }
-                } else if list.count > 1 {
-                    list.removeAll { $0 == language.rawValue }
+    private func save(_ list: [String]) {
+        let ordered = Language.allCases.map { $0.rawValue }.filter { list.contains($0) }
+        guard !ordered.isEmpty, ordered != enabled else { return }
+        Feedback.tick()
+        enabled = ordered
+        Settings.shared.enabledLanguages = ordered
+    }
+}
+
+/// The languages that are not enabled yet; picking one adds it and goes back.
+private struct AddLanguageView: View {
+    let enabled: [String]
+    let add: (Language) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            ForEach(Language.allCases.filter { !enabled.contains($0.rawValue) }, id: \.rawValue) { language in
+                Button {
+                    add(language)
+                    dismiss()
+                } label: {
+                    Text(language.displayName).foregroundColor(.primary)
                 }
-                let ordered = Language.allCases.map { $0.rawValue }.filter { list.contains($0) }
-                guard ordered != enabled else { return }
-                Feedback.tick()
-                enabled = ordered
-                Settings.shared.enabledLanguages = ordered
             }
-        )
+        }
+        .navigationTitle("Add a language")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Learned words
+
+/// Words the keyboard learned (ones no dictionary has, used at least twice), per language, with swipe to remove.
+struct LearnedWordsView: View {
+    @State private var words: [String: [String]] = LearnedWordsView.load()
+
+    private var languages: [Language] {
+        return Language.allCases.filter { !(words[$0.rawValue] ?? []).isEmpty }
+    }
+
+    var body: some View {
+        List {
+            if languages.isEmpty {
+                Section {
+                    Text("No learned words yet").foregroundColor(.secondary)
+                } footer: {
+                    Text("A word that isn't in the dictionary is learned once you have typed it twice.")
+                }
+            }
+            ForEach(languages, id: \.rawValue) { language in
+                Section(language.displayName) {
+                    ForEach(words[language.rawValue] ?? [], id: \.self) { word in
+                        Text(word)
+                    }
+                    .onDelete { offsets in remove(offsets, from: language) }
+                }
+            }
+        }
+        .navigationTitle("Learned words")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !languages.isEmpty { EditButton() }
+        }
+    }
+
+    private static func load() -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for language in Language.allCases {
+            let list = Settings.shared.learnedWordList(for: language.rawValue)
+            if !list.isEmpty { result[language.rawValue] = list }
+        }
+        return result
+    }
+
+    private func remove(_ offsets: IndexSet, from language: Language) {
+        var list = words[language.rawValue] ?? []
+        for index in offsets { Settings.shared.removeLearnedWord(list[index], for: language.rawValue) }
+        list.remove(atOffsets: offsets)
+        words[language.rawValue] = list
+        Feedback.tick()
     }
 }

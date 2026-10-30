@@ -37,6 +37,8 @@ enum SettingKey {
     static let learnedPrefix = "hunkeys.learned."
     /// "typed\tmeant" -> how often the user deleted the typed word and wrote the meant one in its place.
     static let correctionsPrefix = "hunkeys.corrections."
+    /// Bumped whenever the app changes what the keyboard learned, so a running keyboard reloads it.
+    static let personalRevision = "hunkeys.personalRevision"
     static let bigramPrefix = "hunkeys.bigrams."
     static let trigramPrefix = "hunkeys.trigrams."
     static let usagePrefix = "hunkeys.learnedDays."
@@ -387,6 +389,31 @@ final class Settings {
         put(words, SettingKey.learnedPrefix + languageCode)
     }
 
+    /// The words the keyboard has learned (used at least `learnAfter` times), alphabetically.
+    func learnedWordList(for languageCode: String, learnAfter: Int = 2) -> [String] {
+        return learnedWords(for: languageCode).filter { $0.value >= learnAfter }.keys
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// Removes one learned word (from the app's list); the keyboard picks the change up when it opens.
+    func removeLearnedWord(_ word: String, for languageCode: String) {
+        var words = learnedWords(for: languageCode)
+        words.removeValue(forKey: word)
+        setLearnedWords(words, for: languageCode)
+        var corrections = self.corrections(for: languageCode)
+        for key in corrections.keys where key.hasSuffix("\t" + word) { corrections.removeValue(forKey: key) }
+        setCorrections(corrections, for: languageCode)
+        bumpPersonalRevision()
+    }
+
+    var personalRevision: Int {
+        return value(SettingKey.personalRevision) as? Int ?? 0
+    }
+
+    func bumpPersonalRevision() {
+        put(personalRevision + 1, SettingKey.personalRevision)
+    }
+
     func corrections(for languageCode: String) -> [String: Int] {
         return value(SettingKey.correctionsPrefix + languageCode) as? [String: Int] ?? [:]
     }
@@ -449,6 +476,7 @@ final class Settings {
             put(nil, SettingKey.correctionsPrefix + language.rawValue)
             put(nil, SettingKey.bigramPrefix + language.rawValue)
         }
+        bumpPersonalRevision()
     }
 
     func clearRecentEmoji() {
