@@ -117,9 +117,10 @@ jobs:
           ls -la TempoKeyboard.ipa
 
       - name: Upload IPA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: TempoKeyboard
+          # Not zipped: the download is TempoKeyboard.ipa itself (the file name is the artifact name).
+          archive: false
           path: TempoKeyboard.ipa
           if-no-files-found: error
 

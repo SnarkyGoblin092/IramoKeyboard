@@ -6,7 +6,7 @@ and a theme picker (native, transparent, Liquid Glass and gradient themes). All 
 
 ## Build and install (no Mac needed)
 1. Push this repo to GitHub. The **Build TempoKeyboard IPA** workflow runs on a `macos-26` runner.
-2. Download the `TempoKeyboard` artifact (`TempoKeyboard.ipa`).
+2. Download the `TempoKeyboard.ipa` artifact (not zipped).
 3. Install it with **iloader** (the App Group entitlement is already in the IPA so settings reach the keyboard).
 4. Settings > General > Keyboard > Keyboards > Add New Keyboard > Tempo, then turn on **Allow Full Access**
    (needed for vibration, recent emoji and learned words).
