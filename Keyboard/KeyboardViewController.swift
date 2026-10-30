@@ -174,6 +174,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        applyInterfaceStyle()
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
@@ -258,11 +259,25 @@ final class KeyboardViewController: UIInputViewController {
         ].joined(separator: "|")
     }
 
+    /// Light or dark: the theme's when it forces one; dark whenever the phone is in dark mode, even in an app that
+    /// keeps itself light; otherwise the app's. (The screen's style is only trusted to say dark: it has reported
+    /// light in dark mode, which then just leaves the app's style.)
+    private func applyInterfaceStyle() {
+        var style = Theme.interfaceStyle
+        if style == .unspecified && UIScreen.main.traitCollection.userInterfaceStyle == .dark { style = .dark }
+        if view.overrideUserInterfaceStyle != style { view.overrideUserInterfaceStyle = style }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyInterfaceStyle()
+    }
+
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
     private func buildInterface() {
         Prefs.refresh()
         Theme.reload()
-        view.overrideUserInterfaceStyle = Theme.interfaceStyle   // themes may force light/dark
+        applyInterfaceStyle()
         validateLanguage()
         hideEmojiPanel(refresh: false)
         isSearchingEmoji = false
