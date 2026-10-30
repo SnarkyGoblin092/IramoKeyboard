@@ -81,6 +81,8 @@ struct ThemePreview: View {
     private struct PreviewKey {
         var title = ""
         var symbol: String? = nil
+        /// An emoji-picker tab icon (EmojiTabIcons) instead of an SF Symbol, as the keyboard's emoji key uses.
+        var tabIcon: String? = nil
         var weight: CGFloat = 1
         var function = false
         var spacer = false
@@ -107,7 +109,7 @@ struct ThemePreview: View {
             row2,
             row3,
             [PreviewKey(title: "123", weight: 1.3, function: true),
-             PreviewKey(symbol: "face.smiling", function: true),
+             PreviewKey(tabIcon: "smileys", function: true),
              PreviewKey(title: ","),
              PreviewKey(title: shownLanguage.displayName, weight: 3.9),
              PreviewKey(title: "."),
@@ -283,7 +285,14 @@ struct ThemePreview: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
                         .stroke(borderColor, lineWidth: drawsBorder ? 0.5 : 0))
-            if let symbol = k.symbol {
+            if let tabIcon = k.tabIcon, let image = EmojiTabIcons.icon(forKey: tabIcon, side: 36, weight: 1.8) {
+                // Same size and line weight as KeyView's emoji key, scaled with the preview.
+                Image(uiImage: image)
+                    .renderingMode(.template)
+                    .resizable()
+                    .frame(width: 36 * s, height: 36 * s)
+                    .foregroundColor(tint)
+            } else if let symbol = k.symbol {
                 Image(systemName: symbol)
                     .font(.system(size: 20 * s))
                     .foregroundColor(tint)

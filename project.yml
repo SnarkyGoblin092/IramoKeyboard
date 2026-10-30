@@ -22,6 +22,7 @@ targets:
     sources:
       - path: App
       - path: Shared
+      - path: Keyboard/EmojiTabIcons.swift   # the theme preview draws the keyboard's emoji key icon
     dependencies:
       - target: HunKeysKeyboard
     info:
