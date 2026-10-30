@@ -85,6 +85,7 @@ final class KeyboardView: UIView {
             // Spacing just under the gap between keys: neighbouring keys share sampling but do not melt together.
             let container = GlassSupport.makeContainer(spacing: 2)
             container.isUserInteractionEnabled = false
+            if Theme.contrastKeys { container.overrideUserInterfaceStyle = .light }   // as KeyView's glass
             addSubview(container)
             glassContainer = container
         }

@@ -35,6 +35,8 @@ final class KeyView: UIView {
         self.drawsShadow = Theme.drawsKeyShadow
         self.glassView = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
         super.init(frame: .zero)
+        // Keys on the app's light backdrop keep the light glass the theme shows in light mode.
+        if Theme.contrastKeys { glassView?.overrideUserInterfaceStyle = .light }
         isUserInteractionEnabled = false
 
         let host: UIView

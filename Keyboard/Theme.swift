@@ -266,11 +266,12 @@ enum Theme {
             p.letterKeyPressed = pick(white(0.75), black(0.28))
             p.functionKeyPressed = pick(white(0.62), black(0.14))
         case .liquidGlass:
-            // Tints on the glass (letter keys too, which are otherwise left clear).
-            p.letterKey = pick(white(0.45), black(0.12))
-            p.functionKey = pick(white(0.30), black(0.25))
-            p.letterKeyPressed = pick(white(0.65), black(0.25))
-            p.functionKeyPressed = pick(white(0.55), black(0.12))
+            // The glass is drawn light (KeyView, KeyboardView) like the theme in light mode, so these tints are
+            // fixed rather than light/dark; letter keys get one too, as they otherwise stay clear.
+            p.letterKey = black(0.06)
+            p.functionKey = black(0.14)
+            p.letterKeyPressed = black(0.22)
+            p.functionKeyPressed = black(0.06)
         case .colored:
             break   // coloured themes set light/dark themselves, so they never differ from the backdrop
         }
