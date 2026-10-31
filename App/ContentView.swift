@@ -149,7 +149,7 @@ private struct GesturesSection: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Gestures")
-                        Text("Swipe typing, two thumbs, delete, cursor and flicks")
+                        Text("Swipe typing, thumb handoff, flicks, cursor and delete")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 } icon: {
@@ -162,7 +162,7 @@ private struct GesturesSection: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Hitboxes")
-                        Text("Key size, adaptive keys and your hit map")
+                        Text("Letter room, adaptive keys and your hit map")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 } icon: {
@@ -184,7 +184,7 @@ private struct FeedbackSection: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Haptics")
-                        Text("Vibration strength and feel, cursor ticks and key clicks")
+                        Text("Vibration, cursor ticks and key clicks")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 } icon: {

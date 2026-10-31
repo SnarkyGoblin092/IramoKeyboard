@@ -22,7 +22,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - The word space will write sits on an accent-coloured pill in the middle of the bar.
 - The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
   (solid, dashed, dotted or none) or key-like segments, in the theme's colours or neutral ones, at any height.
-- Suggestion speed: Instant, Balanced or Efficient (how long the bar waits for a pause in typing).
+- Update speed: Fastest, Normal or Battery saver (how long the bar waits for a pause in typing).
 - Backspace right after an auto-correction undoes it.
 - Learns new words: tap the word as you typed it in the bar to keep it, or type a new word twice; words you
   retype after deleting a typo teach the keyboard that typo; words you use often, and the words you put after
@@ -32,9 +32,9 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 
 ### Typing
 - Swipe typing: slide across the letters to write a word; the bar offers the other readings.
-- Two-thumb swiping: hand a word to the other thumb mid-glide (or right after lifting) and it goes on.
+- Thumb handoff: pass a word to the other thumb mid-glide (or right after lifting) and it goes on.
 - Glide onto the space bar to finish a word and carry on with the next one without lifting.
-- Optional multi-word glides: one glide can read as two or three words ("do it", "in the morning").
+- Optional phrase glides: one glide can read as two or three words ("do it", "in the morning").
 - Delete right after a swipe removes the whole word (can be turned off).
 - Optional flicks: up on a letter for a capital, down for its first accent.
 - Hold a key for its accents and variants; hold the comma or the full stop for more punctuation.
@@ -47,13 +47,13 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Numbers and symbols pages, and an optional number row.
 - A hide-keyboard button at the right end of the suggestion bar.
 - Key pop-ups and key clicks.
-- Vibration with an adjustable strength and feel (Soft, Light, Medium, Heavy, Rigid, or anywhere on a pad),
+- Vibration with an adjustable strength and feel (Soft, Light, Medium, Firm or Crisp, or any sharpness),
   and optional ticks when the cursor mode starts and for each character it moves.
 
 ### Hitboxes
-- Letter-key touch areas: Precise, Default or Forgiving next to shift, delete and space, or any size in between.
-- Adaptive keys: the letters likely to come next get bigger touch areas, the unlikely ones smaller (Subtle,
-  Default or Strong, with fine-tuning), also at the start of a word.
+- Letter room: Strict, Normal or Generous next to shift, delete and space, or any amount in between.
+- Adaptive keys: the letters likely to come next get more room, the unlikely ones less (Gentle, Normal or
+  Strong, with fine-tuning), also before the first letter.
 - Hit map: learns where you really tap each key and moves its touch area there; the app shows the map per
   language and can reset it.
 
@@ -67,7 +67,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - 75 themes: Native, Transparent, Liquid Glass and 72 colour themes, which are a lighter shade in light mode.
 - Follows light and dark mode; with the phone in dark mode, the keys stay dark even in apps that stay light.
 - Accent colour and key borders.
-- Keys: Compact, Balanced or Roomy, or set one by one: key height (with its own landscape size), keyboard
+- Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
   width, corners (square to round), the gaps between keys and rows, letter size, capitals that follow shift or
   always show, accent hints in any corner (or off) at any size, and the space bar's text (your own, the
   language's name or its code) and size.
