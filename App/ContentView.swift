@@ -342,15 +342,19 @@ private struct DataSection: View {
     }
 }
 
-/// Credit for the icon sets the emoji picker's tabs use (two of them ask for it: CC BY 4.0).
+/// Credits and licences for the word data, emoji data and icons the app ships (LicensesView).
 private struct CreditsSection: View {
     var body: some View {
         Section {
-            Text("Emoji tab icons: Codicons by Microsoft (CC BY 4.0), Basil by Craftwork (CC BY 4.0), "
-                 + "Font Awesome 4 by Dave Gandy (OFL 1.1), and Akar Icons, Famicons, Flowbite Icons, "
-                 + "Fluent UI System Icons and Boxicons (MIT).")
-                .font(.footnote)
-                .foregroundColor(.secondary)
+            NavigationLink {
+                LicensesView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Licences")
+                    Text("Word lists, emoji data and icons used by the keyboard")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
         } header: {
             SectionHeader("Acknowledgements", symbol: "info.circle.fill", color: .gray)
         }

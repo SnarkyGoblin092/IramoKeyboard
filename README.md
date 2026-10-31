@@ -27,5 +27,13 @@ swiping; see the script for options.
 No voice typing; cursor control is horizontal only.
 
 ## Credits
-Emoji tab icons via Iconify: Codicons (Microsoft, CC BY 4.0), Basil (Craftwork, CC BY 4.0), Font Awesome 4
-(OFL 1.1), Akar Icons, Famicons, Flowbite Icons, Fluent UI System Icons and Boxicons (MIT).
+The full notices are in the app under Licences (App/LicensesView.swift).
+
+- Dictionaries: adapted from [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave
+  (OpenSubtitles 2018 word counts), CC BY-SA 4.0; the built dictionaries are shared under the same licence.
+- Word pairs: [Tatoeba](https://tatoeba.org) example sentences, CC BY 2.0 FR.
+- Next-word statistics: counted from the OPUS OpenSubtitles 2018 corpus (Lison & Tiedemann, 2016), compiled from
+  opensubtitles.org; no subtitle text ships with the app.
+- Emoji list and names: Unicode emoji data and CLDR annotations, Unicode License V3.
+- Emoji tab icons via Iconify: Codicons (Microsoft, CC BY 4.0), Basil (Craftwork, CC BY 4.0), Font Awesome 4
+  (Dave Gandy, OFL 1.1), and Akar Icons, Famicons, Flowbite Icons, Fluent UI System Icons and Boxicons (MIT).
