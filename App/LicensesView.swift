@@ -19,6 +19,11 @@ struct LicensesView: View {
     var body: some View {
         List {
             Section {
+                row(Licenses.app)
+            } footer: {
+                Text("Free software: you may share and change it under the GNU GPL v3. It comes with no warranty.")
+            }
+            Section {
                 ForEach(Licenses.data) { item in row(item) }
             } header: {
                 Text("Words and emoji")
@@ -69,6 +74,24 @@ private struct LicenseDetailView: View {
 }
 
 enum Licenses {
+    /// The app itself (the GPL asks interactive programs to show this notice).
+    static let app = LicenseItem(
+        name: "TempoKeyboard",
+        credit: "Copyright (C) 2026 Orsós Emil",
+        licenseName: "GNU GPL v3.0",
+        source: "https://github.com/SnarkyGoblin092/TempoKeyboard",
+        text: """
+        This program is free software: you can redistribute it and/or modify it under the terms of the GNU General \
+        Public License as published by the Free Software Foundation, either version 3 of the License, or (at your \
+        option) any later version.
+
+        This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the \
+        implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License \
+        for more details.
+
+        The full licence is in the LICENSE file of the source code, and at https://www.gnu.org/licenses/gpl-3.0.html
+        """)
+
     static let data: [LicenseItem] = [
         LicenseItem(
             name: "FrequencyWords",

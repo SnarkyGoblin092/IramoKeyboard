@@ -351,7 +351,7 @@ private struct CreditsSection: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Licences")
-                    Text("Word lists, emoji data and icons used by the keyboard")
+                    Text("The app's licence, and the word lists, emoji data and icons it uses")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }

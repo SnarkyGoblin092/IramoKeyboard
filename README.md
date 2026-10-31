@@ -12,12 +12,27 @@ A custom keyboard for iPhone and iPad. All settings live in the **Tempo app**.
 - **Look:** 75 themes (native, transparent, Liquid Glass and key-colour themes), accent colours, key roundness,
   height, borders and a number row; the previews follow light and dark mode.
 
-## Build and install (no Mac needed)
-1. Push this repo to GitHub. The **Build TempoKeyboard IPA** workflow runs on a `macos-26` runner.
-2. Download the `TempoKeyboard.ipa` artifact (not zipped).
-3. Install it with **iloader** (the App Group entitlement is already in the IPA so settings reach the keyboard).
-4. Settings > General > Keyboard > Keyboards > Add New Keyboard > Tempo, then turn on **Allow Full Access**
-   (needed for vibration, recent emoji and learned words).
+## Build it yourself
+
+### On GitHub
+1. **Fork** this repo.
+2. In your fork, open the **Actions** tab and enable workflows (GitHub turns them off in new forks).
+3. Start a build: **Actions > Build TempoKeyboard IPA > Run workflow**. Every push to the fork builds too.
+4. When the run is green, download **TempoKeyboard.ipa** from the run's Artifacts (it is not zipped).
+
+The first build takes 15-20 minutes, because it downloads about 400 MB of word lists and sentences and turns
+them into dictionaries (`scripts/build_data.py`). The result is cached for a week, so later builds take about
+3 minutes. Keep the fork **public**: Actions minutes are free for public repos, while private repos spend the
+account's monthly minutes, and macOS runners use them up ten times faster.
+
+### Install the IPA
+The IPA is unsigned. Sign and install it with your own Apple ID using a sideloading tool such as
+[iloader](https://github.com/nab138/iloader), [AltStore](https://altstore.io) or
+[SideStore](https://sidestore.io). The App Group entitlement is already in the IPA and these tools keep it, so
+the app's settings reach the keyboard. With a free Apple ID the app has to be refreshed every 7 days.
+
+Then: **Settings > General > Keyboard > Keyboards > Add New Keyboard > Tempo**, and turn on
+**Allow Full Access** (needed for vibration, recent emoji and learned words; the keyboard works without it).
 
 ## Prediction tests
 `python3 scripts/predict_eval/run.py` scores prediction on held-out sentences with simulated sloppy typing and
@@ -25,6 +40,13 @@ swiping; see the script for options.
 
 ## Limits
 No voice typing; cursor control is horizontal only.
+
+## License
+Copyright (C) 2026 Orsós Emil. TempoKeyboard is free software under the
+[GNU General Public License v3.0](LICENSE): you may use, change and share it, and anything you distribute that is
+based on it must be released under the same licence with its source code.
+
+The third-party material below keeps its own licences; the dictionaries the build produces are CC BY-SA 4.0.
 
 ## Credits
 The full notices are in the app under Licences (App/LicensesView.swift).
