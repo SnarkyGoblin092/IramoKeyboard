@@ -299,9 +299,9 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
-            Button { pending = .recents } label: { Label("Clear recent emoji", systemImage: "clock.arrow.circlepath") }
-            Button { pending = .learned } label: { Label("Forget learned words", systemImage: "text.book.closed") }
-            Button(role: .destructive) { pending = .reset } label: { Label("Reset all settings", systemImage: "arrow.counterclockwise") }
+            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath")
+            row(.learned, "Forget learned words", symbol: "text.book.closed")
+            row(.reset, "Reset all settings", symbol: "arrow.counterclockwise", role: .destructive)
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
             }
@@ -310,15 +310,19 @@ private struct DataSection: View {
         } footer: {
             Text("Everything the keyboard learns stays on this device.")
         }
-        .confirmationDialog(pending?.title ?? "",
-                            isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
-                            titleVisibility: .visible,
-                            presenting: pending) { action in
-            Button(action.button, role: .destructive) { perform(action) }
-            Button("Cancel", role: .cancel) {}
-        } message: { action in
-            Text(action.message)
-        }
+    }
+
+    /// One option with its own confirmation, so the dialog's arrow points at the option that was tapped.
+    private func row(_ action: Action, _ title: String, symbol: String, role: ButtonRole? = nil) -> some View {
+        Button(role: role) { pending = action } label: { Label(title, systemImage: symbol) }
+            .confirmationDialog(action.title,
+                                isPresented: Binding(get: { pending == action }, set: { if !$0 { pending = nil } }),
+                                titleVisibility: .visible) {
+                Button(action.button, role: .destructive) { perform(action) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(action.message)
+            }
     }
 
     private func perform(_ action: Action) {
