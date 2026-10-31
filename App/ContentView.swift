@@ -290,13 +290,13 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
-            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath")
             NavigationLink {
                 LearnedWordsView()
             } label: {
                 Label("Learned words", systemImage: "character.book.closed")
             }
             row(.learned, "Forget learned words", symbol: "text.book.closed")
+            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath")
             row(.reset, "Reset all settings", symbol: "arrow.counterclockwise", role: .destructive)
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
@@ -380,47 +380,75 @@ struct ShortcutsView: View {
     @State private var trigger = ""
     @State private var phrase = ""
 
+    private var canAdd: Bool {
+        return !trigger.trimmingCharacters(in: .whitespaces).isEmpty
+            && !phrase.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    // Grouped cards rather than a Form, so the shortcuts swipe to delete like the languages do.
     var body: some View {
-        Form {
-            Section("New shortcut") {
-                TextField("Trigger (e.g. omw)", text: $trigger)
-                    .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
-                TextField("Phrase (e.g. On my way!)", text: $phrase)
-                Button("Add") {
-                    let key = trigger.trimmingCharacters(in: .whitespaces)
-                    let text = phrase.trimmingCharacters(in: .whitespaces)
-                    guard !key.isEmpty, !text.isEmpty else { return }
-                    items.removeAll { $0.trigger.lowercased() == key.lowercased() }
-                    items.append(TextShortcut(trigger: key, phrase: text))
-                    save()
-                    trigger = ""
-                    phrase = ""
-                }
-                .disabled(trigger.trimmingCharacters(in: .whitespaces).isEmpty
-                          || phrase.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            Section("Your shortcuts") {
-                if items.isEmpty {
-                    Text("None yet").foregroundColor(.secondary)
-                }
-                ForEach(items) { item in
-                    VStack(alignment: .leading) {
-                        Text(item.trigger).font(.headline)
-                        Text(item.phrase).font(.subheadline).foregroundColor(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                CardHeader("New shortcut")
+                VStack(spacing: 0) {
+                    TextField("Trigger (e.g. omw)", text: $trigger)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .cardRow()
+                    Divider().padding(.leading, 16)
+                    TextField("Phrase (e.g. On my way!)", text: $phrase)
+                        .cardRow()
+                    Divider().padding(.leading, 16)
+                    Button(action: add) {
+                        Text("Add").cardRow().contentShape(Rectangle())
                     }
+                    .disabled(!canAdd)
                 }
-                .onDelete { offsets in
-                    items.remove(atOffsets: offsets)
-                    save()
+                .groupedCard()
+                .padding(.bottom, 16)
+
+                CardHeader("Your shortcuts")
+                if items.isEmpty {
+                    Text("None yet").foregroundColor(.secondary).cardRow().groupedCard()
+                } else {
+                    DeletableCard(items: items, id: { $0.id }, onDelete: remove) { item in
+                        VStack(alignment: .leading) {
+                            Text(item.trigger).font(.headline)
+                            Text(item.phrase).font(.subheadline).foregroundColor(.secondary)
+                        }
+                        .cardRow()
+                        .padding(.vertical, 6)
+                    }
+                    CardFooter("Swipe a shortcut left to remove it.")
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Text shortcuts")
         .navigationBarTitleDisplayMode(.inline)
         // Read again on every visit: the screen is built once with the parent, so the starting value above is
         // from when the app opened.
         .onAppear { items = Settings.shared.shortcuts }
+    }
+
+    private func add() {
+        let key = trigger.trimmingCharacters(in: .whitespaces)
+        let text = phrase.trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty, !text.isEmpty else { return }
+        items.removeAll { $0.trigger.lowercased() == key.lowercased() }
+        items.append(TextShortcut(trigger: key, phrase: text))
+        save()
+        trigger = ""
+        phrase = ""
+    }
+
+    private func remove(_ item: TextShortcut) {
+        Feedback.tick()
+        withAnimation(.easeOut(duration: 0.2)) { items.removeAll { $0.id == item.id } }
+        save()
     }
 
     private func save() {
@@ -440,28 +468,11 @@ struct LanguagesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                VStack(spacing: 0) {
-                    ForEach(Array(languages.enumerated()), id: \.element.rawValue) { index, language in
-                        SwipeToDeleteRow(canDelete: languages.count > 1) {
-                            remove(language)
-                        } content: {
-                            Text(language.displayName)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 48)
-                        }
-                        if index < languages.count - 1 {
-                            Divider().padding(.leading, 16)
-                        }
-                    }
+                DeletableCard(items: languages, id: { $0.rawValue }, canDelete: languages.count > 1, onDelete: remove) { language in
+                    Text(language.displayName).cardRow()
                 }
-                .groupedCard()
 
-                Text("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                CardFooter("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
 
                 if enabled.count < Language.allCases.count {
                     NavigationLink {
@@ -516,6 +527,75 @@ private extension View {
         return self
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+
+    /// A row of a grouped card: full width, list-like insets and height.
+    func cardRow() -> some View {
+        return self
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 48)
+    }
+}
+
+/// The title above a grouped card, like a list section header.
+private struct CardHeader: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        if #available(iOS 26, *) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundColor(.secondary).padding(.horizontal, 16)
+        } else {
+            Text(title.uppercased()).font(.footnote).foregroundColor(.secondary).padding(.horizontal, 16)
+        }
+    }
+}
+
+/// The note under a grouped card, like a list section footer.
+private struct CardFooter: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+    }
+}
+
+/// A grouped card of rows that each swipe left to delete (SwipeToDeleteRow), as on the Languages screen.
+private struct DeletableCard<Item, ID: Hashable, Row: View>: View {
+    let items: [Item]
+    let id: (Item) -> ID
+    var canDelete = true
+    let onDelete: (Item) -> Void
+    @ViewBuilder let row: (Item) -> Row
+
+    private struct Entry: Identifiable {
+        let id: ID
+        let index: Int
+        let item: Item
+    }
+
+    var body: some View {
+        let entries = items.enumerated().map { Entry(id: id($0.element), index: $0.offset, item: $0.element) }
+        VStack(spacing: 0) {
+            ForEach(entries) { entry in
+                SwipeToDeleteRow(canDelete: canDelete) {
+                    onDelete(entry.item)
+                } content: {
+                    row(entry.item)
+                }
+                if entry.index < entries.count - 1 {
+                    Divider().padding(.leading, 16)
+                }
+            }
+        }
+        .groupedCard()
     }
 }
 
@@ -630,35 +710,36 @@ struct LearnedWordsView: View {
         return Language.allCases.filter { !matches(for: $0).isEmpty }
     }
 
+    // Grouped cards rather than a List, so the words swipe to delete like the languages do.
     var body: some View {
-        List {
-            if words.isEmpty {
-                Section {
-                    Text("No learned words yet").foregroundColor(.secondary)
-                } footer: {
-                    Text("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                if words.isEmpty {
+                    Text("No learned words yet").foregroundColor(.secondary).cardRow().groupedCard()
+                    CardFooter("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar.")
+                } else if languages.isEmpty {
+                    Text("No matching words").foregroundColor(.secondary).cardRow().groupedCard()
                 }
-            } else if languages.isEmpty {
-                Text("No matching words").foregroundColor(.secondary)
-            }
-            ForEach(languages, id: \.rawValue) { language in
-                let list = matches(for: language)
-                Section(language.displayName) {
-                    ForEach(list, id: \.self) { word in
-                        Text(word)
+                ForEach(languages, id: \.rawValue) { language in
+                    CardHeader(language.displayName)
+                    DeletableCard(items: matches(for: language), id: { $0 }, onDelete: { remove([$0], from: language) }) { word in
+                        Text(word).cardRow()
                     }
-                    .onDelete { offsets in remove(offsets.map { list[$0] }, from: language) }
+                    .padding(.bottom, 16)
+                }
+                if !languages.isEmpty {
+                    CardFooter("Swipe a word left to remove it.")
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search learned words")
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)
         .navigationTitle("Learned words")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !languages.isEmpty { EditButton() }
-        }
         // Reloaded on every visit: a NavigationLink builds this view's initial state only once.
         .onAppear { words = LearnedWordsView.load() }
     }
@@ -676,7 +757,7 @@ struct LearnedWordsView: View {
         for word in removed { Settings.shared.removeLearnedWord(word, for: language.rawValue) }
         var list = words[language.rawValue] ?? []
         list.removeAll { removed.contains($0) }
-        words[language.rawValue] = list.isEmpty ? nil : list
         Feedback.tick()
+        withAnimation(.easeOut(duration: 0.2)) { words[language.rawValue] = list.isEmpty ? nil : list }
     }
 }
