@@ -890,7 +890,7 @@ final class KeyboardViewController: UIInputViewController {
         let key = TextFolding.key(cleaned)
         guard delta > 0, cleaned.count >= 3, key.count >= 2 else { return }
         // Only unknown words are learned; known words in any enabled language (other spellings) are left alone.
-        let known = stores.values.contains { $0.isLoaded && $0.contains(key: key) }
+        let known = stores.values.contains { $0.isLoaded && $0.dictionaryContains(key: key) }
         if !known { stores[language]?.learn(cleaned) }
     }
 
@@ -902,7 +902,7 @@ final class KeyboardViewController: UIInputViewController {
         let key = TextFolding.key(cleaned)
         guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
         ensureStores()
-        let known = stores.values.contains { $0.isLoaded && $0.contains(key: key) }
+        let known = stores.values.contains { $0.isLoaded && $0.dictionaryContains(key: key) }
         if !known { stores[language]?.learn(cleaned, asTyped: true) }
     }
 

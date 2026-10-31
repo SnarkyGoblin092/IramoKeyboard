@@ -306,6 +306,14 @@ final class WordStore {
         return learnedKeySet.contains(key)
     }
 
+    /// Whether the dictionary itself has a word with this match key (learned words do not count, so a word
+    /// that is still being learned keeps counting up).
+    func dictionaryContains(key: String) -> Bool {
+        guard !key.isEmpty else { return false }
+        let index = lowerBound(of: key)
+        return index < entries.count && entries.keyEquals(index, Array(key.utf8))
+    }
+
     /// 0...1: how common the most common word with this match key is (a learned word counts as fairly common);
     /// 0 when the language does not know it. Used to tell which language a word belongs to.
     func frequency(ofKey key: String) -> Double {

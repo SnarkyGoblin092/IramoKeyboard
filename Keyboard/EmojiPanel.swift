@@ -266,7 +266,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // Native look: the system keyboard backdrop shows in the native theme; other themes get the native colour.
         // Light or dark comes from the keyboard itself (the app's keyboard appearance, or the theme), like the keys.
         // (UIScreen's style is not the keyboard's: in dark mode it could still say light, leaving black icons.)
-        backgroundColor = UIColor.clear
+        // Not fully clear: the system drops touches on pixels of a keyboard that draw nothing, so a swipe that
+        // started between emoji or on the empty part of Recently Used never reached the grid. 1% is invisible.
+        backgroundColor = UIColor(white: 0.5, alpha: 0.01)
 
         // Search field
         searchGlass.capsule = true
