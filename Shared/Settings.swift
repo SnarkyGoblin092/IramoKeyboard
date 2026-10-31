@@ -25,7 +25,6 @@ enum SettingKey {
     static let accentHex = "hunkeys.accentHex"
     static let keyboardHeight = "hunkeys.keyboardHeight"
     static let keyRoundness = "hunkeys.keyRoundness"
-    static let oneHanded = "hunkeys.oneHanded"
     // Data
     static let language = "hunkeys.language"
     static let enabledLanguages = "hunkeys.enabledLanguages"
@@ -56,7 +55,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, accentHex, keyboardHeight, keyRoundness, oneHanded, enabledLanguages, keyBorders
+        theme, accent, accentHex, keyboardHeight, keyRoundness, enabledLanguages, keyBorders
     ]
 }
 
@@ -81,7 +80,6 @@ enum SettingDefault {
     static let keyBorders = true
     static let keyboardHeight = 1.0
     static let keyRoundness = 0.26
-    static let oneHanded = "off"
     static let language = "en"
     static let enabledLanguages = ["en", "hu"]
 }
@@ -222,7 +220,6 @@ final class Settings {
             SettingKey.keyBorders: SettingDefault.keyBorders,
             SettingKey.keyboardHeight: SettingDefault.keyboardHeight,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
-            SettingKey.oneHanded: SettingDefault.oneHanded,
             SettingKey.language: SettingDefault.language
         ])
     }
@@ -329,10 +326,6 @@ final class Settings {
         set { put(newValue, SettingKey.theme) }
     }
 
-    var isTransparentTheme: Bool { return theme == "transparent" }
-
-    var themeDefinition: ThemeDefinition { return ThemeCatalog.theme(id: theme) }
-
     var accentName: String {
         get { return readString(SettingKey.accent) ?? SettingDefault.accent }
         set { put(newValue, SettingKey.accent) }
@@ -346,12 +339,6 @@ final class Settings {
         set { put(newValue, SettingKey.accentHex) }
     }
 
-    /// The accent actually in use: the custom colour if one is set and valid, else the preset.
-    var accentRGB: (red: Double, green: Double, blue: Double) {
-        if let custom = HexColor.parse(accentHex) { return custom }
-        return accent.rgb
-    }
-
     /// 0 = square keys ... 1 = fully round (pill) keys.
     var keyRoundness: Double {
         get { return clamp(readDouble(SettingKey.keyRoundness), 0...1) }
@@ -361,12 +348,6 @@ final class Settings {
     var keyboardHeightScale: Double {
         get { return clamp(readDouble(SettingKey.keyboardHeight), Settings.heightScaleRange) }
         set { put(clamp(newValue, Settings.heightScaleRange), SettingKey.keyboardHeight) }
-    }
-
-    /// "off", "left" or "right".
-    var oneHanded: String {
-        get { return readString(SettingKey.oneHanded) ?? SettingDefault.oneHanded }
-        set { put(newValue, SettingKey.oneHanded) }
     }
 
     // MARK: Data

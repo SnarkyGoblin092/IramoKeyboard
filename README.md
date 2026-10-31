@@ -2,22 +2,58 @@
 
 A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 
-- **Languages:** English, Hungarian and 13 other European languages; swipe the space bar to switch.
-- **Prediction:** a word trigram model per language with typo, accent and missing-space correction
-  ("vsgyok" -> "vagyok", "koszonom" -> "köszönöm", "nemakarom" -> "nem akarom"), capitalisation ("im" -> "I'm"),
-  next-word suggestions, and learning of your own words and typos (tap a word as you typed it in the suggestion bar to keep it).
-  Backspace right after an auto-correction undoes it, and auto-correction can be turned off.
-- **Typing:** swipe typing, space-bar cursor control, delete-by-word, text shortcuts, double-space full stop.
-- **Emoji:** an iOS-style picker with recents, search and skin tones, plus emoji suggestions in the bar.
-- **Look:** 75 themes (native, transparent, Liquid Glass and key-colour themes), accent colours, key roundness,
-  height, borders and a number row; the previews follow light and dark mode.
+## Features
 
-## Prediction tests
-`python3 scripts/predict_eval/run.py` scores prediction on held-out sentences with simulated sloppy typing and
-swiping; see the script for options.
+### Languages
+- 15 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
+  Turkish, Russian, Ukrainian and Swedish.
+- Each with its own layout: QWERTY, QWERTZ, AZERTY, Turkish, and Cyrillic for Russian and Ukrainian, plus the
+  language's extra letters (ñ, ç, ü ö ä, å, ğ ş ı...).
+- Swipe the space bar left or right to switch; the space bar shows the language's name.
+- Several languages at once: words from any enabled language are suggested and corrected, and the keyboard
+  learns which ones you write in most.
+- The return key is labelled in the keyboard's language, to match the field (Go, Search, Send, Done, Next).
 
-## Limits
-No voice typing; cursor control is horizontal only.
+### Prediction and correction
+- Word suggestions as you type, from a word trigram language model per language.
+- Next-word suggestions before you start the next word.
+- Auto-correction when you press space: typos ("vsgyok" -> "vagyok"), missing accents ("koszonom" -> "köszönöm"),
+  missing spaces ("nemakarom" -> "nem akarom"), apostrophes and capitals ("im" -> "I'm").
+- The word space will write is shown highlighted in the middle of the bar.
+- Backspace right after an auto-correction undoes it.
+- Learns new words: tap the word as you typed it in the bar to keep it; words you retype after deleting a typo
+  teach the keyboard that typo; words you use often rank higher.
+- No correction in password, email and web address fields, or where the app asks for none.
+
+### Typing
+- Swipe typing: slide across the letters to write a word; the bar offers the other readings.
+- Hold a key for its accents and variants; hold the comma or the full stop for more punctuation.
+- Auto-capitalization at the start of sentences, double-tap shift for caps lock.
+- Double-tap the space bar for a full stop.
+- Hold the space bar and slide to move the cursor.
+- Slide left from the delete key to delete whole words.
+- Text shortcuts: type a trigger and press space to expand it.
+- Numbers and symbols pages, and an optional number row.
+- Key pop-ups, key clicks and adjustable vibration.
+
+### Emoji
+- An emoji picker like the iOS one: recently used emoji, categories with tabs, skin tones, and search in your
+  language.
+- Emoji suggestions in the bar for the word you typed; tapping one replaces the word.
+- Emoticons turn into emoji: type ":)", "<3", "xD", "(y)" and the bar offers 🙂, ❤️, 😆, 👍.
+
+### Look
+- 75 themes: Native, Transparent, Liquid Glass and 72 colour themes, which are a lighter shade in light mode.
+- Follows light and dark mode; with the phone in dark mode, the keys stay dark even in apps that stay light.
+- Accent colour, key roundness, keyboard height, key borders and accent hints on the keys.
+- Theme previews in the app that look like the real keyboard, in light and dark mode.
+- Works on iPhone and iPad, in portrait and landscape.
+
+### Privacy
+- Everything the keyboard learns stays on the device; the keyboard makes no network connections.
+- Full Access is only needed for vibration and for saving recent emoji and learned words; the keyboard works
+  without it.
+- Clear recent emoji, forget learned words or reset all settings from the app.
 
 ## License
 Copyright (C) 2026 Orsós Emil. All rights reserved. The code and the app may not be used, copied, changed or

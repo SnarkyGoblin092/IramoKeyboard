@@ -64,14 +64,4 @@ enum SharedStore {
         }
         return entitlements["com.apple.security.application-groups"] as? [String] ?? []
     }
-
-    // MARK: Leftovers kept so older call sites still compile (the clipboard sync was removed)
-
-    static func isSettingsPayload(_ text: String) -> Bool { return false }
-
-    @discardableResult
-    static func importSettings(from text: String) -> Bool { return false }
-
-    @discardableResult
-    static func importFromClipboardIfNeeded(hasFullAccess: Bool) -> Bool { return false }
 }

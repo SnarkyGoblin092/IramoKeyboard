@@ -54,8 +54,6 @@ struct ThemeDefinition: Hashable {
         /// Coloured keys on the normal system keyboard background. Only the keys change colour.
         case colored
         /// iOS 26 Liquid Glass keys/popups/strip (real `UIGlassEffect`); older iOS falls back to a blur.
-        /// The backdrop is clear, so `gradient*` is ignored unless `gradientStops` is non-empty
-        /// (then it is drawn faintly behind the glass so previews and fallbacks still have colour).
         case liquidGlass
     }
 
@@ -66,10 +64,9 @@ struct ThemeDefinition: Hashable {
     let kind: Kind
 
     /// nil = follow the system light/dark setting. true/false forces the keyboard into dark/light.
-    /// Gradient themes should force a style so the text colours below always read well.
     let isDark: Bool?
 
-    // ---- Colours (used by .gradient, and as the base for .liquidGlass tints) ----
+    // ---- Colours (used by .colored; placeholders for the other kinds) ----
 
     /// Fill of a letter/number key.
     var key: ThemeRGBA
@@ -79,8 +76,6 @@ struct ThemeDefinition: Hashable {
     var keyPressed: ThemeRGBA
     /// Fill of the pressed function key.
     var functionPressed: ThemeRGBA
-    /// Hairline outline around keys (alpha 0 = none).
-    let keyBorder: ThemeRGBA
     /// Colour of key labels, suggestions and icons.
     var text: ThemeRGBA
     /// Secondary labels (key hints, placeholders).
@@ -91,36 +86,6 @@ struct ThemeDefinition: Hashable {
     let onAccent: ThemeRGBA
     /// Fill of popups (key balloon, long-press strip, skin-tone strip). Keep it nearly opaque.
     var popup: ThemeRGBA
-    /// Fill of the suggestion strip and emoji search field / tab bar.
-    let panel: ThemeRGBA
-
-    // ---- Backdrop gradient (kind .gradient; faint for .liquidGlass) ----
-
-    /// Colour stops from start to end. 2 or more entries for a gradient, empty for none.
-    let gradientStops: [ThemeRGBA]
-    /// Angle in degrees: 0 = left to right, 90 = top to bottom (clockwise), 135 = top-left to bottom-right.
-    let gradientAngle: Double
-
-    /// Start/end points in unit space (CAGradientLayer convention: (0,0) top-left, (1,1) bottom-right).
-    var gradientStart: CGPoint {
-        let rad = gradientAngle * Double.pi / 180
-        return CGPoint(x: 0.5 - 0.5 * cos(rad), y: 0.5 - 0.5 * sin(rad))
-    }
-
-    var gradientEnd: CGPoint {
-        let rad = gradientAngle * Double.pi / 180
-        return CGPoint(x: 0.5 + 0.5 * cos(rad), y: 0.5 + 0.5 * sin(rad))
-    }
-
-    /// Evenly spaced stop locations 0...1.
-    var gradientLocations: [Double] {
-        let count = gradientStops.count
-        guard count > 1 else { return [0] }
-        return (0..<count).map { Double($0) / Double(count - 1) }
-    }
-
-    /// True when the keyboard should draw its own backdrop and a clear system background.
-    var drawsBackdrop: Bool { return false }
 
     /// Heading the theme is listed under in the picker ("" for the basic, non-colour themes).
     var group: String = ""
@@ -182,7 +147,6 @@ enum ThemeCatalog {
 
     // MARK: Helpers
 
-    private static let clear = ThemeRGBA(0, 0, 0, 0)
     private static let white = ThemeRGBA(1, 1, 1, 1)
 
     /// Mixes a colour toward white (amount > 0) or black (amount < 0).
@@ -211,15 +175,11 @@ enum ThemeCatalog {
             function: shade(key, -0.30),
             keyPressed: shade(key, lightText ? 0.25 : -0.12),
             functionPressed: shade(key, lightText ? 0.10 : -0.40),
-            keyBorder: clear,
             text: text,
             secondaryText: ThemeRGBA(text.r, text.g, text.b, 0.65),
             accent: ThemeRGBA(hex: accent),
             onAccent: ThemeRGBA(hex: onAccent),
             popup: shade(key, 0),
-            panel: ThemeRGBA(0, 0, 0, 0.08),
-            gradientStops: [],
-            gradientAngle: 90,
             group: "Classic"
         )
     }
@@ -264,15 +224,11 @@ enum ThemeCatalog {
             function: functionFill,
             keyPressed: shade(key, darkLabel ? -0.15 : 0.22),
             functionPressed: shade(functionHex, darkLabel ? -0.25 : 0.15),
-            keyBorder: clear,
             text: label,
             secondaryText: ThemeRGBA(label.r, label.g, label.b, 0.65),
             accent: ThemeRGBA(hex: accent),
             onAccent: onAccentColor,
             popup: shade(key, 0),
-            panel: ThemeRGBA(0, 0, 0, 0.08),
-            gradientStops: [],
-            gradientAngle: 90,
             group: group
         )
     }
@@ -289,15 +245,11 @@ enum ThemeCatalog {
         function: ThemeRGBA(0.67, 0.70, 0.74, 1),
         keyPressed: ThemeRGBA(0.67, 0.70, 0.74, 1),
         functionPressed: ThemeRGBA(1, 1, 1, 1),
-        keyBorder: clear,
         text: ThemeRGBA(0, 0, 0, 1),
         secondaryText: ThemeRGBA(0, 0, 0, 0.5),
         accent: ThemeRGBA(hex: 0x0A84FF),
         onAccent: white,
-        popup: ThemeRGBA(1, 1, 1, 1),
-        panel: ThemeRGBA(1, 1, 1, 0.5),
-        gradientStops: [ThemeRGBA(hex: 0xD2D5DB), ThemeRGBA(hex: 0xD2D5DB)],
-        gradientAngle: 90
+        popup: ThemeRGBA(1, 1, 1, 1)
     )
 
     /// See-through keys over the clear backdrop.
@@ -310,15 +262,11 @@ enum ThemeCatalog {
         function: ThemeRGBA(0.5, 0.5, 0.5, 0.18),
         keyPressed: ThemeRGBA(1, 1, 1, 0.45),
         functionPressed: ThemeRGBA(1, 1, 1, 0.35),
-        keyBorder: ThemeRGBA(1, 1, 1, 0.35),
         text: ThemeRGBA(0, 0, 0, 1),
         secondaryText: ThemeRGBA(0, 0, 0, 0.5),
         accent: ThemeRGBA(hex: 0x0A84FF),
         onAccent: white,
-        popup: ThemeRGBA(1, 1, 1, 0.96),
-        panel: ThemeRGBA(1, 1, 1, 0.30),
-        gradientStops: [ThemeRGBA(hex: 0x9AA4B5), ThemeRGBA(hex: 0xC9D1DE)],
-        gradientAngle: 90
+        popup: ThemeRGBA(1, 1, 1, 0.96)
     )
 
     /// iOS 26 Liquid Glass. Glass keys float over a clear backdrop.
@@ -331,15 +279,11 @@ enum ThemeCatalog {
         function: ThemeRGBA(0.5, 0.55, 0.65, 0.16),
         keyPressed: ThemeRGBA(1, 1, 1, 0.34),
         functionPressed: ThemeRGBA(1, 1, 1, 0.28),
-        keyBorder: ThemeRGBA(1, 1, 1, 0.22),
         text: ThemeRGBA(0, 0, 0, 1),
         secondaryText: ThemeRGBA(0, 0, 0, 0.5),
         accent: ThemeRGBA(hex: 0x0A84FF),
         onAccent: white,
-        popup: ThemeRGBA(1, 1, 1, 0.9),
-        panel: ThemeRGBA(1, 1, 1, 0.18),
-        gradientStops: [ThemeRGBA(hex: 0x7FB2FF), ThemeRGBA(hex: 0xC9A8FF), ThemeRGBA(hex: 0xFFB8D0)],
-        gradientAngle: 120
+        popup: ThemeRGBA(1, 1, 1, 0.9)
     )
 
     static let ocean = colored(id: "ocean", name: "Ocean", key: 0x2F7FD6, lightText: true, accent: 0xFFFFFF, onAccent: 0x0B3D91)

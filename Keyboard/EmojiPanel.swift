@@ -210,7 +210,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var sections: [Section] = []
     private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
-    private var headerLabels: [UILabel] = []
 
     private let searchGlass = FlatPanel(background: EmojiLook.searchField, cornerRadius: 20)
     private let searchButton = HitButton(type: .system)
@@ -261,7 +260,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
     private var searchHeight: CGFloat = 36
-    private var titleHeight: CGFloat = 18
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -371,7 +369,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         sections = built
 
         collectionView.isHidden = false
-        rebuildHeaders()
         rebuildTabs()
         collectionView.reloadData()
         collectionView.collectionViewLayout.invalidateLayout()
@@ -386,17 +383,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         updateEmptyState()
         setNeedsLayout()
         applyInitialScrollIfPossible()
-    }
-
-    /// Category names live inside the scrolling strip, so they move with their emoji.
-    private func rebuildHeaders() {
-        // The stock picker has no titles inside the grid: it is purely emoji.
-        for label in headerLabels { label.removeFromSuperview() }
-        headerLabels = []
-    }
-
-    private func positionHeaders() {
-        // (no headers any more)
     }
 
     private func applyInitialScrollIfPossible() {

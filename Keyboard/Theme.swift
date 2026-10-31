@@ -31,13 +31,11 @@ enum Theme {
         var functionKey: UIColor
         var letterKeyPressed: UIColor
         var functionKeyPressed: UIColor
-        var activeKey: UIColor
         var keyShadow: UIColor
         var keyBorder: UIColor
         var popupFill: UIColor
         var panelBackground: UIColor
         var stripFill: UIColor
-        var searchField: UIColor
         var separator: UIColor
     }
 
@@ -62,22 +60,10 @@ enum Theme {
     // MARK: Flags
 
     static var kind: ThemeDefinition.Kind { return definition.kind }
-    static var isTransparent: Bool { return kind == .transparent }
-    static var isColored: Bool { return kind == .colored }
     static var isLiquidGlass: Bool { return kind == .liquidGlass }
 
     /// Real Liquid Glass (iOS 26 SDK + iOS 26 phone + the Liquid Glass theme).
     static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable }
-
-    /// Keys are blurred / see-through rather than solid.
-    static var wantsClearBackdrop: Bool { return kind != .native && kind != .colored }
-
-    /// Whether the keyboard draws its own gradient behind everything. Only the gradient themes do:
-    /// Liquid Glass must stay see-through, so nothing is painted behind it.
-    static var drawsBackdrop: Bool { return false }
-
-    /// Opacity of that gradient.
-    static var backdropOpacity: CGFloat { return 0.45 }
 
     /// Dark/light forced by the theme (gradient themes), or `.unspecified` to follow the system.
     static var interfaceStyle: UIUserInterfaceStyle {
@@ -116,13 +102,11 @@ enum Theme {
     static var contrastKeys = false
     private static var contrastPalette = palette
     private static var keyPalette: Palette { return contrastKeys ? contrastPalette : palette }
-    static var activeKey: UIColor { return palette.activeKey }
     static var keyShadow: UIColor { return palette.keyShadow }
     static var keyBorder: UIColor { return palette.keyBorder }
     static var popupFill: UIColor { return palette.popupFill }
     static var panelBackground: UIColor { return palette.panelBackground }
     static var stripFill: UIColor { return palette.stripFill }
-    static var searchField: UIColor { return palette.searchField }
     static var separator: UIColor { return palette.separator }
 
     // MARK: Palettes
@@ -168,13 +152,11 @@ enum Theme {
                 functionKey: pick(nativeFunction, grey(0.27)),
                 letterKeyPressed: pick(nativeFunction, grey(0.27)),
                 functionKeyPressed: pick(UIColor.white, grey(0.42)),
-                activeKey: UIColor.white,
                 keyShadow: pick(UIColor(red: 0.53, green: 0.55, blue: 0.58, alpha: 1), black(0.55)),
                 keyBorder: UIColor.clear,
                 popupFill: pick(UIColor.white, grey(0.42)),
                 panelBackground: pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), grey(0.17)),
                 stripFill: UIColor.clear,
-                searchField: pick(black(0.08), white(0.16)),
                 separator: pick(black(0.12), white(0.20)))
 
         case .transparent:
@@ -189,13 +171,11 @@ enum Theme {
                 functionKey: pick(black(0.12), black(0.28)),
                 letterKeyPressed: pick(white(0.62), white(0.32)),
                 functionKeyPressed: pick(white(0.50), white(0.24)),
-                activeKey: pick(white(0.88), white(0.78)),
                 keyShadow: UIColor.clear,
                 keyBorder: pick(white(0.70), white(0.28)),
                 popupFill: pick(white(0.97), grey(0.30, 0.97)),
                 panelBackground: pick(grey(0.92, 0.72), grey(0.10, 0.72)),
                 stripFill: UIColor.clear,
-                searchField: pick(black(0.08), white(0.16)),
                 separator: pick(black(0.12), white(0.20)))
 
         case .liquidGlass:
@@ -212,13 +192,11 @@ enum Theme {
                 functionKey: GlassSupport.isAvailable ? pick(black(0.08), white(0.10)) : pick(black(0.12), black(0.28)),
                 letterKeyPressed: pick(white(0.55), white(0.30)),
                 functionKeyPressed: pick(white(0.45), white(0.24)),
-                activeKey: pick(white(0.80), white(0.60)),
                 keyShadow: UIColor.clear,
                 keyBorder: pick(white(0.60), white(0.25)),
                 popupFill: pick(white(0.94), grey(0.22, 0.94)),
                 panelBackground: UIColor.clear,
                 stripFill: UIColor.clear,
-                searchField: pick(black(0.06), white(0.12)),
                 separator: pick(black(0.12), white(0.20)))
 
         case .colored:
@@ -235,13 +213,11 @@ enum Theme {
                 functionKey: pick(light.function.uiColor, theme.function.uiColor),
                 letterKeyPressed: pick(light.keyPressed.uiColor, theme.keyPressed.uiColor),
                 functionKeyPressed: pick(light.functionPressed.uiColor, theme.functionPressed.uiColor),
-                activeKey: white(0.92),
                 keyShadow: UIColor.clear,
                 keyBorder: pick(white(0.60), white(0.28)),
                 popupFill: pick(light.popup.uiColor, theme.popup.uiColor),
                 panelBackground: pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), grey(0.17)),
                 stripFill: UIColor.clear,
-                searchField: pick(black(0.08), white(0.16)),
                 separator: pick(black(0.12), white(0.20)))
         }
     }
@@ -279,7 +255,4 @@ enum Theme {
         }
         return p
     }
-
-    /// Text colour on top of the shift key when it is on (always dark: the key turns near-white).
-    static var onActiveKey: UIColor { return UIColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1) }
 }

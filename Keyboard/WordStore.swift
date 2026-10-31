@@ -847,16 +847,6 @@ final class WordStore {
         rebuildLearnedKeys()
     }
 
-    func forgetLearnedWords() {
-        learned = [:]
-        corrections = [:]
-        used = [:]
-        bigrams = [:]
-        trigrams = [:]
-        usage = [:]
-        rebuildLearnedKeys()
-    }
-
     private func scheduleSave() {
         if saveScheduled { return }
         saveScheduled = true

@@ -40,9 +40,6 @@ enum Language: String, CaseIterable {
         }
     }
 
-    /// "EN", "HU", ...
-    var shortCode: String { return rawValue.uppercased() }
-
     /// Languages from a list of ISO codes (unknown codes are ignored; never returns an empty list).
     static func list(from codes: [String], fallback: Language = .english) -> [Language] {
         var result: [Language] = []

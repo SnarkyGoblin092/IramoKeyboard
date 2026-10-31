@@ -46,17 +46,6 @@ final class SuggestionBar: UIView {
         didSet { refreshVisibility() }
     }
 
-    /// Flashes a short message in place of the suggestions.
-    func flash(_ message: String, duration: TimeInterval = 2.5) {
-        let previousHint = emptyHint
-        update([])
-        emptyHint = message
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
-            guard let self = self, self.emptyHint == message else { return }
-            self.emptyHint = previousHint
-        }
-    }
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor.clear

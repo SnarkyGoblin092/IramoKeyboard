@@ -286,9 +286,10 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Returns true when contrastKeys changed (the keys must then be rebuilt).
     private func updateKeyStyle() -> Bool {
-        view.overrideUserInterfaceStyle = Theme.interfaceStyle
+        // Only assigned on a change: this runs after every layout pass, and each assignment re-resolves the traits.
+        if view.overrideUserInterfaceStyle != Theme.interfaceStyle { view.overrideUserInterfaceStyle = Theme.interfaceStyle }
         let keys = keyInterfaceStyle
-        keyboardView.overrideUserInterfaceStyle = keys
+        if keyboardView.overrideUserInterfaceStyle != keys { keyboardView.overrideUserInterfaceStyle = keys }
         let app = view.traitCollection.userInterfaceStyle
         guard app != .unspecified else { return false }   // not known yet (e.g. mid-rotation): keep what we have
         let differs = keys != .unspecified && keys != app
@@ -331,19 +332,7 @@ final class KeyboardViewController: UIInputViewController {
         searchQuery = ""
         for sub in container.subviews { sub.removeFromSuperview() }
 
-        // Gradient backdrop (gradient themes, and a soft wash behind Liquid Glass) covers the system backdrop.
-        if Theme.drawsBackdrop {
-            let backdrop = BackdropView(theme: Theme.definition, opacity: Theme.backdropOpacity)
-            backdrop.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(backdrop)
-            NSLayoutConstraint.activate([
-                backdrop.topAnchor.constraint(equalTo: container.topAnchor),
-                backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-                backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-            ])
-        }
-        else if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
+        if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
             // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
             // normal keyboard background, so paint one.
             let solid = UIView()
@@ -726,8 +715,8 @@ final class KeyboardViewController: UIInputViewController {
 
         // Auto-correction: "vsgyok" + space -> "vagyok ", "koszonom" -> "köszönöm ", "dont" -> "don't ", in any enabled
         // language (see Decoder.autoCorrect). Backspace right after takes it back. Fields that ask for no
-        // correction (addresses, codes) are left alone.
-        if autoCorrectAllowed {
+        // correction (addresses, codes) are left alone, and so are emoticons ("xD" is not a typo of "do").
+        if autoCorrectAllowed && Emoticons.match(atEndOf: before) == nil {
             let typedWord = currentPrefix(in: before)
             let fieldText = Predictor.fieldContext(before: before, after: textDocumentProxy.documentContextAfterInput ?? "")
             let fix: String?
@@ -1073,7 +1062,7 @@ final class KeyboardViewController: UIInputViewController {
                                                     field: field,
                                                     taps: currentTaps(for: prefix))
                 words = found.words.map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
-                if autoCorrectAllowed {
+                if autoCorrectAllowed && Emoticons.match(atEndOf: before) == nil {
                     fix = found.fix
                     shownFix = (before, found.fix)
                 }

@@ -161,26 +161,6 @@ struct SettingSlider: View {
     }
 }
 
-struct InfoRow: View {
-    let title: String
-    let value: String
-
-    init(_ title: String, _ value: String) {
-        self.title = title
-        self.value = value
-    }
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-}
-
 
 /// Key-roundness slider with a live preview of a few sample keys.
 struct RoundnessSlider: View {

@@ -277,7 +277,7 @@ def print_table(rows, compare=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--engine", default="baseline", help="module in scripts/predict_eval with an Engine class")
+    parser.add_argument("--engine", default="decoder", help="module in scripts/predict_eval with an Engine class (decoder: the keyboard's; baseline: the old one)")
     parser.add_argument("--langs", default=",".join(ALL_LANGS), help="languages to test, each on its own")
     parser.add_argument("--mix", help="enabled languages tested together, the first is the layout (e.g. hu,en)")
     parser.add_argument("--sentences", type=int, default=150, help="test sentences per language")
