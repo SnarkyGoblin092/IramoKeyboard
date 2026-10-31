@@ -43,7 +43,7 @@ from keyboard import Layout, normalize_apostrophes, swipe_path, tap_word_points,
 EVAL_DIR = ROOT / ".eval"
 DATA_DIR = EVAL_DIR / "data"
 RESULTS_DIR = EVAL_DIR / "results"
-ALL_LANGS = ["en", "hu", "es", "fr", "de", "it", "pt", "nl", "pl", "cs", "ro", "tr", "ru", "uk", "sv"]
+ALL_LANGS = ["en", "hu", "es", "fr", "de", "it", "pt", "nl", "pl", "cs", "ro", "tr", "ru", "uk", "sv", "lt", "ar"]
 TOKEN = re.compile(r"[^\W\d_]+(?:[" + APOSTROPHES + r"][^\W\d_]+)*")
 METRICS = ["next", "typed", "space", "clean", "slipped", "ksr", "swipe1", "swipe3"]
 

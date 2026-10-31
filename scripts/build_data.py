@@ -60,9 +60,10 @@ FREQ = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/conte
 TATOEBA = "https://downloads.tatoeba.org/exports/per_language"
 OPUS = "https://object.pouta.csc.fi/OPUS-OpenSubtitles/v2018/mono"
 ISO3 = {"en": "eng", "hu": "hun", "es": "spa", "fr": "fra", "de": "deu", "it": "ita", "pt": "por", "nl": "nld",
-        "pl": "pol", "cs": "ces", "ro": "ron", "tr": "tur", "ru": "rus", "uk": "ukr", "sv": "swe"}
+        "pl": "pol", "cs": "ces", "ro": "ron", "tr": "tur", "ru": "rus", "uk": "ukr", "sv": "swe",
+        "lt": "lit", "ar": "ara"}
 
-LANGS = ["en", "hu", "es", "fr", "de", "it", "pt", "nl", "pl", "cs", "ro", "tr", "ru", "uk", "sv"]
+LANGS = ["en", "hu", "es", "fr", "de", "it", "pt", "nl", "pl", "cs", "ro", "tr", "ru", "uk", "sv", "lt", "ar"]
 REQUIRED = {"en", "hu"}
 BUILD_PROCESSES = 4
 
@@ -430,6 +431,9 @@ ALPHABETS = {
     "ru": "а-яё",
     "uk": "а-щьюяіїєґ",
     "sv": "a-zåäöé",
+    "lt": "a-ząčęėįšųūž",
+    # Arabic letters (hamza to ghain, feh to yeh), without the tatweel; vowel marks are removed in lower().
+    "ar": "ء-غف-ي",
 }
 APOSTROPHE = {"en", "fr", "it", "uk"}
 # Subtitles saved in the wrong code page: letters a language's code page has were read as the Latin-1 letter with
@@ -460,14 +464,15 @@ VOWELS = {
     "en": "aeiouy", "hu": "aeiouyáéíóöőúüű", "es": "aeiouyáéíóúü", "fr": "aeiouyàâæéèêëîïôœùûüÿ",
     "de": "aeiouyäöü", "it": "aeiouyàèéìíîòóùú", "pt": "aeiouyáàâãéêíóôõúü", "nl": "aeiouyáäéèêëíïóöúü",
     "pl": "aeiouyąęó", "cs": None, "ro": "aeiouyăâî", "tr": "aeiouıöüâîû",
-    "ru": "аеёиоуыэюя", "uk": "аеєиіїоуюя", "sv": "aeiouyåäö",
+    "ru": "аеёиоуыэюя", "uk": "аеєиіїоуюя", "sv": "aeiouyåäö", "lt": "aeiouyąęėįųū",
+    "ar": None,    # short vowels are not written
 }
 SINGLES = {
     "en": {"a", "i"}, "hu": {"a", "e", "s", "ő", "ó", "é"}, "es": {"a", "y", "o", "e", "u"}, "fr": {"a", "y", "à"},
     "de": set(), "it": {"a", "e", "i", "o"}, "pt": {"a", "e", "o"}, "nl": {"u", "e", "o"},
     "pl": {"a", "i", "o", "u", "w", "z"}, "cs": {"a", "i", "k", "o", "s", "u", "v", "z"}, "ro": {"a"},
     "tr": {"o", "e"}, "ru": {"а", "в", "и", "к", "о", "с", "у", "я"}, "uk": {"а", "в", "і", "й", "и", "о", "с", "у", "я", "з"},
-    "sv": {"i", "å", "ö", "o", "a"},
+    "sv": {"i", "å", "ö", "o", "a"}, "lt": {"o", "į", "a"}, "ar": {"و"},
 }
 NO_VOWEL_OK = {"hm", "hmm", "mr", "mrs", "ms", "dr", "tv", "pm", "cd", "dj", "mm", "sh", "shh", "psst"}
 EN_BLOCK = {"ll", "ve", "re", "didn", "doesn", "isn", "wasn", "weren", "hasn", "haven",
@@ -533,7 +538,10 @@ def word_pattern(lang: str):
 
 # How many words each dictionary keeps. Languages that build words from many suffixes need far more forms
 # ("billentyűzet", "billentyűzetet", "billentyűzeten" ... are all separate words).
-WORD_LIMITS = {"hu": int(os.environ.get("HUNKEYS_HU_WORDS", 400000)), "tr": 140000, "pl": 100000, "cs": 100000, "ru": 100000, "uk": 100000, "ro": 90000}
+WORD_LIMITS = {"hu": int(os.environ.get("HUNKEYS_HU_WORDS", 400000)), "tr": 140000, "pl": 100000, "cs": 100000, "ru": 100000,
+               "uk": 100000, "ro": 90000, "lt": 140000,
+               # Arabic writes "and", "the", "to" and pronouns onto the word ("وكتابه"), so it has very many forms.
+               "ar": 200000}
 DEFAULT_WORD_LIMIT = 80000
 MIN_COUNT = 3   # rarer "words" in the full lists are mostly typos and names
 
@@ -543,10 +551,17 @@ ENGLISH_RATIO = 30
 ENGLISH_PROTECTED_RANK = 1000
 
 
+# Arabic vowel marks (fathatan ... sukun, superscript alef) and the tatweel: words are listed without them.
+ARABIC_MARKS = re.compile("[\u064B-\u0652\u0670\u0640]")
+
+
 def lower(text: str, lang: str) -> str:
-    """Lower-case the way the language does (Turkish I -> ı, İ -> i), with straight apostrophes."""
+    """Lower-case the way the language does (Turkish I -> ı, İ -> i), with straight apostrophes (Arabic: without
+    its vowel marks)."""
     if lang == "tr":
         text = text.replace("I", "ı").replace("İ", "i")
+    if lang == "ar":
+        text = ARABIC_MARKS.sub("", text)
     return text.lower().replace("’", "'").replace("ʼ", "'")
 
 

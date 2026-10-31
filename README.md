@@ -5,10 +5,13 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ## Features
 
 ### Languages
-- 15 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
-  Turkish, Russian, Ukrainian and Swedish.
-- Each with its own layout: QWERTY, QWERTZ, AZERTY, Turkish, and Cyrillic for Russian and Ukrainian, plus the
-  language's extra letters (ñ, ç, ü ö ä, å, ğ ş ı...).
+- 17 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
+  Turkish, Russian, Ukrainian, Swedish, Lithuanian and Arabic.
+- Each with its own layout: QWERTY, QWERTZ, AZERTY, Turkish, Cyrillic for Russian and Ukrainian and the Arabic
+  layout, plus the language's extra letters (ñ, ç, ü ö ä, å, ğ ş ı, ą č ę ė į š ų ū ž...).
+- Arabic: right to left (the cursor slides the right way), no shift key, its own comma, question mark and
+  semicolon (، ؟ ؛), Arabic-Indic digits (the Western ones on long-press), hamza forms on long-press, and words
+  matched with or without hamza and vowel marks.
 - Swipe the space bar left or right to switch; the space bar shows the language's name.
 - Several languages at once: words from any enabled language are suggested and corrected, and the keyboard
   learns which ones you write in most.

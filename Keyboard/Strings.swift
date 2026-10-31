@@ -100,6 +100,16 @@ extension Language {
                                    emptyRecents: "Emojis du använder visas här.", returnKey: "retur", go: "Gå", search: "Sök",
                                    send: "Skicka", done: "Klar", next: "Nästa",
                                    categories: ["Smileys och personer", "Djur och natur", "Mat och dryck", "Aktiviteter", "Resor och platser", "Objekt", "Symboler", "Flaggor"])
+        case .lithuanian:
+            return LanguageStrings(searchEmoji: "Ieškoti jaustukų", recentlyUsed: "Neseniai naudoti", loadingEmoji: "Įkeliami jaustukai…",
+                                   emptyRecents: "Čia bus rodomi jūsų naudoti jaustukai.", returnKey: "grįžti", go: "Eiti", search: "Ieškoti",
+                                   send: "Siųsti", done: "Atlikta", next: "Kitas",
+                                   categories: ["Šypsenėlės ir žmonės", "Gyvūnai ir gamta", "Maistas ir gėrimai", "Veikla", "Kelionės ir vietos", "Objektai", "Simboliai", "Vėliavos"])
+        case .arabic:
+            return LanguageStrings(searchEmoji: "البحث عن رموز تعبيرية", recentlyUsed: "المستخدمة مؤخرًا", loadingEmoji: "جارٍ تحميل الرموز…",
+                                   emptyRecents: "ستظهر هنا الرموز التعبيرية التي تستخدمها.", returnKey: "إدخال", go: "انتقال", search: "بحث",
+                                   send: "إرسال", done: "تم", next: "التالي",
+                                   categories: ["الوجوه والأشخاص", "الحيوانات والطبيعة", "الطعام والشراب", "الأنشطة", "السفر والأماكن", "الأشياء", "الرموز", "الأعلام"])
         }
     }
 }
@@ -123,6 +133,8 @@ extension Language {
         case .russian: return "Люди"
         case .ukrainian: return "Люди"
         case .swedish: return "Personer"
+        case .lithuanian: return "Žmonės"
+        case .arabic: return "الأشخاص"
         }
     }
 }

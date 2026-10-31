@@ -35,6 +35,11 @@ extension Language {
             return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish:
             return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
+        case .lithuanian:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .arabic:
+            // Left to right as the keys appear (the Arabic PC layout; ذ from the key left of 1 starts the last row).
+            return split("ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ")
         }
     }
 
@@ -73,6 +78,11 @@ extension Language {
             return [:]
         case .swedish:
             return ["e": ["é"], "u": ["ü"]]
+        case .lithuanian:
+            return ["a": ["ą"], "c": ["č"], "e": ["ę", "ė"], "i": ["į"], "s": ["š"], "u": ["ų", "ū"], "z": ["ž"]]
+        case .arabic:
+            // Hamza and madda forms of alef, and the other seats of hamza.
+            return ["ا": ["أ", "إ", "آ", "ٱ"], "ي": ["ى", "ئ"], "و": ["ؤ"], "ه": ["ة"], "ء": ["أ", "إ", "ؤ", "ئ"]]
         }
     }
 
@@ -89,6 +99,7 @@ extension Language {
 
     /// Upper-case a string the way this language does it (Turkish i -> İ).
     func uppercase(_ text: String) -> String {
+        if !hasCapitals { return text }
         if self == .turkish { return text.uppercased(with: Locale(identifier: "tr")) }
         return text.uppercased()
     }
@@ -100,6 +111,8 @@ extension Language {
         case .german: return ["\u{201E}", "\u{201C}", "\u{00BB}", "\u{00AB}"]
         case .french, .russian, .ukrainian: return ["\u{00AB}", "\u{00BB}"]
         case .swedish: return ["\u{201D}"]
+        case .lithuanian: return ["\u{201E}", "\u{201C}"]
+        case .arabic: return ["\u{00AB}", "\u{00BB}"]
         default: return []
         }
     }
@@ -115,8 +128,20 @@ extension Language {
         case .swedish: return ["kr", "€", "£", "¥"]
         case .russian: return ["₽", "€", "£", "¥"]
         case .ukrainian: return ["₴", "€", "£", "¥"]
+        case .arabic: return ["﷼", "€", "£", "¥"]
         default: return ["€", "£", "¥", "¢"]
         }
+    }
+
+    /// The language's own comma, question mark and semicolon (Arabic turns them: "،" "؟" "؛").
+    var comma: String { return self == .arabic ? "\u{060C}" : "," }
+    var questionMark: String { return self == .arabic ? "\u{061F}" : "?" }
+    var semicolon: String { return self == .arabic ? "\u{061B}" : ";" }
+
+    /// Digits on the numbers page: Arabic-Indic for Arabic (the Western ones on long-press), else 0-9.
+    var digits: [String] {
+        if self == .arabic { return ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "٠"] }
+        return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
     }
 }
 
@@ -213,15 +238,20 @@ enum LayoutBuilder {
         result.append(row2)
 
         let edgeWeight = min(1.8, max(1.0, CGFloat(topCount - letters[2].count) / 2))
-        var row3: [KeySpec] = [KeySpec(action: .shift, symbol: "shift", weight: edgeWeight, isFunction: true)]
+        var row3: [KeySpec] = []
+        if language.hasCapitals {
+            row3.append(KeySpec(action: .shift, symbol: "shift", weight: edgeWeight, isFunction: true))
+        }
         row3.append(contentsOf: letters[2].map(letterKey))
-        row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: edgeWeight, isFunction: true))
+        // Without a shift key (Arabic) the delete key takes its room too.
+        let deleteWeight = language.hasCapitals ? edgeWeight : max(1.5, CGFloat(topCount - letters[2].count))
+        row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: deleteWeight, isFunction: true))
         result.append(row3)
 
         result.append([
             KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true),
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
-            KeySpec(action: .character(","), title: ",", weight: 1.0, alternates: commaAlternates(language)),
+            KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0, alternates: commaAlternates(language)),
             KeySpec(action: .space, title: language.displayName, weight: 3.9),
             KeySpec(action: .character("."), title: ".", weight: 1.0, alternates: dotAlternates(language)),
             KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
@@ -232,14 +262,16 @@ enum LayoutBuilder {
     /// Long-press options of the comma key.
     /// The comma's long-press: marks used inside a sentence.
     private static func commaAlternates(_ language: Language) -> [String] {
-        var marks = [";", ":", "'", "-", "\u{2013}", "(", ")"]
+        var marks = [language.semicolon, ":", "'", "-", "\u{2013}", "(", ")"]
+        if language == .arabic { marks.insert(",", at: 0) }
         if language == .ukrainian { marks.insert("\u{02BC}", at: 3) }   // the Ukrainian apostrophe
         return marks
     }
 
     /// The full stop's long-press: marks that end or start a sentence.
     private static func dotAlternates(_ language: Language) -> [String] {
-        var marks = ["?", "!", "\u{2026}", "\""]
+        var marks = [language.questionMark, "!", "\u{2026}", "\""]
+        if language == .arabic { marks.insert("?", at: 1) }
         if language == .spanish { marks.insert(contentsOf: ["\u{00BF}", "\u{00A1}"], at: 2) }   // ¿ ¡
         return marks + language.quoteMarks
     }
@@ -249,8 +281,10 @@ enum LayoutBuilder {
     private static func numberPage(language: Language, returnTitle: String) -> [[KeySpec]] {
         let currency = language.currencyOptions
 
-        let row1 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map {
-            KeySpec(action: .character($0), title: $0)
+        // Arabic-Indic digits for Arabic, with the Western digit on long-press.
+        let western = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+        let row1 = zip(language.digits, western).map { digit, plain in
+            KeySpec(action: .character(digit), title: digit, alternates: digit == plain ? [] : [plain])
         }
 
         var row2: [KeySpec] = []
@@ -260,7 +294,7 @@ enum LayoutBuilder {
         }
 
         var row3: [KeySpec] = [KeySpec(action: .showSymbols, title: "#+=", weight: 1.5, isFunction: true)]
-        for symbol in [".", ",", "?", "!", "'"] {
+        for symbol in [".", language.comma, language.questionMark, "!", "'"] {
             row3.append(KeySpec(action: .character(symbol), title: symbol, weight: 1.4))
         }
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))
@@ -279,7 +313,7 @@ enum LayoutBuilder {
         }
 
         var row3: [KeySpec] = [KeySpec(action: .showNumbers, title: "123", weight: 1.5, isFunction: true)]
-        for symbol in [".", ",", "?", "!", "'"] {
+        for symbol in [".", language.comma, language.questionMark, "!", "'"] {
             row3.append(KeySpec(action: .character(symbol), title: symbol, weight: 1.4))
         }
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))

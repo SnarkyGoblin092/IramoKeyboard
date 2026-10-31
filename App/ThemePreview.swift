@@ -56,6 +56,8 @@ struct ThemePreview: View {
         case .russian: return split("йцукенгшщзхъ", "фывапролджэ", "ячсмитьбю")
         case .ukrainian: return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish: return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
+        case .lithuanian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .arabic: return split("ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ")
         }
     }
 
@@ -75,6 +77,8 @@ struct ThemePreview: View {
         case .turkish: return ["a": "â", "i": "î", "u": "û"]
         case .russian: return ["е": "ё"]
         case .swedish: return ["e": "é", "u": "ü"]
+        case .lithuanian: return ["a": "ą", "c": "č", "e": "ę", "i": "į", "s": "š", "u": "ų", "z": "ž"]
+        case .arabic: return ["ا": "أ", "ي": "ى", "و": "ؤ", "ه": "ة", "ء": "أ"]
         default: return [:]
         }
     }
@@ -91,6 +95,8 @@ struct ThemePreview: View {
         case .russian: return "ввод"
         case .ukrainian: return "ввід"
         case .swedish: return "retur"
+        case .lithuanian: return "grįžti"
+        case .arabic: return "إدخال"
         default: return "return"
         }
     }
@@ -126,16 +132,19 @@ struct ThemePreview: View {
         row2 += letters[1].map(letterKey)
         if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
         let edge = min(1.8, max(1.0, CGFloat(top - letters[2].count) / 2))
-        var row3 = [PreviewKey(symbol: "shift.fill", weight: edge, function: true, accent: true)]
+        // As the keyboard: no shift key for a language without capitals; delete takes its room.
+        var row3 = shownLanguage.hasCapitals ? [PreviewKey(symbol: "shift.fill", weight: edge, function: true, accent: true)] : []
         row3 += letters[2].map(letterKey)
-        row3.append(PreviewKey(symbol: "delete.left", weight: edge, function: true))
+        row3.append(PreviewKey(symbol: "delete.left",
+                               weight: shownLanguage.hasCapitals ? edge : max(1.5, CGFloat(top - letters[2].count)),
+                               function: true))
         return [
             letters[0].map(letterKey),
             row2,
             row3,
             [PreviewKey(title: "123", weight: 1.3, function: true),
              PreviewKey(tabIcon: "smileys", function: true),
-             PreviewKey(title: ","),
+             PreviewKey(title: shownLanguage == .arabic ? "\u{060C}" : ","),
              PreviewKey(title: spaceTitle, weight: 3.9, space: true),
              PreviewKey(title: "."),
              PreviewKey(title: returnTitle, weight: 1.8, function: true, accent: true)]

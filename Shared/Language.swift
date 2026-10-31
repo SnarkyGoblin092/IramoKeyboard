@@ -18,6 +18,8 @@ enum Language: String, CaseIterable {
     case russian = "ru"
     case ukrainian = "uk"
     case swedish = "sv"
+    case lithuanian = "lt"
+    case arabic = "ar"
 
     /// The language's own name.
     var displayName: String {
@@ -37,8 +39,16 @@ enum Language: String, CaseIterable {
         case .russian: return "Русский"
         case .ukrainian: return "Українська"
         case .swedish: return "Svenska"
+        case .lithuanian: return "Lietuvių"
+        case .arabic: return "العربية"
         }
     }
+
+    /// Written right to left (the cursor gesture is mirrored for it).
+    var isRightToLeft: Bool { return self == .arabic }
+
+    /// Has capital letters (no shift key, auto-capitalization or capitalised suggestions without them).
+    var hasCapitals: Bool { return self != .arabic }
 
     /// Languages from a list of ISO codes (unknown codes are ignored; never returns an empty list).
     static func list(from codes: [String], fallback: Language = .english) -> [Language] {

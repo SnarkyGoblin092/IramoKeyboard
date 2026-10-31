@@ -700,7 +700,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func shouldAutoCapitalize() -> Bool {
-        guard Prefs.autoCapitalize else { return false }
+        guard Prefs.autoCapitalize, language.hasCapitals else { return false }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         let type = textDocumentProxy.autocapitalizationType ?? .sentences
 
@@ -721,7 +721,7 @@ final class KeyboardViewController: UIInputViewController {
             }
             guard let last = trimmed.last else { return true }
             if last == "\n" { return true }
-            return hadSpace && (last == "." || last == "!" || last == "?")
+            return hadSpace && (last == "." || last == "!" || last == "?" || last == "\u{061F}")
         @unknown default:
             return false
         }
@@ -757,7 +757,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         // Punctuation that normally ends a word goes right after the word when the space in front of it was
         // added automatically (by a swipe or a picked suggestion) and nothing was typed since.
-        if text.count == 1, ".,!?;:)]}\u{2026}".contains(text) {
+        if text.count == 1, ".,!?;:)]}\u{2026}\u{060C}\u{061F}\u{061B}".contains(text) {
             let before = textDocumentProxy.documentContextBeforeInput ?? ""
             if let marker = autoSpaceMarker, !marker.isEmpty, before.hasSuffix(marker), before.hasSuffix(" "),
                let beforeSpace = before.dropLast().last, beforeSpace.isLetter || beforeSpace.isNumber {
@@ -1446,7 +1446,8 @@ extension KeyboardViewController: KeyboardViewDelegate {
 
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {
         guard offset != 0, !isSearchingEmoji else { return }
-        textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
+        // In right-to-left text, sliding right goes back towards the start of the text.
+        textDocumentProxy.adjustTextPosition(byCharacterOffset: language.isRightToLeft ? -offset : offset)
         if Prefs.cursorTickHaptic { Haptics.shared.tick() }
         clearSwipeState()
         lastSpaceTime = Date.distantPast
