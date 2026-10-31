@@ -314,6 +314,20 @@ final class WordStore {
         return index < entries.count && entries.keyEquals(index, Array(key.utf8))
     }
 
+    /// Whether the dictionary has exactly this spelling (lower-case, accents included): "omágá" is not
+    /// "omaga", although both share the match key.
+    func dictionaryHas(word: String) -> Bool {
+        let lower = TextFolding.normalizeApostrophes(word).lowercased()
+        let key = TextFolding.key(lower)
+        guard !key.isEmpty else { return false }
+        var index = lowerBound(of: key)
+        while index < entries.count, entries[index].folded == key {
+            if entries[index].word == lower { return true }
+            index += 1
+        }
+        return false
+    }
+
     /// 0...1: how common the most common word with this match key is (a learned word counts as fairly common);
     /// 0 when the language does not know it. Used to tell which language a word belongs to.
     func frequency(ofKey key: String) -> Double {

@@ -894,15 +894,16 @@ final class KeyboardViewController: UIInputViewController {
         if !known { stores[language]?.learn(cleaned) }
     }
 
-    /// Tapping the word exactly as typed keeps it: one that no enabled dictionary has is learned at once (and
-    /// from then on suggested, and never corrected away).
+    /// Tapping the word exactly as typed keeps it: a spelling that no enabled dictionary has is learned at once
+    /// (and from then on suggested, and never corrected away). Only the exact spelling counts as known: a
+    /// dictionary word with the same letters but other accents ("omaga" for "omágá") must not block it.
     private func learnTappedWord(_ word: String) {
         guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
         let cleaned = TextFolding.normalizeApostrophes(word)
         let key = TextFolding.key(cleaned)
         guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
         ensureStores()
-        let known = stores.values.contains { $0.isLoaded && $0.dictionaryContains(key: key) }
+        let known = stores.values.contains { $0.isLoaded && $0.dictionaryHas(word: cleaned) }
         if !known { stores[language]?.learn(cleaned, asTyped: true) }
     }
 

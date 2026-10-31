@@ -607,9 +607,12 @@ private struct SwipeToDeleteRow<Content: View>: View {
 
     @State private var offset: CGFloat = 0
     @State private var settled: CGFloat = 0
+    /// Whether the current drag is a sideways swipe (decided once, at its start); nil until it is known.
+    @State private var horizontal: Bool?
     private let buttonWidth: CGFloat = 84
     /// How far the Delete button may grow: a long swipe that reaches it deletes at once.
     private let maxReveal: CGFloat = 200
+    private let settle = Animation.spring(response: 0.35, dampingFraction: 0.86)
 
     var body: some View {
         // The row stays put (the name never slides off screen); the Delete button grows in from the right edge.
@@ -617,47 +620,56 @@ private struct SwipeToDeleteRow<Content: View>: View {
             .background(Color(.secondarySystemGroupedBackground))
             .onTapGesture { close() }
             .overlay(alignment: .trailing) {
-                if offset < 0 {
-                    Button(action: delete) {
-                        Text("Delete")
-                            .font(.body.weight(.semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .fixedSize()
-                            .frame(width: -offset)
-                            .frame(maxHeight: .infinity)
-                            .background(Color.red)
-                            .clipped()
-                    }
-                    .buttonStyle(.plain)
+                Button(action: delete) {
+                    Text("Delete")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(width: max(0, -offset))
+                        .frame(maxHeight: .infinity)
+                        .background(Color.red)
+                        .clipped()
                 }
+                .buttonStyle(.plain)
+                .allowsHitTesting(offset < 0)
             }
-        .gesture(drag, including: canDelete ? .all : .subviews)
+            // Alongside the scroll view's own pan, so the row follows the finger from the first point instead
+            // of waiting for the scroll view to give up (the stall partway into a slow swipe).
+            .simultaneousGesture(drag, including: canDelete ? .all : .subviews)
     }
 
     private var drag: some Gesture {
-        DragGesture(minimumDistance: 12)
+        DragGesture(minimumDistance: 6)
             .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                // At most up to a short distance from the name, so it always stays readable.
-                offset = max(-maxReveal, min(0, settled + value.translation.width))
+                let dx = value.translation.width, dy = value.translation.height
+                if horizontal == nil { horizontal = abs(dx) > abs(dy) }
+                guard horizontal == true else { return }
+                let target = min(0, settled + dx)
+                // Past the full-delete point the button resists instead of stopping dead.
+                let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
+                if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.tick() }   // crossing it
+                offset = resisted
             }
             .onEnded { value in
+                defer { horizontal = nil }
+                guard horizontal == true else { return }
                 let end = min(0, settled + value.translation.width)
                 if end <= -maxReveal {
                     delete()
-                } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        offset = end < -buttonWidth / 2 ? -buttonWidth : 0
-                    }
-                    settled = offset
+                    return
                 }
+                // A quick flick counts as far as it was heading.
+                let heading = min(0, settled + value.predictedEndTranslation.width)
+                let open = min(end, heading) < -buttonWidth / 2
+                withAnimation(settle) { offset = open ? -buttonWidth : 0 }
+                settled = open ? -buttonWidth : 0
             }
     }
 
     private func close() {
         guard offset != 0 else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { offset = 0 }
+        withAnimation(settle) { offset = 0 }
         settled = 0
     }
 
