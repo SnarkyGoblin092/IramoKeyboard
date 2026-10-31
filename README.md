@@ -1,6 +1,6 @@
-# TempoKeyboard
+# Iramo
 
-A custom keyboard for iPhone and iPad. All settings live in the **Tempo app**.
+A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 
 - **Languages:** English, Hungarian and 13 other European languages; swipe the space bar to switch.
 - **Prediction:** a word trigram model per language with typo, accent and missing-space correction

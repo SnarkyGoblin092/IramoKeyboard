@@ -28,7 +28,7 @@ targets:
     info:
       path: Config/App-Info.plist
       properties:
-        CFBundleDisplayName: Tempo
+        CFBundleDisplayName: Iramo
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -52,7 +52,7 @@ targets:
     info:
       path: Config/Keyboard-Info.plist
       properties:
-        CFBundleDisplayName: Tempo
+        CFBundleDisplayName: Iramo
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController

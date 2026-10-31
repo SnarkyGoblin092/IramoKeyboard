@@ -9,7 +9,9 @@ from PIL import Image, ImageDraw, ImageFilter
 
 F = 4             # supersampling factor
 S = 1024 * F
-out = Path(__file__).resolve().parent.parent / "App" / "Assets.xcassets" / "AppIcon.appiconset" / "icon.png"
+ASSETS = Path(__file__).resolve().parent.parent / "App" / "Assets.xcassets"
+out = ASSETS / "AppIcon.appiconset" / "icon.png"
+logo = ASSETS / "AppLogo.imageset" / "logo.png"
 
 
 def hexrgb(h):
@@ -110,5 +112,11 @@ shadow(img, dot, (0, 0), 28 * F, hexrgb("#E8287A"), 0.9)
 paste_colour(img, dot, (255, 255, 255))
 
 out.parent.mkdir(parents=True, exist_ok=True)
-img.convert("RGB").resize((1024, 1024), Image.LANCZOS).save(out)   # no alpha: iOS rejects icons with it
+icon = img.convert("RGB").resize((1024, 1024), Image.LANCZOS)
+icon.save(out)   # no alpha: iOS rejects icons with it
 print("wrote", out)
+
+# A small copy for the app's own header (56 pt, at 3x).
+logo.parent.mkdir(parents=True, exist_ok=True)
+icon.resize((168, 168), Image.LANCZOS).save(logo)
+print("wrote", logo)

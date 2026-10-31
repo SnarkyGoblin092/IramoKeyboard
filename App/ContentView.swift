@@ -36,26 +36,20 @@ struct ContentView: View {
 private struct HeaderSection: View {
     @State private var status = KeyboardStatus.read()
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
-    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-
-    private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
 
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 14) {
-                    Image(systemName: "keyboard.fill")
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundColor(.white)
+                    // The app icon (AppLogo is a small copy of it, written by scripts/make_icon.py), with the
+                    // home screen's corner shape.
+                    Image("AppLogo")
+                        .resizable()
                         .frame(width: 56, height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(LinearGradient(colors: [accent, accent.opacity(0.65)],
-                                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
+                        .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Tempo").font(.title2.weight(.bold))
+                        Text("Iramo").font(.title2.weight(.bold))
                         Text("Your keyboard, your way")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -96,7 +90,7 @@ private struct HeaderSection: View {
             return "This install can't share settings with the keyboard (no App Group). Install the IPA with iloader."
         }
         if !status.seen {
-            return "Add Tempo in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
+            return "Add Iramo in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
         }
         if !status.fullAccess {
             return "Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words."

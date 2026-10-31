@@ -19,7 +19,7 @@ struct LicensesView: View {
     var body: some View {
         List {
             Section {
-                Text("TempoKeyboard. Copyright © 2026 Orsós Emil. All rights reserved.")
+                Text("Iramo. Copyright © 2026 Orsós Emil. All rights reserved.")
             } footer: {
                 Text("The third-party material below keeps its own licences.")
             }

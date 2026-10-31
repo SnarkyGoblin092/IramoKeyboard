@@ -1,7 +1,7 @@
-name: Build TempoKeyboard IPA
+name: Build Iramo IPA
 
 # Runs on every push (except documentation-only changes) and can also be started by hand
-# (Actions tab > Build TempoKeyboard IPA > Run workflow).
+# (Actions tab > Build Iramo IPA > Run workflow).
 on:
   push:
     paths-ignore:
@@ -127,7 +127,7 @@ jobs:
       - name: Package IPA
         run: |
           command -v ldid
-          rm -rf Payload TempoKeyboard.ipa
+          rm -rf Payload Iramo.ipa
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/HunKeys.app Payload/
           APP=Payload/HunKeys.app
@@ -137,15 +137,15 @@ jobs:
           ldid -e "$APP/HunKeys" | tee app-ent.txt
           grep -q "group.com.hunkeys.k9x4.shared" appex-ent.txt
           grep -q "group.com.hunkeys.k9x4.shared" app-ent.txt
-          zip -qry TempoKeyboard.ipa Payload
-          ls -la TempoKeyboard.ipa
+          zip -qry Iramo.ipa Payload
+          ls -la Iramo.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v7
         with:
-          # Not zipped: the download is TempoKeyboard.ipa itself (the file name is the artifact name).
+          # Not zipped: the download is Iramo.ipa itself (the file name is the artifact name).
           archive: false
-          path: TempoKeyboard.ipa
+          path: Iramo.ipa
           if-no-files-found: error
 
       - name: Show compiler errors (only if something failed)
