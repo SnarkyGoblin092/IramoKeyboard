@@ -5,7 +5,7 @@ protocol KeyboardViewDelegate: AnyObject {
     func keyboardView(_ view: KeyboardView, didSelectAlternate text: String)
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int)
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView)
-    func keyboardViewDidHoldGlobe(_ view: KeyboardView)
+    func keyboardViewDidHoldEmoji(_ view: KeyboardView)
     /// A quick horizontal swipe on the space bar: +1 = next language, -1 = previous.
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int)
     /// The finger moved during a swipe (the whole path so far), for a live preview of the word.
@@ -417,7 +417,7 @@ final class KeyboardView: UIView {
             if !key.spec.alternates.isEmpty {
                 startHoldTimer(state, delay: popupDelay)
             } else if key.spec.action == .emoji {
-                // Holding emoji hands over to the next keyboard; a slow ordinary tap must not do that.
+                // Holding emoji opens the app; a slow ordinary tap must not do that.
                 startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
             }
         }
@@ -493,10 +493,10 @@ final class KeyboardView: UIView {
                 beginCursorMode(state, at: state.path.last ?? state.startPoint)
             }
         case .emoji:
-            // Holding the emoji key hands over to the next installed keyboard.
+            // Holding the emoji key opens the app.
             state.handledByHold = true
             Haptics.shared.keyPress()
-            delegate?.keyboardViewDidHoldGlobe(self)
+            delegate?.keyboardViewDidHoldEmoji(self)
         default:
             if !key.spec.alternates.isEmpty {
                 showAlternates(for: key, state: state)

@@ -1,13 +1,12 @@
 import UIKit
 
-/// The emoji picker always uses the native iOS look, whatever theme the keyboard has.
+/// The emoji picker uses the native iOS look whatever the theme (only the search pill follows it: Theme.searchLook).
 enum EmojiLook {
     private static func pick(_ light: UIColor, _ dark: UIColor) -> UIColor {
         return UIColor { trait in trait.userInterfaceStyle == .dark ? dark : light }
     }
     static let text = UIColor.label
     static let secondary = UIColor.secondaryLabel
-    static let searchField = pick(UIColor(white: 0, alpha: 0.08), UIColor(white: 1, alpha: 0.14))
     static let separator = pick(UIColor(white: 0, alpha: 0.12), UIColor(white: 1, alpha: 0.20))
     static let selection = pick(UIColor(white: 0, alpha: 0.30), UIColor(white: 1, alpha: 0.30))
     static let popup = pick(UIColor.white, UIColor(white: 0.42, alpha: 1))
@@ -211,7 +210,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let gridLayout = EmojiGridLayout()
     private var collectionView: UICollectionView!
 
-    private let searchGlass = FlatPanel(background: EmojiLook.searchField, cornerRadius: 20)
+    private let searchLook = Theme.searchLook(besideKeys: false)
+    private lazy var searchGlass = FlatPanel(background: searchLook.fill, cornerRadius: 20, allowGlass: searchLook.glass)
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -272,10 +272,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchGlass.capsule = true
         addSubview(searchGlass)
         searchIcon.image = UIImage(systemName: "magnifyingglass")
-        searchIcon.tintColor = EmojiLook.secondary
+        searchIcon.tintColor = searchLook.secondaryText
         searchIcon.contentMode = .scaleAspectFit
         searchLabel.font = UIFont.systemFont(ofSize: 20)
-        searchLabel.textColor = EmojiLook.secondary
+        searchLabel.textColor = searchLook.secondaryText
         searchGlass.contentView.addSubview(searchIcon)
         searchGlass.contentView.addSubview(searchLabel)
         searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)

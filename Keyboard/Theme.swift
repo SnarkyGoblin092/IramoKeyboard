@@ -109,6 +109,31 @@ enum Theme {
     static var stripFill: UIColor { return palette.stripFill }
     static var separator: UIColor { return palette.separator }
 
+    /// How the emoji search pills are drawn.
+    struct SearchLook {
+        let fill: UIColor
+        let text: UIColor
+        let secondaryText: UIColor
+        /// A real Liquid Glass pill (the fill is then unused).
+        let glass: Bool
+    }
+
+    /// The emoji search pills match the keys: letter-key fill and label colours (the native theme keeps the stock
+    /// translucent grey pill). `besideKeys`: the search bar shown over the keys, which uses the keys' palette;
+    /// the picker follows the app's style, so it takes the base palette.
+    static func searchLook(besideKeys: Bool) -> SearchLook {
+        let p = besideKeys ? keyPalette : palette
+        switch kind {
+        case .native:
+            return SearchLook(fill: pick(black(0.08), white(0.14)), text: UIColor.label,
+                              secondaryText: UIColor.secondaryLabel, glass: false)
+        case .liquidGlass where usesRealGlass:
+            return SearchLook(fill: UIColor.clear, text: p.keyText, secondaryText: p.keySecondaryText, glass: true)
+        default:
+            return SearchLook(fill: p.letterKey, text: p.keyText, secondaryText: p.keySecondaryText, glass: false)
+        }
+    }
+
     // MARK: Palettes
 
     private static func pick(_ light: UIColor, _ dark: UIColor) -> UIColor {

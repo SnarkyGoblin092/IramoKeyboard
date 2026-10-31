@@ -35,6 +35,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:              # holding the keyboard's emoji key opens the app
+          - CFBundleURLName: Iramo
+            CFBundleURLSchemes: [iramo]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hunkeys.k9x4.app

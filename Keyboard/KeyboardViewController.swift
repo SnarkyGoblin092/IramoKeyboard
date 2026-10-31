@@ -293,9 +293,16 @@ final class KeyboardViewController: UIInputViewController {
         let app = view.traitCollection.userInterfaceStyle
         guard app != .unspecified else { return false }   // not known yet (e.g. mid-rotation): keep what we have
         let differs = keys != .unspecified && keys != app
-        guard differs != Theme.contrastKeys else { return false }
+        guard differs != Theme.contrastKeys else { matchSearchBarToKeys(); return false }
         Theme.contrastKeys = differs
         return true
+    }
+
+    /// The emoji search bar over the keys is drawn like a key, so it takes the keys' light/dark
+    /// (light glass in contrast mode, as KeyView's glass).
+    private func matchSearchBarToKeys() {
+        let style: UIUserInterfaceStyle = Theme.contrastKeys && Theme.usesRealGlass ? .light : keyboardView.overrideUserInterfaceStyle
+        if searchBar.overrideUserInterfaceStyle != style { searchBar.overrideUserInterfaceStyle = style }
     }
 
     /// updateKeyStyle, rebuilding the keys when their fills changed.
@@ -355,6 +362,7 @@ final class KeyboardViewController: UIInputViewController {
         searchBar = EmojiSearchBar()
         keyboardView = KeyboardView()
         keyboardView.overrideUserInterfaceStyle = keyInterfaceStyle
+        matchSearchBarToKeys()
 
         suggestionBar.delegate = self
         searchBar.delegate = self
@@ -1341,8 +1349,26 @@ extension KeyboardViewController: KeyboardViewDelegate {
         switchLanguage(by: direction)
     }
 
-    func keyboardViewDidHoldGlobe(_ view: KeyboardView) {
-        advanceToNextInputMode()   // hand over to the next installed keyboard
+    func keyboardViewDidHoldEmoji(_ view: KeyboardView) {
+        openApp()
+    }
+
+    /// Opens Iramo's settings app (the `iramo://` scheme in project.yml). Extensions cannot call
+    /// `UIApplication.open`, so it is reached through the responder chain and called by selector.
+    private func openApp() {
+        guard let url = URL(string: "iramo://") else { return }
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current is UIApplication {
+                let selector = NSSelectorFromString("openURL:options:completionHandler:")
+                guard current.responds(to: selector) else { return }
+                typealias Open = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, Any?) -> Void
+                let open = unsafeBitCast(current.method(for: selector), to: Open.self)
+                open(current, selector, url as NSURL, NSDictionary(), nil)
+                return
+            }
+            responder = current.next
+        }
     }
 
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {

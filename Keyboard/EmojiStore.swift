@@ -200,9 +200,6 @@ final class EmojiStore {
 
                 self.isReady = true
                 self.isLoading = false
-                if loaded.total > 0 {
-                    Settings.shared.recordEmojiStats(version: loaded.version, total: loaded.total, shown: loaded.shown)
-                }
                 let callbacks = self.waiting
                 self.waiting = []
                 callbacks.forEach { $0() }

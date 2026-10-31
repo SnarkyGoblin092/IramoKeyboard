@@ -50,31 +50,31 @@ private struct HeaderSection: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Iramo").font(.title2.weight(.bold))
-                        Text("Your keyboard, your way")
+                        Text("Your words, your keyboard")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                 }
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8, alignment: .leading)],
-                          alignment: .leading, spacing: 8) {
-                    StatusChip(text: status.seen ? "Keyboard added" : "Not set up yet",
-                               symbol: status.seen ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
-                               color: status.seen ? .green : .orange)
-                    if status.seen {
-                        StatusChip(text: status.fullAccess ? "Full Access on" : "Full Access off",
-                                   symbol: status.fullAccess ? "lock.open.fill" : "lock.fill",
-                                   color: status.fullAccess ? .green : .orange)
+                // Only what still needs setting up is shown.
+                if !status.isReady {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8, alignment: .leading)],
+                              alignment: .leading, spacing: 8) {
+                        if !status.seen {
+                            StatusChip(text: "Not set up yet", symbol: "exclamationmark.circle.fill", color: .orange)
+                        } else if !status.fullAccess {
+                            StatusChip(text: "Full Access off", symbol: "lock.fill", color: .orange)
+                        }
+                        if !SharedStore.isShared {
+                            StatusChip(text: "Not synced", symbol: "arrow.triangle.2.circlepath", color: .red)
+                        }
                     }
-                    if !SharedStore.isShared {
-                        StatusChip(text: "Not synced", symbol: "arrow.triangle.2.circlepath", color: .red)
-                    }
-                }
 
-                Text(hint)
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(hint)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.vertical, 6)
         }
@@ -92,10 +92,7 @@ private struct HeaderSection: View {
         if !status.seen {
             return "Add Iramo in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
         }
-        if !status.fullAccess {
-            return "Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words."
-        }
-        return "Last used \(status.lastSeenText). \(status.emojiText)."
+        return "Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words."
     }
 }
 
@@ -294,6 +291,11 @@ private struct DataSection: View {
     var body: some View {
         Section {
             row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath")
+            NavigationLink {
+                LearnedWordsView()
+            } label: {
+                Label("Learned words", systemImage: "character.book.closed")
+            }
             row(.learned, "Forget learned words", symbol: "text.book.closed")
             row(.reset, "Reset all settings", symbol: "arrow.counterclockwise", role: .destructive)
             if let note = note {
@@ -359,37 +361,16 @@ private struct CreditsSection: View {
 
 struct KeyboardStatus {
     var seen: Bool
-    var lastSeen: Date
     var fullAccess: Bool
-    var emojiVersion: String
-    var emojiTotal: Int
-    var emojiShown: Int
 
     static func read() -> KeyboardStatus {
         let store = SharedStore.defaults
-        let stamp = store.double(forKey: SettingKey.lastSeen)
-        return KeyboardStatus(seen: stamp > 0,
-                              lastSeen: Date(timeIntervalSince1970: stamp),
-                              fullAccess: store.bool(forKey: SettingKey.fullAccess),
-                              emojiVersion: store.string(forKey: SettingKey.emojiVersion) ?? "",
-                              emojiTotal: store.integer(forKey: SettingKey.emojiTotal),
-                              emojiShown: store.integer(forKey: SettingKey.emojiShown))
+        return KeyboardStatus(seen: store.double(forKey: SettingKey.lastSeen) > 0,
+                              fullAccess: store.bool(forKey: SettingKey.fullAccess))
     }
 
-    var lastSeenText: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: lastSeen, relativeTo: Date())
-    }
-
-    var emojiText: String {
-        guard emojiTotal > 0 else { return "Opens with the keyboard" }
-        let version = emojiVersion.isEmpty ? "" : "Unicode \(emojiVersion): "
-        if emojiShown < emojiTotal {
-            return "\(version)\(emojiShown) of \(emojiTotal) shown"
-        }
-        return "\(version)all \(emojiTotal) shown"
-    }
+    /// Nothing left to set up: the header then shows no chips or hint.
+    var isReady: Bool { return seen && fullAccess && SharedStore.isShared }
 }
 
 // MARK: - Shortcuts
@@ -626,5 +607,76 @@ private struct AddLanguageView: View {
         }
         .navigationTitle("Add a language")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Learned words
+
+/// Words the keyboard learned (ones no dictionary has, used at least twice), per language, with a search
+/// field and swipe to remove.
+struct LearnedWordsView: View {
+    @State private var words: [String: [String]] = [:]
+    @State private var query = ""
+
+    /// The words of each language that match the search.
+    private func matches(for language: Language) -> [String] {
+        let list = words[language.rawValue] ?? []
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return list }
+        return list.filter { $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+
+    private var languages: [Language] {
+        return Language.allCases.filter { !matches(for: $0).isEmpty }
+    }
+
+    var body: some View {
+        List {
+            if words.isEmpty {
+                Section {
+                    Text("No learned words yet").foregroundColor(.secondary)
+                } footer: {
+                    Text("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar.")
+                }
+            } else if languages.isEmpty {
+                Text("No matching words").foregroundColor(.secondary)
+            }
+            ForEach(languages, id: \.rawValue) { language in
+                let list = matches(for: language)
+                Section(language.displayName) {
+                    ForEach(list, id: \.self) { word in
+                        Text(word)
+                    }
+                    .onDelete { offsets in remove(offsets.map { list[$0] }, from: language) }
+                }
+            }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search learned words")
+        .autocorrectionDisabled()
+        .textInputAutocapitalization(.never)
+        .navigationTitle("Learned words")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !languages.isEmpty { EditButton() }
+        }
+        // Reloaded on every visit: a NavigationLink builds this view's initial state only once.
+        .onAppear { words = LearnedWordsView.load() }
+    }
+
+    private static func load() -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for language in Language.allCases {
+            let list = Settings.shared.learnedWordList(for: language.rawValue)
+            if !list.isEmpty { result[language.rawValue] = list }
+        }
+        return result
+    }
+
+    private func remove(_ removed: [String], from language: Language) {
+        for word in removed { Settings.shared.removeLearnedWord(word, for: language.rawValue) }
+        var list = words[language.rawValue] ?? []
+        list.removeAll { removed.contains($0) }
+        words[language.rawValue] = list.isEmpty ? nil : list
+        Feedback.tick()
     }
 }

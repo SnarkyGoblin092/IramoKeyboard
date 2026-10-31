@@ -32,6 +32,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Double-tap the space bar for a full stop.
 - Hold the space bar and slide to move the cursor.
 - Slide left from the delete key to delete whole words.
+- Hold the emoji key to open the Iramo app.
 - Text shortcuts: type a trigger and press space to expand it.
 - Numbers and symbols pages, and an optional number row.
 - Key pop-ups, key clicks and adjustable vibration.
@@ -53,7 +54,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Everything the keyboard learns stays on the device; the keyboard makes no network connections.
 - Full Access is only needed for vibration and for saving recent emoji and learned words; the keyboard works
   without it.
-- Clear recent emoji, forget learned words or reset all settings from the app.
+- Search and remove single learned words, clear recent emoji, forget all learned words or reset all settings from the app.
 
 ## License
 Copyright (C) 2026 Orsós Emil. All rights reserved. The code and the app may not be used, copied, changed or

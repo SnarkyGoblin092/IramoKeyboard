@@ -47,9 +47,6 @@ enum SettingKey {
     // Written by the keyboard so the app can show its status
     static let lastSeen = "hunkeys.status.lastSeen"
     static let fullAccess = "hunkeys.status.fullAccess"
-    static let emojiVersion = "hunkeys.status.emojiVersion"
-    static let emojiTotal = "hunkeys.status.emojiTotal"
-    static let emojiShown = "hunkeys.status.emojiShown"
 
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
@@ -374,6 +371,23 @@ final class Settings {
         return value(SettingKey.personalRevision) as? Int ?? 0
     }
 
+    /// The words the keyboard has learned (used at least `learnAfter` times), alphabetically.
+    func learnedWordList(for languageCode: String, learnAfter: Int = 2) -> [String] {
+        return learnedWords(for: languageCode).filter { $0.value >= learnAfter }.keys
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// Removes one learned word (from the app's list); the keyboard picks the change up when it opens.
+    func removeLearnedWord(_ word: String, for languageCode: String) {
+        var words = learnedWords(for: languageCode)
+        words.removeValue(forKey: word)
+        setLearnedWords(words, for: languageCode)
+        var corrections = self.corrections(for: languageCode)
+        for key in corrections.keys where key.hasSuffix("\t" + word) { corrections.removeValue(forKey: key) }
+        setCorrections(corrections, for: languageCode)
+        bumpPersonalRevision()
+    }
+
     func bumpPersonalRevision() {
         put(personalRevision + 1, SettingKey.personalRevision)
     }
@@ -483,12 +497,6 @@ final class Settings {
     func markKeyboardSeen(hasFullAccess: Bool) {
         put(Date().timeIntervalSince1970, SettingKey.lastSeen)
         put(hasFullAccess, SettingKey.fullAccess)
-    }
-
-    func recordEmojiStats(version: String, total: Int, shown: Int) {
-        put(version, SettingKey.emojiVersion)
-        put(total, SettingKey.emojiTotal)
-        put(shown, SettingKey.emojiShown)
     }
 
     // MARK: Languages

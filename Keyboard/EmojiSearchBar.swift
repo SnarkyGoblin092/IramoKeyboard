@@ -10,7 +10,8 @@ protocol EmojiSearchBarDelegate: AnyObject {
 final class EmojiSearchBar: UIView {
     weak var delegate: EmojiSearchBarDelegate?
 
-    private let glass = FlatPanel(background: EmojiLook.searchField)
+    private let look = Theme.searchLook(besideKeys: true)
+    private lazy var glass = FlatPanel(background: look.fill, allowGlass: look.glass)
     private let backButton = HitButton(type: .system)
     private let iconView = UIImageView()
     private let queryLabel = UILabel()
@@ -30,12 +31,12 @@ final class EmojiSearchBar: UIView {
         backButton.setImage(UIImage(systemName: "chevron.left",
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)),
                             for: .normal)
-        backButton.tintColor = EmojiLook.text
+        backButton.tintColor = look.text
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         glass.contentView.addSubview(backButton)
 
         iconView.image = UIImage(systemName: "magnifyingglass")
-        iconView.tintColor = EmojiLook.secondary
+        iconView.tintColor = look.secondaryText
         iconView.contentMode = .scaleAspectFit
         glass.contentView.addSubview(iconView)
 
@@ -45,7 +46,7 @@ final class EmojiSearchBar: UIView {
         queryLabel.minimumScaleFactor = 0.7
         glass.contentView.addSubview(queryLabel)
 
-        divider.backgroundColor = EmojiLook.separator
+        divider.backgroundColor = look.secondaryText.withAlphaComponent(0.35)
         glass.contentView.addSubview(divider)
 
         scroll.showsHorizontalScrollIndicator = false
@@ -61,10 +62,10 @@ final class EmojiSearchBar: UIView {
         placeholder = newPlaceholder
         if text.isEmpty {
             queryLabel.text = placeholder
-            queryLabel.textColor = EmojiLook.secondary
+            queryLabel.textColor = look.secondaryText
         } else {
             queryLabel.text = text
-            queryLabel.textColor = EmojiLook.text
+            queryLabel.textColor = look.text
         }
     }
 
