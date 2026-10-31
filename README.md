@@ -20,10 +20,14 @@ A custom keyboard for iPhone and iPad. All settings live in the **Tempo app**.
 3. Start a build: **Actions > Build TempoKeyboard IPA > Run workflow**. Every push to the fork builds too.
 4. When the run is green, download **TempoKeyboard.ipa** from the run's Artifacts (it is not zipped).
 
-The first build takes 15-20 minutes, because it downloads about 400 MB of word lists and sentences and turns
-them into dictionaries (`scripts/build_data.py`). The result is cached for a week, so later builds take about
-3 minutes. Keep the fork **public**: Actions minutes are free for public repos, while private repos spend the
-account's monthly minutes, and macOS runners use them up ten times faster.
+The build has two jobs. The **data** job runs on Linux: it downloads about 400 MB of word lists and sentences
+and turns them into dictionaries (`scripts/build_data.py`), which takes 15-20 minutes the first time; the
+result is cached for a week. The **build** job then compiles the app on macOS in about 3 minutes. Pushes that
+only change Markdown files or the licence don't start a build.
+
+Actions minutes are free for public repos. A private repo spends the account's monthly minutes (2,000 on
+GitHub Free), and macOS minutes count ten times, which is why only the compile step runs on macOS: that leaves
+roughly 60 builds a month.
 
 ### Install the IPA
 The IPA is unsigned. Sign and install it with your own Apple ID using a sideloading tool such as
