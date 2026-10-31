@@ -8,7 +8,9 @@ import UIKit
 final class Haptics {
     static let shared = Haptics()
 
-    private let pressGenerator = UIImpactFeedbackGenerator(style: .rigid)
+    /// Key presses use the style the haptic "feel" picks (soft ... rigid); see `style(forSharpness:)`.
+    private var pressStyle = UIImpactFeedbackGenerator.FeedbackStyle.rigid
+    private var pressGenerator = UIImpactFeedbackGenerator(style: .rigid)
     private let tickGenerator = UIImpactFeedbackGenerator(style: .soft)
     private var lastTick = Date.distantPast
     /// Set by the keyboard when it appears. System sounds only play with Full Access.
@@ -19,7 +21,28 @@ final class Haptics {
 
     private init() {}
 
+    /// The haptic feel's sharpness (0 = soft ... 1 = rigid) as one of the system's impact styles. Mirrored by
+    /// the app's Haptics screen (Feedback.test).
+    static func style(forSharpness sharpness: Double) -> UIImpactFeedbackGenerator.FeedbackStyle {
+        switch sharpness {
+        case ..<0.2: return .soft
+        case ..<0.4: return .light
+        case ..<0.6: return .medium
+        case ..<0.8: return .heavy
+        default: return .rigid
+        }
+    }
+
+    private func updateStyle() {
+        let style = Haptics.style(forSharpness: Prefs.hapticSharpness)
+        guard style != pressStyle else { return }
+        pressStyle = style
+        pressGenerator = UIImpactFeedbackGenerator(style: style)
+        pressGenerator.prepare()
+    }
+
     func prepare() {
+        updateStyle()
         pressGenerator.prepare()
         tickGenerator.prepare()
     }
@@ -28,6 +51,7 @@ final class Haptics {
     func keyPress() {
         let strength = Prefs.vibration
         if strength > 0.01 {
+            updateStyle()
             pressGenerator.impactOccurred(intensity: CGFloat(strength))
             pressGenerator.prepare()
         }

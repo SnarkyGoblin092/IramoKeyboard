@@ -18,11 +18,25 @@ enum Feedback {
         selection.prepare()
     }
 
-    /// Plays the keyboard's key-press vibration at the given strength (0...1).
-    static func test(strength: Double) {
+    /// Plays the keyboard's key-press vibration at the given strength (0...1), with the feel's sharpness
+    /// (0 = soft ... 1 = rigid; the stored one when nil).
+    static func test(strength: Double, sharpness: Double? = nil) {
         guard strength > 0.01 else { return }
-        impact.impactOccurred(intensity: CGFloat(strength))
+        let style = self.style(forSharpness: sharpness ?? Settings.shared.hapticSharpness)
+        let generator = style == .rigid ? impact : UIImpactFeedbackGenerator(style: style)
+        generator.impactOccurred(intensity: CGFloat(strength))
         impact.prepare()
+    }
+
+    /// Mirrors Haptics.style(forSharpness:) in the keyboard.
+    static func style(forSharpness sharpness: Double) -> UIImpactFeedbackGenerator.FeedbackStyle {
+        switch sharpness {
+        case ..<0.2: return .soft
+        case ..<0.4: return .light
+        case ..<0.6: return .medium
+        case ..<0.8: return .heavy
+        default: return .rigid
+        }
     }
 }
 
@@ -157,48 +171,6 @@ struct SettingSlider: View {
         .padding(.vertical, 2)
         .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
             local = min(max(defaultValue, range.lowerBound), range.upperBound)
-        }
-    }
-}
-
-
-/// Key-roundness slider with a live preview of a few sample keys.
-struct RoundnessSlider: View {
-    @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var stored = SettingDefault.keyRoundness
-    @State private var local: Double
-
-    init() {
-        let current = SharedStore.defaults.object(forKey: SettingKey.keyRoundness) as? Double ?? SettingDefault.keyRoundness
-        _local = State(initialValue: min(max(current, 0), 1))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Key roundness")
-                Spacer()
-                Text("\(Int((local * 100).rounded()))%")
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-            }
-            HStack(spacing: 6) {
-                ForEach(["Q", "A", "Z", "\u{23CE}"], id: \.self) { label in
-                    RoundedRectangle(cornerRadius: local * 22, style: .continuous)
-                        .fill(Color(.systemGray4))
-                        .frame(height: 44)
-                        .overlay(Text(label).font(.system(size: 20)).foregroundColor(.primary))
-                }
-            }
-            Slider(value: $local, in: 0...1, step: 0.02) { editing in
-                if !editing { stored = local }
-            }
-            .accessibilityLabel("Key roundness")
-            .accessibilityValue("\(Int((local * 100).rounded())) percent")
-            .onChange(of: local) { _ in Feedback.tick() }
-        }
-        .padding(.vertical, 2)
-        .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
-            local = SettingDefault.keyRoundness
         }
     }
 }

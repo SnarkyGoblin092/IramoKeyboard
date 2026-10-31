@@ -26,6 +26,13 @@ final class KeyboardViewController: UIInputViewController {
     private var builtSignature = ""
 
     private var stores: [Language: WordStore] = [:]
+    /// Where the user really taps each key, per language (see HitMap).
+    private var hitMaps: [Language: HitMap] = [:]
+    /// The language and word start the adaptive key areas were last worked out for.
+    private var adaptiveFor: String?
+    /// Swipes being decoded: key taps that come meanwhile wait, so they land after the swiped word.
+    private var swipesDecoding = 0
+    private var queuedActions: [(action: KeyAction, point: CGPoint?)] = []
     private var loadingStores: Set<String> = []
     private let maxSecondaryStores = 4
     /// Words kept for all the other enabled languages together (split between them); halved on a memory warning.
@@ -191,12 +198,16 @@ final class KeyboardViewController: UIInputViewController {
             for store in stores.values { store.reloadPersonal() }
         }
         seenPersonalRevision = revision
+        // The app may have reset the hit map or changed the hitbox settings.
+        hitMaps = [:]
+        adaptiveFor = nil
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
         if settingsSignature() != builtSignature {
             buildInterface()
         }
+        applyHitMap()
         applyHeight()
         updateAutoShift()
         scheduleRefresh()
@@ -226,6 +237,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         for store in stores.values { store.saveNow() }
+        for map in hitMaps.values { map.saveNow() }
         var usage: [String: Double] = [:]
         for (language, value) in Decoder.languageUsage { usage[language.rawValue] = value }
         settings.setLanguageUsage(usage)
@@ -258,8 +270,13 @@ final class KeyboardViewController: UIInputViewController {
         let s = settings
         return [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
-            "\(s.keyboardHeightScale)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", "\(s.keyBorders)", s.enabledLanguages.joined(separator: ","),
-            SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? ""
+            "\(s.keyPopups)", "\(Prefs.keyRoundness)", "\(s.keyBorders)", s.enabledLanguages.joined(separator: ","),
+            SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
+            // Keys and the suggestion bar (the app's Keys and Suggestions screens)
+            "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
+            "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
+            s.spaceText, "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
+            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)"
         ].joined(separator: "|")
     }
 
@@ -417,9 +434,19 @@ final class KeyboardViewController: UIInputViewController {
     private func applyHeight() {
         let isPad = traitCollection.userInterfaceIdiom == .pad
         let isLandscape = !isPad && view.bounds.width > 500
-        var total: CGFloat = isPad ? 340 : (isLandscape ? 208 : 276)
-        if Prefs.numberRow { total += isLandscape ? 26 : 40 }
-        total *= CGFloat(Prefs.heightScale)
+        // The keyboard is as tall as its rows of keys (key height + the gap between rows) and the bar. At the
+        // defaults: 276pt on a phone, 208pt in landscape (keys two thirds as tall) and 340pt on an iPad.
+        let keyHeight: CGFloat
+        if isPad {
+            keyHeight = CGFloat(Prefs.keyHeight) * 61 / 45
+        } else if isLandscape {
+            keyHeight = Prefs.landscapeSeparate ? CGFloat(Prefs.landscapeKeyHeight) : CGFloat(Prefs.keyHeight) * 30 / 45
+        } else {
+            keyHeight = CGFloat(Prefs.keyHeight)
+        }
+        let rowCount: CGFloat = Prefs.numberRow ? 5 : 4
+        let barHeight = CGFloat(Prefs.suggestionHeight) * (isLandscape ? 36.0 / 44.0 : 1.0)
+        var total = barHeight + 8 + rowCount * (keyHeight + CGFloat(Prefs.rowGap))
         // The emoji picker always shows four full rows: the keyboard grows to fit while it is open. An iPhone in
         // landscape always has that height, so the keyboard never jumps between letters, picker and search.
         // (The view may not have its final width yet when the picker opens, so fall back to the screen width.)
@@ -428,7 +455,7 @@ final class KeyboardViewController: UIInputViewController {
         if emojiPanel != nil || isSearchingEmoji || isLandscape {
             total = max(total, EmojiPanel.requiredHeight(forWidth: width))
         }
-        var suggestions: CGFloat = isLandscape ? 36 : 44
+        var suggestions = barHeight
         if isSearchingEmoji {
             // Same height and top gap as the picker, so the search field stays exactly where it was.
             EmojiSearchBar.topInset = (5 * panelScale).rounded()
@@ -465,9 +492,73 @@ final class KeyboardViewController: UIInputViewController {
                 return true
             } }
         }
+        // The space bar: the user's own text, or the language (its name, or its code with "Language code" on).
+        let custom = Prefs.spaceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let spaceTitle = !custom.isEmpty ? custom : (Prefs.spaceLanguageCode ? language.rawValue.uppercased() : language.displayName)
+        rows = rows.map { row in row.map { spec in
+            guard spec.action == .space else { return spec }
+            var titled = spec
+            titled.title = spaceTitle
+            return titled
+        } }
         keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()
+        applyHitMap()
+        adaptiveFor = nil
+    }
+
+    // MARK: Hitboxes
+
+    private func hitMap(for target: Language) -> HitMap {
+        if let map = hitMaps[target] { return map }
+        let map = HitMap(language: target)
+        hitMaps[target] = map
+        return map
+    }
+
+    /// Moves the letter keys' touch centres to where the user really taps them.
+    private func applyHitMap() {
+        keyboardView.hitOffsets = Prefs.hitMap ? hitMap(for: language).offsets(strength: Prefs.hitMapStrength) : [:]
+    }
+
+    /// Learns from a finished word: each of its taps meant the letter of `word` in the same place (the word as
+    /// typed, or what auto-correction made of it when that has as many letters).
+    private func recordHitMap(typed: String, word: String) {
+        guard Prefs.hitMap, page == .letters, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true,
+              word.count == typed.count, wordTaps.count == typed.count else { return }
+        let points = wordTaps.compactMap { $0 }
+        guard points.count == typed.count else { return }
+        hitMap(for: language).record(word: word, points: points,
+                                      centers: keyboardView.letterCenters(), keySize: keyboardView.letterKeySize())
+        applyHitMap()
+    }
+
+    /// Adaptive keys: the letters likely to come next (from the dictionary and the user's words) get bigger touch
+    /// areas, the unlikely ones smaller (see KeyboardView.letterBias).
+    private func updateAdaptiveHitboxes() {
+        guard Prefs.adaptiveHitboxes, Prefs.adaptiveStrength > 0, page == .letters, !isSearchingEmoji,
+              textDocumentProxy.isSecureTextEntry != true, let store = stores[language], store.isLoaded else {
+            if !keyboardView.letterBias.isEmpty { keyboardView.letterBias = [:] }
+            adaptiveFor = nil
+            return
+        }
+        let prefix = currentPrefix(in: textDocumentProxy.documentContextBeforeInput ?? "")
+        let tag = language.rawValue + ":" + prefix
+        guard tag != adaptiveFor else { return }
+        adaptiveFor = tag
+        let weights = (prefix.isEmpty && !Prefs.adaptiveWordStart) ? [:] : store.nextLetterWeights(after: prefix)
+        guard let top = weights.values.max(), top > 0 else {
+            keyboardView.letterBias = [:]
+            return
+        }
+        let strength = Prefs.adaptiveStrength
+        var bias: [Character: CGFloat] = [:]
+        for letter in keyboardView.letterCenters().keys {
+            let share = ((weights[letter] ?? 0) / top).squareRoot()
+            bias[letter] = CGFloat(1 + strength * (share * Prefs.adaptiveGrow - (1 - share) * Prefs.adaptiveShrink))
+        }
+        keyboardView.letterBias = bias
     }
 
     /// Loads a dictionary (with its swipe index) in the background. `limit` nil = every word, for the active
@@ -738,6 +829,7 @@ final class KeyboardViewController: UIInputViewController {
             }
             if !typedWord.isEmpty, let fixed = fix {
                 let replacement = matchCase(of: typedWord, for: fixed)
+                recordHitMap(typed: typedWord, word: fixed)
                 recordBigram(contextBefore: before, next: fixed)
                 noteWordUse(fixed)
                 for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
@@ -750,6 +842,11 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
+        // A word kept as typed teaches the hit map when it is a real word (a typo would teach it wrong).
+        let finished = currentPrefix(in: before)
+        if !finished.isEmpty, stores.values.contains(where: { $0.isLoaded && $0.dictionaryHas(word: finished) }) {
+            recordHitMap(typed: finished, word: finished)
+        }
         clearSwipeState()
         textDocumentProxy.insertText(" ")
         lastSpaceTime = Date()
@@ -801,7 +898,7 @@ final class KeyboardViewController: UIInputViewController {
             stores[language]?.learn(fix.typed, asTyped: true)
             lastCommitted = nil   // the typed word was kept on purpose: no typo to learn here
             clearSwipeState()
-        } else if let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
+        } else if Prefs.deleteSwipedWord, let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
             // Right after a swipe, backspace removes the whole swiped word (and takes back its use).
             for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
             noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
@@ -1000,6 +1097,7 @@ final class KeyboardViewController: UIInputViewController {
                 guard let self = self else { return }
                 self.refreshScheduled = false
                 self.updateAutoShift()
+                self.updateAdaptiveHitboxes()
             }
         }
         // Suggestions are the heavy part: coalesce bursts of typing into one refresh just after the last key,
@@ -1007,7 +1105,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.refreshSuggestions() }
         suggestionWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Prefs.suggestionDelay, execute: work)   // the Speed setting
     }
 
     private func clearSwipeState() {
@@ -1060,6 +1158,8 @@ final class KeyboardViewController: UIInputViewController {
         let field = Predictor.fieldContext(before: before, after: after)
         var words: [String] = []
         var fix: String? = nil
+        // "Fit more" and "Scrollable" bars show more than three words.
+        let capacity = SuggestionBar.capacity
         if Prefs.suggestions && stores[language]?.isLoaded == true {
             if !prefix.isEmpty {
                 let found = Predictor.suggestAndFix(typed: prefix,
@@ -1067,7 +1167,7 @@ final class KeyboardViewController: UIInputViewController {
                                                     active: language,
                                                     enabled: enabledLanguages,
                                                     stores: stores,
-                                                    limit: 4,
+                                                    limit: max(4, capacity),
                                                     field: field,
                                                     taps: currentTaps(for: prefix))
                 words = found.words.map { Predictor.styled(matchCase(of: prefix, for: $0), field: field, allowLower: false) }
@@ -1080,7 +1180,7 @@ final class KeyboardViewController: UIInputViewController {
                                             active: language,
                                             enabled: enabledLanguages,
                                             stores: stores,
-                                            limit: 3,
+                                            limit: capacity,
                                             field: field)
                     .map { applyShift(to: Predictor.styled($0, field: field)) }
             }
@@ -1105,27 +1205,29 @@ final class KeyboardViewController: UIInputViewController {
                 highlighted = 1
             }
             let best = ranked.first
-            let second = ranked.dropFirst().first
             result.append(Suggestion(text: prefix, kind: .literal))
             result.append(Suggestion(text: best ?? "", kind: .word))
             if let emoji = emojis.first {
                 result.append(Suggestion(text: emoji, kind: .emoji))
-            } else if let second = second {
-                result.append(Suggestion(text: second, kind: .word))
+            }
+            // The runners-up after them, as many as the bar shows.
+            for word in ranked.dropFirst() where result.count < capacity {
+                result.append(Suggestion(text: word, kind: .word))
             }
         } else {
-            let top = Array(ranked.prefix(3))
-            if top.count >= 3 {
-                result = [Suggestion(text: top[1], kind: .word), Suggestion(text: top[0], kind: .word), Suggestion(text: top[2], kind: .word)]
-            } else if top.count == 2 {
+            // Next words: the likeliest in the middle, then the others.
+            let top = Array(ranked.prefix(capacity))
+            if top.count >= 2 {
                 result = [Suggestion(text: top[1], kind: .word), Suggestion(text: top[0], kind: .word)]
+                result += top.dropFirst(2).map { Suggestion(text: $0, kind: .word) }
             } else if top.count == 1 {
                 result = [Suggestion(text: "", kind: .word), Suggestion(text: top[0], kind: .word)]
             }
             if let emoji = emojis.first {
+                // The emoji takes the right-hand slot of the three.
                 while result.count < 2 { result.append(Suggestion(text: "", kind: .word)) }
-                if result.count >= 3 { result.removeLast() }
-                result.append(Suggestion(text: emoji, kind: .emoji))
+                result.insert(Suggestion(text: emoji, kind: .emoji), at: 2)
+                if result.count > capacity { result.removeLast() }
             }
         }
         suggestionBar.update(result, highlighted: highlighted)
@@ -1301,11 +1403,21 @@ final class KeyboardViewController: UIInputViewController {
 
 extension KeyboardViewController: KeyboardViewDelegate {
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction) {
+        // A key tapped while a swipe is still being decoded (two thumbs, space commits) comes after its word, with
+        // the place it was tapped (the view's last tap point has moved on by then).
+        if swipesDecoding > 0 {
+            queuedActions.append((action, view.lastTapPoint))
+            return
+        }
+        handleTap(action, at: view.lastTapPoint)
+    }
+
+    private func handleTap(_ action: KeyAction, at point: CGPoint?) {
         if action != .backspace { lastAutoFix = nil }   // an auto-fix can only be undone by the very next key
         switch action {
         case .character(let text):
             insert(text)
-            noteTap(text, at: view.lastTapPoint)
+            noteTap(text, at: point)
         case .space: handleSpace()
         case .enter: handleEnter()
         case .backspace:
@@ -1335,7 +1447,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {
         guard offset != 0, !isSearchingEmoji else { return }
         textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
-        Haptics.shared.tick()
+        if Prefs.cursorTickHaptic { Haptics.shared.tick() }
         clearSwipeState()
         lastSpaceTime = Date.distantPast
         scheduleRefresh()
@@ -1388,11 +1500,26 @@ extension KeyboardViewController: KeyboardViewDelegate {
         pendingSwipePath = nil
         guard let swipe = context else { return }
         let decoder = self.decoder
+        swipesDecoding += 1
+        let multiWord = Prefs.multiWordSwipe && !isSearchingEmoji
         swipeQueue.async { [weak self] in
-            let words = decoder.decode(path: path, keyCenters: swipe.centers, keySize: swipe.keySize, sources: swipe.sources)
+            var words = decoder.decode(path: path, keyCenters: swipe.centers, keySize: swipe.keySize, sources: swipe.sources)
+            // Multi-word glides: a phrase that fits clearly better goes first, the single words stay as alternatives.
+            if multiWord {
+                let phrases = decoder.decodePhrase(path: path, keyCenters: swipe.centers, keySize: swipe.keySize,
+                                                   sources: swipe.sources)
+                if let best = phrases.first { words = [best] + words.filter { $0 != best } }
+            }
             DispatchQueue.main.async {
-                if words.isEmpty { self?.scheduleRefresh() }   // no word: drop the live preview
-                self?.commitSwipe(words)
+                guard let self = self else { return }
+                if words.isEmpty { self.scheduleRefresh() }   // no word: drop the live preview
+                self.commitSwipe(words)
+                self.swipesDecoding -= 1
+                if self.swipesDecoding == 0 && !self.queuedActions.isEmpty {
+                    let queued = self.queuedActions
+                    self.queuedActions = []
+                    for item in queued { self.handleTap(item.action, at: item.point) }
+                }
             }
         }
     }

@@ -96,9 +96,9 @@ final class KeyView: UIView {
         } else {
             label.text = spec.title
             if spec.action == .space {
-                label.font = UIFont.systemFont(ofSize: 16)
+                label.font = UIFont.systemFont(ofSize: CGFloat(Prefs.spaceTextSize))
             } else if spec.title.count == 1 {
-                label.font = UIFont.systemFont(ofSize: 23, weight: .light)
+                label.font = UIFont.systemFont(ofSize: 23 * CGFloat(Prefs.letterSize), weight: .light)
             } else {
                 label.font = UIFont.systemFont(ofSize: 16)
             }
@@ -200,12 +200,34 @@ final class KeyView: UIView {
             }
         }
         label.frame = bounds.insetBy(dx: 2, dy: 0)
-        // The hint sits inside the rounded corner: pulled in from the edge by an amount that grows with the
-        // corner radius (and a bit closer to the main character), so round keys never clip it.
-        let hintRight = min(bounds.width - 3 - radius * 0.4, bounds.midX + 16)
-        hintLabel.font = UIFont.systemFont(ofSize: radius > 12 ? 9 : 10, weight: .regular)
-        hintLabel.frame = CGRect(x: hintRight - 14, y: 2 + radius * 0.12, width: 14, height: 11)
+        layoutHint(radius: radius)
         let side: CGFloat = 26
         iconView.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+    }
+
+    /// The accent hint, in the corner (or edge) the user picked. It sits inside the rounded corner: pulled in from
+    /// the edge by an amount that grows with the corner radius (and a bit closer to the main character), so
+    /// round keys never clip it.
+    private func layoutHint(radius: CGFloat) {
+        let scale = CGFloat(Prefs.hintSize)
+        hintLabel.font = UIFont.systemFont(ofSize: (radius > 12 ? 9 : 10) * scale, weight: .regular)
+        let width = 14 * scale
+        let height = 11 * scale
+        let inset = 3 + radius * 0.4
+        let position = Prefs.hintPosition
+        let x: CGFloat
+        if position.hasSuffix("Left") {
+            x = max(inset, bounds.midX - 16 * scale)
+            hintLabel.textAlignment = .left
+        } else if position.hasSuffix("Center") {
+            x = bounds.midX - width / 2
+            hintLabel.textAlignment = .center
+        } else {
+            x = min(bounds.width - inset, bounds.midX + 16 * scale) - width
+            hintLabel.textAlignment = .right
+        }
+        let edge = 2 + radius * 0.12
+        let y = position.hasPrefix("bottom") ? bounds.height - height - edge : edge
+        hintLabel.frame = CGRect(x: x, y: y, width: width, height: height)
     }
 }

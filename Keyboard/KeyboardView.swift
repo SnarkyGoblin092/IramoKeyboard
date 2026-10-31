@@ -20,7 +20,10 @@ protocol KeyboardViewDelegate: AnyObject {
 ///  - holding a key shows its accents / alternatives (after the user's hold delay),
 ///  - holding the space bar and sliding moves the text cursor,
 ///  - sliding left from backspace deletes word by word,
-///  - dragging across the letter keys is recognised as swipe typing.
+///  - dragging across the letter keys is recognised as swipe typing (handed between thumbs, and committed word by
+///    word when it glides through the space bar),
+///  - a short flick up on a letter types it in capitals, a flick down its first accent,
+///  - the letter keys' touch areas follow the hitbox settings (size, adaptive keys, the hit map).
 final class KeyboardView: UIView {
     weak var delegate: KeyboardViewDelegate?
     /// Where the last key tap landed (this view's coordinates), read by the controller for the typing decoder.
@@ -29,6 +32,10 @@ final class KeyboardView: UIView {
     var typingLanguage: Language = .english
     /// Popups are added here (the controller's root view) so they can rise above the first row.
     weak var popupHost: UIView?
+    /// Adaptive keys: letter -> touch-area factor (1 = normal), set by the controller as the word grows.
+    var letterBias: [Character: CGFloat] = [:]
+    /// The hit map: letter -> shift of its touch centre, in key widths and heights.
+    var hitOffsets: [Character: CGPoint] = [:]
 
     private var rows: [[KeySpec]] = []
     private var keyViews: [[KeyView]] = []
@@ -63,6 +70,15 @@ final class KeyboardView: UIView {
         var cursorRemainder: CGFloat = 0
         var isWordDeleting = false
         var wordSteps = 0
+        /// A flick on a letter: 1 = up (capital), -1 = down (first accent), 0 = none.
+        var flick = 0
+        /// Another thumb took this swipe over: this finger no longer adds to it.
+        var handedOff = false
+        /// The swipe went on from another finger's path (no sloppy-tap check when it ends).
+        var continuesSwipe = false
+        /// The swipe glided onto the space bar: its word is committed, the next starts back on the letters.
+        var awaitingLetter = false
+        var committedAtSpace = false
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
@@ -73,6 +89,18 @@ final class KeyboardView: UIView {
     }
 
     private var states: [UITouch: TouchState] = [:]
+
+    /// A finished swipe kept for a moment with two-thumb swiping on: a touch on a letter right after continues it.
+    private struct PendingSwipe {
+        let path: [CGPoint]
+        let startPoint: CGPoint
+        let startKey: KeyView?
+        let continued: Bool
+    }
+    private var pendingSwipe: PendingSwipe?
+    private var pendingSwipeTimer: Timer?
+    /// How long a lifted swipe waits for the other thumb.
+    private let handoverWindow: TimeInterval = 0.22
 
     // MARK: Setup
 
@@ -164,7 +192,8 @@ final class KeyboardView: UIView {
                 switch spec.action {
                 case .character(let text):
                     if page == .letters && text.count == 1 && text.first?.isLetter == true {
-                        key.label.text = (shift == .off) ? text : typingLanguage.uppercase(text)
+                        // "Always capitals" shows capitals on the keys whatever shift does (as the system can).
+                        key.label.text = (shift == .off && !Prefs.alwaysCapitals) ? text : typingLanguage.uppercase(text)
                     }
                 case .shift:
                     key.isActive = (shift != .off)
@@ -221,8 +250,11 @@ final class KeyboardView: UIView {
         glassContainer?.frame = bounds
         guard !rows.isEmpty else { return }
 
-        let sidePadding: CGFloat = 1
+        // A narrower keyboard (the Width setting) is centred.
+        let sidePadding: CGFloat = 1 + bounds.width * (1 - CGFloat(Prefs.keyboardWidth)) / 2
         let verticalPadding: CGFloat = 4
+        let keyInset = CGFloat(Prefs.keyGap) / 2
+        let rowInset = CGFloat(Prefs.rowGap) / 2
         let rowHeight = (bounds.height - verticalPadding * 2) / CGFloat(rows.count)
 
         hitRects = []
@@ -238,7 +270,7 @@ final class KeyboardView: UIView {
                 rects.append(hit)
                 let key = keyViews[r][c]
                 if key.transform == .identity {
-                    key.frame = hit.insetBy(dx: 3, dy: 5.5)   // drawn size; the touch area is the whole hit rectangle
+                    key.frame = hit.insetBy(dx: keyInset, dy: rowInset)   // drawn size; the touch area is the whole cell
                 }
                 x += width
             }
@@ -286,7 +318,60 @@ final class KeyboardView: UIView {
             }
         }
         guard let col = bestCol else { return nil }
-        return (row: bestRow, col: col)
+        let base = (row: bestRow, col: col)
+        return shapesHitboxes ? shapedKeyIndex(at: point, base: base) : base
+    }
+
+    // MARK: Hitbox shaping
+
+    private func letter(of spec: KeySpec) -> Character? {
+        guard case .character(let text) = spec.action, text.count == 1,
+              let letter = text.lowercased().first, letter.isLetter else { return nil }
+        return letter
+    }
+
+    private var shapesHitboxes: Bool {
+        return page == .letters && (Prefs.hitboxSize != 1 || !letterBias.isEmpty || !hitOffsets.isEmpty)
+    }
+
+    /// How far `point` is from a key's touch centre, in units of the key's half size (the edge of its cell is 1),
+    /// divided by the key's touch-area factor. With every factor 1 and no shifts this picks exactly the cell
+    /// under the point (inside a cell its own score is below 1, every other key's above), so the settings only
+    /// move the borders between keys; a key's own centre always picks it.
+    private func hitScore(row: Int, col: Int, point: CGPoint) -> CGFloat {
+        let rect = hitRects[row][col]
+        var center = CGPoint(x: rect.midX, y: rect.midY)
+        var factor: CGFloat = 1
+        if let letter = letter(of: rows[row][col]) {
+            factor = CGFloat(Prefs.hitboxSize) * (letterBias[letter] ?? 1)
+            // The hit map measures in drawn key sizes (HitMap.record gets letterKeySize()), not touch cells.
+            if let shift = hitOffsets[letter] {
+                let drawn = keyViews[row][col].bounds.size
+                center.x += shift.x * drawn.width
+                center.y += shift.y * drawn.height
+            }
+        }
+        let dx = abs(point.x - center.x) / max(rect.width / 2, 1)
+        let dy = abs(point.y - center.y) / max(rect.height / 2, 1)
+        return max(dx, dy) / max(factor, 0.1)
+    }
+
+    /// The key whose shaped touch area claims the point: the cell under it or one of its neighbours.
+    private func shapedKeyIndex(at point: CGPoint, base: (row: Int, col: Int)) -> (row: Int, col: Int) {
+        var best = base
+        var bestScore = hitScore(row: base.row, col: base.col, point: point)
+        for r in max(0, base.row - 1)...min(rows.count - 1, base.row + 1) where r < hitRects.count {
+            for c in rows[r].indices where c < hitRects[r].count && !rows[r][c].isSpacer {
+                let rect = hitRects[r][c]
+                guard rect.insetBy(dx: -rect.width * 0.6, dy: -rect.height * 0.6).contains(point) else { continue }
+                let score = hitScore(row: r, col: c, point: point)
+                if score < bestScore {
+                    bestScore = score
+                    best = (row: r, col: c)
+                }
+            }
+        }
+        return best
     }
 
     /// The full (gap-free) touch cell of a key.
@@ -315,8 +400,24 @@ final class KeyboardView: UIView {
             let state = TouchState(start: point)
             states[touch] = state
             guard let index = keyIndex(at: point) else { continue }
-            state.visited.insert(ObjectIdentifier(keyViews[index.row][index.col]))
-            press(state, key: keyViews[index.row][index.col])
+            let key = keyViews[index.row][index.col]
+            // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
+            // that same word.
+            if Prefs.twoThumbSwipe && Prefs.swipe && page == .letters && letter(of: key.spec) != nil {
+                if let pending = pendingSwipe {
+                    continueSwipe(state, from: pending.path, at: point)
+                    continue
+                }
+                if let other = states.values.first(where: { $0 !== state && $0.isSwiping && !$0.awaitingLetter }) {
+                    other.isSwiping = false
+                    other.handedOff = true
+                    continueSwipe(state, from: other.path, at: point)
+                    continue
+                }
+            }
+            commitPendingSwipe()
+            state.visited.insert(ObjectIdentifier(key))
+            press(state, key: key)
         }
     }
 
@@ -329,15 +430,16 @@ final class KeyboardView: UIView {
                 state.visited.insert(ObjectIdentifier(keyViews[index.row][index.col]))
             }
 
+            if state.handedOff || state.flick != 0 { continue }
             if state.isCursorMode {
                 moveCursor(state, to: point)
                 continue
             }
             if state.isSwiping {
-                updateTrail(state.path)
-                delegate?.keyboardView(self, didUpdateSwipe: state.path)
+                moveSwipe(state, to: point)
                 continue
             }
+            if detectFlick(state, at: point) { continue }
             if state.popupActive, let popup = alternatesPopup {
                 let hostPoint = touch.location(in: popup.superview)
                 popup.updateHighlight(hostX: hostPoint.x)
@@ -506,10 +608,14 @@ final class KeyboardView: UIView {
 
     /// How far the finger travelled in total (points).
     private func travel(of state: TouchState) -> CGFloat {
+        return travel(state.path)
+    }
+
+    private func travel(_ path: [CGPoint]) -> CGFloat {
         var total: CGFloat = 0
-        for index in 1..<max(1, state.path.count) {
-            let a = state.path[index - 1]
-            let b = state.path[index]
+        for index in 1..<max(1, path.count) {
+            let a = path[index - 1]
+            let b = path[index]
             total += hypot(b.x - a.x, b.y - a.y)
         }
         return total
@@ -533,22 +639,39 @@ final class KeyboardView: UIView {
             }
             return
         }
+        if state.handedOff { return }
+        if state.flick != 0 {
+            guard !cancelled, let key = state.startKey, case .character(let text) = key.spec.action else { return }
+            lastTapPoint = state.startPoint
+            if state.flick > 0 {
+                delegate?.keyboardView(self, didTap: .character(typingLanguage.uppercase(text)))
+            } else if let accent = key.spec.alternates.first {
+                delegate?.keyboardView(self, didSelectAlternate: shift == .off ? accent : typingLanguage.uppercase(accent))
+            }
+            return
+        }
         if state.isSwiping {
-            fadeTrail()
             if cancelled {
+                fadeTrail()
                 delegate?.keyboardViewDidCancelSwipe(self)
                 return
             }
-            // A short slide is a sloppy tap, not a swipe: type the key the finger went down on.
-            let keyWidth = max(letterKeySize().width, 1)
-            let end = state.path.last ?? state.startPoint
-            let displacement = hypot(end.x - state.startPoint.x, end.y - state.startPoint.y)
-            if travel(of: state) < keyWidth * 2.2 && displacement < keyWidth * 1.4, let key = state.startKey {
-                delegate?.keyboardViewDidCancelSwipe(self)
-                lastTapPoint = state.startPoint
-                delegate?.keyboardView(self, didTap: key.spec.action)
+            // Its word was committed at the space bar and the finger lifted there (or barely moved on).
+            if state.awaitingLetter || (state.committedAtSpace && travel(state.path) < letterKeySize().width) {
+                fadeTrail()
+                return
+            }
+            let swipe = PendingSwipe(path: state.path, startPoint: state.startPoint, startKey: state.startKey,
+                                     continued: state.continuesSwipe || state.committedAtSpace)
+            if Prefs.twoThumbSwipe && !isSloppyTap(swipe) {
+                // The other thumb may go on with this word: wait a moment before it ends.
+                pendingSwipe = swipe
+                pendingSwipeTimer?.invalidate()
+                pendingSwipeTimer = makeTimer(after: handoverWindow, repeats: false) { [weak self] in
+                    self?.commitPendingSwipe()
+                }
             } else {
-                delegate?.keyboardView(self, didFinishSwipe: state.path)
+                endSwipe(swipe)
             }
             return
         }
@@ -583,6 +706,7 @@ final class KeyboardView: UIView {
     /// The keys are rebuilt (page or language change) while other fingers are down: their plain taps still type
     /// the key they went down on when they lift; swipes, accent pop-ups and cursor moves end.
     private func endGesturesForRebuild() {
+        commitPendingSwipe()
         let ending = states.filter { $0.value.isSwiping || $0.value.popupActive || $0.value.isCursorMode || $0.value.isWordDeleting }
         for touch in ending.keys { states.removeValue(forKey: touch) }
         for state in ending.values.map({ $0 }) + Array(states.values) {
@@ -607,7 +731,7 @@ final class KeyboardView: UIView {
         state.cursorRemainder = 0
         hidePreview()
         setCursorAppearance(true)
-        Haptics.shared.keyPress()
+        if Prefs.cursorStartHaptic { Haptics.shared.keyPress() }
     }
 
     private func moveCursor(_ state: TouchState, to point: CGPoint) {
@@ -618,8 +742,7 @@ final class KeyboardView: UIView {
         if steps != 0 {
             state.cursorMoved = true
             state.cursorRemainder -= CGFloat(steps) * step
-            delegate?.keyboardView(self, didMoveCursorBy: steps)
-            Haptics.shared.tick()
+            delegate?.keyboardView(self, didMoveCursorBy: steps)   // which ticks, when that is switched on
         }
     }
 
@@ -686,6 +809,109 @@ final class KeyboardView: UIView {
         trailLayer.opacity = 1
         updateTrail(state.path)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
+    }
+
+    /// The swiping finger moved. Gliding onto the space bar (with "space commits") ends the word there; the next
+    /// word starts when the finger is back on the letters.
+    private func moveSwipe(_ state: TouchState, to point: CGPoint) {
+        // Well onto the bar only: a glide through the bottom letters that grazes its top edge is still one word.
+        if Prefs.spaceCommits, let index = keyIndex(at: point), rows[index.row][index.col].action == .space,
+           index.row < hitRects.count, index.col < hitRects[index.row].count,
+           point.y > hitRects[index.row][index.col].minY + hitRects[index.row][index.col].height * 0.35 {
+            if !state.awaitingLetter {
+                state.path.removeLast()   // the point on the space bar is not part of the word
+                if travel(state.path) >= letterKeySize().width {
+                    Haptics.shared.tick()
+                    endSwipe(PendingSwipe(path: state.path, startPoint: state.startPoint, startKey: state.startKey,
+                                          continued: true))
+                } else {
+                    fadeTrail()
+                }
+                state.awaitingLetter = true
+                state.committedAtSpace = true
+                state.path = []
+            }
+            return
+        }
+        if state.awaitingLetter {
+            guard let index = keyIndex(at: point), letter(of: rows[index.row][index.col]) != nil else { return }
+            state.awaitingLetter = false
+            state.path = [point]
+            trailLayer.removeAllAnimations()
+            trailLayer.opacity = 1
+        }
+        updateTrail(state.path)
+        delegate?.keyboardView(self, didUpdateSwipe: state.path)
+    }
+
+    /// A touch on a letter takes over a swipe (from the other thumb, or one that just lifted).
+    private func continueSwipe(_ state: TouchState, from path: [CGPoint], at point: CGPoint) {
+        pendingSwipeTimer?.invalidate()
+        pendingSwipeTimer = nil
+        pendingSwipe = nil
+        state.isSwiping = true
+        state.continuesSwipe = true
+        state.startedOnLetter = true
+        state.path = path + [point]
+        trailLayer.removeAllAnimations()
+        trailLayer.opacity = 1
+        updateTrail(state.path)
+        Haptics.shared.tick()
+        delegate?.keyboardView(self, didUpdateSwipe: state.path)
+    }
+
+    /// A short slide is a sloppy tap, not a swipe (never so for a swipe that went on from another finger).
+    private func isSloppyTap(_ swipe: PendingSwipe) -> Bool {
+        guard !swipe.continued, swipe.startKey != nil else { return false }
+        let keyWidth = max(letterKeySize().width, 1)
+        let end = swipe.path.last ?? swipe.startPoint
+        let displacement = hypot(end.x - swipe.startPoint.x, end.y - swipe.startPoint.y)
+        return travel(swipe.path) < keyWidth * 2.2 && displacement < keyWidth * 1.4
+    }
+
+    private func endSwipe(_ swipe: PendingSwipe) {
+        fadeTrail()
+        if isSloppyTap(swipe), let key = swipe.startKey {
+            // Type the key the finger went down on.
+            delegate?.keyboardViewDidCancelSwipe(self)
+            lastTapPoint = swipe.startPoint
+            delegate?.keyboardView(self, didTap: key.spec.action)
+        } else {
+            delegate?.keyboardView(self, didFinishSwipe: swipe.path)
+        }
+    }
+
+    /// Ends a swipe that was waiting for the other thumb.
+    private func commitPendingSwipe() {
+        pendingSwipeTimer?.invalidate()
+        pendingSwipeTimer = nil
+        guard let swipe = pendingSwipe else { return }
+        pendingSwipe = nil
+        endSwipe(swipe)
+    }
+
+    // MARK: Flicks
+
+    /// A short, straight flick up or down from a letter (when that flick is switched on).
+    private func detectFlick(_ state: TouchState, at point: CGPoint) -> Bool {
+        guard page == .letters, state.startedOnLetter, !state.popupActive, !state.handledByHold,
+              let key = state.startKey, key === state.key else { return false }
+        let dx = point.x - state.startPoint.x
+        let dy = point.y - state.startPoint.y
+        let height = max(letterKeySize().height, 1)
+        guard abs(dy) > height * 0.45, abs(dy) > abs(dx) * 1.6 else { return false }
+        if dy < 0 {
+            guard Prefs.flickUpCapital else { return false }
+            state.flick = 1
+        } else {
+            guard Prefs.flickDownAccent, !key.spec.alternates.isEmpty else { return false }
+            state.flick = -1
+        }
+        state.holdTimer?.invalidate()
+        state.holdTimer = nil
+        hidePreview()
+        Haptics.shared.tick()
+        return true
     }
 
     private func updateTrail(_ points: [CGPoint]) {

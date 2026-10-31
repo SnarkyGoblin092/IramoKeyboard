@@ -81,6 +81,17 @@ final class SwipeDecoder {
                 keySize: CGSize,
                 sources: [Source],
                 limit: Int = 4) -> [String] {
+        return scored(path: rawPath, keyCenters: keyCenters, keySize: keySize, sources: sources, limit: limit)
+            .map { $0.word }
+    }
+
+    /// The best words for a path with their scores, higher is better (log10 units with the language models,
+    /// minus the cost without them).
+    private func scored(path rawPath: [CGPoint],
+                        keyCenters: [Character: CGPoint],
+                        keySize: CGSize,
+                        sources: [Source],
+                        limit: Int) -> [(word: String, score: Double)] {
         let path = thinned(rawPath, minimumStep: 2)
         guard path.count >= 2, let start = path.first, let end = path.last else { return [] }
 
@@ -222,11 +233,152 @@ final class SwipeDecoder {
                 let logProb = item.probability > 0 ? log10(item.probability) : -99
                 return (item.written, logProb + item.boost - SwipeDecoder.shapeWeight * item.shape)
             }
-            return ranked.sorted { $0.score == $1.score ? $0.word < $1.word : $0.score > $1.score }
-                .prefix(limit).map { $0.word }
+            return Array(ranked.sorted { $0.score == $1.score ? $0.word < $1.word : $0.score > $1.score }.prefix(limit))
         }
         scored.sort { $0.score < $1.score }
-        return scored.prefix(limit).map { $0.word }
+        return scored.prefix(limit).map { (word: $0.word, score: -$0.score) }
+    }
+
+    // MARK: Several words in one glide
+
+    /// Reads one glide as two or three words ("do it", "in the morning") when that fits clearly better than any
+    /// single word. Returns the phrases (words joined by spaces), best first, or nothing when one word fits best.
+    ///
+    /// The finger turns at each letter it aims for, so the word boundaries are looked for at the corners of the
+    /// path: a word ends at one corner and the next starts there or at the corner after it (the stretch between
+    /// them is the glide from the last letter of one word to the first of the next). Every part is decoded as a
+    /// word of its own; a part with no length is a one-letter word ("a", "I").
+    func decodePhrase(path rawPath: [CGPoint],
+                      keyCenters: [Character: CGPoint],
+                      keySize: CGSize,
+                      sources: [Source]) -> [String] {
+        let keyWidth = max(keySize.width, 1)
+        let path = thinned(rawPath, minimumStep: 2)
+        let total = length(of: path)
+        guard path.count >= 2, total > keyWidth * 2.5 else { return [] }   // too short for two words
+        let usesModels = sources.contains { $0.model != nil }
+        let bestSingle = scored(path: path, keyCenters: keyCenters, keySize: keySize, sources: sources, limit: 1)
+            .first?.score ?? -Double.greatestFiniteMagnitude
+        // What an extra word costs, and how clearly the phrase has to win: a single word stays the safe reading.
+        let perWord = usesModels ? 1.0 : 0.35
+        let margin = usesModels ? 1.0 : 0.25
+
+        // Points every quarter key along the path; the corners are where it turns sharply.
+        let count = max(8, min(160, Int(total / (keyWidth * 0.25))))
+        let dense = resample(path, count: count)
+        let anchors = [0] + corners(of: dense, keyWidth: keyWidth) + [dense.count - 1]
+        guard anchors.count >= 3 else { return [] }
+
+        var cache: [Int: (word: String, score: Double)?] = [:]
+        func part(_ from: Int, _ to: Int) -> (word: String, score: Double)? {
+            let tag = from * 1000 + to
+            if let known = cache[tag] { return known }
+            let points = Array(dense[from...to])
+            let result: (word: String, score: Double)?
+            if length(of: points) < keyWidth * 0.6 {
+                result = oneLetterWord(at: points[points.count / 2], keyCenters: keyCenters, keyWidth: keyWidth,
+                                       sources: sources, usesModels: usesModels)
+            } else {
+                result = scored(path: points, keyCenters: keyCenters, keySize: keySize, sources: sources, limit: 1).first
+            }
+            cache[tag] = result
+            return result
+        }
+
+        var phrases: [(words: [String], score: Double)] = []
+        let last = anchors.count - 1
+        // Two words: the first ends at anchor i, the second starts at anchor i or i + 1.
+        for i in 1..<last {
+            guard let first = part(0, anchors[i]) else { continue }
+            for j in [i, i + 1] where j <= last {
+                guard let second = part(anchors[j], dense.count - 1) else { continue }
+                phrases.append(([first.word, second.word], first.score + second.score - perWord))
+            }
+        }
+        // Three words, on long glides with few corners (each part is a decode of its own).
+        if total > keyWidth * 6, anchors.count <= 8 {
+            for i in 1..<last {
+                guard let first = part(0, anchors[i]) else { continue }
+                for j in [i, i + 1] where j < last {
+                    for k in j..<last {
+                        guard let second = part(anchors[j], anchors[k]) else { continue }
+                        for l in [k, k + 1] where l <= last {
+                            guard let third = part(anchors[l], dense.count - 1) else { continue }
+                            phrases.append(([first.word, second.word, third.word],
+                                            first.score + second.score + third.score - 2 * perWord))
+                        }
+                    }
+                }
+            }
+        }
+
+        let ranked = phrases.filter { $0.score > bestSingle + margin }.sorted { $0.score > $1.score }
+        var result: [String] = []
+        for phrase in ranked {
+            let text = phrase.words.joined(separator: " ")
+            if !result.contains(text) { result.append(text) }
+            if result.count == 3 { break }
+        }
+        return result
+    }
+
+    /// Interior points of the path where it turns by more than about 50 degrees, at most one per half key and
+    /// the six sharpest, in path order.
+    private func corners(of dense: [CGPoint], keyWidth: CGFloat) -> [Int] {
+        let span = 2
+        guard dense.count > span * 2 + 1 else { return [] }
+        var turns: [Double] = Array(repeating: 0, count: dense.count)
+        for i in span..<(dense.count - span) {
+            let a = dense[i - span], b = dense[i], c = dense[i + span]
+            let v1 = (x: Double(b.x - a.x), y: Double(b.y - a.y))
+            let v2 = (x: Double(c.x - b.x), y: Double(c.y - b.y))
+            let l1 = (v1.x * v1.x + v1.y * v1.y).squareRoot()
+            let l2 = (v2.x * v2.x + v2.y * v2.y).squareRoot()
+            guard l1 > 0.5, l2 > 0.5 else { continue }
+            let cosine = max(-1, min(1, (v1.x * v2.x + v1.y * v2.y) / (l1 * l2)))
+            turns[i] = acos(cosine)
+        }
+        var found: [(index: Int, turn: Double)] = []
+        for i in span..<(dense.count - span) where turns[i] > 0.87 && turns[i] >= turns[i - 1] && turns[i] >= turns[i + 1] {
+            if let previous = found.last, i - previous.index <= span {
+                if turns[i] > previous.turn { found[found.count - 1] = (i, turns[i]) }
+                continue
+            }
+            found.append((i, turns[i]))
+        }
+        return found.sorted { $0.turn > $1.turn }.prefix(6).map { $0.index }.sorted()
+    }
+
+    /// A one-letter word ("a", "I", "y") on the key under `point`, scored like the decoded words.
+    private func oneLetterWord(at point: CGPoint,
+                               keyCenters: [Character: CGPoint],
+                               keyWidth: CGFloat,
+                               sources: [Source],
+                               usesModels: Bool) -> (word: String, score: Double)? {
+        guard let key = nearestKeys(to: point, centers: keyCenters, within: keyWidth * 0.8, count: 1).first else { return nil }
+        let word = String(key)
+        let match = TextFolding.key(word)
+        var best: Double?
+        for source in sources {
+            var index = source.entries.lowerBound(match)
+            while index < source.entries.count, source.entries.key(index) == match {
+                let entry = source.entries[index]
+                index += 1
+                guard entry.word == word else { continue }
+                let score: Double
+                if usesModels {
+                    if let model = source.model, entry.rank >= 0 {
+                        score = model.logProb(entry.rank + LanguageModel.firstWord, previous: source.previousId, before: source.beforeId)
+                    } else {
+                        score = -7 + 5 * entry.norm
+                    }
+                } else {
+                    score = 0.55 * entry.norm - source.penalty
+                }
+                best = max(best ?? score, score)
+            }
+        }
+        return best.map { (word: word, score: $0) }
     }
 
     // MARK: Geometry

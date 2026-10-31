@@ -73,6 +73,8 @@ final class WordStore {
 
     private(set) var entries: Entries = .empty
     private(set) var isLoaded = false
+    /// The most common words, for guessing the next letter (`nextLetterWeights`); built on first use.
+    private var commonWords: [(letters: [Character], key: String, weight: Double)]?
     /// True when every word of the list is loaded (false when it was cut at a limit).
     private(set) var isFull = false
     /// The word limit the dictionary was loaded with (nil = none), for the languages that are not the active layout.
@@ -254,6 +256,7 @@ final class WordStore {
         accentModel = parsed.accents
         prefixCache = [:]
         frequencyOrder = nil
+        commonWords = nil
         isLoaded = true
     }
 
@@ -1007,5 +1010,58 @@ extension WordStore {
             if count > (best?.count ?? 0) { best = (String(key.dropFirst(prefix.count)), count) }
         }
         return best?.word
+    }
+}
+
+
+// MARK: - Next letter (adaptive key areas)
+
+extension WordStore {
+    /// How likely each letter is to come next after `typed` (the start of a word; empty = a new word), from how
+    /// common the words that continue it are. Letters as written, accents included ("ö" is not "o").
+    func nextLetterWeights(after typed: String) -> [Character: Double] {
+        guard isLoaded else { return [:] }
+        let lower = Array(TextFolding.normalizeApostrophes(typed).lowercased())
+        let key = TextFolding.key(String(lower))
+        var weights: [Character: Double] = [:]
+
+        func add(_ letters: [Character], weight: Double) {
+            guard letters.count > lower.count, Array(letters.prefix(lower.count)) == lower else { return }
+            let next = letters[lower.count]
+            guard next.isLetter else { return }
+            weights[next, default: 0] += weight
+        }
+
+        // A short range of the dictionary is read whole; a long one (the first letter or two) would be too slow
+        // on every key press, so the most common words stand in for it.
+        let start = key.isEmpty ? 0 : entries.lowerBound(key)
+        let end = key.isEmpty ? entries.count : entries.lowerBound(key + "\u{FFFF}")
+        if end - start <= 400 {
+            for index in start..<end {
+                let entry = entries[index]
+                add(Array(entry.word), weight: Double(entry.freq) + 1)
+            }
+        } else {
+            for word in common() where key.isEmpty || word.key.hasPrefix(key) {
+                add(word.letters, weight: word.weight)
+            }
+        }
+        // The user's own words count as fairly common.
+        for (word, count) in learned where count >= WordStore.learnAfter {
+            add(Array(word), weight: 50)
+        }
+        return weights
+    }
+
+    private func common() -> [(letters: [Character], key: String, weight: Double)] {
+        if let cached = commonWords { return cached }
+        var list: [(letters: [Character], key: String, weight: Double)] = []
+        for rank in 0..<min(5000, entries.count) {
+            guard let index = entries.index(ofRank: rank) else { continue }
+            let entry = entries[index]
+            list.append((Array(entry.word), entry.folded, Double(entry.freq) + 1))
+        }
+        commonWords = list
+        return list
     }
 }

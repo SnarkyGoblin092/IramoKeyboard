@@ -5,19 +5,21 @@ import UIKit
 struct ContentView: View {
     var body: some View {
         NavigationStack {
+            // Liquid Glass: frosted rows on the tinted backdrop (Glass.swift).
             List {
-                HeaderSection()
-                TestFieldSection()
-                TypingSection()
-                LanguagesSection()
-                GesturesSection()
-                FeedbackSection()
-                AppearanceSection()
-                ShortcutsSection()
-                DataSection()
-                CreditsSection()
+                HeaderSection().glassRows()
+                TestFieldSection().glassRows()
+                TypingSection().glassRows()
+                LanguagesSection().glassRows()
+                GesturesSection().glassRows()
+                FeedbackSection().glassRows()
+                AppearanceSection().glassRows()
+                ShortcutsSection().glassRows()
+                DataSection().glassRows()
+                CreditsSection().glassRows()
             }
             .listStyle(.insetGrouped)
+            .glassScreen()
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
             .scrollDismissesKeyboard(.interactively)
@@ -111,14 +113,23 @@ private struct TestFieldSection: View {
 private struct TypingSection: View {
     var body: some View {
         Section {
-            SettingToggle("Word suggestions", key: SettingKey.suggestions, defaultValue: SettingDefault.suggestions,
-                          subtitle: "Predictions above the keys as you type")
+            NavigationLink {
+                SuggestionsView()
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Suggestion bar")
+                        Text("Word suggestions, how many words, look and speed")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "text.line.first.and.arrowtriangle.forward")
+                }
+            }
             SettingToggle("Auto-correction", key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: "Fixes typos, missing accents and missing spaces when you press space")
             SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions,
                           subtitle: "Offers an emoji that matches the word you typed")
-            SettingToggle("Swipe typing", key: SettingKey.swipe, defaultValue: SettingDefault.swipe,
-                          subtitle: "Slide across the letters to type a word")
             SettingToggle("Auto-capitalization", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
                           subtitle: "Starts each sentence with a capital letter")
             SettingToggle("\u{201C}.\u{201D} shortcut", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
@@ -132,18 +143,34 @@ private struct TypingSection: View {
 private struct GesturesSection: View {
     var body: some View {
         Section {
-            SettingToggle("Move the cursor", key: SettingKey.cursorControl, defaultValue: SettingDefault.cursorControl,
-                          subtitle: "Hold the space bar and slide")
-            SettingToggle("Delete whole words", key: SettingKey.deleteSwipe, defaultValue: SettingDefault.deleteSwipe,
-                          subtitle: "Slide left from the delete key")
-            SettingSlider("Hold delay",
-                          key: SettingKey.holdDelay,
-                          defaultValue: SettingDefault.holdDelay,
-                          range: Settings.holdDelayRange,
-                          step: 0.05,
-                          subtitle: "How long to hold a key before its accents appear") { String(format: "%.2f s", $0) }
+            NavigationLink {
+                GesturesView()
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Gestures")
+                        Text("Swipe typing, two thumbs, delete, cursor and flicks")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "hand.draw")
+                }
+            }
+            NavigationLink {
+                HitboxesView()
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hitboxes")
+                        Text("Key size, adaptive keys and your hit map")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "scope")
+                }
+            }
         } header: {
-            SectionHeader("Gestures", symbol: "hand.draw.fill", color: .teal)
+            SectionHeader("Gestures & touch", symbol: "hand.draw.fill", color: .teal)
         }
     }
 }
@@ -151,15 +178,19 @@ private struct GesturesSection: View {
 private struct FeedbackSection: View {
     var body: some View {
         Section {
-            SettingSlider("Vibration",
-                          key: SettingKey.vibration,
-                          defaultValue: SettingDefault.vibration,
-                          range: 0...1,
-                          step: 0.05,
-                          showsTest: true,
-                          subtitle: "Needs Full Access") { $0 < 0.01 ? "Off" : "\(Int(($0 * 100).rounded()))%" }
-            SettingToggle("Key clicks", key: SettingKey.clickSound, defaultValue: SettingDefault.clickSound,
-                          subtitle: "Muted by the silent switch")
+            NavigationLink {
+                HapticsView()
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Haptics")
+                        Text("Vibration strength and feel, cursor ticks and key clicks")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "iphone.radiowaves.left.and.right")
+                }
+            }
             SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
                           subtitle: "Shows the letter above your finger")
         } header: {
@@ -220,18 +251,23 @@ private struct AppearanceSection: View {
             .padding(.vertical, 2)
             AccentCustomRow()
 
-            SettingSlider("Keyboard height",
-                          key: SettingKey.keyboardHeight,
-                          defaultValue: SettingDefault.keyboardHeight,
-                          range: Settings.heightScaleRange,
-                          step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
-            RoundnessSlider()
+            NavigationLink {
+                KeysView()
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Keys")
+                        Text("Size, corners, spacing, labels and the space bar")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "keyboard")
+                }
+            }
             SettingToggle("Key borders", key: SettingKey.keyBorders, defaultValue: SettingDefault.keyBorders,
                           subtitle: "A thin outline around keys on translucent themes")
             SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
                           subtitle: "Numbers above the letters")
-            SettingToggle("Accent hints", key: SettingKey.keyHints, defaultValue: SettingDefault.keyHints,
-                          subtitle: "Shows a key's first accent in its corner")
         } header: {
             SectionHeader("Appearance", symbol: "paintpalette.fill", color: .purple)
         }
@@ -426,7 +462,7 @@ struct ShortcutsView: View {
             .padding(.top, 12)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(GlassBackdrop())
         .navigationTitle("Text shortcuts")
         .navigationBarTitleDisplayMode(.inline)
         // Read again on every visit: the screen is built once with the parent, so the starting value above is
@@ -497,7 +533,7 @@ struct LanguagesView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(GlassBackdrop())
         .navigationTitle("Languages")
         .navigationBarTitleDisplayMode(.inline)
         // Read again on every visit: the screen is built once with the parent, so the starting value above is
@@ -520,13 +556,12 @@ struct LanguagesView: View {
 }
 
 private extension View {
-    /// The white (dark: grey) rounded card of a grouped list.
+    /// The rounded glass card of a grouped list (Liquid Glass on iOS 26).
     func groupedCard() -> some View {
-        let radius: CGFloat
-        if #available(iOS 26, *) { radius = 26 } else { radius = 10 }
+        let radius = GlassMetrics.cardRadius
         return self
-            .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .glassCard(cornerRadius: radius)
     }
 
     /// A row of a grouped card: full width, list-like insets and height.
@@ -617,7 +652,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
     var body: some View {
         // The row stays put (the name never slides off screen); the Delete button grows in from the right edge.
         content()
-            .background(Color(.secondarySystemGroupedBackground))
+            .contentShape(Rectangle())   // the card's glass shows through; the whole row still takes taps
             .onTapGesture { close() }
             .overlay(alignment: .trailing) {
                 Button(action: delete) {
@@ -696,7 +731,9 @@ private struct AddLanguageView: View {
                     Text(language.displayName).foregroundColor(.primary)
                 }
             }
+            .glassRows()
         }
+        .glassScreen()
         .navigationTitle("Add a language")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -746,7 +783,7 @@ struct LearnedWordsView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(GlassBackdrop())
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search learned words")
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)

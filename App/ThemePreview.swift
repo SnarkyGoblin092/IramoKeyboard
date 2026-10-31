@@ -11,6 +11,20 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
     @AppStorage(SettingKey.keyBorders, store: SharedStore.defaults) private var keyBorders = SettingDefault.keyBorders
     @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
+    // The Keys and Suggestions screens' settings, drawn as the keyboard does.
+    @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
+    @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize
+    @AppStorage(SettingKey.hintPosition, store: SharedStore.defaults) private var hintPosition = SettingDefault.hintPosition
+    @AppStorage(SettingKey.hintSize, store: SharedStore.defaults) private var hintSize = SettingDefault.hintSize
+    @AppStorage(SettingKey.spaceText, store: SharedStore.defaults) private var spaceText = SettingDefault.spaceText
+    @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
+    @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var suggestionHeight = SettingDefault.suggestionHeight
+    @AppStorage(SettingKey.suggestionStyle, store: SharedStore.defaults) private var suggestionStyle = SettingDefault.suggestionStyle
+    @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separatorStyle = SettingDefault.separatorStyle
+    @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
 
     @Environment(\.colorScheme) private var systemScheme
 
@@ -24,10 +38,13 @@ struct ThemePreview: View {
         return enabled.first ?? .english
     }
 
+    private var letterRows: [[String]] { return ThemePreview.letterRows(for: shownLanguage) }
+
     // Mirrors `Language.letterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
-    private var letterRows: [[String]] {
+    // Also drawn by the hit map (HitboxesView).
+    static func letterRows(for language: Language) -> [[String]] {
         func split(_ rows: String...) -> [[String]] { return rows.map { $0.map { String($0) } } }
-        switch shownLanguage {
+        switch language {
         case .english, .italian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         case .hungarian, .czech: return split("qwertzuiop", "asdfghjkl", "yxcvbnm")
         case .spanish: return split("qwertyuiop", "asdfghjklñ", "zxcvbnm")
@@ -88,6 +105,14 @@ struct ThemePreview: View {
         var spacer = false
         var accent = false
         var active = false
+        var space = false
+    }
+
+    /// Mirrors KeyboardViewController.reloadKeyboardLayout: the user's text, or the language's name or code.
+    private var spaceTitle: String {
+        let custom = spaceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom.isEmpty { return custom }
+        return spaceLanguageCode ? shownLanguage.rawValue.uppercased() : shownLanguage.displayName
     }
 
     private var keyRows: [[PreviewKey]] {
@@ -111,7 +136,7 @@ struct ThemePreview: View {
             [PreviewKey(title: "123", weight: 1.3, function: true),
              PreviewKey(tabIcon: "smileys", function: true),
              PreviewKey(title: ","),
-             PreviewKey(title: shownLanguage.displayName, weight: 3.9),
+             PreviewKey(title: spaceTitle, weight: 3.9, space: true),
              PreviewKey(title: "."),
              PreviewKey(title: returnTitle, weight: 1.8, function: true, accent: true)]
         ]
@@ -182,10 +207,22 @@ struct ThemePreview: View {
 
     // MARK: Body
 
-    /// The real keyboard's size in points (Keyboard/KeyboardViewController.applyHeight): 440 wide, a 44pt strip
-    /// over 232pt of keys. Callers use these ratios so the preview has the keyboard's proportions.
-    static let aspectWithStrip: CGFloat = 440 / 276
-    static let aspectKeysOnly: CGFloat = 440 / 232
+    /// The real keyboard's size in points (Keyboard/KeyboardViewController.applyHeight): 440 wide, the strip over
+    /// four rows of keys (key height + row gap) and 8pt of padding; 276pt at the defaults. Callers use these
+    /// ratios so the preview has the keyboard's proportions.
+    /// (Read straight from the defaults: the Settings snapshot can lag a moment behind the app's own controls.)
+    static var aspectWithStrip: CGFloat {
+        return 440 / (CGFloat(stored(SettingKey.suggestionHeight)) + keysHeight)
+    }
+    static var aspectKeysOnly: CGFloat { return 440 / keysHeight }
+
+    private static var keysHeight: CGFloat {
+        return CGFloat(8 + 4 * (stored(SettingKey.keyHeight) + stored(SettingKey.rowGap)))
+    }
+
+    private static func stored(_ key: String) -> Double {
+        return SharedStore.defaults.double(forKey: key)   // registered defaults fill in unset values
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -193,11 +230,12 @@ struct ThemePreview: View {
             let height = proxy.size.height
             // Everything is measured in the keyboard's points and scaled to the preview's width.
             let s = width / 440
-            let stripHeight = showsStrip ? 44 * s : 0
+            let stripHeight = showsStrip ? CGFloat(suggestionHeight) * s : 0
             let verticalPadding = 4 * s
             let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / 4)
-            let keyHeight = max(1, rowHeight - 11 * s)
-            let rowWidth = width - 2 * s
+            let keyHeight = max(1, rowHeight - CGFloat(rowGap) * s)
+            // A narrower keyboard (the Width setting) is centred.
+            let rowWidth = (width - 2 * s) * CGFloat(keyboardWidth)
 
             ZStack(alignment: .top) {
                 backdrop
@@ -221,7 +259,7 @@ struct ThemePreview: View {
     // MARK: Pieces
 
     /// A row as KeyboardView lays it out: each key's touch cell is its share of the width by weight, and the
-    /// key is drawn 3pt in from each side of its cell and 5.5pt from the top and bottom.
+    /// key is drawn half the key gap in from each side of its cell and half the row gap from the top and bottom.
     private func row(_ keys: [PreviewKey], rowWidth: CGFloat, rowHeight: CGFloat, keyHeight: CGFloat,
                      scale s: CGFloat) -> some View {
         let total = keys.reduce(CGFloat(0)) { $0 + $1.weight }
@@ -234,7 +272,7 @@ struct ThemePreview: View {
                     if k.spacer {
                         Color.clear
                     } else {
-                        key(k, width: max(1, cell - 6 * s), height: keyHeight, scale: s)
+                        key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s)
                     }
                 }
                 .frame(width: cell, height: rowHeight)
@@ -243,19 +281,41 @@ struct ThemePreview: View {
         .frame(width: rowWidth)
     }
 
-    /// The suggestion strip: three slots with thin dividers and the accent-coloured hide-keyboard button.
+    /// The suggestion strip: three slots with dividers (or on segments, as the Suggestions screen sets it) and
+    /// the accent-coloured hide-keyboard button. Mirrors Keyboard/SuggestionBar.swift.
     private func strip(height: CGFloat, scale s: CGFloat) -> some View {
         let words = shownLanguage == .hungarian ? ["A", "Én", "Nem"] : ["I", "The", "It"]
+        let segments = suggestionStyle == "segments"
+        let radius = CGFloat(min(1, max(0, roundness))) * (height - 13 * s) / 2
         return HStack(spacing: 0) {
             ForEach(0..<words.count, id: \.self) { i in
                 Text(words[i])
                     .font(.system(size: 17 * s))
-                    .foregroundColor(stripText)
+                    .foregroundColor(segments && followTheme ? textColor : stripText)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background {
+                        if segments {
+                            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                .fill(followTheme ? keyFill : pick(Color.black.opacity(0.06), Color.white.opacity(0.12)))
+                                .padding(.horizontal, 2.5 * s)
+                                .padding(.vertical, 3 * s)
+                        }
+                    }
                     .overlay(alignment: .trailing) {
-                        if i < words.count - 1 {
-                            Rectangle().fill(separatorColor).frame(width: max(0.5, s), height: height * 0.5)
+                        if i < words.count - 1 && !segments && separatorStyle != "none" {
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(width: max(1, s), height: height * 0.5)
+                                .overlay(
+                                    Path { path in
+                                        path.move(to: CGPoint(x: 0.5, y: 0))
+                                        path.addLine(to: CGPoint(x: 0.5, y: height * 0.5))
+                                    }
+                                    .stroke(stripSeparator,
+                                            style: StrokeStyle(lineWidth: separatorStyle == "dotted" ? 1.5 * s : max(0.5, s),
+                                                               lineCap: separatorStyle == "dotted" ? .round : .butt,
+                                                               dash: separatorDash(scale: s))))
                         }
                     }
             }
@@ -266,10 +326,22 @@ struct ThemePreview: View {
         }
         .padding(.leading, 8 * s)
         .padding(.top, 9 * s)
+        .padding(.bottom, 1.5 * s)
         .frame(height: height)
     }
 
     private var separatorColor: Color { return pick(Color.black.opacity(0.12), Color.white.opacity(0.20)) }
+
+    /// "Follow theme": a faded version of the key labels, else the neutral hairline.
+    private var stripSeparator: Color { return followTheme ? textColor.opacity(0.35) : separatorColor }
+
+    private func separatorDash(scale s: CGFloat) -> [CGFloat] {
+        switch separatorStyle {
+        case "dashed": return [4 * s, 3 * s]
+        case "dotted": return [0.1, 3 * s]
+        default: return []
+        }
+    }
 
     private var keyShadow: Color {
         return theme.kind == .native ? pick(Color(red: 0.53, green: 0.55, blue: 0.58), Color.black.opacity(0.55)) : .clear
@@ -281,6 +353,7 @@ struct ThemePreview: View {
         let fill = k.accent ? accentColor : (k.function ? functionFill : keyFill)
         let tint: Color = k.accent ? onAccent : textColor
         let hint = keyHints && k.title.count == 1 ? hints[k.title.lowercased()] : nil
+        let hintScale = CGFloat(hintSize)
         return ZStack {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(fill)
@@ -301,22 +374,35 @@ struct ThemePreview: View {
                     .foregroundColor(tint)
             } else if !k.title.isEmpty {
                 Text(k.title)
-                    .font(k.title.count == 1 ? .system(size: 23 * s, weight: .light) : .system(size: 16 * s))
+                    .font(k.space ? .system(size: CGFloat(spaceTextSize) * s)
+                          : (k.title.count == 1 ? .system(size: 23 * s * CGFloat(letterSize), weight: .light) : .system(size: 16 * s)))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundColor(tint)
                     .padding(.horizontal, 2 * s)
             }
             if let hint = hint {
+                // Where KeyView.layoutHint puts it.
                 Text(hint)
-                    .font(.system(size: (radius > 12 * s ? 9 : 10) * s))
+                    .font(.system(size: (radius > 12 * s ? 9 : 10) * s * hintScale))
                     .foregroundColor(textColor.opacity(0.55))
-                    .padding(.trailing, 4 * s + radius * 0.3)
-                    .padding(.top, 2 * s)
-                    .frame(width: width, height: height, alignment: .topTrailing)
+                    .padding(.horizontal, 4 * s + radius * 0.3)
+                    .padding(.vertical, 2 * s)
+                    .frame(width: width, height: height, alignment: hintAlignment)
             }
         }
         .frame(width: width, height: height)
+    }
+
+    private var hintAlignment: Alignment {
+        switch hintPosition {
+        case "topLeft": return .topLeading
+        case "topCenter": return .top
+        case "bottomRight": return .bottomTrailing
+        case "bottomCenter": return .bottom
+        case "bottomLeft": return .bottomLeading
+        default: return .topTrailing
+        }
     }
 
     /// Outlines: every theme but Native (and real Liquid Glass) when Key borders is on.

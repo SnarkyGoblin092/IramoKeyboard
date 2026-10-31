@@ -319,7 +319,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         addSubview(deletePanel)
         addSubview(tabGlass)
         tabSelection.isUserInteractionEnabled = false
-        tabSelection.backgroundColor = UIColor.label.withAlphaComponent(0.3)
+        tabSelection.backgroundColor = Theme.accent   // the theme's highlight colour, like the suggestion bar
         tabSelection.layer.cornerCurve = .continuous
         tabGlass.contentView.addSubview(tabSelection)
         abcButton.setTitle("ABC", for: .normal)
@@ -477,7 +477,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private func refreshTabHighlight() {
         for (index, button) in tabButtons.enumerated() {
             let selected = (index == selectedTabIndex)
-            button.tintColor = EmojiLook.text
+            button.tintColor = selected ? Theme.onAccent : EmojiLook.text
             if let pair = tabImages[index] { button.setImage(selected ? pair.filled : pair.outline, for: .normal) }
             button.alpha = selected ? 1.0 : 0.9
         }

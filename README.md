@@ -19,14 +19,24 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Next-word suggestions before you start the next word.
 - Auto-correction when you press space: typos ("vsgyok" -> "vagyok"), missing accents ("koszonom" -> "köszönöm"),
   missing spaces ("nemakarom" -> "nem akarom"), apostrophes and capitals ("im" -> "I'm").
-- The word space will write is shown highlighted in the middle of the bar.
+- The word space will write sits on an accent-coloured pill in the middle of the bar.
+- The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
+  (solid, dashed, dotted or none) or key-like segments, in the theme's colours or neutral ones, at any height.
+- Suggestion speed: Instant, Balanced or Efficient (how long the bar waits for a pause in typing).
 - Backspace right after an auto-correction undoes it.
-- Learns new words: tap the word as you typed it in the bar to keep it; words you retype after deleting a typo
-  teach the keyboard that typo; words you use often rank higher.
+- Learns new words: tap the word as you typed it in the bar to keep it, or type a new word twice; words you
+  retype after deleting a typo teach the keyboard that typo; words you use often, and the words you put after
+  each other, rank higher.
+- Knows your contacts' names (suggested, never corrected) and uses your iOS text replacements.
 - No correction in password, email and web address fields, or where the app asks for none.
 
 ### Typing
 - Swipe typing: slide across the letters to write a word; the bar offers the other readings.
+- Two-thumb swiping: hand a word to the other thumb mid-glide (or right after lifting) and it goes on.
+- Glide onto the space bar to finish a word and carry on with the next one without lifting.
+- Optional multi-word glides: one glide can read as two or three words ("do it", "in the morning").
+- Delete right after a swipe removes the whole word (can be turned off).
+- Optional flicks: up on a letter for a capital, down for its first accent.
 - Hold a key for its accents and variants; hold the comma or the full stop for more punctuation.
 - Auto-capitalization at the start of sentences, double-tap shift for caps lock.
 - Double-tap the space bar for a full stop.
@@ -35,20 +45,45 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Hold the emoji key to open the Iramo app.
 - Text shortcuts: type a trigger and press space to expand it.
 - Numbers and symbols pages, and an optional number row.
-- Key pop-ups, key clicks and adjustable vibration.
+- A hide-keyboard button at the right end of the suggestion bar.
+- Key pop-ups and key clicks.
+- Vibration with an adjustable strength and feel (Soft, Light, Medium, Heavy, Rigid, or anywhere on a pad),
+  and optional ticks when the cursor mode starts and for each character it moves.
+
+### Hitboxes
+- Letter-key touch areas: Precise, Default or Forgiving next to shift, delete and space, or any size in between.
+- Adaptive keys: the letters likely to come next get bigger touch areas, the unlikely ones smaller (Subtle,
+  Default or Strong, with fine-tuning), also at the start of a word.
+- Hit map: learns where you really tap each key and moves its touch area there; the app shows the map per
+  language and can reset it.
 
 ### Emoji
 - An emoji picker like the iOS one: recently used emoji, categories with tabs, skin tones, and search in your
-  language.
+  language; the search bar takes the theme's key colours.
 - Emoji suggestions in the bar for the word you typed; tapping one replaces the word.
 - Emoticons turn into emoji: type ":)", "<3", "xD", "(y)" and the bar offers 🙂, ❤️, 😆, 👍.
 
 ### Look
 - 75 themes: Native, Transparent, Liquid Glass and 72 colour themes, which are a lighter shade in light mode.
 - Follows light and dark mode; with the phone in dark mode, the keys stay dark even in apps that stay light.
-- Accent colour, key roundness, keyboard height, key borders and accent hints on the keys.
-- Theme previews in the app that look like the real keyboard, in light and dark mode.
+- Accent colour and key borders.
+- Keys: Compact, Balanced or Roomy, or set one by one: key height (with its own landscape size), keyboard
+  width, corners (square to round), the gaps between keys and rows, letter size, capitals that follow shift or
+  always show, accent hints in any corner (or off) at any size, and the space bar's text (your own, the
+  language's name or its code) and size.
+- Highlights follow the theme's accent: the auto-correction pill, pressed suggestions, the hide-keyboard button
+  and the emoji category tabs.
 - Works on iPhone and iPad, in portrait and landscape.
+
+### The Iramo app
+- A Liquid Glass design: glass cards and rows over a backdrop tinted with your accent colour (frosted glass
+  before iOS 26).
+- Shows what still needs setting up (adding the keyboard, Full Access), and a field to try the keyboard.
+- Themes with previews that look like the real keyboard, in light and dark mode.
+- Languages, text shortcuts and learned words, each swiped left to remove an entry.
+- Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
+  adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
+- Credits and licences for the word, emoji and icon data.
 
 ### Privacy
 - Everything the keyboard learns stays on the device; the keyboard makes no network connections.

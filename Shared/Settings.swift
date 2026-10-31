@@ -17,13 +17,53 @@ enum SettingKey {
     static let autoCorrect = "hunkeys.autoCorrect"
     static let cursorControl = "hunkeys.cursorControl"
     static let deleteSwipe = "hunkeys.deleteSwipe"
+    static let deleteSwipedWord = "hunkeys.deleteSwipedWord"
+    static let twoThumbSwipe = "hunkeys.twoThumbSwipe"
+    static let spaceCommits = "hunkeys.spaceCommits"
+    static let multiWordSwipe = "hunkeys.multiWordSwipe"
+    static let flickUpCapital = "hunkeys.flickUpCapital"
+    static let flickDownAccent = "hunkeys.flickDownAccent"
+    // Hitboxes
+    static let hitboxSize = "hunkeys.hitboxSize"
+    static let adaptiveHitboxes = "hunkeys.adaptiveHitboxes"
+    static let adaptiveGrow = "hunkeys.adaptiveGrow"
+    static let adaptiveShrink = "hunkeys.adaptiveShrink"
+    static let adaptiveStrength = "hunkeys.adaptiveStrength"
+    static let adaptiveWordStart = "hunkeys.adaptiveWordStart"
+    static let hitMap = "hunkeys.hitMap"
+    static let hitMapStrength = "hunkeys.hitMapStrength"
+    /// language code -> the learned tap offsets (data written by the keyboard; not a preference).
+    static let hitMapPrefix = "hunkeys.hitMapData."
     // Layout and look
     static let numberRow = "hunkeys.numberRow"
     static let keyHints = "hunkeys.keyHints"
     static let theme = "hunkeys.theme"
     static let accent = "hunkeys.accent"
     static let accentHex = "hunkeys.accentHex"
-    static let keyboardHeight = "hunkeys.keyboardHeight"
+    // Keys, haptics and the suggestion bar (the app's Keys, Haptics and Suggestions screens)
+    static let keyHeight = "hunkeys.keyHeight"
+    static let landscapeSeparate = "hunkeys.landscapeSeparate"
+    static let landscapeKeyHeight = "hunkeys.landscapeKeyHeight"
+    static let keyboardWidth = "hunkeys.keyboardWidth"
+    static let keyGap = "hunkeys.keyGap"
+    static let rowGap = "hunkeys.rowGap"
+    static let alwaysCapitals = "hunkeys.alwaysCapitals"
+    static let letterSize = "hunkeys.letterSize"
+    static let hintPosition = "hunkeys.hintPosition"
+    static let hintSize = "hunkeys.hintSize"
+    static let spaceText = "hunkeys.spaceText"
+    static let spaceTextSize = "hunkeys.spaceTextSize"
+    static let spaceLanguageCode = "hunkeys.spaceLanguageCode"
+    static let hapticSharpness = "hunkeys.hapticSharpness"
+    static let cursorStartHaptic = "hunkeys.cursorStartHaptic"
+    static let cursorTickHaptic = "hunkeys.cursorTickHaptic"
+    static let suggestionStyle = "hunkeys.suggestionStyle"
+    static let separatorStyle = "hunkeys.separatorStyle"
+    static let suggestionFollowTheme = "hunkeys.suggestionFollowTheme"
+    static let suggestionHeight = "hunkeys.suggestionHeight"
+    static let suggestionFit = "hunkeys.suggestionFit"
+    static let suggestionScroll = "hunkeys.suggestionScroll"
+    static let suggestionDelay = "hunkeys.suggestionDelay"
     static let keyRoundness = "hunkeys.keyRoundness"
     // Data
     static let language = "hunkeys.language"
@@ -52,7 +92,11 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, accentHex, keyboardHeight, keyRoundness, enabledLanguages, keyBorders
+        theme, accent, accentHex, keyRoundness, enabledLanguages, keyBorders,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceText, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay,
+        deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
+        hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
+        hitMap, hitMapStrength
     ]
 }
 
@@ -69,13 +113,50 @@ enum SettingDefault {
     static let autoCorrect = true
     static let cursorControl = true
     static let deleteSwipe = true
+    static let deleteSwipedWord = true
+    static let twoThumbSwipe = true
+    static let spaceCommits = true
+    /// Off until tried: a phrase reading only wins clearly, but a single word is the safer default.
+    static let multiWordSwipe = false
+    static let flickUpCapital = false
+    static let flickDownAccent = false
+    static let hitboxSize = 1.0
+    static let adaptiveHitboxes = true
+    static let adaptiveGrow = 0.35
+    static let adaptiveShrink = 0.20
+    static let adaptiveStrength = 0.65
+    static let adaptiveWordStart = true
+    static let hitMap = true
+    static let hitMapStrength = 0.7
     static let numberRow = false
     static let keyHints = true
     static let theme = "native"
     static let accent = "blue"
     static let accentHex = ""
     static let keyBorders = true
-    static let keyboardHeight = 1.0
+    static let keyHeight: Double = 45.0
+    static let landscapeSeparate: Bool = false
+    static let landscapeKeyHeight: Double = 30.0
+    static let keyboardWidth: Double = 1.0
+    static let keyGap: Double = 6.0
+    static let rowGap: Double = 11.0
+    static let alwaysCapitals: Bool = false
+    static let letterSize: Double = 1.0
+    static let hintPosition: String = "topRight"
+    static let hintSize: Double = 1.0
+    static let spaceText: String = ""
+    static let spaceTextSize: Double = 16.0
+    static let spaceLanguageCode: Bool = false
+    static let hapticSharpness: Double = 1.0
+    static let cursorStartHaptic: Bool = true
+    static let cursorTickHaptic: Bool = true
+    static let suggestionStyle: String = "separators"
+    static let separatorStyle: String = "solid"
+    static let suggestionFollowTheme: Bool = true
+    static let suggestionHeight: Double = 44.0
+    static let suggestionFit: Bool = false
+    static let suggestionScroll: Bool = false
+    static let suggestionDelay: Double = 0.06
     static let keyRoundness = 0.26
     static let language = "en"
     static let enabledLanguages = ["en", "hu"]
@@ -137,7 +218,6 @@ final class Settings {
     static let shared = Settings()
 
     static let holdDelayRange: ClosedRange<Double> = 0.10...1.00
-    static let heightScaleRange: ClosedRange<Double> = 0.85...1.20
 
     private var store: UserDefaults { return SharedStore.defaults }
 
@@ -208,6 +288,20 @@ final class Settings {
             SettingKey.autoCorrect: SettingDefault.autoCorrect,
             SettingKey.cursorControl: SettingDefault.cursorControl,
             SettingKey.deleteSwipe: SettingDefault.deleteSwipe,
+            SettingKey.deleteSwipedWord: SettingDefault.deleteSwipedWord,
+            SettingKey.twoThumbSwipe: SettingDefault.twoThumbSwipe,
+            SettingKey.spaceCommits: SettingDefault.spaceCommits,
+            SettingKey.multiWordSwipe: SettingDefault.multiWordSwipe,
+            SettingKey.flickUpCapital: SettingDefault.flickUpCapital,
+            SettingKey.flickDownAccent: SettingDefault.flickDownAccent,
+            SettingKey.hitboxSize: SettingDefault.hitboxSize,
+            SettingKey.adaptiveHitboxes: SettingDefault.adaptiveHitboxes,
+            SettingKey.adaptiveGrow: SettingDefault.adaptiveGrow,
+            SettingKey.adaptiveShrink: SettingDefault.adaptiveShrink,
+            SettingKey.adaptiveStrength: SettingDefault.adaptiveStrength,
+            SettingKey.adaptiveWordStart: SettingDefault.adaptiveWordStart,
+            SettingKey.hitMap: SettingDefault.hitMap,
+            SettingKey.hitMapStrength: SettingDefault.hitMapStrength,
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
             SettingKey.theme: SettingDefault.theme,
@@ -215,7 +309,29 @@ final class Settings {
             SettingKey.accent: SettingDefault.accent,
             SettingKey.accentHex: SettingDefault.accentHex,
             SettingKey.keyBorders: SettingDefault.keyBorders,
-            SettingKey.keyboardHeight: SettingDefault.keyboardHeight,
+            SettingKey.keyHeight: SettingDefault.keyHeight,
+            SettingKey.landscapeSeparate: SettingDefault.landscapeSeparate,
+            SettingKey.landscapeKeyHeight: SettingDefault.landscapeKeyHeight,
+            SettingKey.keyboardWidth: SettingDefault.keyboardWidth,
+            SettingKey.keyGap: SettingDefault.keyGap,
+            SettingKey.rowGap: SettingDefault.rowGap,
+            SettingKey.alwaysCapitals: SettingDefault.alwaysCapitals,
+            SettingKey.letterSize: SettingDefault.letterSize,
+            SettingKey.hintPosition: SettingDefault.hintPosition,
+            SettingKey.hintSize: SettingDefault.hintSize,
+            SettingKey.spaceText: SettingDefault.spaceText,
+            SettingKey.spaceTextSize: SettingDefault.spaceTextSize,
+            SettingKey.spaceLanguageCode: SettingDefault.spaceLanguageCode,
+            SettingKey.hapticSharpness: SettingDefault.hapticSharpness,
+            SettingKey.cursorStartHaptic: SettingDefault.cursorStartHaptic,
+            SettingKey.cursorTickHaptic: SettingDefault.cursorTickHaptic,
+            SettingKey.suggestionStyle: SettingDefault.suggestionStyle,
+            SettingKey.separatorStyle: SettingDefault.separatorStyle,
+            SettingKey.suggestionFollowTheme: SettingDefault.suggestionFollowTheme,
+            SettingKey.suggestionHeight: SettingDefault.suggestionHeight,
+            SettingKey.suggestionFit: SettingDefault.suggestionFit,
+            SettingKey.suggestionScroll: SettingDefault.suggestionScroll,
+            SettingKey.suggestionDelay: SettingDefault.suggestionDelay,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.language: SettingDefault.language
         ])
@@ -297,6 +413,42 @@ final class Settings {
         set { put(newValue, SettingKey.keyBorders) }
     }
 
+    // MARK: Swipe and flick gestures
+
+    var deleteSwipedWord: Bool { return readBool(SettingKey.deleteSwipedWord) }
+    var twoThumbSwipe: Bool { return readBool(SettingKey.twoThumbSwipe) }
+    var spaceCommits: Bool { return readBool(SettingKey.spaceCommits) }
+    var multiWordSwipe: Bool { return readBool(SettingKey.multiWordSwipe) }
+    var flickUpCapital: Bool { return readBool(SettingKey.flickUpCapital) }
+    var flickDownAccent: Bool { return readBool(SettingKey.flickDownAccent) }
+
+    // MARK: Hitboxes
+
+    static let hitboxSizeRange: ClosedRange<Double> = 0.80...1.30
+    static let adaptiveGrowRange: ClosedRange<Double> = 0...0.60
+    static let adaptiveShrinkRange: ClosedRange<Double> = 0...0.40
+
+    /// Letter-key touch areas compared with the other keys: < 1 lets shift, delete and space take more of the
+    /// edges, > 1 gives them to the letters.
+    var hitboxSize: Double { return clamp(readDouble(SettingKey.hitboxSize), Settings.hitboxSizeRange) }
+    var adaptiveHitboxes: Bool { return readBool(SettingKey.adaptiveHitboxes) }
+    var adaptiveGrow: Double { return clamp(readDouble(SettingKey.adaptiveGrow), Settings.adaptiveGrowRange) }
+    var adaptiveShrink: Double { return clamp(readDouble(SettingKey.adaptiveShrink), Settings.adaptiveShrinkRange) }
+    var adaptiveStrength: Double { return clamp(readDouble(SettingKey.adaptiveStrength), 0...1) }
+    var adaptiveWordStart: Bool { return readBool(SettingKey.adaptiveWordStart) }
+    var hitMap: Bool { return readBool(SettingKey.hitMap) }
+    var hitMapStrength: Double { return clamp(readDouble(SettingKey.hitMapStrength), 0...1) }
+
+    /// The hit map of a language: letter -> [taps, mean x offset, mean y offset] (offsets in key widths/heights,
+    /// from the key's centre to where the user actually taps it).
+    func hitMapData(for languageCode: String) -> [String: [Double]] {
+        return value(SettingKey.hitMapPrefix + languageCode) as? [String: [Double]] ?? [:]
+    }
+
+    func setHitMapData(_ data: [String: [Double]], for languageCode: String) {
+        put(data.isEmpty ? nil : data, SettingKey.hitMapPrefix + languageCode)
+    }
+
     /// Removes what the old adaptive key areas stored (the feature is gone).
     func removeTouchModel() {
         guard SharedStore.defaults.object(forKey: SettingKey.touchModel) != nil
@@ -342,10 +494,45 @@ final class Settings {
         set { put(clamp(newValue, 0...1), SettingKey.keyRoundness) }
     }
 
-    var keyboardHeightScale: Double {
-        get { return clamp(readDouble(SettingKey.keyboardHeight), Settings.heightScaleRange) }
-        set { put(clamp(newValue, Settings.heightScaleRange), SettingKey.keyboardHeight) }
-    }
+    // MARK: Keys, haptics and the suggestion bar
+
+    /// Drawn height of a key in portrait (pt); the keyboard grows or shrinks to fit. In landscape the keys keep
+    /// the same share unless `landscapeSeparate` gives them their own `landscapeKeyHeight`.
+    static let keyHeightRange: ClosedRange<Double> = 34...60
+    static let landscapeKeyHeightRange: ClosedRange<Double> = 24...44
+    static let keyboardWidthRange: ClosedRange<Double> = 0.80...1.0
+    static let keyGapRange: ClosedRange<Double> = 2...14
+    static let rowGapRange: ClosedRange<Double> = 4...20
+    static let letterSizeRange: ClosedRange<Double> = 0.80...1.30
+    static let hintSizeRange: ClosedRange<Double> = 0.70...1.50
+    static let spaceTextSizeRange: ClosedRange<Double> = 11...22
+    static let hapticSharpnessRange: ClosedRange<Double> = 0...1
+    static let suggestionHeightRange: ClosedRange<Double> = 32...56
+    static let suggestionDelayRange: ClosedRange<Double> = 0...0.30
+
+    var keyHeight: Double { return clamp(readDouble(SettingKey.keyHeight), Settings.keyHeightRange) }
+    var landscapeSeparate: Bool { return readBool(SettingKey.landscapeSeparate) }
+    var landscapeKeyHeight: Double { return clamp(readDouble(SettingKey.landscapeKeyHeight), Settings.landscapeKeyHeightRange) }
+    var keyboardWidth: Double { return clamp(readDouble(SettingKey.keyboardWidth), Settings.keyboardWidthRange) }
+    var keyGap: Double { return clamp(readDouble(SettingKey.keyGap), Settings.keyGapRange) }
+    var rowGap: Double { return clamp(readDouble(SettingKey.rowGap), Settings.rowGapRange) }
+    var alwaysCapitals: Bool { return readBool(SettingKey.alwaysCapitals) }
+    var letterSize: Double { return clamp(readDouble(SettingKey.letterSize), Settings.letterSizeRange) }
+    var hintPosition: String { return readString(SettingKey.hintPosition) ?? SettingDefault.hintPosition }
+    var hintSize: Double { return clamp(readDouble(SettingKey.hintSize), Settings.hintSizeRange) }
+    var spaceText: String { return readString(SettingKey.spaceText) ?? SettingDefault.spaceText }
+    var spaceTextSize: Double { return clamp(readDouble(SettingKey.spaceTextSize), Settings.spaceTextSizeRange) }
+    var spaceLanguageCode: Bool { return readBool(SettingKey.spaceLanguageCode) }
+    var hapticSharpness: Double { return clamp(readDouble(SettingKey.hapticSharpness), Settings.hapticSharpnessRange) }
+    var cursorStartHaptic: Bool { return readBool(SettingKey.cursorStartHaptic) }
+    var cursorTickHaptic: Bool { return readBool(SettingKey.cursorTickHaptic) }
+    var suggestionStyle: String { return readString(SettingKey.suggestionStyle) ?? SettingDefault.suggestionStyle }
+    var separatorStyle: String { return readString(SettingKey.separatorStyle) ?? SettingDefault.separatorStyle }
+    var suggestionFollowTheme: Bool { return readBool(SettingKey.suggestionFollowTheme) }
+    var suggestionHeight: Double { return clamp(readDouble(SettingKey.suggestionHeight), Settings.suggestionHeightRange) }
+    var suggestionFit: Bool { return readBool(SettingKey.suggestionFit) }
+    var suggestionScroll: Bool { return readBool(SettingKey.suggestionScroll) }
+    var suggestionDelay: Double { return clamp(readDouble(SettingKey.suggestionDelay), Settings.suggestionDelayRange) }
 
     // MARK: Data
 

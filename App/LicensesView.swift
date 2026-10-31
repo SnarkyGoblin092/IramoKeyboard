@@ -19,12 +19,12 @@ struct LicensesView: View {
     var body: some View {
         List {
             Section {
-                Text("Iramo. Copyright © 2026 Orsós Emil. All rights reserved.")
+                Text("Iramo. Copyright © 2026 Orsós Emil. All rights reserved.").glassRows()
             } footer: {
                 Text("The third-party material below keeps its own licences.")
             }
             Section {
-                ForEach(Licenses.data) { item in row(item) }
+                ForEach(Licenses.data) { item in row(item) }.glassRows()
             } header: {
                 Text("Words and emoji")
             } footer: {
@@ -32,9 +32,10 @@ struct LicensesView: View {
                      + "licence, CC BY-SA 4.0.")
             }
             Section("Emoji tab icons") {
-                ForEach(Licenses.icons) { item in row(item) }
+                ForEach(Licenses.icons) { item in row(item) }.glassRows()
             }
         }
+        .glassScreen()
         .navigationTitle("Licences")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -57,17 +58,19 @@ private struct LicenseDetailView: View {
     var body: some View {
         List {
             Section {
-                Text(item.credit)
+                Text(item.credit).glassRows()
                 if let url = URL(string: item.source) {
-                    Link(item.source, destination: url).font(.footnote)
+                    Link(item.source, destination: url).font(.footnote).glassRows()
                 }
             }
             Section(item.licenseName) {
                 Text(item.text)
                     .font(.footnote.monospaced())
                     .textSelection(.enabled)
+                    .glassRows()
             }
         }
+        .glassScreen()
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.inline)
     }

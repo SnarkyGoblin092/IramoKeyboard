@@ -44,7 +44,7 @@ struct ThemesView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(GlassBackdrop())
         .navigationTitle("Themes")
         .navigationBarTitleDisplayMode(.inline)
     }

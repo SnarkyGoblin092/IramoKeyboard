@@ -16,27 +16,46 @@ protocol SuggestionBarDelegate: AnyObject {
     func suggestionBarDidTapDismiss(_ bar: SuggestionBar)
 }
 
-/// A flat strip above the keys, like the native one: three suggestion slots (words and emoji)
-/// and a permanent "hide keyboard" button on the right.
+/// The strip above the keys: suggestion slots (words and emoji) and a permanent "hide keyboard" button on the
+/// right. Set up by the Suggestions screen of the app:
+///  - three equal slots like the native bar, slots sized to their words so more fit ("Fit more"), or up to ten
+///    in a strip that scrolls sideways ("Scrollable");
+///  - thin separators between the slots (solid, dashed, dotted or none), or each slot on a key-like segment;
+///  - colours from the theme ("Follow theme") or neutral ones.
 final class SuggestionBar: UIView {
     weak var delegate: SuggestionBarDelegate?
 
+    /// How many suggestions the bar can show with the current settings (the controller asks for this many).
+    static var capacity: Int {
+        if Prefs.suggestionScroll { return 10 }
+        return Prefs.suggestionFit ? 6 : 3
+    }
+
+    private enum Layout { case equal, fit, scroll }
+    private let layoutMode: Layout
+    private let segments: Bool
+    private let followTheme: Bool
+
     private let glass = FlatPanel(background: Theme.stripFill)
+    /// Holds the slots. It scrolls only in the scrollable layout; otherwise the bar handles the touches itself.
+    private let strip = UIScrollView()
     private let dismissIcon = UIImageView()
     private let dismissHighlight = UIView()
     private let hintLabel = UILabel()
-    private var slotLabels: [UILabel] = []
-    private var slotHighlights: [UIView] = []
-    private var separators: [UIView] = []
+    /// The accent pill behind the word space will write (the auto-correction).
+    private let bestPill = UIView()
+
+    private var labels: [UILabel] = []
+    private var highlights: [UIView] = []
+    private var segmentViews: [UIView] = []
+    private let separatorLayer = CAShapeLayer()
+
     private var suggestions: [Suggestion] = []
-    private let slotCount = 3
+    private var highlightedIndex: Int?
+    /// Where each suggestion is drawn, in the strip's content coordinates.
+    private var slotFrames: [CGRect] = []
 
-    /// Layout cache used by the touch handling (the whole strip is one touch surface).
-    private var slotMinX: CGFloat = 0
-    private var slotWidth: CGFloat = 0
     private var dismissMinX: CGFloat = 0
-
-    /// What the current touch went down on: a slot index, `dismissIndex`, or nil.
     private let dismissIndex = -1
     private var pressedIndex: Int?
     private var touchStart = CGPoint.zero
@@ -47,6 +66,9 @@ final class SuggestionBar: UIView {
     }
 
     override init(frame: CGRect) {
+        layoutMode = Prefs.suggestionScroll ? .scroll : (Prefs.suggestionFit ? .fit : .equal)
+        segments = Prefs.suggestionStyle == "segments"
+        followTheme = Prefs.suggestionFollowTheme
         super.init(frame: frame)
         backgroundColor = UIColor.clear
         isMultipleTouchEnabled = false
@@ -59,33 +81,36 @@ final class SuggestionBar: UIView {
         hintLabel.minimumScaleFactor = 0.7
         glass.contentView.addSubview(hintLabel)
 
-        for index in 0..<slotCount {
-            // Highlight (pressed state) below the label; both are purely visual - the bar itself takes the touches.
-            let highlight = UIView()
-            highlight.backgroundColor = Theme.accent.withAlphaComponent(0.22)
-            highlight.alpha = 0
-            glass.contentView.addSubview(highlight)
-            slotHighlights.append(highlight)
-
-            let label = UILabel()
-            label.textColor = Theme.text
-            label.font = UIFont.systemFont(ofSize: 17)
-            label.textAlignment = .center
-            label.adjustsFontSizeToFitWidth = true
-            label.minimumScaleFactor = 0.6
-            label.lineBreakMode = .byTruncatingTail
-            glass.contentView.addSubview(label)
-            slotLabels.append(label)
-
-            if index > 0 {
-                let line = UIView()
-                line.backgroundColor = Theme.separator
-                glass.contentView.addSubview(line)
-                separators.append(line)
-            }
+        strip.showsHorizontalScrollIndicator = false
+        strip.alwaysBounceHorizontal = layoutMode == .scroll
+        strip.isScrollEnabled = layoutMode == .scroll
+        strip.isUserInteractionEnabled = layoutMode == .scroll
+        strip.clipsToBounds = true
+        glass.contentView.addSubview(strip)
+        if layoutMode == .scroll {
+            // The strip pans by itself; a tap picks the suggestion under the finger.
+            strip.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(stripTapped(_:))))
         }
 
-        dismissHighlight.backgroundColor = Theme.accent.withAlphaComponent(0.22)
+        separatorLayer.fillColor = nil
+        separatorLayer.lineWidth = 1
+        switch Prefs.separatorStyle {
+        case "dashed": separatorLayer.lineDashPattern = [4, 3]
+        case "dotted":
+            separatorLayer.lineDashPattern = [1, 3]
+            separatorLayer.lineCap = .round
+            separatorLayer.lineWidth = 1.5
+        default: break
+        }
+        separatorLayer.isHidden = segments || Prefs.separatorStyle == "none"
+        strip.layer.addSublayer(separatorLayer)
+
+        bestPill.backgroundColor = Theme.accent
+        bestPill.layer.cornerCurve = .continuous
+        bestPill.isHidden = true
+        strip.addSubview(bestPill)
+
+        dismissHighlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
         dismissHighlight.alpha = 0
         glass.contentView.addSubview(dismissHighlight)
 
@@ -95,10 +120,9 @@ final class SuggestionBar: UIView {
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
 
-        // Nothing inside the strip takes touches itself: the bar decides from the x position.
-        for view in [glass as UIView, hintLabel, dismissIcon, dismissHighlight] { view.isUserInteractionEnabled = false }
-        glass.contentView.isUserInteractionEnabled = false
-        for view in slotLabels + slotHighlights + separators { view.isUserInteractionEnabled = false }
+        // Nothing but the strip takes touches itself: the bar decides from the x position.
+        for view in [glass as UIView, hintLabel, dismissIcon, dismissHighlight, bestPill] { view.isUserInteractionEnabled = false }
+        if layoutMode != .scroll { glass.contentView.isUserInteractionEnabled = false }
 
         refreshVisibility()
     }
@@ -107,29 +131,84 @@ final class SuggestionBar: UIView {
         fatalError("init(coder:) is not supported")
     }
 
+    // MARK: Colours
+
+    /// Separators: a faded version of the theme's key labels, or the neutral system hairline.
+    private var separatorColor: UIColor {
+        return followTheme ? Theme.keySecondaryText.withAlphaComponent(0.45) : Theme.separator
+    }
+
+    /// Segments: the theme's letter keys, or a neutral wash.
+    private var segmentColor: UIColor {
+        if followTheme { return Theme.letterKey }
+        return UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.12) : UIColor(white: 0, alpha: 0.06) }
+    }
+
+    private var textColor: UIColor {
+        return followTheme && segments ? Theme.keyText : Theme.text
+    }
+
     // MARK: Content
 
-    /// `highlighted`: the slot space will write (the auto-correction), shown in the accent colour.
+    /// `highlighted`: the slot space will write (the auto-correction), shown on an accent-coloured pill.
     func update(_ newSuggestions: [Suggestion], highlighted: Int? = nil) {
-        suggestions = Array(newSuggestions.prefix(slotCount))
-        for (index, label) in slotLabels.enumerated() {
-            if index < suggestions.count {
-                let item = suggestions[index]
-                label.text = item.text
-                let isBest = (index == highlighted)
-                label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17, weight: isBest ? .semibold : .regular)
-                label.textColor = isBest ? Theme.accent : Theme.text
-            } else {
-                label.text = nil
-            }
+        suggestions = Array(newSuggestions.prefix(SuggestionBar.capacity))
+        highlightedIndex = nil
+        if let index = highlighted, index < suggestions.count, !suggestions[index].text.isEmpty {
+            highlightedIndex = index
         }
+        while labels.count < suggestions.count { addSlot() }
+        for (index, label) in labels.enumerated() {
+            guard index < suggestions.count else {
+                label.text = nil
+                label.isHidden = true
+                segmentViews[index].isHidden = true
+                continue
+            }
+            let item = suggestions[index]
+            let isBest = index == highlightedIndex
+            label.isHidden = false
+            label.text = item.text
+            label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17, weight: isBest ? .semibold : .regular)
+            label.textColor = isBest ? Theme.onAccent : textColor
+            segmentViews[index].isHidden = !segments || item.text.isEmpty
+        }
+        bestPill.isHidden = highlightedIndex == nil
+        strip.contentOffset = .zero
         setPressed(nil)
         refreshVisibility()
+        setNeedsLayout()
+    }
+
+    private func addSlot() {
+        let segment = UIView()
+        segment.backgroundColor = segmentColor
+        segment.layer.cornerCurve = .continuous
+        segment.isUserInteractionEnabled = false
+        strip.insertSubview(segment, at: 0)
+        segmentViews.append(segment)
+
+        let highlight = UIView()
+        highlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
+        highlight.layer.cornerCurve = .continuous
+        highlight.alpha = 0
+        highlight.isUserInteractionEnabled = false
+        strip.addSubview(highlight)
+        highlights.append(highlight)
+
+        let label = UILabel()
+        label.textAlignment = .center
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.6
+        label.lineBreakMode = .byTruncatingTail
+        label.isUserInteractionEnabled = false
+        strip.addSubview(label)
+        labels.append(label)
     }
 
     private func refreshVisibility() {
-        let hasSuggestions = !suggestions.isEmpty
-        for line in separators { line.isHidden = !hasSuggestions }
+        let hasSuggestions = suggestions.contains { !$0.text.isEmpty }
+        separatorLayer.opacity = hasSuggestions ? 1 : 0
         hintLabel.text = emptyHint
         hintLabel.isHidden = hasSuggestions || emptyHint == nil
     }
@@ -144,9 +223,6 @@ final class SuggestionBar: UIView {
         let area = glass.bounds
         let dismissWidth: CGFloat = 52
         let contentWidth = max(0, area.width - dismissWidth - 6)
-
-        slotMinX = 6
-        slotWidth = contentWidth / CGFloat(slotCount)
         dismissMinX = area.width - dismissWidth
 
         dismissIcon.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
@@ -154,32 +230,108 @@ final class SuggestionBar: UIView {
         let circle = min(area.height - 2, dismissWidth - 6)
         dismissHighlight.frame = CGRect(x: dismissIcon.frame.midX - circle / 2, y: (area.height - circle) / 2,
                                         width: circle, height: circle)
-        hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
-
-        let radius = Theme.keyCornerRadius(for: CGSize(width: slotWidth, height: area.height))
-        for index in 0..<slotCount {
-            let frame = CGRect(x: slotMinX + CGFloat(index) * slotWidth, y: 0, width: slotWidth, height: area.height)
-            slotHighlights[index].frame = frame.insetBy(dx: 2, dy: 2)
-            slotHighlights[index].layer.cornerRadius = radius
-            slotLabels[index].frame = frame.insetBy(dx: 6, dy: 0)
-        }
         dismissHighlight.layer.cornerRadius = circle / 2
-        for (index, line) in separators.enumerated() {
-            line.frame = CGRect(x: slotMinX + CGFloat(index + 1) * slotWidth - 0.5,
-                                y: area.height * 0.25,
-                                width: 1,
-                                height: area.height * 0.5)
+        hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
+        strip.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
+
+        var frames: [CGRect] = []
+        for width in slotWidths(contentWidth: contentWidth) {
+            frames.append(CGRect(x: frames.last?.maxX ?? 0, y: 0, width: width, height: area.height))
         }
+        slotFrames = frames
+        strip.contentSize = CGSize(width: max(contentWidth, frames.last?.maxX ?? 0), height: area.height)
+
+        let segmentRadius = Theme.keyCornerRadius(for: CGSize(width: 60, height: max(0, area.height - 6)))
+        let separators = UIBezierPath()
+        for (index, label) in labels.enumerated() {
+            guard index < frames.count, frames[index].width > 0 else {
+                // A word that did not fit ("Fit more" shows only what fits).
+                label.isHidden = true
+                segmentViews[index].isHidden = true
+                continue
+            }
+            let frame = frames[index]
+            label.frame = frame.insetBy(dx: 6, dy: 0)
+            highlights[index].frame = frame.insetBy(dx: 2, dy: 2)
+            highlights[index].layer.cornerRadius = segments ? segmentRadius : Theme.keyCornerRadius(for: frame.size)
+            segmentViews[index].frame = frame.insetBy(dx: 2.5, dy: 3)
+            segmentViews[index].layer.cornerRadius = segmentRadius
+        }
+        // A line between neighbouring slots (also the empty ones of the three-slot bar, like the native bar).
+        for frame in frames.dropFirst() where frame.minX > 0 && frame.width > 0 {
+            separators.move(to: CGPoint(x: frame.minX, y: area.height * 0.25))
+            separators.addLine(to: CGPoint(x: frame.minX, y: area.height * 0.75))
+        }
+        separatorLayer.frame = CGRect(origin: .zero, size: strip.contentSize)
+        separatorLayer.path = separators.cgPath
+        separatorLayer.strokeColor = separatorColor.resolvedColor(with: traitCollection).cgColor
+
+        if let best = highlightedIndex, best < frames.count, frames[best].width > 0 {
+            let frame = frames[best]
+            if segments {
+                // The chosen segment itself turns accent-coloured.
+                bestPill.frame = frame.insetBy(dx: 2.5, dy: 3)
+                bestPill.layer.cornerRadius = segmentRadius
+            } else {
+                // Hugs the word, like the system's auto-correction bubble, with the keys' corner style.
+                let textWidth = labels[best].intrinsicContentSize.width
+                let width = min(frame.width - 4, max(textWidth + 28, area.height * 1.6))
+                let height = max(0, area.height - 8)
+                bestPill.frame = CGRect(x: frame.midX - width / 2, y: (area.height - height) / 2, width: width, height: height)
+                bestPill.layer.cornerRadius = min(height / 2, Theme.keyCornerRadius(for: bestPill.bounds.size) * 1.6)
+            }
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        separatorLayer.strokeColor = separatorColor.resolvedColor(with: traitCollection).cgColor
+    }
+
+    /// The width of each suggestion's slot.
+    private func slotWidths(contentWidth: CGFloat) -> [CGFloat] {
+        let count = suggestions.count
+        let equal = Array(repeating: contentWidth / 3, count: max(count, 3))
+        guard layoutMode != .equal, count > 0 else { return equal }
+        // Each word as wide as it needs (with room around it), never narrower than a key or two.
+        var natural: [CGFloat] = []
+        for (index, item) in suggestions.enumerated() {
+            let font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17,
+                                         weight: index == highlightedIndex ? .semibold : .regular)
+            let text = (item.text as NSString).size(withAttributes: [.font: font]).width
+            natural.append(item.text.isEmpty ? 0 : max(56, ceil(text) + 30))
+        }
+        let shown = CGFloat(natural.filter { $0 > 0 }.count)
+        if layoutMode == .scroll {
+            let total = natural.reduce(0, +)
+            guard total < contentWidth, shown > 0 else { return natural }
+            let extra = (contentWidth - total) / shown
+            return natural.map { $0 > 0 ? $0 + extra : 0 }
+        }
+        // Fit more: as many words as fit, in order; the room left over is shared out.
+        var fitted: [CGFloat] = []
+        var used: CGFloat = 0
+        for width in natural {
+            if used + width > contentWidth { break }
+            fitted.append(width)
+            used += width
+        }
+        guard fitted.count >= 3 else { return equal }
+        let fittedShown = CGFloat(fitted.filter { $0 > 0 }.count)
+        let extra = fittedShown > 0 ? (contentWidth - used) / fittedShown : 0
+        // Words that did not fit get no room (their labels end up empty-sized at the end).
+        return fitted.map { $0 > 0 ? $0 + extra : 0 } + Array(repeating: 0, count: count - fitted.count)
     }
 
     // MARK: Touch handling
     //
-    // The whole strip is a single touch surface. Wherever the finger lands (margins and gaps
-    // included) the x position decides: right end = hide keyboard, otherwise the suggestion slot
-    // whose separated area contains it. Nothing depends on touching the word itself.
+    // The whole strip is a single touch surface. Wherever the finger lands (margins and gaps included) the x
+    // position decides: right end = hide keyboard, otherwise the suggestion slot whose area contains it. In the
+    // scrollable layout the strip itself takes the touches (it pans, and a tap picks a suggestion).
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
+        if layoutMode == .scroll && point.x - glass.frame.minX < dismissMinX { return strip }
         return self
     }
 
@@ -187,13 +339,24 @@ final class SuggestionBar: UIView {
         return bounds.insetBy(dx: -4, dy: -4).contains(point)
     }
 
+    /// The suggestion whose slot is nearest to `x` (in the strip's content coordinates).
+    private func slot(atContentX x: CGFloat) -> Int? {
+        var best: Int?
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for (index, frame) in slotFrames.enumerated() where index < suggestions.count && frame.width > 0 {
+            let distance = x < frame.minX ? frame.minX - x : (x > frame.maxX ? x - frame.maxX : 0)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = index
+            }
+        }
+        return best
+    }
+
     private func index(at point: CGPoint) -> Int? {
         let x = point.x - glass.frame.minX
         if x >= dismissMinX { return dismissIndex }
-        guard slotWidth > 0 else { return nil }
-        let raw = Int(floor((x - slotMinX) / slotWidth))
-        let clamped = min(max(raw, 0), slotCount - 1)
-        return clamped < suggestions.count ? clamped : nil
+        return slot(atContentX: x - strip.frame.minX + strip.contentOffset.x)
     }
 
     private func setPressed(_ index: Int?) {
@@ -204,8 +367,15 @@ final class SuggestionBar: UIView {
     }
 
     private func highlight(_ index: Int, on: Bool) {
-        let view = (index == dismissIndex) ? dismissHighlight : slotHighlights[index]
+        let view = (index == dismissIndex) ? dismissHighlight : highlights[index]
         view.alpha = on ? 1 : 0
+    }
+
+    @objc private func stripTapped(_ recognizer: UITapGestureRecognizer) {
+        guard let index = slot(atContentX: recognizer.location(in: strip).x), !suggestions[index].text.isEmpty else { return }
+        highlights[index].alpha = 1
+        UIView.animate(withDuration: 0.25) { self.highlights[index].alpha = 0 }
+        delegate?.suggestionBar(self, didSelect: suggestions[index])
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
