@@ -5,7 +5,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Tempo app**.
 - **Languages:** English, Hungarian and 13 other European languages; swipe the space bar to switch.
 - **Prediction:** a word trigram model per language with typo, accent and missing-space correction
   ("vsgyok" -> "vagyok", "koszonom" -> "köszönöm", "nemakarom" -> "nem akarom"), capitalisation ("im" -> "I'm"),
-  next-word suggestions, and learning of your own words and typos (view or remove them under Learned words).
+  next-word suggestions, and learning of your own words and typos (tap a word as you typed it in the suggestion bar to keep it).
   Backspace right after an auto-correction undoes it, and auto-correction can be turned off.
 - **Typing:** swipe typing, space-bar cursor control, delete-by-word, text shortcuts, double-space full stop.
 - **Emoji:** an iOS-style picker with recents, search and skin tones, plus emoji suggestions in the bar.

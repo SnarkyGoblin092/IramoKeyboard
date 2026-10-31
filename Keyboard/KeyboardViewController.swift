@@ -897,6 +897,18 @@ final class KeyboardViewController: UIInputViewController {
         if !known { stores[language]?.learn(cleaned) }
     }
 
+    /// Tapping the word exactly as typed keeps it: one that no enabled dictionary has is learned at once (and
+    /// from then on suggested, and never corrected away).
+    private func learnTappedWord(_ word: String) {
+        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
+        let cleaned = TextFolding.normalizeApostrophes(word)
+        let key = TextFolding.key(cleaned)
+        guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
+        ensureStores()
+        let known = stores.values.contains { $0.isLoaded && $0.contains(key: key) }
+        if !known { stores[language]?.learn(cleaned, asTyped: true) }
+    }
+
     /// Remembers which word followed which, for next-word suggestions.
     private func recordBigram(contextBefore: String, next: String) {
         guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
@@ -1034,7 +1046,9 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         var emojis: [String] = []
-        if Prefs.emojiSuggestions && !emojiWord.isEmpty && EmojiStore.shared.isReady {
+        if Prefs.emojiSuggestions, let emoticon = Emoticons.match(atEndOf: before) {
+            emojis = [emoticon.emoji]   // ":)" -> the emoji, in place of the word's
+        } else if Prefs.emojiSuggestions && !emojiWord.isEmpty && EmojiStore.shared.isReady {
             // The word's own language first ("hat" is six in Hungarian, a hat in English), then the others.
             let owners = Predictor.owners(of: emojiWord, stores: stores)
             let order = owners + ([language] + enabledLanguages).filter { !owners.contains($0) }
@@ -1489,6 +1503,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
         switch suggestion.kind {
         case .literal, .word:
             guard !suggestion.text.isEmpty else { return }
+            if suggestion.kind == .literal { learnTappedWord(suggestion.text) }
             replacePrefix(with: suggestion.text)
             clearSwipeState()
             afterTyping()
@@ -1501,7 +1516,9 @@ extension KeyboardViewController: SuggestionBarDelegate {
             let before = textDocumentProxy.documentContextBeforeInput ?? ""
             let typing = currentPrefix(in: before)
             var replaced = 0
-            if !typing.isEmpty {
+            if let emoticon = Emoticons.match(atEndOf: before), emoticon.emoji == suggestion.text {
+                replaced = emoticon.length   // ":)" or ":) " becomes the emoji
+            } else if !typing.isEmpty {
                 replaced = typing.count
             } else if before.hasSuffix(" ") {
                 let finished = currentPrefix(in: String(before.dropLast()))

@@ -389,23 +389,6 @@ final class Settings {
         put(words, SettingKey.learnedPrefix + languageCode)
     }
 
-    /// The words the keyboard has learned (used at least `learnAfter` times), alphabetically.
-    func learnedWordList(for languageCode: String, learnAfter: Int = 2) -> [String] {
-        return learnedWords(for: languageCode).filter { $0.value >= learnAfter }.keys
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
-    /// Removes one learned word (from the app's list); the keyboard picks the change up when it opens.
-    func removeLearnedWord(_ word: String, for languageCode: String) {
-        var words = learnedWords(for: languageCode)
-        words.removeValue(forKey: word)
-        setLearnedWords(words, for: languageCode)
-        var corrections = self.corrections(for: languageCode)
-        for key in corrections.keys where key.hasSuffix("\t" + word) { corrections.removeValue(forKey: key) }
-        setCorrections(corrections, for: languageCode)
-        bumpPersonalRevision()
-    }
-
     var personalRevision: Int {
         return value(SettingKey.personalRevision) as? Int ?? 0
     }

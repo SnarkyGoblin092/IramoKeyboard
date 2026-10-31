@@ -299,15 +299,6 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
-            NavigationLink {
-                LearnedWordsView()
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Learned words")
-                    Text("Words the keyboard picked up from your typing")
-                        .font(.footnote).foregroundColor(.secondary)
-                }
-            }
             Button { pending = .recents } label: { Label("Clear recent emoji", systemImage: "clock.arrow.circlepath") }
             Button { pending = .learned } label: { Label("Forget learned words", systemImage: "text.book.closed") }
             Button(role: .destructive) { pending = .reset } label: { Label("Reset all settings", systemImage: "arrow.counterclockwise") }
@@ -627,58 +618,5 @@ private struct AddLanguageView: View {
         }
         .navigationTitle("Add a language")
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Learned words
-
-/// Words the keyboard learned (ones no dictionary has, used at least twice), per language, with swipe to remove.
-struct LearnedWordsView: View {
-    @State private var words: [String: [String]] = LearnedWordsView.load()
-
-    private var languages: [Language] {
-        return Language.allCases.filter { !(words[$0.rawValue] ?? []).isEmpty }
-    }
-
-    var body: some View {
-        List {
-            if languages.isEmpty {
-                Section {
-                    Text("No learned words yet").foregroundColor(.secondary)
-                } footer: {
-                    Text("A word that isn't in the dictionary is learned once you have typed it twice.")
-                }
-            }
-            ForEach(languages, id: \.rawValue) { language in
-                Section(language.displayName) {
-                    ForEach(words[language.rawValue] ?? [], id: \.self) { word in
-                        Text(word)
-                    }
-                    .onDelete { offsets in remove(offsets, from: language) }
-                }
-            }
-        }
-        .navigationTitle("Learned words")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !languages.isEmpty { EditButton() }
-        }
-    }
-
-    private static func load() -> [String: [String]] {
-        var result: [String: [String]] = [:]
-        for language in Language.allCases {
-            let list = Settings.shared.learnedWordList(for: language.rawValue)
-            if !list.isEmpty { result[language.rawValue] = list }
-        }
-        return result
-    }
-
-    private func remove(_ offsets: IndexSet, from language: Language) {
-        var list = words[language.rawValue] ?? []
-        for index in offsets { Settings.shared.removeLearnedWord(list[index], for: language.rawValue) }
-        list.remove(atOffsets: offsets)
-        words[language.rawValue] = list
-        Feedback.tick()
     }
 }
