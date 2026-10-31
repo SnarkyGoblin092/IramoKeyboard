@@ -437,6 +437,9 @@ struct ShortcutsView: View {
         }
         .navigationTitle("Text shortcuts")
         .navigationBarTitleDisplayMode(.inline)
+        // Read again on every visit: the screen is built once with the parent, so the starting value above is
+        // from when the app opened.
+        .onAppear { items = Settings.shared.shortcuts }
     }
 
     private func save() {
@@ -505,6 +508,9 @@ struct LanguagesView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Languages")
         .navigationBarTitleDisplayMode(.inline)
+        // Read again on every visit: the screen is built once with the parent, so the starting value above is
+        // from when the app opened (reopening it showed the languages of that moment).
+        .onAppear { enabled = Settings.shared.enabledLanguages }
     }
 
     private func remove(_ language: Language) {
