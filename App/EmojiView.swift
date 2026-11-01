@@ -30,7 +30,11 @@ struct EmojiView: View {
 
     @State private var tab: Tab = .general
 
+    // The picker as it will look stays pinned above the settings (PinnedPreview).
     var body: some View {
+        PinnedPreview(id: "emoji", height: 230, fills: true) {
+            EmojiPickerPreview()
+        } content: {
         GlassList {
             Section {
                 EmojiTabBar(selected: $tab)
@@ -44,9 +48,214 @@ struct EmojiView: View {
             case .skinTones: EmojiSkinToneTab()
             }
         }
-        .glassScreen()
+        .scrollContentBackground(.hidden)
+        }
         .navigationTitle("Emoji")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Preview
+
+/// The picker's sizes on this phone, as EmojiPanel lays it out (the stock 440 x 337pt picker, scaled by the width).
+enum EmojiPickerMetrics {
+    static var scale: Double { return min(1, max(0.6, DeviceMetrics.portraitWidth / 440)) }
+
+    /// The height of an emoji cell with `rows` rows (an emoji's size is a share of it).
+    static func cell(rows: Int) -> Double {
+        let gridHeight = 4 * 54.8 * scale
+        if rows == 4 { return min(DeviceMetrics.portraitWidth * 54.8 / 440, gridHeight / 4) }
+        return gridHeight / Double(max(rows, 1))
+    }
+}
+
+/// The emoji picker drawn with the Emoji screen's settings: where the search field and the tabs sit, the tabs'
+/// order and style, delete, the rows, the emoji's size and spacing, the scroll direction and the skin tone.
+struct EmojiPickerPreview: View {
+    @AppStorage(SettingKey.emojiScroll, store: SharedStore.defaults) private var scroll = SettingDefault.emojiScroll
+    @AppStorage(SettingKey.emojiRows, store: SharedStore.defaults) private var rows = SettingDefault.emojiRows
+    @AppStorage(SettingKey.emojiSize, store: SharedStore.defaults) private var size = SettingDefault.emojiSize
+    @AppStorage(SettingKey.emojiSpacing, store: SharedStore.defaults) private var spacing = SettingDefault.emojiSpacing
+    @AppStorage(SettingKey.emojiSearchPosition, store: SharedStore.defaults) private var search = SettingDefault.emojiSearchPosition
+    @AppStorage(SettingKey.emojiTabsPosition, store: SharedStore.defaults) private var tabs = SettingDefault.emojiTabsPosition
+    @AppStorage(SettingKey.emojiTabStyle, store: SharedStore.defaults) private var tabStyle = SettingDefault.emojiTabStyle
+    @AppStorage(SettingKey.emojiBackspaceKey, store: SharedStore.defaults) private var backspace = SettingDefault.emojiBackspaceKey
+    @AppStorage(SettingKey.emojiShowRecents, store: SharedStore.defaults) private var showRecents = SettingDefault.emojiShowRecents
+    @AppStorage(SettingKey.emojiSkinTone, store: SharedStore.defaults) private var tone = SettingDefault.emojiSkinTone
+    @Environment(\.colorScheme) private var scheme
+    /// The tabs in the Categories tab's order, without the hidden ones (re-read whenever the settings change).
+    @State private var tabKeys: [String] = []
+
+    private static let icons: [String: (symbol: String, emoji: String)] = [
+        "recent": ("clock", "🕘"), "smileys": ("face.smiling", "😀"), "animals": ("pawprint", "🐶"),
+        "food": ("fork.knife", "🍎"), "activity": ("sportscourt", "⚽"), "travel": ("car", "🚗"),
+        "objects": ("lightbulb", "💡"), "symbols": ("heart", "❤️"), "flags": ("flag", "🏁")
+    ]
+    private static let standardKeys = ["recent", "smileys", "animals", "food", "activity", "travel", "objects", "symbols", "flags"]
+    private static let sample = Array("😀😃😄😁😆😅🤣😂🙂🙃😉😊😇🥰😍🤩😘😗😚😙😋😛😜🤪😝🤑🤗🤭🤫🤔🤐🤨😐😑😶😏😒🙄😬😮😯😲😳🥺😦😧😨😰😥😢😭😱😖😣😞😓😩😫🥱😤😡").map { String($0) }
+    /// Emoji that take a skin tone, shown among the others in the chosen one.
+    private static let hands = ["👋", "👍", "👏", "🙌", "🤞", "✌️"]
+
+    private var toneMark: String {
+        let marks = ["", "\u{1F3FB}", "\u{1F3FC}", "\u{1F3FD}", "\u{1F3FE}", "\u{1F3FF}"]
+        return marks[min(max(Int(tone.rounded()), 0), 5)]
+    }
+
+    private var emoji: [String] {
+        let hands = EmojiPickerPreview.hands.map { $0.replacingOccurrences(of: "\u{FE0F}", with: "") + toneMark }
+        var list = EmojiPickerPreview.sample
+        // Hands spread through the grid so they show whatever the layout.
+        for (index, hand) in hands.enumerated() where index * 7 + 3 < list.count {
+            list[index * 7 + 3] = hand
+        }
+        return list
+    }
+
+    private func loadTabs() {
+        let defaults = SharedStore.defaults
+        let stored = (defaults.stringArray(forKey: SettingKey.emojiCategoryOrder) ?? [])
+            .filter { EmojiPickerPreview.standardKeys.contains($0) }
+        let order = stored + EmojiPickerPreview.standardKeys.filter { !stored.contains($0) }
+        let hidden = Set(defaults.stringArray(forKey: SettingKey.emojiHiddenCategories) ?? [])
+        let keys = order.filter { $0 == "recent" ? showRecents : !hidden.contains($0) }
+        if keys != tabKeys { tabKeys = keys }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            // The picker's own shape (440 x 337 on the stock phone), fitted into the pane.
+            let fitWidth = min(geometry.size.width, geometry.size.height * 440 / 337)
+            let height = fitWidth * 337 / 440
+            picker(width: fitWidth, height: height)
+                .frame(width: fitWidth, height: height)
+                .background(RoundedRectangle(cornerRadius: 14 * fitWidth / 440, style: .continuous)
+                    .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86)))
+                .clipShape(RoundedRectangle(cornerRadius: 14 * fitWidth / 440, style: .continuous))
+                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .onAppear(perform: loadTabs)
+        .onChange(of: showRecents) { _ in loadTabs() }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in loadTabs() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Preview of the emoji picker")
+    }
+
+    private func picker(width: CGFloat, height: CGFloat) -> some View {
+        let s = width / 440
+        let pill = 44 * s
+        let band = 46 * s
+        var top = 5 * s
+        var bottom = height
+        var searchY: CGFloat?
+        let barY: CGFloat
+        if search == "top" {
+            searchY = top
+            top += pill + 3 * s
+        }
+        if tabs == "top" {
+            barY = top
+            top += band
+        } else {
+            barY = bottom - band
+            bottom -= band
+        }
+        if search == "bottom" {
+            searchY = bottom - pill - 4 * s
+            bottom -= pill + 7 * s
+        }
+        let gridHeight = max(20, bottom - top)
+        return ZStack(alignment: .topLeading) {
+            if let y = searchY {
+                searchField(width: width, height: pill, scale: s).offset(x: 6 * s, y: y)
+            }
+            grid(width: width, height: gridHeight, scale: s).offset(y: top)
+            bar(width: width, height: band, scale: s).offset(y: barY)
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+    }
+
+    private func searchField(width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
+        HStack(spacing: 6 * s) {
+            Image(systemName: "magnifyingglass")
+            Text("Search Emoji")
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 18 * s))
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 13 * s)
+        .frame(width: width - 12 * s, height: height)
+        .background(Capsule().fill(scheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.08)))
+    }
+
+    private func grid(width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
+        let count = max(1, Int(rows.rounded()))
+        let gap = CGFloat(spacing) * s
+        let side = height / CGFloat(count)
+        let vertical = scroll == "vertical"
+        let cellWidth: CGFloat
+        let columns: Int
+        let inset: CGFloat
+        if vertical {
+            inset = side * 0.15
+            columns = max(1, Int((width - inset * 2 + gap) / (side + gap)))
+            cellWidth = (width - inset * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns)
+        } else {
+            cellWidth = count == 4 ? 54.8 * s : side
+            inset = count == 4 ? 7.3 * s : side * 0.2
+            columns = Int(ceil((width - inset) / (cellWidth + gap))) + 1
+        }
+        let font = min(cellWidth, side) * CGFloat(size)
+        let list = emoji
+        return ZStack(alignment: .topLeading) {
+            ForEach(0..<(columns * count), id: \.self) { index in
+                // Down the columns when scrolling sideways, along the rows when scrolling down.
+                let column = vertical ? index % columns : index / count
+                let row = vertical ? index / columns : index % count
+                Text(list[index % list.count])
+                    .font(.system(size: font))
+                    .frame(width: cellWidth, height: side)
+                    .offset(x: inset + CGFloat(column) * (cellWidth + gap),
+                            y: CGFloat(row) * (vertical ? side + gap : side))
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .clipped()
+    }
+
+    private func bar(width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Text("ABC")
+                .font(.system(size: 15 * s))
+                .frame(width: 56 * s)
+            Spacer(minLength: 0)
+            if tabs != "hidden" {
+                HStack(spacing: 0) {
+                    ForEach(tabKeys.indices, id: \.self) { index in
+                        let key = tabKeys[index]
+                        let icon = EmojiPickerPreview.icons[key] ?? ("questionmark", "❓")
+                        ZStack {
+                            if index == 0 { Circle().fill(.tint).frame(width: 28 * s, height: 28 * s) }
+                            if tabStyle == "emoji" {
+                                Text(icon.emoji).font(.system(size: 16 * s))
+                            } else {
+                                Image(systemName: icon.symbol)
+                                    .font(.system(size: 13 * s))
+                                    .foregroundColor(index == 0 ? .white : .primary)
+                            }
+                        }
+                        .frame(width: 32 * s, height: height)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "delete.left")
+                .font(.system(size: 17 * s, weight: .light))
+                .frame(width: 52 * s)
+                .opacity(backspace ? 1 : 0)
+        }
+        .foregroundColor(.primary)
+        .frame(width: width, height: height)
     }
 }
 
@@ -296,7 +505,7 @@ private struct EmojiLayoutTab: View {
             GlassSlider(title: "Rows", symbol: "rectangle.split.1x2", value: $rows,
                         range: Settings.emojiRowsRange, step: 1) { "\(Int($0.rounded()))" }
             GlassSlider(title: "Emoji size", symbol: "textformat.size", value: $size,
-                        range: Settings.emojiSizeRange, step: 0.01) { "\(Int(($0 * 100).rounded()))%" }
+                        range: Settings.emojiSizeRange, step: 0.01) { DeviceMetrics.points(EmojiPickerMetrics.cell(rows: Int(rows.rounded())) * $0) }
             GlassSlider(title: "Cell spacing", symbol: "arrow.left.and.right", value: $spacing,
                         range: Settings.emojiSpacingRange, step: 1) { "\(Int($0.rounded())) pt" }
         } header: {

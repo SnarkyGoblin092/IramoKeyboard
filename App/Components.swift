@@ -282,27 +282,22 @@ struct SettingSlider: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text(format(local))
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-                if showsTest {
-                    Button("Test") { Feedback.test(strength: local) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            if subtitle != nil || showsTest {
+                HStack {
+                    if let subtitle = subtitle {
+                        Text(subtitle).font(.footnote).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    if showsTest {
+                        Button("Test") { Feedback.test(strength: local) }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
                 }
             }
-            if let subtitle = subtitle {
-                Text(subtitle).font(.footnote).foregroundColor(.secondary)
-            }
-            Slider(value: $local, in: range, step: step) { editing in
+            ValueBar(title: title, value: $local, range: range, step: step, format: format) { editing in
                 if !editing { stored = local }
             }
-            .accessibilityLabel(title)
-            .accessibilityValue(format(local))
-            .onChange(of: local) { _ in Feedback.tick() }
         }
         .padding(.vertical, 2)
         .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in

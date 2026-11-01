@@ -5,6 +5,7 @@ import SwiftUI
 /// reads the same settings (Prefs, KeyboardView.hitScore).
 struct HitboxesView: View {
     @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var size = SettingDefault.hitboxSize
+    @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes
     @AppStorage(SettingKey.adaptiveGrow, store: SharedStore.defaults) private var grow = SettingDefault.adaptiveGrow
     @AppStorage(SettingKey.adaptiveShrink, store: SharedStore.defaults) private var shrink = SettingDefault.adaptiveShrink
@@ -27,13 +28,16 @@ struct HitboxesView: View {
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
 
+    /// A letter key's width on this phone, which the room settings are shares of.
+    private var keyWidth: Double { return DeviceMetrics.letterKeyWidth(keyGap: keyGap) + keyGap }
+
     private var sizeFooter: String {
-        let percent = Int((size * 100).rounded())
+        let room = DeviceMetrics.points(keyWidth * size)
         if size < 0.999 {
-            return "Letters get \(percent)% of their normal room: shift, delete and space take more of the edges next to them."
+            return "Letters take \(room) of room each: shift, delete and space take more of the edges next to them."
         }
         if size > 1.001 {
-            return "Letters get \(percent)% of their normal room: they take more of the edges next to shift, delete and space."
+            return "Letters take \(room) of room each: they take more of the edges next to shift, delete and space."
         }
         return "Every key gets exactly the room it is drawn with."
     }
@@ -48,7 +52,7 @@ struct HitboxesView: View {
                 SegmentedChoice(names: ["Strict", "Normal", "Generous"],
                                 selected: sizes.firstIndex { same($0, size) }) { size = sizes[$0] }
                 GlassSlider(title: "Letter room", symbol: "square.dashed", value: $size,
-                            range: Settings.hitboxSizeRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                            range: Settings.hitboxSizeRange, step: 0.05) { DeviceMetrics.points(keyWidth * $0) }
             } header: {
                 SectionHeader("Letter keys", symbol: "square.dashed", color: .blue)
             } footer: {
@@ -73,11 +77,11 @@ struct HitboxesView: View {
                                 subtitle: "Favour the letters words usually begin with.",
                                 isOn: $wordStart)
                     GlassSlider(title: "Likely letters", symbol: "plus.magnifyingglass", value: $grow,
-                                range: Settings.adaptiveGrowRange, step: 0.05) { "+\(Int(($0 * 100).rounded()))%" }
+                                range: Settings.adaptiveGrowRange, step: 0.05) { "+" + DeviceMetrics.points(keyWidth * $0) }
                     GlassSlider(title: "Unlikely letters", symbol: "minus.magnifyingglass", value: $shrink,
-                                range: Settings.adaptiveShrinkRange, step: 0.05) { "\u{2212}\(Int(($0 * 100).rounded()))%" }
+                                range: Settings.adaptiveShrinkRange, step: 0.05) { "\u{2212}" + DeviceMetrics.points(keyWidth * $0) }
                     GlassSlider(title: "Strength", symbol: "dial.medium", value: $strength,
-                                range: 0...1, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                                range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 }
                 .disabled(!adaptive || EnabledLanguages.shared.lacking(.keyLearning).all)
                 .opacity(adaptive && !EnabledLanguages.shared.lacking(.keyLearning).all ? 1 : 0.45)
@@ -147,7 +151,7 @@ private struct HitMapSection: View {
             }
             .padding(.vertical, 6)
             GlassSlider(title: "Strength", symbol: "dial.medium", value: $strength,
-                        range: 0...1, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                        range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 .disabled(!isOn)
                 .opacity(isOn ? 1 : 0.45)
             Button(role: .destructive) {

@@ -69,8 +69,8 @@ enum KeyboardTool: String, CaseIterable {
         return self == .copy || self == .cut || self == .paste || self == .clipboard
     }
 
-    /// The tools a new install's panel shows.
-    static let standard: [KeyboardTool] = [.oneHanded, .emoji, .copy, .paste, .clipboard, .numberRow, .swipeTyping, .nextLanguage, .openApp]
+    /// The tools a new install's panel shows (split only appears on an iPad).
+    static let standard: [KeyboardTool] = [.oneHanded, .split, .emoji, .copy, .paste, .clipboard, .numberRow, .swipeTyping, .nextLanguage, .openApp]
 
     /// Stored names in order, unknown ones dropped.
     static func list(from names: [String]) -> [KeyboardTool] {

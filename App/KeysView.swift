@@ -98,7 +98,7 @@ struct KeysView: View {
                 GlassSlider(title: "Key height", symbol: "arrow.up.and.down", value: $keyHeight,
                             range: Settings.keyHeightRange, step: 1) { "\(Int($0.rounded())) pt" }
                 GlassSlider(title: "Keyboard width", symbol: "arrow.left.and.right", value: $keyboardWidth,
-                            range: Settings.keyboardWidthRange, step: 0.01) { "\(Int(($0 * 100).rounded()))%" }
+                            range: Settings.keyboardWidthRange, step: 0.01) { DeviceMetrics.points(DeviceMetrics.portraitWidth * $0) }
                 GlassToggle(title: "Own height in landscape",
                             subtitle: "Off: landscape keys are two thirds of the portrait height.",
                             isOn: $landscapeSeparate)
@@ -135,7 +135,8 @@ struct KeysView: View {
                 SegmentedChoice(names: ["Square", "Slight", "Standard", "Round"],
                                 selected: corners.firstIndex { same($0, roundness) }) { roundness = corners[$0] }
                 GlassSlider(title: "Roundness", symbol: "app", value: $roundness, range: 0...1, step: 0.02) {
-                    "\(Int(($0 * 100).rounded()))%"
+                    // The corner radius of a letter key (a share of half its shorter side, Theme.keyCornerRadius).
+                    DeviceMetrics.points($0 * min(DeviceMetrics.letterKeyWidth(keyGap: keyGap), keyHeight) / 2)
                 }
             } header: {
                 SectionHeader("Corners", symbol: "app", color: .indigo)
@@ -199,7 +200,7 @@ struct KeysView: View {
                     FeatureNote(.capitals)
                 }
                 GlassSlider(title: "Letter size", symbol: "textformat.size", value: $letterSize,
-                            range: Settings.letterSizeRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                            range: Settings.letterSizeRange, step: 0.05) { DeviceMetrics.points(23 * $0) }
             } header: {
                 SectionHeader("Letters", symbol: "textformat", color: .orange)
             } footer: {
@@ -233,7 +234,7 @@ struct KeysView: View {
                     .labelsHidden()
                 }
                 GlassSlider(title: "Hint size", symbol: "textformat.size.smaller", value: $hintSize,
-                            range: Settings.hintSizeRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                            range: Settings.hintSizeRange, step: 0.05) { DeviceMetrics.points(10 * $0) }
                     .disabled(!keyHints)
                     .opacity(keyHints ? 1 : 0.45)
             } header: {

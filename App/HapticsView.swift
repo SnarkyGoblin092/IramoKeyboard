@@ -47,7 +47,7 @@ struct HapticsView: View {
                         Feedback.test(strength: strength, sharpness: sharpness)
                     }
                     GlassSlider(title: "Strength", symbol: "speaker.wave.2", value: $strength,
-                                range: 0.1...1, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                                range: 0.1...1, step: 0.05) { DeviceMetrics.level($0, in: 0.1...1) }
                     GlassSlider(title: "Sharpness", symbol: "waveform.path", value: $sharpness,
                                 range: 0...1, step: 0.05) { value in
                         ["Soft", "Light", "Medium", "Firm", "Crisp"][min(4, max(0, Int(value * 5)))]

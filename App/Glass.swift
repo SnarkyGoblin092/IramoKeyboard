@@ -102,34 +102,125 @@ struct GlassSlider: View {
     let step: Double
     let format: (Double) -> String
 
-    /// The finger is on the slider (a preset changing the value must not click).
-    @State private var editing = false
+    var body: some View {
+        ValueBar(title: title, symbol: symbol, value: $value, range: range, step: step, format: format)
+    }
+}
 
-    // Spelled out: the private state would make the memberwise initializer private.
-    init(title: String, symbol: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double,
-         format: @escaping (Double) -> String) {
-        self.title = title
-        self.symbol = symbol
-        _value = value
-        self.range = range
-        self.step = step
-        self.format = format
+/// The app's slider: a capsule that fills with the accent up to the value, its name and value written on it.
+/// Drawn by hand rather than the system Slider, whose own haptics (a hard knock at either end) came on top of the
+/// app's light click per step. Drag sideways anywhere on it; vertical drags still scroll the screen.
+struct ValueBar: View {
+    let title: String
+    var symbol: String? = nil
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let format: (Double) -> String
+    /// Called with true when a drag starts and false when it ends.
+    var onEditingChanged: (Bool) -> Void = { _ in }
+
+    @Environment(\.isEnabled) private var isEnabled
+    /// Whether the current drag is sideways (decided once, at its start); nil until it is known.
+    @State private var horizontal: Bool?
+    @State private var startValue: Double = 0
+
+    private var span: Double { return max(range.upperBound - range.lowerBound, .ulpOfOne) }
+
+    private func snapped(_ raw: Double) -> Double {
+        let clamped = min(max(raw, range.lowerBound), range.upperBound)
+        guard step > 0 else { return clamped }
+        let steps = ((clamped - range.lowerBound) / step).rounded()
+        return min(range.lowerBound + steps * step, range.upperBound)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Label(title, systemImage: symbol)
-                Spacer()
-                Text(format(value))
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let fraction = CGFloat(min(max((value - range.lowerBound) / span, 0), 1))
+            let edge = width * fraction
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(.tertiarySystemFill))
+                Rectangle().fill(.tint.opacity(0.28)).frame(width: max(0, edge))
+                Rectangle().fill(.tint).frame(width: 3).offset(x: min(max(0, edge - 1.5), max(0, width - 3)))
+                HStack(spacing: 8) {
+                    if let symbol = symbol {
+                        Image(systemName: symbol).foregroundStyle(.tint)
+                    }
+                    Text(title).lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    Text(format(value))
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 16)
             }
-            Slider(value: $value, in: range, step: step) { editing = $0 }
-                .accessibilityLabel(title)
-                .accessibilityValue(format(value))
-                .onChange(of: value) { _ in if editing { Feedback.tick() } }
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { drag in
+                        guard isEnabled else { return }
+                        if horizontal == nil {
+                            horizontal = abs(drag.translation.width) > abs(drag.translation.height)
+                            if horizontal == true {
+                                startValue = value
+                                onEditingChanged(true)
+                            }
+                        }
+                        guard horizontal == true, width > 0 else { return }
+                        let next = snapped(startValue + Double(drag.translation.width / width) * span)
+                        if abs(next - value) > step * 0.01 {
+                            value = next
+                            Feedback.tick()   // once per step; nothing more at either end
+                        }
+                    }
+                    .onEnded { _ in
+                        if horizontal == true { onEditingChanged(false) }
+                        horizontal = nil
+                    }
+            )
         }
+        .frame(height: 46)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(format(value))
+        .accessibilityAdjustableAction { direction in
+            let delta = step > 0 ? step : span / 20
+            switch direction {
+            case .increment: value = snapped(value + delta)
+            case .decrement: value = snapped(value - delta)
+            @unknown default: break
+            }
+        }
+    }
+}
+
+/// What the sliders show: real sizes on this device instead of shares and multipliers.
+enum DeviceMetrics {
+    /// The screen's width held upright, in points (the keyboard's width in portrait).
+    static var portraitWidth: Double {
+        let bounds = UIScreen.main.bounds
+        return Double(min(bounds.width, bounds.height))
+    }
+
+    /// About how wide a letter key is in portrait (ten keys across, less the gap between them).
+    static func letterKeyWidth(keyGap: Double) -> Double {
+        return portraitWidth / 10 - keyGap
+    }
+
+    static func points(_ value: Double) -> String {
+        return "\(Int(value.rounded())) pt"
+    }
+
+    /// A strength with no unit of its own (how much a feature acts), in words.
+    static func level(_ value: Double, in range: ClosedRange<Double>) -> String {
+        let share = (value - range.lowerBound) / max(range.upperBound - range.lowerBound, .ulpOfOne)
+        let names = ["Off", "Faint", "Light", "Medium", "Strong", "Full"]
+        if share <= 0.001 && range.lowerBound <= 0 { return names[0] }
+        return names[1 + min(4, max(0, Int(share * 5)))]
     }
 }
 

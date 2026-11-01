@@ -3,7 +3,10 @@ import SwiftUI
 /// The keyboard's Functions panel (the button at the left of the suggestion bar): which tools it shows and in
 /// what order. Tools move up or down, swipe left to remove, and come back from the list under them.
 struct FunctionsView: View {
+    /// The panel's tools as this device shows them (split only on an iPad).
     @State private var tools: [KeyboardTool] = []
+    /// The stored list has split, which an iPhone does not show but keeps for the iPad.
+    @State private var keepsSplit = false
 
     private var isPad: Bool { return UIDevice.current.userInterfaceIdiom == .pad }
 
@@ -67,9 +70,10 @@ struct FunctionsView: View {
             Section {
                 Button("Restore the standard functions") {
                     Feedback.choose()
-                    save(KeyboardTool.standard)
+                    keepsSplit = !isPad
+                    save(KeyboardTool.standard.filter { $0 != .split || isPad })
                 }
-                .disabled(tools == KeyboardTool.standard)
+                .disabled(tools == KeyboardTool.standard.filter { $0 != .split || isPad })
             }
             .glassRows()
         }
@@ -77,8 +81,10 @@ struct FunctionsView: View {
         .navigationTitle("Functions panel")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            tools = KeyboardTool.list(from: SharedStore.defaults.stringArray(forKey: SettingKey.keyboardTools)
-                                      ?? SettingDefault.keyboardTools)
+            let stored = KeyboardTool.list(from: SharedStore.defaults.stringArray(forKey: SettingKey.keyboardTools)
+                                           ?? SettingDefault.keyboardTools)
+            keepsSplit = !isPad && stored.contains(.split)
+            tools = stored.filter { $0 != .split || isPad }
         }
     }
 
@@ -115,7 +121,8 @@ struct FunctionsView: View {
 
     private func save(_ list: [KeyboardTool]) {
         withAnimation(.easeOut(duration: 0.2)) { tools = list }
-        SharedStore.defaults.set(list.map { $0.rawValue }, forKey: SettingKey.keyboardTools)
+        let stored = keepsSplit && !list.contains(.split) ? list + [.split] : list
+        SharedStore.defaults.set(stored.map { $0.rawValue }, forKey: SettingKey.keyboardTools)
     }
 }
 
