@@ -30,7 +30,7 @@ struct ThemesView: View {
             PinnedKeyboard()
         } content: {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            LazyVStack(alignment: .leading, spacing: 22) {
                 Text(selected.name)
                     .font(.title3.weight(.semibold))
                     .frame(maxWidth: .infinity)
@@ -65,6 +65,12 @@ struct ThemesView: View {
     }
 }
 
+private extension View {
+    @ViewBuilder func drawingGroup(isActive: Bool) -> some View {
+        if isActive { drawingGroup() } else { self }
+    }
+}
+
 private struct ThemeGroup: Identifiable {
     let title: String
     var themes: [ThemeDefinition]
@@ -83,6 +89,8 @@ private struct ThemeCard: View {
             VStack(spacing: 8) {
                 ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
                     .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+                    // One flattened layer instead of every key's own shadow; glass can't be flattened.
+                    .drawingGroup(isActive: theme.kind != .liquidGlass)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(isSelected ? accent : Color.primary.opacity(0.12),
