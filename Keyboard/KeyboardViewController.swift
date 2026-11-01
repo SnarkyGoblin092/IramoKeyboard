@@ -52,6 +52,8 @@ final class KeyboardViewController: UIInputViewController {
     private var liveSwipe: SwipeContext?
     private var pendingSwipePath: [CGPoint]?
     private var liveDecodeRunning = false
+    /// The live swipe preview waits for the finger to pause for the Update speed delay, as typed words do.
+    private var liveSwipeWork: DispatchWorkItem?
     /// Bumped when a swipe ends, so late live previews of it are ignored.
     private var swipeGeneration = 0
     /// The language that was active before the current one (swiping also considers it, a little less strongly).
@@ -294,8 +296,9 @@ final class KeyboardViewController: UIInputViewController {
             // Keys and the suggestion bar (the app's Keys and Suggestions screens)
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
-            s.spaceText, "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
-            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)"
+            "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
+            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)",
+            "\(s.splitKeyboard)", s.oneHanded
         ].joined(separator: "|")
     }
 
@@ -512,15 +515,15 @@ final class KeyboardViewController: UIInputViewController {
                 return true
             } }
         }
-        // The space bar: the user's own text, or the language (its name, or its code with "Language code" on).
-        let custom = Prefs.spaceText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let spaceTitle = !custom.isEmpty ? custom : (Prefs.spaceLanguageCode ? language.rawValue.uppercased() : language.displayName)
+        // The space bar: the language's name, or its code with "Language code" on.
+        let spaceTitle = Prefs.spaceLanguageCode ? language.rawValue.uppercased() : language.displayName
         rows = rows.map { row in row.map { spec in
             guard spec.action == .space else { return spec }
             var titled = spec
             titled.title = spaceTitle
             return titled
         } }
+        if KeyboardLayoutMode.split { rows = LayoutBuilder.split(rows) }
         keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()
@@ -1295,7 +1298,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.refreshSuggestions() }
         suggestionWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Prefs.suggestionDelay, execute: work)   // the Speed setting
+        DispatchQueue.main.asyncAfter(deadline: .now() + Prefs.suggestionDelay, execute: work)   // the Update speed setting
     }
 
     private func clearSwipeState() {
@@ -1689,12 +1692,19 @@ extension KeyboardViewController: KeyboardViewDelegate {
         guard !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         if liveSwipe == nil { liveSwipe = makeSwipeContext() }
         guard liveSwipe != nil else { return }
-        pendingSwipePath = path
-        decodeLiveSwipe()
+        // Handed to the decoder only once the delay has passed (a decode that is still busy picks it up after).
+        liveSwipeWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingSwipePath = path
+            self?.decodeLiveSwipe()
+        }
+        liveSwipeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Prefs.suggestionDelay, execute: work)
     }
 
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {
         // Live previews still running belong to this swipe; their results are dropped.
+        liveSwipeWork?.cancel()
         swipeGeneration += 1
         let context = liveSwipe ?? makeSwipeContext()
         liveSwipe = nil
@@ -1726,6 +1736,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
     }
 
     func keyboardViewDidCancelSwipe(_ view: KeyboardView) {
+        liveSwipeWork?.cancel()
         swipeGeneration += 1
         liveSwipe = nil
         pendingSwipePath = nil

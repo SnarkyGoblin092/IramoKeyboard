@@ -12,10 +12,11 @@ struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.suggestionDelay, store: SharedStore.defaults) private var delay = SettingDefault.suggestionDelay
     @AppStorage(SettingKey.suggestionTransition, store: SharedStore.defaults) private var transition = SettingDefault.suggestionTransition
-    @AppStorage(SettingKey.suggestionTransitionSpeed, store: SharedStore.defaults) private var speed = SettingDefault.suggestionTransitionSpeed
+    @AppStorage(SettingKey.suggestionTransitionDuration, store: SharedStore.defaults) private var duration = SettingDefault.suggestionTransitionDuration
 
     private let separators = ["solid", "dashed", "dotted", "none"]
-    private let delays: [Double] = [0.1, 0.3, 0.7]   // Fastest, Normal, Battery saver
+    /// Very slow ... Very fast.
+    private let delays: [Double] = [0.5, 0.3, 0.15, 0.1, 0.05]
     private let transitions = ["instant", "fade", "rise", "slide", "pop"]
     private let transitionNotes = ["New words simply replace the old ones, with nothing in between.",
                                    "The old words fade out as the new ones fade in.",
@@ -74,8 +75,8 @@ struct SuggestionsView: View {
                 Section {
                     SegmentedChoice(names: ["Instant", "Fade", "Rise", "Slide", "Pop"],
                                     selected: transitions.firstIndex(of: transition)) { transition = transitions[$0] }
-                    GlassSlider(title: "Speed", symbol: "hare", value: $speed,
-                                range: Settings.suggestionTransitionSpeedRange, step: 0.25) { String(format: "%g×", $0) }
+                    GlassSlider(title: "Duration", symbol: "timer", value: $duration,
+                                range: Settings.suggestionTransitionDurationRange, step: 0.05) { String(format: "%.2f s", $0) }
                         .disabled(transition == "instant")
                 } header: {
                     SectionHeader("Switching", symbol: "arrow.left.arrow.right", color: .orange)
@@ -85,14 +86,14 @@ struct SuggestionsView: View {
                 .glassRows()
 
                 Section {
-                    SegmentedChoice(names: ["Fastest", "Normal", "Battery saver"],
+                    SegmentedChoice(names: ["Very slow", "Slow", "Normal", "Fast", "Very fast"],
                                     selected: delays.firstIndex { abs($0 - delay) < 0.001 }) { delay = delays[$0] }
                     GlassSlider(title: "Wait after typing", symbol: "timer", value: $delay,
-                                range: Settings.suggestionDelayRange, step: 0.05) { "\(Int(($0 * 1000).rounded())) ms" }
+                                range: Settings.suggestionDelayRange, step: 0.01) { "\(Int(($0 * 1000).rounded())) ms" }
                 } header: {
                     SectionHeader("Update speed", symbol: "speedometer", color: .green)
                 } footer: {
-                    Text("How long the bar waits for a pause in typing before working out new words: a short wait is the quickest, a longer one saves battery. Fastest waits 100 ms, Normal 300 ms, Battery saver 700 ms.")
+                    Text("How long the bar waits for a pause in typing (or swiping) before working out new words: a short wait is the quickest, a longer one saves battery. Very slow waits 500 ms, Slow 300, Normal 150, Fast 100, Very fast 50.")
                 }
                 .glassRows()
             }

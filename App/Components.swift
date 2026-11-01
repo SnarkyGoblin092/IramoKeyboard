@@ -383,18 +383,20 @@ struct AccentTint: ViewModifier {
 
 // MARK: - Accent colour
 
-/// The preset swatches. Custom colours are chosen in `AccentCustomRow` right below.
+/// The preset swatches, and last the system colour picker for any colour (it takes the place of grey, which a
+/// custom colour covers).
 struct AccentPicker: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     private let columns = Array(repeating: GridItem(.flexible(minimum: 30), spacing: 8), count: 6)
+    private let presets = AccentChoice.allCases.filter { $0 != .graphite }
 
     private var isCustom: Bool { return HexColor.parse(accentHex) != nil }
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(AccentChoice.allCases, id: \.rawValue) { choice in
+            ForEach(presets, id: \.rawValue) { choice in
                 let selected = !isCustom && accentName == choice.rawValue
                 Button {
                     guard isCustom || accentName != choice.rawValue else { return }
@@ -418,33 +420,26 @@ struct AccentPicker: View {
                 .accessibilityLabel(choice.displayName)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
+            customSwatch
         }
         .padding(.vertical, 4)
     }
-}
 
-/// A normal, visible row with the system colour picker. Choosing a colour sets the custom accent.
-struct AccentCustomRow: View {
-    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
-    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-
-    private var isCustom: Bool { return HexColor.parse(accentHex) != nil }
-
-    var body: some View {
-        ColorPicker(selection: Binding(
+    /// The system colour well: choosing a colour sets the custom accent (a grey chosen before still shows as it).
+    private var customSwatch: some View {
+        let selected = isCustom || accentName == AccentChoice.graphite.rawValue
+        return ColorPicker("Custom colour", selection: Binding(
             get: { Color.currentAccent(name: accentName, hex: accentHex) },
             set: { newColor in
                 let hex = newColor.hexString
                 guard hex != accentHex else { return }
                 accentHex = hex
-            }), supportsOpacity: false) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Custom colour")
-                Text(isCustom ? accentHex.uppercased() : "Pick any colour")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            }
-        }
+            }), supportsOpacity: false)
+            .labelsHidden()
+            .scaleEffect(1.2)
+            .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.9 : 0), lineWidth: 2).frame(width: 42, height: 42))
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

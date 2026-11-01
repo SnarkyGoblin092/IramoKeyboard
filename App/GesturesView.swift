@@ -11,6 +11,7 @@ struct GesturesView: View {
     @AppStorage(SettingKey.cursorControl, store: SharedStore.defaults) private var cursor = SettingDefault.cursorControl
     @AppStorage(SettingKey.flickUpCapital, store: SharedStore.defaults) private var flickUp = SettingDefault.flickUpCapital
     @AppStorage(SettingKey.flickDownAccent, store: SharedStore.defaults) private var flickDown = SettingDefault.flickDownAccent
+    @AppStorage(SettingKey.swipeTrailLength, store: SharedStore.defaults) private var trailLength = SettingDefault.swipeTrailLength
     @ObservedObject private var languages = EnabledLanguages.shared
 
     // The preview stays pinned above the settings (PinnedPreview).
@@ -36,6 +37,8 @@ struct GesturesView: View {
                     GlassToggle(title: "Undo a swipe with one delete",
                                 subtitle: "Delete right after a swipe removes the whole word. Off: one letter at a time.",
                                 isOn: $deleteSwiped)
+                    GlassSlider(title: "Trail length", symbol: "scribble", value: $trailLength,
+                                range: Settings.swipeTrailLengthRange, step: 10) { "\(Int($0.rounded())) pt" }
                 }
                 .disabled(!swipe || languages.lacking(.swipe).all)
             } header: {

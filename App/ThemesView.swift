@@ -24,9 +24,9 @@ struct ThemesView: View {
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
-    // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to resize it.
+    // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
-        PinnedPreview(id: "themes", height: 240, fills: true) {
+        PinnedPreview(id: "themes", height: 240, fills: true, resizable: true) {
             PinnedKeyboard()
         } content: {
         ScrollView {

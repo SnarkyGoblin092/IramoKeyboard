@@ -219,16 +219,12 @@ private struct TypingSection: View {
     }
 }
 
-/// The theme (with a live preview), the keys, haptics and the accent colour.
+/// The theme (its preview is on the Themes screen), the number row, the keys, haptics and the accent colour.
 private struct LookSection: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
-    // The preview's proportions follow these too (ThemePreview.aspectWithStrip); observed so it resizes at once.
-    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
-    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
-    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
     @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
 
@@ -243,14 +239,10 @@ private struct LookSection: View {
     var body: some View {
         Section {
             ScreenRow(.themes) {
-                VStack(alignment: .leading, spacing: 12) {
-                    ThemePreview(theme: theme, accent: accent, cornerRadius: 12)
-                        .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
-                        .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
-                    SettingsRow(title: "Theme", symbol: "paintbrush.fill", color: .purple, value: theme.name)
-                }
-                .padding(.vertical, 6)
+                SettingsRow(title: "Theme", symbol: "paintbrush.fill", color: .purple, value: theme.name)
             }
+            SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
+                          subtitle: "Numbers above the letters", symbol: "number", color: .orange)
             ScreenRow(.keys) {
                 SettingsRow(title: "Keys", symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
             }
@@ -269,9 +261,6 @@ private struct LookSection: View {
                 AccentPicker()
             }
             .padding(.vertical, 2)
-            AccentCustomRow()
-            SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
-                          subtitle: "Numbers above the letters", symbol: "number", color: .orange)
         } header: {
             SectionHeader("Look & feel", symbol: "paintpalette.fill", color: .purple)
         }
@@ -485,50 +474,49 @@ struct ShortcutsView: View {
             && !phrase.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    // Grouped cards rather than a Form, so the shortcuts swipe to delete like the languages do; the example of
-    // the shortcut being typed stays pinned above them (PinnedPreview).
+    // A Liquid Glass list like the main screen's (the shortcuts swipe to delete); the example of the shortcut being
+    // typed stays pinned above it (PinnedPreview).
     var body: some View {
         PinnedPreview(id: "shortcuts", height: 110) {
             ShortcutPreview(trigger: trigger, phrase: phrase)
         } content: {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                CardHeader("New shortcut")
-                VStack(spacing: 0) {
-                    TextField("Trigger (e.g. omw)", text: $trigger)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .cardRow()
-                    Divider().padding(.leading, 16)
-                    TextField("Phrase (e.g. On my way!)", text: $phrase)
-                        .cardRow()
-                    Divider().padding(.leading, 16)
-                    Button(action: add) {
-                        Text("Add").cardRow().contentShape(Rectangle())
-                    }
+        List {
+            Section {
+                TextField("Trigger (e.g. omw)", text: $trigger)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                TextField("Phrase (e.g. On my way!)", text: $phrase)
+                Button("Add", action: add)
                     .disabled(!canAdd)
-                }
-                .groupedCard()
-                .padding(.bottom, 16)
+            } header: {
+                Text("New shortcut")
+            }
+            .glassRows()
 
-                CardHeader("Your shortcuts")
+            Section {
                 if items.isEmpty {
-                    Text("None yet").foregroundColor(.secondary).cardRow().groupedCard()
+                    Text("None yet").foregroundColor(.secondary)
                 } else {
-                    DeletableCard(items: items, id: { $0.id }, onDelete: remove) { item in
+                    ForEach(items, id: \.id) { item in
                         VStack(alignment: .leading) {
                             Text(item.trigger).font(.headline)
                             Text(item.phrase).font(.subheadline).foregroundColor(.secondary)
                         }
-                        .cardRow()
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 2)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) { remove(item) } label: { Label("Delete", systemImage: "trash") }
+                        }
                     }
-                    CardFooter("Swipe a shortcut left to remove it.")
                 }
+            } header: {
+                Text("Your shortcuts")
+            } footer: {
+                if !items.isEmpty { Text("Swipe a shortcut left to remove it.") }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .glassRows()
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         }
         .navigationTitle("Text shortcuts")
@@ -563,17 +551,17 @@ struct ShortcutsView: View {
 
 // MARK: - Languages
 
-/// The enabled languages only; more are added from a separate list. Drawn as its own grouped card (not a List)
-/// so the swipe-to-delete button sits inside the row and the card keeps its corners while swiping.
+/// The enabled languages only; more are added from a separate list. A Liquid Glass list like the main screen's,
+/// with the system's swipe to delete.
 struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
 
     private var languages: [Language] { return enabled.compactMap { Language(rawValue: $0) } }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                DeletableCard(items: languages, id: { $0.rawValue }, canDelete: languages.count > 1, onDelete: remove) { language in
+        List {
+            Section {
+                ForEach(languages, id: \.rawValue) { language in
                     // The language and its layout (the first letters of its top row), or how it is typed.
                     HStack {
                         Text(language.displayName)
@@ -583,35 +571,32 @@ struct LanguagesView: View {
                             .font(.footnote.monospaced())
                             .foregroundColor(.secondary)
                     }
-                    .cardRow()
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if languages.count > 1 {
+                            Button(role: .destructive) { remove(language) } label: { Label("Delete", systemImage: "trash") }
+                        }
+                    }
                 }
+            } footer: {
+                Text("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
+            }
+            .glassRows()
 
-                CardFooter("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
-
-                if enabled.count < Language.allCases.count {
+            if enabled.count < Language.allCases.count {
+                Section {
                     NavigationLink {
                         AddLanguageView(enabled: enabled) { language in
                             save(enabled + [language.rawValue])
                         }
                     } label: {
-                        HStack {
-                            Label("Add a language", systemImage: "plus")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundColor(Color(.tertiaryLabel))
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 48)
-                        .contentShape(Rectangle())
+                        Label("Add a language", systemImage: "plus")
                     }
-                    .groupedCard()
                 }
+                .glassRows()
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
         }
-        .background(GlassBackdrop())
+        .listStyle(.insetGrouped)
+        .glassScreen()
         .navigationTitle("Languages")
         .navigationBarTitleDisplayMode(.inline)
         // Read again on every visit: the screen is built once with the parent, so the starting value above is
@@ -630,167 +615,6 @@ struct LanguagesView: View {
         if ordered.count > enabled.count { Feedback.success() } else { Feedback.delete() }
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
-    }
-}
-
-private extension View {
-    /// The rounded glass card of a grouped list (Liquid Glass on iOS 26).
-    func groupedCard() -> some View {
-        let radius = GlassMetrics.cardRadius
-        return self
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .glassCard(cornerRadius: radius)
-    }
-
-    /// A row of a grouped card: full width, list-like insets and height.
-    func cardRow() -> some View {
-        return self
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 48)
-    }
-}
-
-/// The title above a grouped card, styled like the list sections' headers (SectionHeader).
-private struct CardHeader: View {
-    let title: String
-    init(_ title: String) { self.title = title }
-
-    var body: some View {
-        Text(title)
-            .font(.footnote.weight(.semibold))
-            .foregroundColor(.secondary)
-            .textCase(.uppercase)
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-    }
-}
-
-/// The note under a grouped card, like a list section footer.
-private struct CardFooter: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .font(.footnote)
-            .foregroundColor(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-    }
-}
-
-/// A grouped card of rows that each swipe left to delete (SwipeToDeleteRow), as on the Languages screen.
-private struct DeletableCard<Item, ID: Hashable, Row: View>: View {
-    let items: [Item]
-    let id: (Item) -> ID
-    var canDelete = true
-    let onDelete: (Item) -> Void
-    @ViewBuilder let row: (Item) -> Row
-
-    private struct Entry: Identifiable {
-        let id: ID
-        let index: Int
-        let item: Item
-    }
-
-    var body: some View {
-        let entries = items.enumerated().map { Entry(id: id($0.element), index: $0.offset, item: $0.element) }
-        VStack(spacing: 0) {
-            ForEach(entries) { entry in
-                SwipeToDeleteRow(canDelete: canDelete) {
-                    onDelete(entry.item)
-                } content: {
-                    row(entry.item)
-                }
-                if entry.index < entries.count - 1 {
-                    Divider().padding(.leading, 16)
-                }
-            }
-        }
-        .groupedCard()
-    }
-}
-
-/// A row that slides left to show a red Delete button inside the row itself; a long swipe deletes at once.
-private struct SwipeToDeleteRow<Content: View>: View {
-    let canDelete: Bool
-    let onDelete: () -> Void
-    @ViewBuilder let content: () -> Content
-
-    @State private var offset: CGFloat = 0
-    @State private var settled: CGFloat = 0
-    /// Whether the current drag is a sideways swipe (decided once, at its start); nil until it is known.
-    @State private var horizontal: Bool?
-    private let buttonWidth: CGFloat = 84
-    /// How far the Delete button may grow: a long swipe that reaches it deletes at once.
-    private let maxReveal: CGFloat = 200
-    private let settle = Animation.spring(response: 0.35, dampingFraction: 0.86)
-
-    var body: some View {
-        // The row stays put (the name never slides off screen); the Delete button grows in from the right edge.
-        content()
-            .contentShape(Rectangle())   // the card's glass shows through; the whole row still takes taps
-            .onTapGesture { close() }
-            .overlay(alignment: .trailing) {
-                Button(action: delete) {
-                    Text("Delete")
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .frame(width: max(0, -offset))
-                        .frame(maxHeight: .infinity)
-                        .background(Color.red)
-                        .clipped()
-                }
-                .buttonStyle(.plain)
-                .allowsHitTesting(offset < 0)
-            }
-            // Alongside the scroll view's own pan, so the row follows the finger from the first point instead
-            // of waiting for the scroll view to give up (the stall partway into a slow swipe).
-            .simultaneousGesture(drag, including: canDelete ? .all : .subviews)
-    }
-
-    private var drag: some Gesture {
-        DragGesture(minimumDistance: 6)
-            .onChanged { value in
-                let dx = value.translation.width, dy = value.translation.height
-                if horizontal == nil { horizontal = abs(dx) > abs(dy) }
-                guard horizontal == true else { return }
-                let target = min(0, settled + dx)
-                // Past the full-delete point the button resists instead of stopping dead.
-                let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
-                if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.threshold() }   // crossing it
-                offset = resisted
-            }
-            .onEnded { value in
-                defer { horizontal = nil }
-                guard horizontal == true else { return }
-                let end = min(0, settled + value.translation.width)
-                if end <= -maxReveal {
-                    delete()
-                    return
-                }
-                // A quick flick counts as far as it was heading.
-                let heading = min(0, settled + value.predictedEndTranslation.width)
-                let open = min(end, heading) < -buttonWidth / 2
-                withAnimation(settle) { offset = open ? -buttonWidth : 0 }
-                settled = open ? -buttonWidth : 0
-            }
-    }
-
-    private func close() {
-        guard offset != 0 else { return }
-        withAnimation(settle) { offset = 0 }
-        settled = 0
-    }
-
-    private func delete() {
-        offset = 0
-        settled = 0
-        onDelete()
     }
 }
 
@@ -833,26 +657,33 @@ struct LearnedWordsView: View {
         return words.filter { $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
     }
 
-    // A grouped card rather than a List, so the words swipe to delete like the languages do.
+    // A Liquid Glass list like the main screen's, with the system's swipe to delete.
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+        List {
+            Section {
                 if words.isEmpty {
-                    Text("No learned words yet").foregroundColor(.secondary).cardRow().groupedCard()
-                    CardFooter("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar. Learned words work in every language.")
+                    Text("No learned words yet").foregroundColor(.secondary)
                 } else if matches.isEmpty {
-                    Text("No matching words").foregroundColor(.secondary).cardRow().groupedCard()
+                    Text("No matching words").foregroundColor(.secondary)
                 } else {
-                    DeletableCard(items: matches, id: { $0 }, onDelete: { remove($0) }) { word in
-                        Text(word).cardRow()
+                    ForEach(matches, id: \.self) { word in
+                        Text(word)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) { remove(word) } label: { Label("Delete", systemImage: "trash") }
+                            }
                     }
-                    CardFooter("Learned words work in every language. Swipe a word left to remove it.")
+                }
+            } footer: {
+                if words.isEmpty {
+                    Text("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar. Learned words work in every language.")
+                } else if !matches.isEmpty {
+                    Text("Learned words work in every language. Swipe a word left to remove it.")
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .glassRows()
         }
-        .background(GlassBackdrop())
+        .listStyle(.insetGrouped)
+        .glassScreen()
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search learned words")
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)

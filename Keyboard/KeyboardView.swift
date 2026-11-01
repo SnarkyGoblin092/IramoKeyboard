@@ -46,9 +46,17 @@ final class KeyboardView: UIView {
 
     private let preview = KeyPreviewView()
     private var alternatesPopup: AlternatesPopupView?
+    /// Holds the swipe line (its colour and the fade when it ends); the line itself is drawn by `trailPieces`.
     private let trailLayer = CAShapeLayer()
+    /// The swipe line in stretches, oldest first, each more opaque than the one before: it fades out behind the
+    /// finger, over the Trail length setting.
+    private let trailPieces: [CAShapeLayer] = (0..<10).map { _ in CAShapeLayer() }
     /// Liquid Glass theme: every key's glass lives inside this shared container (see GlassSupport.makeContainer).
     private var glassContainer: UIVisualEffectView?
+    /// One-handed keyboard: the arrow in the empty side that moves the keys over to it.
+    private let sideButton = UIButton(type: .system)
+    /// Where the keys are across the view (the one-handed keyboard leaves one side empty).
+    private var keysSpan: ClosedRange<CGFloat>?
 
     private final class TouchState {
         var key: KeyView?
@@ -82,6 +90,11 @@ final class KeyboardView: UIView {
         /// A swipe that began as a down flick from the bottom letters runs onto the space bar first: the bar
         /// commits nothing until the finger has reached another letter.
         var spaceCommitWaits = false
+        /// The word being swiped started on the space bar (after one committed there): its path begins with the trip
+        /// up from the bar, which is not part of the word.
+        var startsAtSpace = false
+        /// Where the finger last was on the space bar while waiting for the next word.
+        var lastBarPoint: CGPoint?
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
@@ -127,7 +140,31 @@ final class KeyboardView: UIView {
         trailLayer.lineCap = .round
         trailLayer.lineJoin = .round
         trailLayer.zPosition = 100
+        for (index, piece) in trailPieces.enumerated() {
+            piece.fillColor = nil
+            piece.lineWidth = 7
+            piece.lineJoin = .round
+            // Butt ends where stretches meet (round ones would overlap there as darker dots); round at the finger.
+            piece.lineCap = index == trailPieces.count - 1 ? .round : .butt
+            piece.opacity = Float(index + 1) / Float(trailPieces.count)
+            trailLayer.addSublayer(piece)
+        }
         layer.addSublayer(trailLayer)
+
+        sideButton.tintColor = Theme.secondaryText
+        sideButton.addTarget(self, action: #selector(switchHand), for: .touchUpInside)
+        sideButton.isHidden = true
+        sideButton.accessibilityLabel = "Move keyboard to the other side"
+        addSubview(sideButton)
+    }
+
+    /// The one-handed keyboard moves to the other side (saved, as the app's setting).
+    @objc private func switchHand() {
+        let other = Prefs.oneHanded == "left" ? "right" : "left"
+        Prefs.oneHanded = other
+        SharedStore.defaults.set(other, forKey: SettingKey.oneHanded)
+        Haptics.shared.keyPress()
+        setNeedsLayout()
     }
 
     required init?(coder: NSCoder) {
@@ -244,7 +281,13 @@ final class KeyboardView: UIView {
 
     /// Touches just outside the keys (screen edges, the very bottom) still count, so edge keys never feel dead.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        return bounds.inset(by: UIEdgeInsets(top: 0, left: -10, bottom: -10, right: -10)).contains(point)
+        guard bounds.inset(by: UIEdgeInsets(top: 0, left: -10, bottom: -10, right: -10)).contains(point) else { return false }
+        // The one-handed keyboard's empty side types nothing (only its arrow takes a tap).
+        if !sideButton.isHidden, sideButton.frame.contains(point) { return true }
+        if KeyboardLayoutMode.oneHandedSide != 0, let span = keysSpan {
+            return point.x >= span.lowerBound - 10 && point.x <= span.upperBound + 10
+        }
+        return true
     }
 
     override func layoutSubviews() {
@@ -253,8 +296,19 @@ final class KeyboardView: UIView {
         glassContainer?.frame = bounds
         guard !rows.isEmpty else { return }
 
-        // A narrower keyboard (the Width setting) is centred.
-        let sidePadding: CGFloat = 1 + bounds.width * (1 - CGFloat(Prefs.keyboardWidth)) / 2
+        // A narrower keyboard (the Width setting) is centred; the one-handed keyboard sits against its side.
+        let side = KeyboardLayoutMode.oneHandedSide
+        let keysWidth = (bounds.width - 2) * min(CGFloat(Prefs.keyboardWidth), side == 0 ? 1 : KeyboardLayoutMode.oneHandedWidth)
+        let leftPadding = 1 + (bounds.width - 2 - keysWidth) * (side + 1) / 2
+        keysSpan = leftPadding...(leftPadding + keysWidth)
+        sideButton.isHidden = side == 0
+        if side != 0 {
+            let empty = side < 0 ? CGRect(x: leftPadding + keysWidth, y: 0, width: bounds.width - leftPadding - keysWidth, height: bounds.height)
+                : CGRect(x: 0, y: 0, width: leftPadding, height: bounds.height)
+            sideButton.setImage(UIImage(systemName: side < 0 ? "chevron.right" : "chevron.left",
+                                        withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)), for: .normal)
+            sideButton.frame = CGRect(x: empty.midX - 22, y: empty.midY - 30, width: 44, height: 60)
+        }
         let verticalPadding: CGFloat = 4
         let keyInset = CGFloat(Prefs.keyGap) / 2
         let rowInset = CGFloat(Prefs.rowGap) / 2
@@ -263,8 +317,8 @@ final class KeyboardView: UIView {
         hitRects = []
         for (r, row) in rows.enumerated() {
             let totalWeight = row.reduce(0) { $0 + $1.weight }
-            let unit = (bounds.width - sidePadding * 2) / totalWeight
-            var x = sidePadding
+            let unit = keysWidth / totalWeight
+            var x = leftPadding
             let y = verticalPadding + CGFloat(r) * rowHeight
             var rects: [CGRect] = []
             for (c, spec) in row.enumerated() {
@@ -670,8 +724,8 @@ final class KeyboardView: UIView {
                 fadeTrail()
                 return
             }
-            let swipe = PendingSwipe(path: state.path, startPoint: state.startPoint, startKey: state.startKey,
-                                     continued: state.continuesSwipe || state.committedAtSpace)
+            let swipe = PendingSwipe(path: wordPath(state, endsAtSpace: false), startPoint: state.startPoint,
+                                     startKey: state.startKey, continued: state.continuesSwipe || state.committedAtSpace)
             if Prefs.twoThumbSwipe && !isSloppyTap(swipe) {
                 // The other thumb may go on with this word: wait a moment before it ends.
                 pendingSwipe = swipe
@@ -727,7 +781,7 @@ final class KeyboardView: UIView {
         hidePreview()
         hideAlternates()
         setCursorAppearance(false)
-        trailLayer.path = nil
+        for piece in trailPieces { piece.path = nil }
     }
 
     // MARK: Cursor control (hold + slide on the space bar)
@@ -838,26 +892,66 @@ final class KeyboardView: UIView {
                 state.path.removeLast()   // the point on the space bar is not part of the word
                 if travel(state.path) >= letterKeySize().width {
                     Haptics.shared.tick()
-                    endSwipe(PendingSwipe(path: state.path, startPoint: state.startPoint, startKey: state.startKey,
-                                          continued: true))
+                    endSwipe(PendingSwipe(path: wordPath(state, endsAtSpace: true), startPoint: state.startPoint,
+                                          startKey: state.startKey, continued: true))
                 } else {
                     fadeTrail()
                 }
                 state.awaitingLetter = true
                 state.committedAtSpace = true
-                state.path = []
+                state.startsAtSpace = false
             }
+            state.lastBarPoint = point
+            state.path = []
             return
         }
         if state.awaitingLetter {
             guard let index = keyIndex(at: point), letter(of: rows[index.row][index.col]) != nil else { return }
             state.awaitingLetter = false
-            state.path = [point]
+            state.startsAtSpace = true
+            // From the bar on: the trip up is cut off again once the word is done (wordPath).
+            state.path = (state.lastBarPoint.map { [$0] } ?? []) + [point]
             trailLayer.removeAllAnimations()
             trailLayer.opacity = 1
         }
         updateTrail(state.path)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
+    }
+
+    /// The path of the word just swiped, without the glide to or from the space bar: the decoder would read the
+    /// letters that trip crosses (often the whole bottom row) as part of the word, so "hello you" came out wrong.
+    private func wordPath(_ state: TouchState, endsAtSpace: Bool) -> [CGPoint] {
+        var path = state.path
+        if state.startsAtSpace {
+            let corner = straightRunEnd(path)
+            if corner > 0 && corner < path.count - 1 { path = Array(path[corner...]) }
+        }
+        if endsAtSpace {
+            let corner = straightRunEnd(Array(path.reversed()))
+            if corner > 0 && corner < path.count - 1 { path = Array(path[..<(path.count - corner)]) }
+        }
+        return path
+    }
+
+    /// Where the straight run that `points` start with turns: the index of its last point (0 when it is too
+    /// short to tell; the last index when the whole path is one straight line).
+    private func straightRunEnd(_ list: [CGPoint]) -> Int {
+        guard let start = list.first else { return 0 }
+        let step = max(6, letterKeySize().width * 0.3)
+        guard let reference = list.first(where: { hypot($0.x - start.x, $0.y - start.y) >= step * 2 }) else { return 0 }
+        let heading = atan2(reference.y - start.y, reference.x - start.x)
+        var anchor = start
+        var corner = 0
+        for index in 1..<list.count {
+            let point = list[index]
+            guard hypot(point.x - anchor.x, point.y - anchor.y) >= step else { continue }
+            var turn = abs(atan2(point.y - anchor.y, point.x - anchor.x) - heading)
+            if turn > .pi { turn = 2 * .pi - turn }
+            if turn > .pi * 35 / 180 { return corner }
+            anchor = point
+            corner = index
+        }
+        return corner
     }
 
     /// A touch on a letter takes over a swipe (from the other thumb, or one that just lifted).
@@ -941,11 +1035,44 @@ final class KeyboardView: UIView {
     private static let flickSwipeLimit: CGFloat = 1.3
 
     private func updateTrail(_ points: [CGPoint]) {
-        guard let first = points.first else { return }
-        let path = UIBezierPath()
-        path.move(to: first)
-        for point in points.dropFirst() { path.addLine(to: point) }
-        trailLayer.path = path.cgPath
+        guard var newest = points.last else { return }
+        // The newest stretch of the path, Trail length long (cut part-way through the point that passes it).
+        let limit = CGFloat(Prefs.swipeTrailLength)
+        var kept = [newest]
+        var length: CGFloat = 0
+        for point in points.reversed().dropFirst() {
+            let step = hypot(point.x - newest.x, point.y - newest.y)
+            if length + step > limit {
+                let part = step > 0 ? (limit - length) / step : 0
+                kept.append(CGPoint(x: newest.x + (point.x - newest.x) * part, y: newest.y + (point.y - newest.y) * part))
+                break
+            }
+            length += step
+            kept.append(point)
+            newest = point
+        }
+        kept.reverse()
+
+        let color = trailLayer.strokeColor
+        let count = trailPieces.count
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        for (index, piece) in trailPieces.enumerated() {
+            // Each stretch shares its first point with the one before, so the line has no gaps.
+            let from = kept.count * index / count
+            let to = min(kept.count - 1, kept.count * (index + 1) / count)
+            guard to > from || (index == count - 1 && kept.count == 1) else {
+                piece.path = nil
+                continue
+            }
+            let path = UIBezierPath()
+            path.move(to: kept[from])
+            for point in kept[from...to].dropFirst() { path.addLine(to: point) }
+            if to == from { path.addLine(to: kept[from]) }
+            piece.strokeColor = color
+            piece.path = path.cgPath
+        }
     }
 
     private func fadeTrail() {

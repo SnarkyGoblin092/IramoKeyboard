@@ -29,7 +29,6 @@ final class Prefs {
     static var letterSize = SettingDefault.letterSize
     static var hintPosition = SettingDefault.hintPosition
     static var hintSize = SettingDefault.hintSize
-    static var spaceText = SettingDefault.spaceText
     static var spaceTextSize = SettingDefault.spaceTextSize
     static var spaceLanguageCode = SettingDefault.spaceLanguageCode
     static var hapticSharpness = SettingDefault.hapticSharpness
@@ -43,7 +42,8 @@ final class Prefs {
     static var suggestionScroll = SettingDefault.suggestionScroll
     static var suggestionDelay = SettingDefault.suggestionDelay
     static var suggestionTransition = SettingDefault.suggestionTransition
-    static var suggestionTransitionSpeed = SettingDefault.suggestionTransitionSpeed
+    static var suggestionTransitionDuration = SettingDefault.suggestionTransitionDuration
+    static var swipeTrailLength = SettingDefault.swipeTrailLength
     static var keySurface = SettingDefault.keySurface
     static var keyBorderStyle = SettingDefault.keyBorderStyle
     static var keyGlow = SettingDefault.keyGlow
@@ -52,6 +52,8 @@ final class Prefs {
     static var twoThumbSwipe = SettingDefault.twoThumbSwipe
     static var spaceCommits = SettingDefault.spaceCommits
     static var multiWordSwipe = SettingDefault.multiWordSwipe
+    static var splitKeyboard = SettingDefault.splitKeyboard
+    static var oneHanded = SettingDefault.oneHanded
     static var flickUpCapital = SettingDefault.flickUpCapital
     static var flickDownAccent = SettingDefault.flickDownAccent
     static var hitboxSize = SettingDefault.hitboxSize
@@ -96,7 +98,6 @@ final class Prefs {
         letterSize = s.letterSize
         hintPosition = s.hintPosition
         hintSize = s.hintSize
-        spaceText = s.spaceText
         spaceTextSize = s.spaceTextSize
         spaceLanguageCode = s.spaceLanguageCode
         hapticSharpness = s.hapticSharpness
@@ -110,7 +111,8 @@ final class Prefs {
         suggestionScroll = s.suggestionScroll
         suggestionDelay = s.suggestionDelay
         suggestionTransition = s.suggestionTransition
-        suggestionTransitionSpeed = s.suggestionTransitionSpeed
+        suggestionTransitionDuration = s.suggestionTransitionDuration
+        swipeTrailLength = s.swipeTrailLength
         keySurface = s.keySurface
         keyBorderStyle = s.keyBorderStyle
         keyGlow = s.keyGlow
@@ -119,6 +121,8 @@ final class Prefs {
         twoThumbSwipe = s.twoThumbSwipe
         spaceCommits = s.spaceCommits
         multiWordSwipe = s.multiWordSwipe
+        splitKeyboard = s.splitKeyboard
+        oneHanded = s.oneHanded
         flickUpCapital = s.flickUpCapital
         flickDownAccent = s.flickDownAccent
         hitboxSize = s.hitboxSize

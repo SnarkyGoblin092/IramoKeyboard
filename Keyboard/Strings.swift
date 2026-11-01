@@ -105,6 +105,11 @@ extension Language {
                                    emptyRecents: "Čia bus rodomi jūsų naudoti jaustukai.", returnKey: "grįžti", go: "Eiti", search: "Ieškoti",
                                    send: "Siųsti", done: "Atlikta", next: "Kitas",
                                    categories: ["Šypsenėlės ir žmonės", "Gyvūnai ir gamta", "Maistas ir gėrimai", "Veikla", "Kelionės ir vietos", "Objektai", "Simboliai", "Vėliavos"])
+        case .latvian:
+            return LanguageStrings(searchEmoji: "Meklēt emocijzīmes", recentlyUsed: "Nesen lietotās", loadingEmoji: "Ielādē emocijzīmes…",
+                                   emptyRecents: "Šeit būs redzamas jūsu lietotās emocijzīmes.", returnKey: "atgriezt", go: "Aiziet", search: "Meklēt",
+                                   send: "Sūtīt", done: "Gatavs", next: "Tālāk",
+                                   categories: ["Smaidiņi un cilvēki", "Dzīvnieki un daba", "Ēdieni un dzērieni", "Aktivitātes", "Ceļojumi un vietas", "Objekti", "Simboli", "Karogi"])
         case .cantonese:
             return LanguageStrings(searchEmoji: "搜尋表情符號", recentlyUsed: "最近使用", loadingEmoji: "正在載入表情符號…",
                                    emptyRecents: "你用過嘅表情符號會喺呢度出現。", returnKey: "換行", go: "前往", search: "搜尋",
@@ -229,6 +234,7 @@ extension Language {
         case .ukrainian: return "Люди"
         case .swedish: return "Personer"
         case .lithuanian: return "Žmonės"
+        case .latvian: return "Cilvēki"
         case .arabic: return "الأشخاص"
         case .cantonese: return "人物"
         case .danish: return "Personer"

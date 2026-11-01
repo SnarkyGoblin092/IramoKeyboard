@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import UIKit
 
 // MARK: - Language layouts
 //
@@ -35,7 +36,7 @@ extension Language {
             return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish:
             return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
-        case .lithuanian, .cantonese:
+        case .lithuanian, .latvian, .cantonese:
             return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         case .danish:
             return split("qwertyuiopå", "asdfghjklæø", "zxcvbnm")
@@ -116,6 +117,9 @@ extension Language {
             return ["e": ["é"], "u": ["ü"]]
         case .lithuanian:
             return ["a": ["ą"], "c": ["č"], "e": ["ę", "ė"], "i": ["į"], "s": ["š"], "u": ["ų", "ū"], "z": ["ž"]]
+        case .latvian:
+            return ["a": ["ā"], "c": ["č"], "e": ["ē"], "g": ["ģ"], "i": ["ī"], "k": ["ķ"], "l": ["ļ"], "n": ["ņ"],
+                    "s": ["š"], "u": ["ū"], "z": ["ž"]]
         case .arabic:
             // Hamza and madda forms of alef, and the other seats of hamza.
             return ["ا": ["أ", "إ", "آ", "ٱ"], "ي": ["ى", "ئ"], "و": ["ؤ"], "ه": ["ة"], "ء": ["أ", "إ", "ؤ", "ئ"]]
@@ -186,6 +190,7 @@ extension Language {
         case .french, .russian, .ukrainian: return ["\u{00AB}", "\u{00BB}"]
         case .swedish: return ["\u{201D}"]
         case .lithuanian: return ["\u{201E}", "\u{201C}"]
+        case .latvian: return ["\u{201E}", "\u{201C}", "\u{00AB}", "\u{00BB}"]
         case .arabic: return ["\u{00AB}", "\u{00BB}"]
         case .cantonese: return ["「", "」", "『", "』"]
         case .danish: return ["\u{00BB}", "\u{00AB}"]
@@ -308,9 +313,74 @@ struct KeySpec {
     var isSpacer: Bool { return action == .spacer }
 }
 
+// MARK: - Split and one-handed
+
+/// How the keys sit across the keyboard: in two halves (the split keyboard, iPad only), or narrower against one side
+/// for one hand (iPhone and iPad; the split keyboard takes precedence).
+enum KeyboardLayoutMode {
+    /// The share of the width the gap of the split keyboard takes.
+    static let splitGap: CGFloat = 0.3
+    /// The share of the width the one-handed keyboard takes.
+    static let oneHandedWidth: CGFloat = 0.8
+
+    static var split: Bool { return Prefs.splitKeyboard && UIDevice.current.userInterfaceIdiom == .pad }
+
+    /// -1 = against the left edge, 1 = against the right edge, 0 = the full width (centred).
+    static var oneHandedSide: CGFloat {
+        if split { return 0 }
+        switch Prefs.oneHanded {
+        case "left": return -1
+        case "right": return 1
+        default: return 0
+        }
+    }
+}
+
 // MARK: - Layout builder
 
 enum LayoutBuilder {
+
+    /// The split keyboard: every row in two halves of the same width with a gap between them. Keys go to the half
+    /// most of them falls in; a space bar across the middle is cut in two, one on each side. Works the same for
+    /// every language's rows (and the number and symbol pages).
+    static func split(_ rows: [[KeySpec]], gap: CGFloat = KeyboardLayoutMode.splitGap) -> [[KeySpec]] {
+        return rows.map { row in
+            let total = row.reduce(0) { $0 + $1.weight }
+            guard total > 0, row.count > 1 else { return row }
+            let half = total / 2
+            var left: [KeySpec] = []
+            var right: [KeySpec] = []
+            var used: CGFloat = 0
+            for spec in row {
+                let start = used
+                let end = used + spec.weight
+                used = end
+                if end <= half {
+                    left.append(spec)
+                } else if start >= half {
+                    right.append(spec)
+                } else if spec.action == .space {
+                    var first = spec
+                    first.weight = half - start
+                    var second = spec
+                    second.weight = end - half
+                    left.append(first)
+                    right.append(second)
+                } else if half - start >= end - half {
+                    left.append(spec)
+                } else {
+                    right.append(spec)
+                }
+            }
+            // The lighter half gets room on its inner side, so both halves are the same width.
+            let leftWeight = left.reduce(0) { $0 + $1.weight }
+            let rightWeight = right.reduce(0) { $0 + $1.weight }
+            if leftWeight < rightWeight { left.append(KeySpec(action: .spacer, weight: rightWeight - leftWeight)) }
+            if rightWeight < leftWeight { right.insert(KeySpec(action: .spacer, weight: leftWeight - rightWeight), at: 0) }
+            let gapWeight = max(leftWeight, rightWeight) * 2 * gap / (1 - gap)
+            return left + [KeySpec(action: .spacer, weight: gapWeight)] + right
+        }
+    }
 
     static func rows(language: Language,
                      page: KeyboardPage,

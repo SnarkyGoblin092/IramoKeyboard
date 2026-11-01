@@ -25,6 +25,7 @@ LETTER_ROWS = {
     "uk": ["йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ"],
     "sv": ["qwertyuiopå", "asdfghjklöä", "zxcvbnm"],
     "lt": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
+    "lv": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
     "ar": ["ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ"],
     "da": ["qwertyuiopå", "asdfghjklæø", "zxcvbnm"],
     "no": ["qwertyuiopå", "asdfghjkløæ", "zxcvbnm"],

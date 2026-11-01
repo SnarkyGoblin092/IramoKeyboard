@@ -158,7 +158,13 @@ final class SuggestionBar: UIView {
 
     /// `highlighted`: the slot space will write (the auto-correction), shown on an accent-coloured pill.
     func update(_ newSuggestions: [Suggestion], highlighted: Int? = nil) {
-        let incoming = Array(newSuggestions.prefix(SuggestionBar.capacity))
+        // Empty places are dropped: one or two words sit centred, with separators only between them.
+        var incoming: [Suggestion] = []
+        var best: Int?
+        for (index, item) in newSuggestions.prefix(SuggestionBar.capacity).enumerated() where !item.text.isEmpty {
+            if index == highlighted { best = incoming.count }
+            incoming.append(item)
+        }
         // A picture of the old words, animated away while the new ones come in (the Switching setting).
         var outgoing: UIView?
         if Prefs.suggestionTransition != "instant", window != nil, !strip.bounds.isEmpty,
@@ -168,7 +174,7 @@ final class SuggestionBar: UIView {
         }
         suggestions = incoming
         highlightedIndex = nil
-        if let index = highlighted, index < suggestions.count, !suggestions[index].text.isEmpty {
+        if let index = best, index < suggestions.count, !suggestions[index].text.isEmpty {
             highlightedIndex = index
         }
         while labels.count < suggestions.count { addSlot() }
@@ -222,7 +228,6 @@ final class SuggestionBar: UIView {
         let shift: CGFloat = effectiveUserInterfaceLayoutDirection == .rightToLeft ? -18 : 18
         var outgoing = CGAffineTransform.identity
         var incoming = CGAffineTransform.identity
-        var duration = 0.24
         switch Prefs.suggestionTransition {
         case "rise":
             outgoing = CGAffineTransform(translationX: 0, y: -10)
@@ -233,20 +238,27 @@ final class SuggestionBar: UIView {
         case "pop":
             outgoing = CGAffineTransform(scaleX: 0.92, y: 0.92)
             incoming = CGAffineTransform(scaleX: 0.85, y: 0.85)
-            duration = 0.34
         default:
-            duration = 0.22   // fade
+            break   // fade
         }
         strip.alpha = 0
         strip.transform = incoming
-        let damping: CGFloat = Prefs.suggestionTransition == "pop" ? 0.7 : 1
-        UIView.animate(withDuration: duration / Prefs.suggestionTransitionSpeed, delay: 0, usingSpringWithDamping: damping, initialSpringVelocity: 0,
-                       options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+        // The Duration setting, in seconds; the app's preview (SuggestionBarPreview.switchAnimation) uses the same curves.
+        let duration = Prefs.suggestionTransitionDuration
+        let changes = {
             self.strip.alpha = 1
             self.strip.transform = .identity
             old.alpha = 0
             old.transform = outgoing
-        }, completion: { _ in old.removeFromSuperview() })
+        }
+        let options: UIView.AnimationOptions = [.beginFromCurrentState, .allowUserInteraction]
+        if Prefs.suggestionTransition == "pop" {
+            UIView.animate(withDuration: duration, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0,
+                           options: options, animations: changes, completion: { _ in old.removeFromSuperview() })
+        } else {
+            UIView.animate(withDuration: duration, delay: 0, options: options.union(.curveEaseInOut),
+                           animations: changes, completion: { _ in old.removeFromSuperview() })
+        }
     }
 
     /// A word on the pill (the auto-correction, or one being pressed) is semibold in the colour that reads on the
@@ -312,8 +324,11 @@ final class SuggestionBar: UIView {
         strip.center = CGPoint(x: 6 + contentWidth / 2, y: area.height / 2)
 
         var frames: [CGRect] = []
-        for width in slotWidths(contentWidth: contentWidth) {
-            frames.append(CGRect(x: frames.last?.maxX ?? 0, y: 0, width: width, height: area.height))
+        let widths = slotWidths(contentWidth: contentWidth)
+        // One or two words: centred in the bar.
+        let start = max(0, (contentWidth - widths.reduce(0, +)) / 2)
+        for width in widths {
+            frames.append(CGRect(x: frames.last?.maxX ?? start, y: 0, width: width, height: area.height))
         }
         slotFrames = frames
         strip.contentSize = CGSize(width: max(contentWidth, frames.last?.maxX ?? 0), height: area.height)
@@ -387,8 +402,9 @@ final class SuggestionBar: UIView {
     /// The width of each suggestion's slot.
     private func slotWidths(contentWidth: CGFloat) -> [CGFloat] {
         let count = suggestions.count
-        let equal = Array(repeating: contentWidth / 3, count: max(count, 3))
-        guard layoutMode != .equal, count > 0 else { return equal }
+        // Fewer than three words keep a third of the bar each (centred in layoutSubviews).
+        let equal = Array(repeating: contentWidth / 3, count: count == 0 ? 3 : max(count, 3))
+        guard layoutMode != .equal, count >= 3 else { return count < 3 && count > 0 ? Array(equal.prefix(count)) : equal }
         // Each word as wide as it needs (with room around it), never narrower than a key or two.
         var natural: [CGFloat] = []
         for (index, item) in suggestions.enumerated() {

@@ -37,10 +37,19 @@ struct GlassBackdrop: View {
     }
 }
 
-/// A list row's background: frosted glass over the backdrop.
+/// A list row's background: real Liquid Glass over the backdrop (frosted glass before iOS 26), the same on every
+/// list of the app (settings, languages, learned words, shortcuts).
 struct GlassRowFill: View {
     var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(.regular, in: Rectangle())
+        } else {
+            Rectangle().fill(.thinMaterial)
+        }
+        #else
         Rectangle().fill(.thinMaterial)
+        #endif
     }
 }
 

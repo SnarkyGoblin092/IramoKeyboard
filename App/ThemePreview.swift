@@ -17,10 +17,11 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
+    @AppStorage(SettingKey.splitKeyboard, store: SharedStore.defaults) private var splitKeyboard = SettingDefault.splitKeyboard
+    @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
     @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize
     @AppStorage(SettingKey.hintPosition, store: SharedStore.defaults) private var hintPosition = SettingDefault.hintPosition
     @AppStorage(SettingKey.hintSize, store: SharedStore.defaults) private var hintSize = SettingDefault.hintSize
-    @AppStorage(SettingKey.spaceText, store: SharedStore.defaults) private var spaceText = SettingDefault.spaceText
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var suggestionHeight = SettingDefault.suggestionHeight
@@ -69,7 +70,7 @@ struct ThemePreview: View {
         case .russian: return split("йцукенгшщзхъ", "фывапролджэ", "ячсмитьбю")
         case .ukrainian: return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish: return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
-        case .lithuanian, .cantonese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .lithuanian, .latvian, .cantonese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         case .arabic: return split("ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ")
         case .japanese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         case .korean: return split("ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ", "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ", "ㅋㅌㅊㅍㅠㅜㅡ")
@@ -109,6 +110,7 @@ struct ThemePreview: View {
         case .russian: return ["е": "ё"]
         case .swedish: return ["e": "é", "u": "ü"]
         case .lithuanian: return ["a": "ą", "c": "č", "e": "ę", "i": "į", "s": "š", "u": "ų", "z": "ž"]
+        case .latvian: return ["a": "ā", "c": "č", "e": "ē", "g": "ģ", "i": "ī", "k": "ķ", "l": "ļ", "n": "ņ", "s": "š", "u": "ū", "z": "ž"]
         case .arabic: return ["ا": "أ", "ي": "ى", "و": "ؤ", "ه": "ة", "ء": "أ"]
         case .korean: return ["ㅂ": "ㅃ", "ㅈ": "ㅉ", "ㄷ": "ㄸ", "ㄱ": "ㄲ", "ㅅ": "ㅆ", "ㅐ": "ㅒ", "ㅔ": "ㅖ"]
         case .hindi: return ["ा": "आ", "ि": "इ", "ी": "ई", "ु": "उ", "ू": "ऊ", "े": "ए", "ै": "ऐ", "ो": "ओ", "ौ": "औ", "्": "अ", "ं": "ँ", "क": "ख", "ग": "घ", "ज": "झ", "त": "थ", "द": "ध", "ट": "ठ", "ड": "ढ", "प": "फ", "ब": "भ", "च": "छ", "न": "ण", "स": "ष", "श": "क्ष", "ल": "ळ", "य": "य़"]
@@ -140,6 +142,7 @@ struct ThemePreview: View {
         case .ukrainian: return "ввід"
         case .swedish: return "retur"
         case .lithuanian: return "grįžti"
+        case .latvian: return "atgriezt"
         case .arabic: return "إدخال"
         case .cantonese: return "換行"
         case .danish: return "retur"
@@ -177,11 +180,53 @@ struct ThemePreview: View {
         var space = false
     }
 
-    /// Mirrors KeyboardViewController.reloadKeyboardLayout: the user's text, or the language's name or code.
+    /// Mirrors KeyboardViewController.reloadKeyboardLayout: the language's name or code.
     private var spaceTitle: String {
-        let custom = spaceText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !custom.isEmpty { return custom }
         return spaceLanguageCode ? shownLanguage.rawValue.uppercased() : shownLanguage.displayName
+    }
+
+    /// The split keyboard is the iPad's only (as KeyboardLayoutMode.split).
+    private var split: Bool { return splitKeyboard && UIDevice.current.userInterfaceIdiom == .pad }
+
+    /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
+    private var shownRows: [[PreviewKey]] {
+        guard split else { return keyRows }
+        let gap: CGFloat = 0.3
+        return keyRows.map { row in
+            let total = row.reduce(CGFloat(0)) { $0 + $1.weight }
+            guard total > 0, row.count > 1 else { return row }
+            let half = total / 2
+            var left: [PreviewKey] = []
+            var right: [PreviewKey] = []
+            var used: CGFloat = 0
+            for key in row {
+                let start = used
+                let end = used + key.weight
+                used = end
+                if end <= half {
+                    left.append(key)
+                } else if start >= half {
+                    right.append(key)
+                } else if key.space {
+                    var first = key
+                    first.weight = half - start
+                    var second = key
+                    second.weight = end - half
+                    left.append(first)
+                    right.append(second)
+                } else if half - start >= end - half {
+                    left.append(key)
+                } else {
+                    right.append(key)
+                }
+            }
+            let leftWeight = left.reduce(CGFloat(0)) { $0 + $1.weight }
+            let rightWeight = right.reduce(CGFloat(0)) { $0 + $1.weight }
+            if leftWeight < rightWeight { left.append(PreviewKey(weight: rightWeight - leftWeight, spacer: true)) }
+            if rightWeight < leftWeight { right.insert(PreviewKey(weight: leftWeight - rightWeight, spacer: true), at: 0) }
+            let gapWeight = max(leftWeight, rightWeight) * 2 * gap / (1 - gap)
+            return left + [PreviewKey(weight: gapWeight, spacer: true)] + right
+        }
     }
 
     private var keyRows: [[PreviewKey]] {
@@ -277,18 +322,22 @@ struct ThemePreview: View {
             let verticalPadding = 4 * s
             let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / CGFloat(max(keyRows.count, 1)))
             let keyHeight = max(1, rowHeight - CGFloat(rowGap) * s)
-            // A narrower keyboard (the Width setting) is centred.
-            let rowWidth = (width - 2 * s) * CGFloat(keyboardWidth)
+            // A narrower keyboard (the Width setting) is centred; the one-handed one sits against its side
+            // (as KeyboardView.layoutSubviews, 80% of the width).
+            let side: CGFloat = split ? 0 : (oneHanded == "left" ? -1 : (oneHanded == "right" ? 1 : 0))
+            let rowWidth = (width - 2 * s) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
+            let shift = (width - 2 * s - rowWidth) / 2 * side
 
             ZStack(alignment: .top) {
                 backdrop
                 VStack(spacing: 0) {
                     if showsStrip { strip(height: stripHeight, scale: s) }
                     VStack(spacing: 0) {
-                        ForEach(0..<keyRows.count, id: \.self) { index in
-                            row(keyRows[index], rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
+                        ForEach(0..<shownRows.count, id: \.self) { index in
+                            row(shownRows[index], rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
                         }
                     }
+                    .offset(x: shift)
                     // One glass container for all the keys, as the keyboard's (spacing 2pt).
                     .glassKeyGroup(theme.kind == .liquidGlass, spacing: 2 * s)
                     .padding(.vertical, verticalPadding)

@@ -9,6 +9,10 @@ struct KeysView: View {
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
+    @AppStorage(SettingKey.splitKeyboard, store: SharedStore.defaults) private var split = SettingDefault.splitKeyboard
+    @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
+    private let hands = ["off", "left", "right"]
+    private var isPad: Bool { return UIDevice.current.userInterfaceIdiom == .pad }
     @AppStorage(SettingKey.landscapeSeparate, store: SharedStore.defaults) private var landscapeSeparate = SettingDefault.landscapeSeparate
     @AppStorage(SettingKey.landscapeKeyHeight, store: SharedStore.defaults) private var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
@@ -24,7 +28,6 @@ struct KeysView: View {
     @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
     @AppStorage(SettingKey.hintPosition, store: SharedStore.defaults) private var hintPosition = SettingDefault.hintPosition
     @AppStorage(SettingKey.hintSize, store: SharedStore.defaults) private var hintSize = SettingDefault.hintSize
-    @AppStorage(SettingKey.spaceText, store: SharedStore.defaults) private var spaceText = SettingDefault.spaceText
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
 
@@ -67,7 +70,7 @@ struct KeysView: View {
     }
 
     var body: some View {
-        // The keyboard stays pinned above the settings, as large as its pane (drag the bar under it).
+        // The keyboard stays pinned above the settings, at a fixed size.
         PinnedPreview(id: "keys", height: 240, fills: true) {
             PinnedKeyboard()
         } content: {
@@ -106,6 +109,25 @@ struct KeysView: View {
                 }
             } header: {
                 SectionHeader("Size", symbol: "arrow.up.left.and.arrow.down.right", color: .blue)
+            }
+            .glassRows()
+
+            Section {
+                if isPad {
+                    GlassToggle(title: "Split keyboard",
+                                subtitle: "The keys in two halves, one under each thumb, in every language.",
+                                isOn: $split)
+                }
+                SegmentedChoice(title: "One-handed", names: ["Off", "Left hand", "Right hand"],
+                                selected: hands.firstIndex(of: oneHanded)) { oneHanded = hands[$0] }
+                    .disabled(isPad && split)
+                    .opacity(isPad && split ? 0.45 : 1)
+            } header: {
+                SectionHeader("Layout", symbol: "hand.raised.fingers.spread", color: .teal)
+            } footer: {
+                Text(isPad && split
+                     ? "The split keyboard is used instead of the one-handed one."
+                     : "One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over.")
             }
             .glassRows()
 
@@ -220,30 +242,15 @@ struct KeysView: View {
             .glassRows()
 
             Section {
-                HStack {
-                    TextField("The language's name", text: Binding(get: { spaceText },
-                                                                    set: { spaceText = String($0.prefix(32)) }))
-                    if !spaceText.isEmpty {
-                        Button {
-                            Feedback.delete()
-                            spaceText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Clear")
-                    }
-                }
                 GlassSlider(title: "Text size", symbol: "textformat.size", value: $spaceTextSize,
                             range: Settings.spaceTextSizeRange, step: 1) { "\(Int($0.rounded())) pt" }
                 GlassToggle(title: "Short language code",
                             subtitle: "EN, HU... instead of the language's full name.",
                             isOn: $spaceLanguageCode)
-                    .disabled(!spaceText.trimmingCharacters(in: .whitespaces).isEmpty)
             } header: {
                 SectionHeader("Space bar", symbol: "space", color: .gray)
             } footer: {
-                Text("Up to 32 characters. Leave it empty to show the language.")
+                Text("The space bar shows the language you're typing in.")
             }
             .glassRows()
         }

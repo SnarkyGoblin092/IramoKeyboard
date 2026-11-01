@@ -5,13 +5,13 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ## Features
 
 ### Languages
-- 36 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
-  Turkish, Russian, Ukrainian, Swedish, Lithuanian, Arabic, Danish, Norwegian, Finnish, Greek, Hebrew, Persian,
+- 37 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
+  Turkish, Russian, Ukrainian, Swedish, Lithuanian, Latvian, Arabic, Danish, Norwegian, Finnish, Greek, Hebrew, Persian,
   Indonesian, Malay, Vietnamese, Slovak, Croatian, Bulgarian, Catalan, Korean, Hindi, Thai, Japanese, Cantonese
   and Mandarin.
 - Each with its own layout: QWERTY, QWERTZ, AZERTY, Turkish, Nordic (å æ ø / å ä ö), Croatian (š đ č ć ž),
   Cyrillic for Russian, Ukrainian and Bulgarian (phonetic), Greek, Hebrew, Persian and Arabic, plus the language's
-  extra letters on long-press (ñ, ç, ü ö ä, ğ ş ı, ą č ę ė į š ų ū ž, ά έ ή ί ό ύ ώ, ľ ĺ ô ŕ, l·l...).
+  extra letters on long-press (ñ, ç, ü ö ä, ğ ş ı, ą č ę ė į š ų ū ž, ā ē ģ ī ķ ļ ņ, ά έ ή ί ό ύ ώ, ľ ĺ ô ŕ, l·l...).
 - Vietnamese: type without the marks and pick the word from the bar (tieng → tiếng), or long-press a vowel for
   its tones and ă â ê ô ơ ư, and d for đ.
 - Hebrew and Persian are written right to left like Arabic; Persian has its own letters (پ چ ژ ک گ ی), Persian
@@ -57,9 +57,12 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - The word space will write sits on an accent-coloured pill in the middle of the bar.
 - The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
   (solid, dashed, dotted or none) or key-like segments, in the theme's colours or neutral ones, at any height.
-- Update speed: Fastest, Normal or Battery saver (100, 300 or 700 ms), or any wait from 100 to 1000 ms (how long the bar waits for a pause in typing).
+  With only one or two words they sit centred, with no empty places and separators only between them.
+- Update speed: Very slow, Slow, Normal, Fast or Very fast (500, 300, 150, 100 or 50 ms), or any wait from 50 to
+  500 ms: how long the bar waits for a pause in typing, or in a swipe, before showing new words.
 - Switching: how new words replace the old ones — Instant, Fade, Rise, Slide (along the reading direction, so
-  right to left in Arabic) or Pop, at a Speed from 0.25× to 3×; the settings preview keeps changing its words to show it.
+  right to left in Arabic) or Pop, taking 0.10 to 0.50 s; the settings preview keeps changing its words to show
+  it, at the same speed as the keyboard.
 - Backspace right after an auto-correction undoes it.
 - Learns new words: tap the word as you typed it in the bar to keep it, or type a new word twice; words you
   retype after deleting a typo teach the keyboard that typo; words you use often, and the words you put after
@@ -71,7 +74,9 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ### Typing
 - Swipe typing: slide across the letters to write a word; the bar offers the other readings.
 - Thumb handoff: pass a word to the other thumb mid-glide (or right after lifting) and it goes on.
-- Glide onto the space bar to finish a word and carry on with the next one without lifting.
+- Glide onto the space bar to finish a word and carry on with the next one without lifting ("hello you"); the
+  trips to and from the bar are left out of the words.
+- The swipe line fades out behind the finger, over a Trail length you set (60 to 600 pt).
 - Optional phrase glides: one glide can read as two or three words ("do it", "in the morning").
 - Delete right after a swipe removes the whole word (can be turned off).
 - Optional flicks: up on a letter for a capital, down for its first accent. A flick that keeps going (over about 1.3 key heights) becomes a swiped word instead (one that dips onto the space bar commits nothing there until it reaches another letter).
@@ -104,27 +109,31 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ### Look
 - 75 themes: Native, Transparent, Liquid Glass and 72 colour themes, which are a lighter shade in light mode.
 - Follows light and dark mode; with the phone in dark mode, the keys stay dark even in apps that stay light.
-- Accent colour, and a key style: surface (flat, a soft sheen, or raised with a shadow under each key), border (none,
+- Accent colour (a preset, or any colour from the colour picker in the last place), and a key style: surface (flat, a soft sheen, or raised with a shadow under each key), border (none,
   thin, bold or in the accent colour) and an accent glow (soft or strong); by default colour themes have raised
   keys and every theme but Native a thin outline. Settings a theme has no use for are greyed out (the key style
   with Liquid Glass, whose keys are real glass).
 - Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
   width, corners (square to round), the gaps between keys and rows, a font for the keys and the bar (the system
   font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
-  always show, accent hints in any corner (or off) at any size, and the space bar's text (your own, the
-  language's name or its code) and size.
+  always show, accent hints in any corner (or off) at any size, and the space bar's text (the language's name or
+  its code) and size.
 - Highlights follow the theme's accent: the auto-correction pill, pressed suggestions (a tapped word gets exactly
   the auto-correction's pill, in every theme), the hide-keyboard icon
   and the emoji category tabs; in the Liquid Glass theme the pill, a pressed word, the bar's tiles and the emoji
   tab highlight are glass too.
 - Works on iPhone and iPad, in portrait and landscape.
+- Split keyboard on iPad: every row in two halves with a gap between them (the space bar cut in two), for every
+  language and page.
+- One-handed mode for left or right hand, on iPhone and iPad: a narrower keyboard (80% wide) against that side;
+  the arrow in the empty side moves it over. The split keyboard takes precedence on iPad.
 
 ### The Iramo app
-- A Liquid Glass design: glass cards and rows over a backdrop tinted with your accent colour (frosted glass
-  before iOS 26).
+- A Liquid Glass design: every list (settings, languages, learned words, shortcuts) has real glass rows over a
+  backdrop tinted with your accent colour (frosted glass before iOS 26).
 - Laid out like the system Settings app: coloured icons, and each row showing what it is set to.
 - Screens that change the keyboard keep a live preview pinned at the top while their settings scroll below it
-  (drag the bar under it to make it bigger or smaller): the keyboard itself (Keys, Themes), the suggestion bar, a
+  (on Themes, drag the bar under it to make it smaller): the keyboard itself (Keys, Themes), the suggestion bar, a
   swipe being drawn, the keys' touch areas, the vibration's feel (tap to play it) and a text shortcut, all drawn
   in the chosen theme with its key style. The keyboard previews show it as it opens (number row, shift, sizes,
   font) and follow sliders while they are dragged.
@@ -138,6 +147,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   for deleting, and for Reset all settings a half-second strong buzz before it asks and a warning buzz when it
   is done.
 - Languages, text shortcuts and learned words, each swiped left to remove an entry.
+- On the main screen: the theme's name (its preview is on the Themes screen), the number row right under it,
+  then Keys and Haptics.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
 - Credits and licences for the word, emoji and icon data.

@@ -64,14 +64,18 @@ private struct MiniKey: View {
 // MARK: - Pinned preview
 
 /// A settings screen with its preview pinned at the top: the preview stays in view while the settings below it
-/// scroll, and the bar under the preview drags to make it bigger or smaller (remembered per screen). The pane is
-/// never smaller than the preview needs: a card preview's natural height (caption included), or for the
-/// keyboard, which sizes itself to the pane, a size where it stays readable.
+/// scroll. A card preview keeps its natural height (caption included); the keyboard, which sizes itself to the
+/// pane, gets the height it starts at. Only a `resizable` pane (the theme picker's) has a bar under it that drags
+/// to make it smaller and back (remembered per screen), never past the height it starts at nor below a size where
+/// the keyboard stays readable.
 struct PinnedPreview<Preview: View, Content: View>: View {
     @ViewBuilder let preview: () -> Preview
     @ViewBuilder let content: () -> Content
     /// The preview sizes itself to the pane (the keyboard) instead of keeping its own height.
     let fills: Bool
+    let resizable: Bool
+    /// The height the pane starts at, and a resizable pane's largest.
+    let startHeight: CGFloat
 
     @AppStorage private var storedHeight: Double
     @State private var dragStartHeight: CGFloat?
@@ -85,12 +89,14 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private static var keyboardMinimum: CGFloat { return 150 }
 
     /// `id` names the screen (its height is remembered under it); `height` is where it starts.
-    init(id: String, height: CGFloat, fills: Bool = false,
+    init(id: String, height: CGFloat, fills: Bool = false, resizable: Bool = false,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
         self.preview = preview
         self.content = content
         self.fills = fills
+        self.resizable = resizable
+        self.startHeight = height
         _storedHeight = AppStorage(wrappedValue: Double(height), "previewHeight." + id)
     }
 
@@ -107,8 +113,9 @@ struct PinnedPreview<Preview: View, Content: View>: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let maximum = max(minimum, geometry.size.height * 0.62)
-            let height = clamped(liveHeight ?? CGFloat(storedHeight), maximum: maximum)
+            let maximum = max(minimum, min(startHeight, geometry.size.height * 0.62))
+            let height = resizable ? clamped(liveHeight ?? CGFloat(storedHeight), maximum: maximum)
+                : (fills ? maximum : minimum)
             VStack(spacing: 0) {
                 Group {
                     if fills {
@@ -128,7 +135,11 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                 .padding(.bottom, PinnedPreview.bottomPadding)
                 .frame(height: height)
                 .clipped()
-                handle(height: height, maximum: maximum)
+                if resizable {
+                    handle(height: height, maximum: maximum)
+                } else {
+                    Divider().opacity(0.6)
+                }
                 content()
                     .frame(maxHeight: .infinity)
             }
@@ -213,7 +224,7 @@ struct SuggestionBarPreview: View {
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.suggestionTransition, store: SharedStore.defaults) private var transition = SettingDefault.suggestionTransition
-    @AppStorage(SettingKey.suggestionTransitionSpeed, store: SharedStore.defaults) private var speed = SettingDefault.suggestionTransitionSpeed
+    @AppStorage(SettingKey.suggestionTransitionDuration, store: SharedStore.defaults) private var duration = SettingDefault.suggestionTransitionDuration
 
     /// What the bar offers as "hel", "help" and "he" are typed in turn; the preview keeps cycling through them so
     /// the Switching setting can be seen.
@@ -229,8 +240,8 @@ struct SuggestionBarPreview: View {
     private var words: [String] { return wordSets[step % wordSets.count] }
     private var shown: [String] { return Array(words.prefix(scroll ? 10 : (fit ? 6 : 3))) }
 
-    /// The keyboard's switch (Keyboard/SuggestionBar.animateSwitch) in SwiftUI terms, exaggerated (further, about
-    /// three times slower) so it can be told apart at the preview's size.
+    /// The keyboard's switch (Keyboard/SuggestionBar.animateSwitch) in SwiftUI terms: the same timing, moved a bit
+    /// further so it can be told apart at the preview's size.
     private var switchTransition: AnyTransition {
         switch transition {
         case "fade": return .opacity
@@ -247,8 +258,8 @@ struct SuggestionBarPreview: View {
     private var switchAnimation: Animation? {
         switch transition {
         case "instant": return nil
-        case "pop": return .spring(response: 0.7 / speed, dampingFraction: 0.6)
-        default: return .easeInOut(duration: 0.5 / speed)
+        case "pop": return .spring(response: duration, dampingFraction: 0.7)
+        default: return .easeInOut(duration: duration)
         }
     }
 
@@ -299,8 +310,8 @@ struct SuggestionBarPreview: View {
         .task {
             // New words every so often, switched the chosen way.
             while !Task.isCancelled {
-                // Long enough for a slowed-down switch to finish before the next one starts.
-                let pause = 1.2 + 0.7 / speed
+                // Long enough for the switch to finish and the words to be read before the next one starts.
+                let pause = 1.4 + duration
                 try? await Task.sleep(nanoseconds: UInt64(pause * 1_000_000_000))
                 step += 1
             }
@@ -411,6 +422,7 @@ struct GesturePreview: View {
     @AppStorage(SettingKey.spaceCommits, store: SharedStore.defaults) private var throughSpace = SettingDefault.spaceCommits
     @AppStorage(SettingKey.twoThumbSwipe, store: SharedStore.defaults) private var handoff = SettingDefault.twoThumbSwipe
     @AppStorage(SettingKey.multiWordSwipe, store: SharedStore.defaults) private var phrase = SettingDefault.multiWordSwipe
+    @AppStorage(SettingKey.swipeTrailLength, store: SharedStore.defaults) private var trailLength = SettingDefault.swipeTrailLength
 
     private let rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
 
@@ -498,14 +510,24 @@ struct GesturePreview: View {
             path.move(to: first)
             for point in points.dropFirst() { path.addLine(to: point) }
         }
-        let style = StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+        let style = StrokeStyle(lineWidth: 5, lineCap: .butt, lineJoin: .round)
+        // Only the newest Trail length of the line shows, fading out behind the finger (as KeyboardView.updateTrail).
+        // The preview is about a keyboard's width across, so the length is scaled to it.
+        var total: CGFloat = 0
+        for index in points.indices.dropFirst() {
+            total += hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y)
+        }
+        let visible = total > 0 ? min(1, CGFloat(trailLength) * size.width / 390 / total) : 1
+        let pieces = 8
         return ZStack {
-            if handoff && !throughSpace {
+            ForEach(0..<pieces, id: \.self) { piece in
+                let from = max(0, progress - visible * CGFloat(pieces - piece) / CGFloat(pieces))
+                let to = max(from, progress - visible * CGFloat(pieces - piece - 1) / CGFloat(pieces))
                 // Two thumbs: the second half in another shade.
-                path.trim(from: 0, to: min(progress, 0.5)).stroke(look.accentColor, style: style)
-                path.trim(from: 0.5, to: max(0.5, progress)).stroke(Color.purple, style: style)
-            } else {
-                path.trim(from: 0, to: progress).stroke(look.accentColor, style: style)
+                let color = handoff && !throughSpace && from >= 0.5 ? Color.purple : look.accentColor
+                path.trim(from: from, to: to)
+                    .stroke(color, style: style)
+                    .opacity(Double(piece + 1) / Double(pieces))
             }
         }
         .opacity(0.8)
