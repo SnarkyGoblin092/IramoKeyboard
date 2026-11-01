@@ -40,18 +40,25 @@ struct PreviewCard<Content: View>: View {
 // MARK: - Pinned preview
 
 /// A settings screen with its preview pinned at the top: the preview stays in view while the settings below it
-/// scroll, and the bar under the preview drags to make it bigger or smaller (remembered per screen).
+/// scroll, and the bar under the preview drags to make it bigger or smaller (remembered per screen). The pane is
+/// never smaller than the preview needs: a card preview's natural height (caption included), or for the
+/// keyboard, which sizes itself to the pane, a size where it stays readable.
 struct PinnedPreview<Preview: View, Content: View>: View {
     @ViewBuilder let preview: () -> Preview
     @ViewBuilder let content: () -> Content
-    /// The preview sizes itself to the pane (the keyboard) instead of being shown at its own size, scaled to fit.
+    /// The preview sizes itself to the pane (the keyboard) instead of keeping its own height.
     let fills: Bool
 
     @AppStorage private var storedHeight: Double
     @State private var dragStartHeight: CGFloat?
     @State private var liveHeight: CGFloat?
+    /// The card preview's own height, measured (0 until it has been laid out once).
+    @State private var naturalHeight: CGFloat = 0
 
-    private static var minimumHeight: CGFloat { return 90 }
+    private static var topPadding: CGFloat { return 12 }
+    private static var bottomPadding: CGFloat { return 6 }
+    /// The keyboard preview's smallest pane.
+    private static var keyboardMinimum: CGFloat { return 150 }
 
     /// `id` names the screen (its height is remembered under it); `height` is where it starts.
     init(id: String, height: CGFloat, fills: Bool = false,
@@ -63,30 +70,52 @@ struct PinnedPreview<Preview: View, Content: View>: View {
         _storedHeight = AppStorage(wrappedValue: Double(height), "previewHeight." + id)
     }
 
+    /// The smallest pane that still shows the whole preview.
+    private var minimum: CGFloat {
+        if fills { return PinnedPreview.keyboardMinimum }
+        let content = naturalHeight > 0 ? naturalHeight : 90
+        return content + PinnedPreview.topPadding + PinnedPreview.bottomPadding
+    }
+
+    private func clamped(_ height: CGFloat, maximum: CGFloat) -> CGFloat {
+        return min(max(height, minimum), maximum)
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let maximum = max(PinnedPreview.minimumHeight, geometry.size.height * 0.62)
-            let height = min(max(liveHeight ?? CGFloat(storedHeight), PinnedPreview.minimumHeight), maximum)
+            let maximum = max(minimum, geometry.size.height * 0.62)
+            let height = clamped(liveHeight ?? CGFloat(storedHeight), maximum: maximum)
             VStack(spacing: 0) {
                 Group {
                     if fills {
                         preview().frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        FitToPane { preview() }
+                        // At its own height (measured for the minimum), centred in a taller pane.
+                        preview()
+                            .fixedSize(horizontal: false, vertical: true)
+                            .background(GeometryReader { inner in
+                                Color.clear.preference(key: NaturalHeightKey.self, value: inner.size.height)
+                            })
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .frame(height: height)
+                .padding(.horizontal, 16)
+                .padding(.top, PinnedPreview.topPadding)
+                .padding(.bottom, PinnedPreview.bottomPadding)
+                .frame(height: height)
+                .clipped()
                 handle(height: height, maximum: maximum)
                 content()
                     .frame(maxHeight: .infinity)
             }
         }
         .background(GlassBackdrop())
+        .onPreferenceChange(NaturalHeightKey.self) { value in
+            if abs(value - naturalHeight) > 0.5 { naturalHeight = value }
+        }
     }
 
-    /// The grip under the preview: drag it to resize; double-tap goes back to the starting size.
+    /// The grip under the preview: drag it to resize (never below what the preview needs).
     private func handle(height: CGFloat, maximum: CGFloat) -> some View {
         Capsule()
             .fill(Color.secondary.opacity(0.45))
@@ -96,8 +125,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
             .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { value in
                     if dragStartHeight == nil { dragStartHeight = height }
-                    liveHeight = min(max((dragStartHeight ?? height) + value.translation.height,
-                                         PinnedPreview.minimumHeight), maximum)
+                    liveHeight = clamped((dragStartHeight ?? height) + value.translation.height, maximum: maximum)
                 }
                 .onEnded { _ in
                     if let final = liveHeight { storedHeight = Double(final) }
@@ -111,36 +139,14 @@ struct PinnedPreview<Preview: View, Content: View>: View {
             .accessibilityValue("\(Int(height)) points")
             .accessibilityAdjustableAction { direction in
                 let step: CGFloat = direction == .increment ? 30 : -30
-                storedHeight = Double(min(max(height + step, PinnedPreview.minimumHeight), maximum))
+                storedHeight = Double(clamped(height + step, maximum: maximum))
             }
     }
 }
 
-/// Shows a preview at its natural size, scaled down (never up) to fit the pane, and centred in it. Previews that
-/// size themselves to the space (the keyboard) simply fill it.
-private struct FitToPane<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-    @State private var natural: CGSize = .zero
-
-    var body: some View {
-        GeometryReader { geometry in
-            let scale = natural.height > 0 ? min(1, geometry.size.height / natural.height) : 1
-            content()
-                .frame(width: geometry.size.width)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(GeometryReader { inner in
-                    Color.clear.preference(key: NaturalSizeKey.self, value: inner.size)
-                })
-                .scaleEffect(scale, anchor: .center)
-                .frame(width: geometry.size.width, height: geometry.size.height)
-        }
-        .onPreferenceChange(NaturalSizeKey.self) { natural = $0 }
-    }
-}
-
-private struct NaturalSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+private struct NaturalHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// The keyboard preview for the pinned pane: as large as the pane allows, keeping the keyboard's proportions.
