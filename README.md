@@ -89,6 +89,14 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Text shortcuts: type a trigger and press space to expand it.
 - Numbers and symbols pages, and an optional number row.
 - A hide-keyboard button at the right end of the suggestion bar (no background: the icon just dims while held).
+- A Functions button at the left end opens a panel of tools in place of the keys: one-handed (off, left hand,
+  right hand), emoji, copy, cut, paste, clipboard, number row, swipe typing, auto-correct, vibration, next language,
+  split keyboard (iPad), hide keyboard and the Iramo app. Tools that are on light up in the accent. The app's
+  Functions panel screen picks which ones it shows and in what order (move up or down, swipe left to remove,
+  add from the list).
+- Clipboard (Functions panel): the last 20 texts you copied, newest first; tap one to paste it, remove one
+  with its cross or Clear them all. It picks up the system clipboard when opened (never in password fields) and
+  what the panel's Copy and Cut take. Needs Full Access.
 - Key pop-ups and key clicks.
 - Vibration with an adjustable strength and feel (Soft, Light, Medium, Firm or Crisp, or any sharpness),
   and optional ticks when the cursor mode starts and for each character it moves.

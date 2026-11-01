@@ -185,6 +185,9 @@ private struct KeyboardSection: View {
             ScreenRow(.emoji) {
                 SettingsRow(title: "Emoji", symbol: "face.smiling.inverse", color: .yellow)
             }
+            ScreenRow(.functions) {
+                SettingsRow(title: "Functions panel", symbol: "square.grid.2x2.fill", color: .pink)
+            }
         } header: {
             SectionHeader("Keyboard", symbol: "keyboard", color: .blue)
         } footer: {
@@ -388,7 +391,7 @@ private struct AboutSection: View {
 
 /// The screens the main list opens.
 enum Screen: Hashable {
-    case languages, suggestions, gestures, hitboxes, shortcuts, emoji, themes, keys, haptics, learnedWords, licences
+    case languages, suggestions, gestures, hitboxes, shortcuts, emoji, functions, themes, keys, haptics, learnedWords, licences
 
     @ViewBuilder var view: some View {
         switch self {
@@ -398,6 +401,7 @@ enum Screen: Hashable {
         case .hitboxes: HitboxesView()
         case .shortcuts: ShortcutsView()
         case .emoji: EmojiView()
+        case .functions: FunctionsView()
         case .themes: ThemesView()
         case .keys: KeysView()
         case .haptics: HapticsView()
@@ -562,15 +566,7 @@ struct LanguagesView: View {
         GlassList {
             Section {
                 ForEach(languages, id: \.rawValue) { language in
-                    // The language and its layout (the first letters of its top row), or how it is typed.
-                    HStack {
-                        Text(language.displayName)
-                        Spacer()
-                        Text(language.phoneticSystem
-                             ?? ThemePreview.letterRows(for: language)[0].prefix(6).joined().uppercased())
-                            .font(.footnote.monospaced())
-                            .foregroundColor(.secondary)
-                    }
+                    Text(language.displayName)
                     .swipeToDelete(enabled: languages.count > 1) { remove(language) }
                 }
             } footer: {

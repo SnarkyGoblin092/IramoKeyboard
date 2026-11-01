@@ -86,6 +86,10 @@ enum SettingKey {
     static let emojiHiddenCategories = "hunkeys.emojiHiddenCategories"
     static let emojiSkinTone = "hunkeys.emojiSkinTone"
     static let emojiHoldDelay = "hunkeys.emojiHoldDelay"
+    /// The last copied texts, newest first (data for the Functions panel's Clipboard; not a preference).
+    static let clipboardHistory = "hunkeys.clipboardHistory"
+    /// The Functions panel's tools, in order (KeyboardTool raw values).
+    static let keyboardTools = "hunkeys.keyboardTools"
     /// Emoji -> how often it was picked (data for the "Most used" order; not a preference).
     static let emojiUseCounts = "hunkeys.emojiUseCounts"
     static let keyRoundness = "hunkeys.keyRoundness"
@@ -132,7 +136,7 @@ enum SettingKey {
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
-        emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay,
+        emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay, keyboardTools,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
         splitKeyboard, oneHanded,
         hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
@@ -239,6 +243,7 @@ enum SettingDefault {
     static let emojiSkinTone: Double = 0
     /// How long to hold an emoji for its skin tones, in seconds.
     static let emojiHoldDelay: Double = 0.30
+    static let keyboardTools: [String] = KeyboardTool.standard.map { $0.rawValue }
     static let keyRoundness = 0.26
     static let language = "en"
     static let enabledLanguages = ["en"]
@@ -438,6 +443,7 @@ final class Settings {
             SettingKey.emojiHiddenCategories: SettingDefault.emojiHiddenCategories,
             SettingKey.emojiSkinTone: SettingDefault.emojiSkinTone,
             SettingKey.emojiHoldDelay: SettingDefault.emojiHoldDelay,
+            SettingKey.keyboardTools: SettingDefault.keyboardTools,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.language: SettingDefault.language
         ])
@@ -671,6 +677,35 @@ final class Settings {
     var emojiHiddenCategories: [String] { return readStringArray(SettingKey.emojiHiddenCategories) ?? [] }
     var emojiSkinTone: Int { return Int(clamp(readDouble(SettingKey.emojiSkinTone), Settings.emojiSkinToneRange).rounded()) }
     var emojiHoldDelay: Double { return clamp(readDouble(SettingKey.emojiHoldDelay), Settings.emojiHoldDelayRange) }
+
+    /// The Functions panel's tools, in order.
+    var keyboardTools: [KeyboardTool] {
+        get { return KeyboardTool.list(from: readStringArray(SettingKey.keyboardTools) ?? SettingDefault.keyboardTools) }
+        set { put(newValue.map { $0.rawValue }, SettingKey.keyboardTools) }
+    }
+
+    /// The last copied texts, newest first.
+    var clipboardHistory: [String] {
+        get { return readStringArray(SettingKey.clipboardHistory) ?? [] }
+        set { put(newValue.isEmpty ? nil : newValue, SettingKey.clipboardHistory) }
+    }
+
+    static let clipboardLimit = 20
+
+    /// Puts a copied text first in the clipboard history (once; very long texts are kept in part).
+    func rememberClipboard(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let kept = String(text.prefix(5000))
+        var list = clipboardHistory.filter { $0 != kept }
+        list.insert(kept, at: 0)
+        clipboardHistory = Array(list.prefix(Settings.clipboardLimit))
+    }
+
+    /// Saves a preference the keyboard itself changes (the Functions panel), keeping the cached copy current.
+    func set(_ value: Any?, forKey key: String) {
+        put(value, key)
+    }
 
     // MARK: Data
 

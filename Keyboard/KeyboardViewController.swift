@@ -12,6 +12,12 @@ final class KeyboardViewController: UIInputViewController {
     private var keyboardView = KeyboardView()
     private var emojiPanel: EmojiPanel?
     private var hiddenForEmoji: [UIView] = []
+    /// The Functions panel, shown in place of the keys (the suggestion bar's left button).
+    private var toolsPanel: ToolsPanel?
+    /// The Functions panel's Clipboard: the last copied texts, in place of the keys.
+    private var clipboardPanel: ClipboardPanel?
+    /// The system clipboard's change count when it was last read (it is only read again once it changed).
+    private var seenPasteboardChange = -1
 
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
@@ -376,6 +382,8 @@ final class KeyboardViewController: UIInputViewController {
         hideEmojiPanel(refresh: false)
         isSearchingEmoji = false
         searchQuery = ""
+        toolsPanel = nil   // goes with the old stage
+        clipboardPanel = nil
         for sub in container.subviews { sub.removeFromSuperview() }
 
         if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
@@ -1908,6 +1916,199 @@ extension KeyboardViewController: SuggestionBarDelegate {
 
     func suggestionBarDidTapDismiss(_ bar: SuggestionBar) {
         dismissKeyboard()
+    }
+
+    func suggestionBarDidTapTools(_ bar: SuggestionBar) {
+        if clipboardPanel != nil {
+            hideClipboard()
+        } else if toolsPanel == nil {
+            showTools()
+        } else {
+            hideTools()
+        }
+    }
+}
+
+// MARK: - Functions panel
+
+extension KeyboardViewController: ToolsPanelDelegate {
+    /// The tools the app's Functions screen picked (split only on an iPad), in place of the keys.
+    private func showTools() {
+        guard toolsPanel == nil else { return }
+        finishComposing()
+        let isPad = traitCollection.userInterfaceIdiom == .pad
+        let tools = settings.keyboardTools.filter { $0 != .split || isPad }
+        let panel = ToolsPanel(tools: tools)
+        panel.delegate = self
+        panel.overrideUserInterfaceStyle = keyboardView.overrideUserInterfaceStyle
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        stage.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.topAnchor.constraint(equalTo: keyboardView.topAnchor),
+            panel.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor),
+            panel.leadingAnchor.constraint(equalTo: keyboardView.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: keyboardView.trailingAnchor)
+        ])
+        toolsPanel = panel
+        keyboardView.isHidden = true
+        suggestionBar.toolsOpen = true
+        panel.refresh()
+    }
+
+    private func hideTools() {
+        toolsPanel?.removeFromSuperview()
+        toolsPanel = nil
+        keyboardView.isHidden = false
+        suggestionBar.toolsOpen = false
+    }
+
+    /// Saves a setting changed from the panel. A change to the keys' layout rebuilds the keyboard (the panel
+    /// opens again over it); the others take effect at once.
+    private func saveTool(_ value: Any, forKey key: String, rebuild: Bool) {
+        settings.set(value, forKey: key)
+        Prefs.refresh()
+        if rebuild {
+            buildInterface()
+            showTools()
+        } else {
+            builtSignature = settingsSignature()
+            toolsPanel?.refresh()
+        }
+    }
+
+    func toolsPanel(_ panel: ToolsPanel, didPick tool: KeyboardTool) {
+        switch tool {
+        case .oneHanded:
+            // Off, then left hand, then right hand.
+            let next = Prefs.oneHanded == "off" ? "left" : (Prefs.oneHanded == "left" ? "right" : "off")
+            saveTool(next, forKey: SettingKey.oneHanded, rebuild: false)
+            keyboardView.setNeedsLayout()
+        case .emoji:
+            hideTools()
+            showEmojiPanel()
+        case .copy, .cut:
+            guard hasFullAccess, let selected = textDocumentProxy.selectedText, !selected.isEmpty else { return }
+            UIPasteboard.general.string = selected
+            seenPasteboardChange = UIPasteboard.general.changeCount
+            settings.rememberClipboard(selected)
+            if tool == .cut { textDocumentProxy.deleteBackward() }
+            hideTools()
+            scheduleRefresh()
+        case .paste:
+            guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
+            textDocumentProxy.insertText(text)
+            hideTools()
+            scheduleRefresh()
+        case .clipboard:
+            guard hasFullAccess else { return }
+            hideTools()
+            showClipboard()
+        case .numberRow:
+            saveTool(!Prefs.numberRow, forKey: SettingKey.numberRow, rebuild: true)
+        case .swipeTyping:
+            saveTool(!Prefs.swipe, forKey: SettingKey.swipe, rebuild: false)
+        case .autoCorrect:
+            saveTool(!Prefs.autoCorrect, forKey: SettingKey.autoCorrect, rebuild: false)
+        case .vibration:
+            saveTool(Prefs.vibration > 0 ? 0.0 : SettingDefault.vibration, forKey: SettingKey.vibration, rebuild: false)
+        case .nextLanguage:
+            switchLanguage(by: 1)
+            toolsPanel?.refresh()
+        case .split:
+            saveTool(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard, rebuild: true)
+        case .hideKeyboard:
+            hideTools()
+            dismissKeyboard()
+        case .openApp:
+            hideTools()
+            openApp()
+        }
+    }
+
+    // MARK: Clipboard
+
+    /// Adds what is on the system clipboard now to the history. Read only when it changed since the last look
+    /// (each read can show the system's paste notice), never from a password field.
+    private func noteClipboard() {
+        guard hasFullAccess, textDocumentProxy.isSecureTextEntry != true else { return }
+        let pasteboard = UIPasteboard.general
+        guard pasteboard.changeCount != seenPasteboardChange else { return }
+        seenPasteboardChange = pasteboard.changeCount
+        guard pasteboard.hasStrings, let text = pasteboard.string else { return }
+        settings.rememberClipboard(text)
+    }
+
+    private func showClipboard() {
+        guard clipboardPanel == nil else { return }
+        noteClipboard()
+        let panel = ClipboardPanel(items: settings.clipboardHistory)
+        panel.overrideUserInterfaceStyle = keyboardView.overrideUserInterfaceStyle
+        panel.onPick = { [weak self] text in
+            guard let self = self else { return }
+            self.textDocumentProxy.insertText(text)
+            self.hideClipboard()
+            self.scheduleRefresh()
+        }
+        panel.onDelete = { [weak self] text in
+            guard let self = self else { return }
+            self.settings.clipboardHistory = self.settings.clipboardHistory.filter { $0 != text }
+        }
+        panel.onClear = { [weak self] in
+            self?.settings.clipboardHistory = []
+        }
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        stage.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.topAnchor.constraint(equalTo: keyboardView.topAnchor),
+            panel.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor),
+            panel.leadingAnchor.constraint(equalTo: keyboardView.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: keyboardView.trailingAnchor)
+        ])
+        clipboardPanel = panel
+        keyboardView.isHidden = true
+        suggestionBar.toolsOpen = true
+    }
+
+    private func hideClipboard() {
+        clipboardPanel?.removeFromSuperview()
+        clipboardPanel = nil
+        keyboardView.isHidden = false
+        suggestionBar.toolsOpen = false
+    }
+
+    func toolsPanel(_ panel: ToolsPanel, stateOf tool: KeyboardTool) -> Bool? {
+        switch tool {
+        case .oneHanded: return Prefs.oneHanded != "off"
+        case .numberRow: return Prefs.numberRow
+        case .swipeTyping: return Prefs.swipe
+        case .autoCorrect: return Prefs.autoCorrect
+        case .vibration: return Prefs.vibration > 0
+        case .split: return Prefs.splitKeyboard
+        default: return nil
+        }
+    }
+
+    func toolsPanel(_ panel: ToolsPanel, detailOf tool: KeyboardTool) -> String? {
+        switch tool {
+        case .oneHanded:
+            return Prefs.oneHanded == "left" ? "Left hand" : (Prefs.oneHanded == "right" ? "Right hand" : "Off")
+        case .nextLanguage:
+            let enabled = enabledLanguages
+            guard enabled.count > 1 else { return nil }
+            let index = enabled.firstIndex(of: language) ?? 0
+            return enabled[(index + 1) % enabled.count].displayName
+        default:
+            return nil
+        }
+    }
+
+    func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {
+        switch tool {
+        case .copy, .cut, .paste, .clipboard: return hasFullAccess
+        case .nextLanguage: return enabledLanguages.count > 1
+        case .vibration: return hasFullAccess
+        default: return true
+        }
     }
 }
 

@@ -14,6 +14,7 @@ struct Suggestion {
 protocol SuggestionBarDelegate: AnyObject {
     func suggestionBar(_ bar: SuggestionBar, didSelect suggestion: Suggestion)
     func suggestionBarDidTapDismiss(_ bar: SuggestionBar)
+    func suggestionBarDidTapTools(_ bar: SuggestionBar)
 }
 
 /// The strip above the keys: suggestion slots (words and emoji) and a permanent "hide keyboard" button on the
@@ -40,6 +41,14 @@ final class SuggestionBar: UIView {
     /// Holds the slots. It scrolls only in the scrollable layout; otherwise the bar handles the touches itself.
     private let strip = UIScrollView()
     private let dismissIcon = UIImageView()
+    /// The Functions button at the left end (the panel of tools, KeyboardTool).
+    private let toolsIcon = UIImageView()
+    private var toolsMaxX: CGFloat = 0
+    private let toolsIndex = -2
+    /// The Functions panel is open: the button shows the keyboard, which takes the user back to the keys.
+    var toolsOpen = false {
+        didSet { if toolsOpen != oldValue { setToolsImage() } }
+    }
     private let hintLabel = UILabel()
     /// The accent pill behind the word space will write (the auto-correction).
     private let bestPill = UIView()
@@ -125,9 +134,13 @@ final class SuggestionBar: UIView {
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
+        toolsIcon.tintColor = Theme.accent
+        toolsIcon.contentMode = .center
+        setToolsImage()
+        glass.contentView.addSubview(toolsIcon)
 
         // Nothing but the strip takes touches itself: the bar decides from the x position.
-        for view in [glass as UIView, hintLabel, dismissIcon, bestPill] { view.isUserInteractionEnabled = false }
+        for view in [glass as UIView, hintLabel, dismissIcon, toolsIcon, bestPill] { view.isUserInteractionEnabled = false }
         if layoutMode != .scroll { glass.contentView.isUserInteractionEnabled = false }
 
         refreshVisibility()
@@ -135,6 +148,12 @@ final class SuggestionBar: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    private func setToolsImage() {
+        toolsIcon.image = UIImage(systemName: toolsOpen ? "keyboard" : "square.grid.2x2",
+                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+        toolsIcon.accessibilityLabel = toolsOpen ? "Back to the keys" : "Functions"
     }
 
     // MARK: Colours
@@ -314,14 +333,17 @@ final class SuggestionBar: UIView {
         glass.frame = bounds.insetBy(dx: 2, dy: 3).offsetBy(dx: 0, dy: 4.5)
         let area = glass.bounds
         let dismissWidth: CGFloat = 52
-        let contentWidth = max(0, area.width - dismissWidth - 6)
+        let toolsWidth: CGFloat = 48
+        let contentWidth = max(0, area.width - dismissWidth - toolsWidth)
         dismissMinX = area.width - dismissWidth
+        toolsMaxX = toolsWidth
 
         dismissIcon.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
-        hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
+        toolsIcon.frame = CGRect(x: 0, y: 0, width: toolsWidth, height: area.height)
+        hintLabel.frame = CGRect(x: toolsWidth, y: 0, width: contentWidth, height: area.height)
         // Bounds and centre rather than frame: the strip may be mid-switch with a transform.
         strip.bounds.size = CGSize(width: contentWidth, height: area.height)
-        strip.center = CGPoint(x: 6 + contentWidth / 2, y: area.height / 2)
+        strip.center = CGPoint(x: toolsWidth + contentWidth / 2, y: area.height / 2)
 
         var frames: [CGRect] = []
         let widths = slotWidths(contentWidth: contentWidth)
@@ -443,7 +465,8 @@ final class SuggestionBar: UIView {
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
-        if layoutMode == .scroll && point.x - glass.frame.minX < dismissMinX { return strip }
+        let x = point.x - glass.frame.minX
+        if layoutMode == .scroll && x > toolsMaxX && x < dismissMinX { return strip }
         return self
     }
 
@@ -468,6 +491,7 @@ final class SuggestionBar: UIView {
     private func index(at point: CGPoint) -> Int? {
         let x = point.x - glass.frame.minX
         if x >= dismissMinX { return dismissIndex }
+        if x < toolsMaxX { return toolsIndex }
         return slot(atContentX: x - stripRect.minX + strip.contentOffset.x)
     }
 
@@ -479,9 +503,9 @@ final class SuggestionBar: UIView {
     }
 
     private func highlight(_ index: Int, on: Bool) {
-        if index == dismissIndex {
+        if index == dismissIndex || index == toolsIndex {
             // No background behind the icon: it just dims while held, like a system button.
-            dismissIcon.alpha = on ? 0.35 : 1
+            (index == dismissIndex ? dismissIcon : toolsIcon).alpha = on ? 0.35 : 1
             return
         }
         guard index < highlights.count else { return }
@@ -517,7 +541,10 @@ final class SuggestionBar: UIView {
         if pressed == dismissIndex {
             Haptics.shared.keyPress()
             delegate?.suggestionBarDidTapDismiss(self)
-        } else if pressed < suggestions.count {
+        } else if pressed == toolsIndex {
+            Haptics.shared.keyPress()
+            delegate?.suggestionBarDidTapTools(self)
+        } else if pressed >= 0 && pressed < suggestions.count {
             delegate?.suggestionBar(self, didSelect: suggestions[pressed])
         }
     }
