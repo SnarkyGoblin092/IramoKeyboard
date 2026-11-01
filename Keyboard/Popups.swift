@@ -24,7 +24,7 @@ final class KeyPreviewView: UIView {
         layer.addSublayer(shape)
 
         label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 38, weight: .light)
+        label.font = Theme.keyFont(ofSize: 38, weight: .light)
         label.textColor = Theme.keyText
         if let glassView = glassView {
             glassView.contentView.addSubview(label)
@@ -50,7 +50,7 @@ final class KeyPreviewView: UIView {
             frame = CGRect(x: x, y: max(hostBounds.minY, keyFrame.minY - height - 6), width: width, height: height)
             glassView.frame = bounds
             GlassSupport.applyShape(glassView, radius: Theme.keyCornerRadius(for: bounds.size), size: bounds.size)
-            label.font = UIFont.systemFont(ofSize: min(38, height * 0.75), weight: .light)
+            label.font = Theme.keyFont(ofSize: min(38, height * 0.75), weight: .light)
             label.frame = glassView.bounds
             return
         }
@@ -104,7 +104,7 @@ final class KeyPreviewView: UIView {
         shape.path = path.cgPath
         shape.shadowPath = path.cgPath
         shape.fillColor = balloonFill
-        label.font = UIFont.systemFont(ofSize: min(38, topHeight * 0.75), weight: .light)
+        label.font = Theme.keyFont(ofSize: min(38, topHeight * 0.75), weight: .light)
         label.frame = CGRect(x: 0, y: 2, width: balloonWidth, height: topHeight - 4)
     }
 
@@ -188,7 +188,7 @@ final class AlternatesPopupView: UIView {
                                               height: height - inset * 2))
             label.text = item
             label.textAlignment = .center
-            label.font = UIFont.systemFont(ofSize: 24, weight: .regular)
+            label.font = Theme.keyFont(ofSize: 24)
             label.adjustsFontSizeToFitWidth = true
             label.minimumScaleFactor = 0.6
             host.addSubview(label)

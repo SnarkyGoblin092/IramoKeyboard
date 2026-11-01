@@ -110,6 +110,23 @@ enum Theme {
 
     static var drawsKeyBorder: Bool { return !usesRealGlass && keyBorderStyle != .none }
 
+    /// The keys' and the suggestion bar's typeface at a size (KeyFont, the Keys screen's Font). Named fonts have
+    /// one weight; the system designs keep the weight asked for.
+    static func keyFont(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+        let choice = KeyFont.named(Prefs.keyFont)
+        if let name = choice.postScriptName, let font = UIFont(name: name, size: size) { return font }
+        let system = UIFont.systemFont(ofSize: size, weight: weight)
+        let design: UIFontDescriptor.SystemDesign
+        switch choice {
+        case .rounded: design = .rounded
+        case .serif: design = .serif
+        case .mono: design = .monospaced
+        default: return system
+        }
+        guard let descriptor = system.fontDescriptor.withDesign(design) else { return system }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
     static var keyBorderWidth: CGFloat {
         switch keyBorderStyle {
         case .none: return 0

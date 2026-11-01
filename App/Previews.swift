@@ -6,34 +6,58 @@ import SwiftUI
 // it will look, a swipe being drawn the way the gestures are set, the keys' touch areas, the vibration's feel.
 // They read the same stored settings as the controls below them, so they change as the controls do.
 
-/// The colours of the miniature keyboards (neutral, light and dark like the system keyboard).
-private enum Mini {
-    static let backdrop = Color(.systemGray5)
-    static let key = Color(.systemBackground)
-    static let function = Color(.systemGray3)
-    static let shadow = Color.black.opacity(0.12)
-}
-
-/// A card around a preview, with a caption under it.
+/// A card around a preview, with a caption under it. The card is the chosen theme's keyboard background (the
+/// keys inside are drawn with the theme too, through ThemeLook), so every preview looks like the user's keyboard.
 struct PreviewCard<Content: View>: View {
     let caption: String
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 10) {
-            content()
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Mini.backdrop))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            Text(caption)
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .animation(nil, value: caption)
+        CurrentThemeLook { look in
+            VStack(spacing: 10) {
+                content()
+                    .padding(10)
+                    .background(look.backdrop())
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Text(caption)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .animation(nil, value: caption)
+            }
+            .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A key of the previews, drawn with the theme: its shape (fill, sheen, outline, shadow or glass) and a letter.
+private struct MiniKey: View {
+    @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFont = SettingDefault.keyFont
+    let look: ThemeLook
+    var kind: ThemeLook.KeyKind = .letter
+    var letter: String? = nil
+    var symbol: String? = nil
+    var letterColor: Color? = nil
+    var fontSize: CGFloat = 14
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            ZStack {
+                look.keyShape(kind, radius: look.radius(width: size.width, height: size.height) * 0.9 + 2)
+                if let letter = letter {
+                    Text(letter)
+                        .font(KeyFont.named(keyFont).font(size: fontSize))
+                        .foregroundColor(letterColor ?? (kind == .accent ? look.onAccent : look.textColor))
+                } else if let symbol = symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: fontSize))
+                        .foregroundColor(letterColor ?? (kind == .accent ? look.onAccent : look.textColor))
+                }
+            }
+        }
     }
 }
 
@@ -154,11 +178,17 @@ struct PinnedKeyboard: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    // Its proportions (ThemePreview.aspectWithStrip): read here so a change redraws it at once.
+    @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
 
     var body: some View {
         GeometryReader { geometry in
             // The largest keyboard that fits: by width, or by height when the pane is short.
-            let aspect = ThemePreview.aspectWithStrip
+            let rows: Double = numberRow ? 5 : 4
+            let aspect = CGFloat(440 / (barHeight + 8 + rows * (keyHeight + rowGap)))
             let width = min(geometry.size.width, geometry.size.height * aspect)
             ThemePreview(theme: ThemeCatalog.theme(id: themeID),
                          accent: Color.currentAccent(name: accentName, hex: accentHex),
@@ -198,17 +228,19 @@ struct SuggestionBarPreview: View {
 
     var body: some View {
         PreviewCard(caption: caption) {
-            GeometryReader { geometry in
-                let barWidth = geometry.size.width - 34
-                VStack(spacing: 6) {
-                    HStack(spacing: 0) {
-                        if enabled { slots(width: barWidth) } else { Spacer() }
-                        Image(systemName: "keyboard.chevron.compact.down")
-                            .foregroundStyle(.tint)
-                            .frame(width: 34)
+            CurrentThemeLook { look in
+                GeometryReader { geometry in
+                    let barWidth = geometry.size.width - 34
+                    VStack(spacing: 6) {
+                        HStack(spacing: 0) {
+                            if enabled { slots(width: barWidth, look: look) } else { Spacer() }
+                            Image(systemName: "keyboard.chevron.compact.down")
+                                .foregroundColor(look.accentColor)
+                                .frame(width: 34)
+                        }
+                        .frame(height: CGFloat(height) * 0.8)
+                        keyRow(look: look)
                     }
-                    .frame(height: CGFloat(height) * 0.8)
-                    keyRow
                 }
             }
             .frame(height: CGFloat(height) * 0.8 + 50)
@@ -241,27 +273,24 @@ struct SuggestionBarPreview: View {
         return result
     }
 
-    private func slots(width total: CGFloat) -> some View {
+    private func slots(width total: CGFloat, look: ThemeLook) -> some View {
         let sizes = widths(total: total)
-        return ZStack(alignment: .trailing) {
-            HStack(spacing: 0) {
-                ForEach(0..<sizes.count, id: \.self) { index in
-                    slot(index: index, width: sizes[index], last: index == sizes.count - 1)
-                }
-            }
-            .frame(width: total, alignment: .leading)
-            .clipped()
-            if scroll {
-                // More words wait past the edge.
-                LinearGradient(colors: [Mini.backdrop.opacity(0), Mini.backdrop], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 28)
-                    .allowsHitTesting(false)
+        return HStack(spacing: 0) {
+            ForEach(0..<sizes.count, id: \.self) { index in
+                slot(index: index, width: sizes[index], last: index == sizes.count - 1, look: look)
             }
         }
+        .frame(width: total, alignment: .leading)
+        .clipped()
+        // More words wait past the edge: the strip fades out there.
+        .mask(LinearGradient(stops: [.init(color: .black, location: 0),
+                                     .init(color: .black, location: scroll ? 0.86 : 1),
+                                     .init(color: scroll ? .clear : .black, location: 1)],
+                             startPoint: .leading, endPoint: .trailing))
         .frame(width: total)
     }
 
-    private func slot(index: Int, width: CGFloat, last: Bool) -> some View {
+    private func slot(index: Int, width: CGFloat, last: Bool, look: ThemeLook) -> some View {
         let word = index < shown.count ? shown[index] : ""
         let isBest = index == best
         let tiles = style == "segments"
@@ -269,20 +298,25 @@ struct SuggestionBarPreview: View {
             .font(.system(size: 14, weight: isBest ? .semibold : .regular))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            .foregroundColor(isBest ? .white : .primary)
+            .foregroundColor(isBest ? look.onAccent : (tiles && followTheme ? look.textColor : look.stripText))
             .padding(.horizontal, 4)
             .frame(width: width)
             .frame(maxHeight: .infinity)
             .background {
                 if isBest {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(.tint)
+                    look.pill(radius: 9)
                         .padding(tiles ? 2 : 5)
                         .padding(.horizontal, tiles ? 0 : max(0, (width - natural(word) - 6) / 2))
                 } else if tiles {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(followTheme ? Mini.key : Color.primary.opacity(0.07))
-                        .padding(2)
+                    Group {
+                        if followTheme {
+                            look.keyShape(.letter, radius: 9)
+                        } else {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(look.pick(Color.black.opacity(0.06), Color.white.opacity(0.12)))
+                        }
+                    }
+                    .padding(2)
                 }
             }
             .overlay(alignment: .trailing) {
@@ -291,7 +325,7 @@ struct SuggestionBarPreview: View {
                         path.move(to: CGPoint(x: 0.5, y: 0))
                         path.addLine(to: CGPoint(x: 0.5, y: 18))
                     }
-                    .stroke(followTheme ? Color.primary.opacity(0.35) : Color.primary.opacity(0.2),
+                    .stroke(followTheme ? look.textColor.opacity(0.35) : look.stripText.opacity(0.2),
                             style: StrokeStyle(lineWidth: separator == "dotted" ? 1.5 : 1,
                                                lineCap: separator == "dotted" ? .round : .butt,
                                                dash: separator == "dashed" ? [3, 2] : (separator == "dotted" ? [0.1, 3] : [])))
@@ -300,13 +334,10 @@ struct SuggestionBarPreview: View {
             }
     }
 
-    private var keyRow: some View {
+    private func keyRow(look: ThemeLook) -> some View {
         HStack(spacing: 5) {
             ForEach(Array("qwertyuiop"), id: \.self) { letter in
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Mini.key)
-                    .shadow(color: Mini.shadow, radius: 0, x: 0, y: 1)
-                    .overlay(Text(String(letter)).font(.system(size: 14)).foregroundColor(.primary))
+                MiniKey(look: look, letter: String(letter))
             }
         }
         .frame(height: 34)
@@ -335,17 +366,19 @@ struct GesturePreview: View {
 
     var body: some View {
         PreviewCard(caption: caption) {
-            GeometryReader { geometry in
-                let size = geometry.size
-                let centers = keyCenters(in: size)
-                TimelineView(.animation) { timeline in
-                    let progress = phase(timeline.date)
-                    ZStack(alignment: .topLeading) {
-                        keyboard(size: size)
-                        if swipe {
-                            trail(centers: centers, size: size, progress: progress)
-                        } else {
-                            taps(centers: centers, progress: progress)
+            CurrentThemeLook { look in
+                GeometryReader { geometry in
+                    let size = geometry.size
+                    let centers = keyCenters(in: size)
+                    TimelineView(.animation) { timeline in
+                        let progress = phase(timeline.date)
+                        ZStack(alignment: .topLeading) {
+                            keyboard(size: size, look: look)
+                            if swipe {
+                                trail(centers: centers, size: size, progress: progress, look: look)
+                            } else {
+                                taps(centers: centers, progress: progress, look: look)
+                            }
                         }
                     }
                 }
@@ -374,25 +407,21 @@ struct GesturePreview: View {
         return centers
     }
 
-    private func keyboard(size: CGSize) -> some View {
+    private func keyboard(size: CGSize, look: ThemeLook) -> some View {
         let rowHeight = size.height / 4
         let keyWidth = size.width / 10
         return VStack(spacing: 0) {
             ForEach(rows, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(Array(row), id: \.self) { letter in
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Mini.key)
-                            .overlay(Text(String(letter)).font(.system(size: 12)).foregroundColor(.secondary))
+                        MiniKey(look: look, letter: String(letter), fontSize: 12)
                             .padding(2)
                             .frame(width: keyWidth, height: rowHeight)
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Mini.key)
-                .overlay(Text("space").font(.system(size: 11)).foregroundColor(.secondary))
+            MiniKey(look: look, letter: "space", fontSize: 11)
                 .padding(2)
                 .frame(width: keyWidth * 5, height: rowHeight)
         }
@@ -403,7 +432,7 @@ struct GesturePreview: View {
         return throughSpace ? Array("hello you") : Array("hello")
     }
 
-    private func trail(centers: [Character: CGPoint], size: CGSize, progress: CGFloat) -> some View {
+    private func trail(centers: [Character: CGPoint], size: CGSize, progress: CGFloat, look: ThemeLook) -> some View {
         let points = word.compactMap { centers[$0] }
         let path = Path { path in
             guard let first = points.first else { return }
@@ -414,23 +443,23 @@ struct GesturePreview: View {
         return ZStack {
             if handoff && !throughSpace {
                 // Two thumbs: the second half in another shade.
-                path.trim(from: 0, to: min(progress, 0.5)).stroke(.tint, style: style)
+                path.trim(from: 0, to: min(progress, 0.5)).stroke(look.accentColor, style: style)
                 path.trim(from: 0.5, to: max(0.5, progress)).stroke(Color.purple, style: style)
             } else {
-                path.trim(from: 0, to: progress).stroke(.tint, style: style)
+                path.trim(from: 0, to: progress).stroke(look.accentColor, style: style)
             }
         }
         .opacity(0.8)
     }
 
-    private func taps(centers: [Character: CGPoint], progress: CGFloat) -> some View {
+    private func taps(centers: [Character: CGPoint], progress: CGFloat, look: ThemeLook) -> some View {
         let letters = Array("hello")
         let shownCount = Int(progress * CGFloat(letters.count + 1))
         return ZStack(alignment: .topLeading) {
             ForEach(0..<letters.count, id: \.self) { index in
                 if index < shownCount, let center = centers[letters[index]] {
                     Circle()
-                        .fill(.tint)
+                        .fill(look.accentColor)
                         .frame(width: 16, height: 16)
                         .opacity(0.7)
                         .position(center)
@@ -463,43 +492,38 @@ struct HitboxPreview: View {
 
     var body: some View {
         PreviewCard(caption: caption) {
+            CurrentThemeLook { look in
             HStack(spacing: 6) {
-                functionKey("shift")
+                functionKey("shift", look: look)
                 ForEach(letters, id: \.self) { letter in
                     let likely = adaptive && letter == "e"
                     let factor = size * (adaptive ? (likely ? 1 + grow * strength : 1 - shrink * strength) : 1)
                     ZStack {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(Mini.key)
-                            .shadow(color: Mini.shadow, radius: 0, x: 0, y: 1)
-                        Text(letter)
-                            .font(.system(size: 20))
-                            .foregroundStyle(likely ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                        MiniKey(look: look, letter: letter, letterColor: likely ? look.accentColor : nil, fontSize: 20)
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                            .foregroundStyle(.tint)
+                            .foregroundColor(look.accentColor)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(likely ? AnyShapeStyle(TintShapeStyle().opacity(0.12)) : AnyShapeStyle(Color.clear)))
+                                .fill(likely ? look.accentColor.opacity(0.12) : Color.clear))
                             .frame(width: 36 * factor, height: 50 * factor)
                     }
                     .frame(width: 32, height: 44)
                     .zIndex(likely ? 1 : 0)
                 }
-                functionKey("delete.left")
+                functionKey("delete.left", look: look)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 70)
+            }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: size)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: adaptive)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: grow * strength - shrink)
         }
     }
 
-    private func functionKey(_ symbol: String) -> some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(Mini.function)
+    private func functionKey(_ symbol: String, look: ThemeLook) -> some View {
+        MiniKey(look: look, kind: .function, symbol: symbol, fontSize: 15)
             .frame(width: 42, height: 44)
-            .overlay(Image(systemName: symbol).font(.system(size: 15)).foregroundColor(.primary))
     }
 }
 
@@ -519,32 +543,30 @@ struct HapticPreview: View {
 
     var body: some View {
         PreviewCard(caption: caption) {
+            CurrentThemeLook { look in
             HStack(spacing: 16) {
                 Button {
                     Feedback.test(strength: strength, sharpness: sharpness)
                     withAnimation(.easeOut(duration: 0.12)) { pulse = true }
                     withAnimation(.easeOut(duration: 0.3).delay(0.12)) { pulse = false }
                 } label: {
-                    Text("a")
-                        .font(.system(size: 28))
-                        .foregroundColor(.primary)
+                    MiniKey(look: look, letter: "a", fontSize: 28)
                         .frame(width: 56, height: 62)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Mini.key)
-                            .shadow(color: Mini.shadow, radius: 0, x: 0, y: 1))
                         .scaleEffect(pulse ? 0.9 : 1)
                 }
                 .buttonStyle(.plain)
                 .disabled(strength < 0.01)
                 .accessibilityLabel("Play the vibration")
                 FeelShape(sharpness: sharpness, strength: strength < 0.01 ? 0.02 : strength)
-                    .stroke(.tint, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                    .stroke(look.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                     .background(FeelShape(sharpness: sharpness, strength: strength < 0.01 ? 0.02 : strength, closed: true)
-                        .fill(TintShapeStyle().opacity(0.15)))
+                        .fill(look.accentColor.opacity(0.15)))
                     .frame(height: 70)
                     .animation(.easeOut(duration: 0.25), value: sharpness)
                     .animation(.easeOut(duration: 0.25), value: strength)
             }
             .padding(.horizontal, 4)
+            }
         }
     }
 }

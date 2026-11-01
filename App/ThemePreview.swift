@@ -27,6 +27,12 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.suggestionStyle, store: SharedStore.defaults) private var suggestionStyle = SettingDefault.suggestionStyle
     @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separatorStyle = SettingDefault.separatorStyle
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
+    // What the keyboard shows when it opens: the number row, shift on at the start of a sentence (with
+    // auto-capitalization) or capitals always, and the key font.
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.autoCapitalize, store: SharedStore.defaults) private var autoCapitalize = SettingDefault.autoCapitalize
+    @AppStorage(SettingKey.alwaysCapitals, store: SharedStore.defaults) private var alwaysCapitals = SettingDefault.alwaysCapitals
+    @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFontID = SettingDefault.keyFont
 
     @Environment(\.colorScheme) private var systemScheme
 
@@ -127,7 +133,10 @@ struct ThemePreview: View {
         let letters = letterRows
         let top = letters[0].count
         let locale = Locale(identifier: shownLanguage.rawValue)
-        func letterKey(_ l: String) -> PreviewKey { return PreviewKey(title: l.uppercased(with: locale)) }
+        // As the keyboard opens in an empty field: shift on (capitals) with auto-capitalization.
+        let shiftOn = autoCapitalize && shownLanguage.hasCapitals
+        let capitals = (shiftOn || alwaysCapitals) && shownLanguage.hasCapitals
+        func letterKey(_ l: String) -> PreviewKey { return PreviewKey(title: capitals ? l.uppercased(with: locale) : l) }
         let side = CGFloat(max(0, top - letters[1].count)) / 2
         var row2: [PreviewKey] = []
         if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
@@ -135,12 +144,17 @@ struct ThemePreview: View {
         if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
         let edge = min(1.8, max(1.0, CGFloat(top - letters[2].count) / 2))
         // As the keyboard: no shift key for a language without capitals; delete takes its room.
-        var row3 = shownLanguage.hasCapitals ? [PreviewKey(symbol: "shift.fill", weight: edge, function: true, accent: true)] : []
+        var row3 = shownLanguage.hasCapitals
+            ? [PreviewKey(symbol: shiftOn ? "shift.fill" : "shift", weight: edge, function: true, accent: shiftOn)] : []
         row3 += letters[2].map(letterKey)
         row3.append(PreviewKey(symbol: "delete.left",
                                weight: shownLanguage.hasCapitals ? edge : max(1.5, CGFloat(top - letters[2].count)),
                                function: true))
-        return [
+        var rows: [[PreviewKey]] = []
+        if numberRow {
+            rows.append(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map { PreviewKey(title: $0) })
+        }
+        return rows + [
             letters[0].map(letterKey),
             row2,
             row3,
@@ -153,87 +167,25 @@ struct ThemePreview: View {
         ]
     }
 
-    // MARK: Palette (mirrors Keyboard/Theme.swift, in the iPhone's light or dark mode)
+    // MARK: Palette (ThemeLook, shared with the settings screens' previews)
 
-    private var dark: Bool { return systemScheme == .dark }
-    /// Themes that sit on the normal system keyboard background.
-    private var onSystemBackground: Bool { return theme.kind == .native || theme.kind == .colored }
-
-    private func pick(_ light: Color, _ darkColor: Color) -> Color { return dark ? darkColor : light }
-
-    /// Key-colour themes are a lighter shade in light mode (as on the keyboard).
-    private var colors: ThemeDefinition { return dark ? theme : theme.lightModeVariant }
-
-    /// Labels on the keys: the theme's own on key-colour themes, the system label colour on the others.
-    private var textColor: Color { return theme.kind == .colored ? Color(colors.text) : pick(.black, .white) }
-    /// Strip text sits on the background, not on a key.
-    private var stripText: Color { return pick(Color(white: 0.08), .white) }
-
-    private var keyFill: Color {
-        switch theme.kind {
-        case .native: return pick(.white, Color(white: 0.42))
-        case .colored: return Color(colors.key)
-        case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
-        case .liquidGlass: return pick(Color.white, Color.white.opacity(0.16))
-        }
-    }
-
-    private var functionFill: Color {
-        switch theme.kind {
-        case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
-        case .colored: return Color(colors.function)
-        case .transparent: return pick(Color.black.opacity(0.12), Color.black.opacity(0.28))
-        case .liquidGlass: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
-        }
-    }
-
-    private var borderColor: Color {
-        switch theme.kind {
-        case .native: return .clear
-        case .liquidGlass: return pick(Color.white.opacity(0.60), Color.white.opacity(0.25))
-        default: return pick(Color.white.opacity(0.60), Color.white.opacity(0.28))
-        }
-    }
-
-    /// Key-colour themes keep their own accent until the user picks one (as on the keyboard).
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
-    private var usesThemeAccent: Bool {
-        return theme.kind == .colored && accentHex.isEmpty && accentName == SettingDefault.accent
-    }
-    private var accentColor: Color { return usesThemeAccent ? Color(theme.accent) : accent }
-    private var onAccent: Color { return usesThemeAccent ? Color(theme.onAccent) : .white }
 
-    @ViewBuilder private var backdrop: some View {
-        if onSystemBackground {
-            Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
-        } else if theme.kind == .transparent {
-            // The keyboard's frosted panel over the app (Theme.panelBackground).
-            Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
-        } else {
-            // Liquid Glass has no panel: the app shows straight through. A colourful backdrop stands in for the
-            // app, so the glass keys have something to bend and blur.
-            ZStack {
-                LinearGradient(colors: pick([Color(red: 0.62, green: 0.80, blue: 1.0), Color(red: 1.0, green: 0.80, blue: 0.86)],
-                                            [Color(red: 0.10, green: 0.16, blue: 0.38), Color(red: 0.36, green: 0.12, blue: 0.34)]),
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                GeometryReader { geometry in
-                    Circle()
-                        .fill(pick(Color(red: 1.0, green: 0.86, blue: 0.45), Color(red: 0.95, green: 0.45, blue: 0.30)).opacity(0.75))
-                        .frame(width: geometry.size.width * 0.45)
-                        .blur(radius: geometry.size.width * 0.06)
-                        .offset(x: geometry.size.width * 0.55, y: -geometry.size.width * 0.08)
-                    Circle()
-                        .fill(pick(Color(red: 0.45, green: 0.85, blue: 0.75), Color(red: 0.20, green: 0.55, blue: 0.70)).opacity(0.7))
-                        .frame(width: geometry.size.width * 0.38)
-                        .blur(radius: geometry.size.width * 0.05)
-                        .offset(x: -geometry.size.width * 0.06, y: geometry.size.height * 0.45)
-                }
-            }
-        }
+    private var look: ThemeLook {
+        return ThemeLook(theme: theme, accent: accent, dark: systemScheme == .dark, roundness: roundness,
+                         keySurface: keySurface, keyBorderStyle: keyBorderStyle, keyGlow: keyGlow,
+                         accentHex: accentHex, accentName: accentName)
     }
 
-    private func pick(_ light: [Color], _ darkColors: [Color]) -> [Color] { return dark ? darkColors : light }
+    private var dark: Bool { return look.dark }
+    private func pick(_ light: Color, _ darkColor: Color) -> Color { return look.pick(light, darkColor) }
+    private var textColor: Color { return look.textColor }
+    private var stripText: Color { return look.stripText }
+    private var keyFill: Color { return look.keyFill }
+    private var accentColor: Color { return look.accentColor }
+    private var onAccent: Color { return look.onAccent }
+    private var backdrop: some View { return look.backdrop() }
 
     // MARK: Body
 
@@ -246,8 +198,10 @@ struct ThemePreview: View {
     }
     static var aspectKeysOnly: CGFloat { return 440 / keysHeight }
 
+    /// The rows of keys (the number row adds one) at the key height and row gap, and the padding.
     private static var keysHeight: CGFloat {
-        return CGFloat(8 + 4 * (stored(SettingKey.keyHeight) + stored(SettingKey.rowGap)))
+        let rows = SharedStore.defaults.bool(forKey: SettingKey.numberRow) ? 5.0 : 4.0
+        return CGFloat(8 + rows * (stored(SettingKey.keyHeight) + stored(SettingKey.rowGap)))
     }
 
     private static func stored(_ key: String) -> Double {
@@ -262,7 +216,7 @@ struct ThemePreview: View {
             let s = width / 440
             let stripHeight = showsStrip ? CGFloat(suggestionHeight) * s : 0
             let verticalPadding = 4 * s
-            let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / 4)
+            let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / CGFloat(max(keyRows.count, 1)))
             let keyHeight = max(1, rowHeight - CGFloat(rowGap) * s)
             // A narrower keyboard (the Width setting) is centred.
             let rowWidth = (width - 2 * s) * CGFloat(keyboardWidth)
@@ -325,7 +279,7 @@ struct ThemePreview: View {
             ForEach(0..<words.count, id: \.self) { i in
                 let best = i == 1
                 Text(words[i])
-                    .font(.system(size: 17 * s, weight: best ? .semibold : .regular))
+                    .font(keyFont(17 * s, weight: best ? .semibold : .regular))
                     .foregroundColor(best ? onAccent : (segments && followTheme ? textColor : stripText))
                     .lineLimit(1)
                     .padding(.horizontal, best && !segments ? 14 * s : 0)
@@ -380,12 +334,11 @@ struct ThemePreview: View {
     private var separatorColor: Color { return pick(Color.black.opacity(0.12), Color.white.opacity(0.20)) }
 
     /// The auto-correction pill: the accent colour, or accent-tinted glass in the Liquid Glass theme.
-    @ViewBuilder private func bestPill(radius: CGFloat) -> some View {
-        if theme.kind == .liquidGlass {
-            GlassKeyShape(radius: radius, tint: accentColor, dark: dark)
-        } else {
-            RoundedRectangle(cornerRadius: radius, style: .continuous).fill(accentColor)
-        }
+    private func bestPill(radius: CGFloat) -> some View { return look.pill(radius: radius) }
+
+    /// The keyboard's key font (KeyFont) at a size, as Theme.keyFont makes it.
+    private func keyFont(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        return KeyFont.named(keyFontID).font(size: size, weight: weight)
     }
 
     /// "Follow theme": a faded version of the key labels, else the neutral hairline.
@@ -399,40 +352,14 @@ struct ThemePreview: View {
         }
     }
 
-    private var keyShadow: Color {
-        return theme.kind == .native ? pick(Color(red: 0.53, green: 0.55, blue: 0.58), Color.black.opacity(0.55)) : .clear
-    }
-
     private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
         // Theme.keyCornerRadius: the roundness share of half the key's shorter side.
         let radius = CGFloat(min(1, max(0, roundness))) * min(width, height) / 2
-        let fill = k.accent ? accentColor : (k.function ? functionFill : keyFill)
         let tint: Color = k.accent ? onAccent : textColor
         let hint = keyHints && k.title.count == 1 ? hints[k.title.lowercased()] : nil
         let hintScale = CGFloat(hintSize)
         return ZStack {
-            if theme.kind == .liquidGlass {
-                // As the keyboard draws it: a piece of Liquid Glass, tinted for function keys and the accent.
-                GlassKeyShape(radius: radius,
-                              tint: k.accent ? accentColor : (k.function ? Color.black.opacity(dark ? 0.0 : 0.06) : nil),
-                              dark: dark)
-            } else {
-                // As KeyView draws it: the fill, the sheen, the outline, and the glow or shadow under it.
-                let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-                let shadow = keyShadowStyle
-                shape
-                    .fill(fill)
-                    .overlay {
-                        if surface != "flat" {
-                            shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity(dark ? 0.12 : 0.22), location: 0),
-                                                              .init(color: Color.white.opacity(0), location: 0.55),
-                                                              .init(color: Color.black.opacity(dark ? 0.16 : 0.08), location: 1)],
-                                                      startPoint: .top, endPoint: .bottom))
-                        }
-                    }
-                    .overlay(shape.strokeBorder(keyOutline, lineWidth: keyOutlineWidth * max(s, 0.6)))
-                    .shadow(color: shadow.color, radius: shadow.radius * s, x: 0, y: shadow.y * s)
-            }
+            look.keyShape(k.accent ? .accent : (k.function ? .function : .letter), radius: radius, scale: s)
             if let tabIcon = k.tabIcon, let image = EmojiTabIcons.icon(forKey: tabIcon, side: 36, weight: 1.8) {
                 // Same size and line weight as KeyView's emoji key, scaled with the preview.
                 Image(uiImage: image)
@@ -446,8 +373,8 @@ struct ThemePreview: View {
                     .foregroundColor(tint)
             } else if !k.title.isEmpty {
                 Text(k.title)
-                    .font(k.space ? .system(size: CGFloat(spaceTextSize) * s)
-                          : (k.title.count == 1 ? .system(size: 23 * s * CGFloat(letterSize), weight: .light) : .system(size: 16 * s)))
+                    .font(k.space ? keyFont(CGFloat(spaceTextSize) * s)
+                          : (k.title.count == 1 ? keyFont(23 * s * CGFloat(letterSize), weight: .light) : keyFont(16 * s)))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundColor(tint)
@@ -475,51 +402,6 @@ struct ThemePreview: View {
         case "bottomLeft": return .bottomLeading
         default: return .topTrailing
         }
-    }
-
-    // MARK: Key style (mirrors Theme.keySurface / keyBorderStyle / keyGlow)
-
-    /// "flat", "sheen" or "raised"; "auto": raised on the colour themes.
-    private var surface: String {
-        if keySurface != "auto" { return keySurface }
-        return theme.kind == .colored ? "raised" : "flat"
-    }
-
-    private var borderStyle: String {
-        if theme.kind == .liquidGlass {
-            if #available(iOS 26, *) { return "none" }   // real glass keys have no outline
-        }
-        if keyBorderStyle != "auto" { return keyBorderStyle }
-        return theme.kind == .native ? "none" : "thin"
-    }
-
-    private var keyOutlineWidth: CGFloat {
-        switch borderStyle {
-        case "thin": return 0.5
-        case "bold": return 1.5
-        case "accent": return 1.2
-        default: return 0
-        }
-    }
-
-    private var keyOutline: Color {
-        switch borderStyle {
-        case "thin": return theme.kind == .native ? pick(Color.black.opacity(0.18), Color.white.opacity(0.28)) : borderColor
-        case "bold": return textColor.opacity(0.4)
-        case "accent": return accentColor
-        default: return .clear
-        }
-    }
-
-    /// The accent glow, the raised key's drop shadow, or the native key's 1pt line.
-    private var keyShadowStyle: (color: Color, radius: CGFloat, y: CGFloat) {
-        switch keyGlow {
-        case "soft": return (accentColor.opacity(0.55), 5, 0)
-        case "strong": return (accentColor.opacity(0.95), 10, 0)
-        default: break
-        }
-        if surface == "raised" { return (Color.black.opacity(dark ? 0.45 : 0.25), 1.5, 1.5) }
-        return (keyShadow, 0, 1)
     }
 }
 
@@ -551,5 +433,227 @@ private struct GlassKeyShape: View {
                                                startPoint: .top, endPoint: .center)))
             .overlay(shape.strokeBorder(Color.white.opacity(dark ? 0.35 : 0.8), lineWidth: 0.8))
             .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - Theme look
+
+/// How a theme draws, in light or dark mode, with the user's key style: the colours, the backdrop behind the keys
+/// and a key's shape (fill, sheen, outline, glow or shadow; glass in the Liquid Glass theme). Mirrors
+/// Keyboard/Theme.swift and KeyView; used by ThemePreview and the settings screens' previews.
+struct ThemeLook {
+    let theme: ThemeDefinition
+    /// The user's accent (colour themes keep their own until one is picked).
+    let accent: Color
+    let dark: Bool
+    var roundness: Double
+    var keySurface: String
+    var keyBorderStyle: String
+    var keyGlow: String
+    var accentHex: String
+    var accentName: String
+
+    enum KeyKind { case letter, function, accent }
+
+    func pick(_ light: Color, _ darkColor: Color) -> Color { return dark ? darkColor : light }
+    private func pick(_ light: [Color], _ darkColors: [Color]) -> [Color] { return dark ? darkColors : light }
+
+    /// Themes that sit on the normal system keyboard background.
+    var onSystemBackground: Bool { return theme.kind == .native || theme.kind == .colored }
+    /// Key-colour themes are a lighter shade in light mode (as on the keyboard).
+    private var colors: ThemeDefinition { return dark ? theme : theme.lightModeVariant }
+
+    /// Labels on the keys: the theme's own on key-colour themes, the system label colour on the others.
+    var textColor: Color { return theme.kind == .colored ? Color(colors.text) : pick(.black, .white) }
+    /// Text on the background (the suggestion bar), not on a key.
+    var stripText: Color { return pick(Color(white: 0.08), .white) }
+
+    var keyFill: Color {
+        switch theme.kind {
+        case .native: return pick(.white, Color(white: 0.42))
+        case .colored: return Color(colors.key)
+        case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
+        case .liquidGlass: return pick(Color.white, Color.white.opacity(0.16))
+        }
+    }
+
+    var functionFill: Color {
+        switch theme.kind {
+        case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
+        case .colored: return Color(colors.function)
+        case .transparent: return pick(Color.black.opacity(0.12), Color.black.opacity(0.28))
+        case .liquidGlass: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
+        }
+    }
+
+    private var borderColor: Color {
+        switch theme.kind {
+        case .native: return .clear
+        case .liquidGlass: return pick(Color.white.opacity(0.60), Color.white.opacity(0.25))
+        default: return pick(Color.white.opacity(0.60), Color.white.opacity(0.28))
+        }
+    }
+
+    private var usesThemeAccent: Bool {
+        return theme.kind == .colored && accentHex.isEmpty && accentName == SettingDefault.accent
+    }
+    var accentColor: Color { return usesThemeAccent ? Color(theme.accent) : accent }
+    var onAccent: Color { return usesThemeAccent ? Color(theme.onAccent) : .white }
+
+    /// Theme.keyCornerRadius: the roundness share of half the key's shorter side.
+    func radius(width: CGFloat, height: CGFloat) -> CGFloat {
+        return CGFloat(min(1, max(0, roundness))) * min(width, height) / 2
+    }
+
+    @ViewBuilder func backdrop() -> some View {
+        if onSystemBackground {
+            Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
+        } else if theme.kind == .transparent {
+            // The keyboard's frosted panel over the app (Theme.panelBackground).
+            Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
+        } else {
+            // Liquid Glass has no panel: the app shows straight through. A colourful backdrop stands in for the
+            // app, so the glass keys have something to bend and blur.
+            ZStack {
+                LinearGradient(colors: pick([Color(red: 0.62, green: 0.80, blue: 1.0), Color(red: 1.0, green: 0.80, blue: 0.86)],
+                                            [Color(red: 0.10, green: 0.16, blue: 0.38), Color(red: 0.36, green: 0.12, blue: 0.34)]),
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                GeometryReader { geometry in
+                    Circle()
+                        .fill(pick(Color(red: 1.0, green: 0.86, blue: 0.45), Color(red: 0.95, green: 0.45, blue: 0.30)).opacity(0.75))
+                        .frame(width: geometry.size.width * 0.45)
+                        .blur(radius: geometry.size.width * 0.06)
+                        .offset(x: geometry.size.width * 0.55, y: -geometry.size.width * 0.08)
+                    Circle()
+                        .fill(pick(Color(red: 0.45, green: 0.85, blue: 0.75), Color(red: 0.20, green: 0.55, blue: 0.70)).opacity(0.7))
+                        .frame(width: geometry.size.width * 0.38)
+                        .blur(radius: geometry.size.width * 0.05)
+                        .offset(x: -geometry.size.width * 0.06, y: geometry.size.height * 0.45)
+                }
+            }
+        }
+    }
+
+    /// A key as KeyView draws it: the fill, the sheen, the outline, and the glow or shadow under it; a piece of
+    /// Liquid Glass (tinted for function keys and the accent) in that theme. `scale`: points of the preview per
+    /// keyboard point.
+    @ViewBuilder func keyShape(_ kind: KeyKind, radius: CGFloat, scale s: CGFloat = 1) -> some View {
+        if theme.kind == .liquidGlass {
+            GlassKeyShape(radius: radius,
+                          tint: kind == .accent ? accentColor : (kind == .function ? Color.black.opacity(dark ? 0.0 : 0.06) : nil),
+                          dark: dark)
+        } else {
+            let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+            let shadow = shadowStyle
+            shape
+                .fill(kind == .accent ? accentColor : (kind == .function ? functionFill : keyFill))
+                .overlay {
+                    if surface != "flat" {
+                        shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity(dark ? 0.12 : 0.22), location: 0),
+                                                          .init(color: Color.white.opacity(0), location: 0.55),
+                                                          .init(color: Color.black.opacity(dark ? 0.16 : 0.08), location: 1)],
+                                                  startPoint: .top, endPoint: .bottom))
+                    }
+                }
+                .overlay(shape.strokeBorder(outline, lineWidth: outlineWidth * max(s, 0.6)))
+                .shadow(color: shadow.color, radius: shadow.radius * s, x: 0, y: shadow.y * s)
+        }
+    }
+
+    /// The suggestion bar's accent pill (accent-tinted glass in the Liquid Glass theme).
+    @ViewBuilder func pill(radius: CGFloat) -> some View {
+        if theme.kind == .liquidGlass {
+            GlassKeyShape(radius: radius, tint: accentColor, dark: dark)
+        } else {
+            RoundedRectangle(cornerRadius: radius, style: .continuous).fill(accentColor)
+        }
+    }
+
+    // MARK: Key style (mirrors Theme.keySurface / keyBorderStyle / keyGlow)
+
+    /// "flat", "sheen" or "raised"; "auto": raised on the colour themes.
+    var surface: String {
+        if keySurface != "auto" { return keySurface }
+        return theme.kind == .colored ? "raised" : "flat"
+    }
+
+    private var borderStyle: String {
+        if theme.kind == .liquidGlass {
+            if #available(iOS 26, *) { return "none" }   // real glass keys have no outline
+        }
+        if keyBorderStyle != "auto" { return keyBorderStyle }
+        return theme.kind == .native ? "none" : "thin"
+    }
+
+    private var outlineWidth: CGFloat {
+        switch borderStyle {
+        case "thin": return 0.5
+        case "bold": return 1.5
+        case "accent": return 1.2
+        default: return 0
+        }
+    }
+
+    private var outline: Color {
+        switch borderStyle {
+        case "thin": return theme.kind == .native ? pick(Color.black.opacity(0.18), Color.white.opacity(0.28)) : borderColor
+        case "bold": return textColor.opacity(0.4)
+        case "accent": return accentColor
+        default: return .clear
+        }
+    }
+
+    private var nativeShadow: Color {
+        return theme.kind == .native ? pick(Color(red: 0.53, green: 0.55, blue: 0.58), Color.black.opacity(0.55)) : .clear
+    }
+
+    /// The accent glow, the raised key's drop shadow, or the native key's 1pt line.
+    private var shadowStyle: (color: Color, radius: CGFloat, y: CGFloat) {
+        switch keyGlow {
+        case "soft": return (accentColor.opacity(0.55), 5, 0)
+        case "strong": return (accentColor.opacity(0.95), 10, 0)
+        default: break
+        }
+        if surface == "raised" { return (Color.black.opacity(dark ? 0.45 : 0.25), 1.5, 1.5) }
+        return (nativeShadow, 0, 1)
+    }
+}
+
+/// Builds the current theme's look (the chosen theme, accent and key style, in the phone's light or dark mode)
+/// for the settings screens' previews, and redraws them when any of it changes.
+struct CurrentThemeLook<Content: View>: View {
+    @ViewBuilder let content: (ThemeLook) -> Content
+    @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
+    @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
+    @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
+    @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var keyGlow = SettingDefault.keyGlow
+    @Environment(\.colorScheme) private var scheme
+
+    init(@ViewBuilder content: @escaping (ThemeLook) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        content(ThemeLook(theme: ThemeCatalog.theme(id: themeID),
+                          accent: Color.currentAccent(name: accentName, hex: accentHex),
+                          dark: scheme == .dark, roundness: roundness,
+                          keySurface: keySurface, keyBorderStyle: keyBorderStyle, keyGlow: keyGlow,
+                          accentHex: accentHex, accentName: accentName))
+    }
+}
+
+extension KeyFont {
+    /// The font in SwiftUI, as the keyboard's Theme.keyFont makes it (named fonts have one weight).
+    func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        if let name = postScriptName { return .custom(name, fixedSize: size) }
+        switch self {
+        case .rounded: return .system(size: size, weight: weight, design: .rounded)
+        case .serif: return .system(size: size, weight: weight, design: .serif)
+        case .mono: return .system(size: size, weight: weight, design: .monospaced)
+        default: return .system(size: size, weight: weight)
+        }
     }
 }

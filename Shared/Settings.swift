@@ -74,6 +74,8 @@ enum SettingKey {
     static let keySurface = "hunkeys.keySurface"
     static let keyBorderStyle = "hunkeys.keyBorderStyle"
     static let keyGlow = "hunkeys.keyGlow"
+    /// The keys' typeface (KeyFont).
+    static let keyFont = "hunkeys.keyFont"
     /// The learned key-offset model (data written by the keyboard; not a preference).
     static let touchModel = "hunkeys.touchModel"
     static let learnedPrefix = "hunkeys.learned."
@@ -95,7 +97,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow,
+        theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceText, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
         hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
@@ -142,6 +144,7 @@ enum SettingDefault {
     static let keyBorderStyle = "auto"
     /// Off, soft or strong accent glow around the keys.
     static let keyGlow = "off"
+    static let keyFont = "system"
     static let keyHeight: Double = 45.0
     static let landscapeSeparate: Bool = false
     static let landscapeKeyHeight: Double = 30.0
@@ -319,6 +322,7 @@ final class Settings {
             SettingKey.keySurface: SettingDefault.keySurface,
             SettingKey.keyBorderStyle: SettingDefault.keyBorderStyle,
             SettingKey.keyGlow: SettingDefault.keyGlow,
+            SettingKey.keyFont: SettingDefault.keyFont,
             SettingKey.keyHeight: SettingDefault.keyHeight,
             SettingKey.landscapeSeparate: SettingDefault.landscapeSeparate,
             SettingKey.landscapeKeyHeight: SettingDefault.landscapeKeyHeight,
@@ -421,6 +425,7 @@ final class Settings {
     var keySurface: String { return readString(SettingKey.keySurface) ?? SettingDefault.keySurface }
     var keyBorderStyle: String { return readString(SettingKey.keyBorderStyle) ?? SettingDefault.keyBorderStyle }
     var keyGlow: String { return readString(SettingKey.keyGlow) ?? SettingDefault.keyGlow }
+    var keyFont: String { return readString(SettingKey.keyFont) ?? SettingDefault.keyFont }
 
     // MARK: Swipe and flick gestures
 

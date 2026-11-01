@@ -178,7 +178,8 @@ final class SuggestionBar: UIView {
             let isBest = index == highlightedIndex
             label.isHidden = false
             label.text = item.text
-            label.font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17, weight: isBest ? .semibold : .regular)
+            label.font = item.kind == .emoji ? UIFont.systemFont(ofSize: 26)
+                : Theme.keyFont(ofSize: 17, weight: isBest ? .semibold : .regular)
             label.textColor = isBest ? Theme.onAccent : textColor
             segmentViews[index].isHidden = !segments || item.text.isEmpty
         }
@@ -314,8 +315,8 @@ final class SuggestionBar: UIView {
         // Each word as wide as it needs (with room around it), never narrower than a key or two.
         var natural: [CGFloat] = []
         for (index, item) in suggestions.enumerated() {
-            let font = UIFont.systemFont(ofSize: item.kind == .emoji ? 26 : 17,
-                                         weight: index == highlightedIndex ? .semibold : .regular)
+            let font = item.kind == .emoji ? UIFont.systemFont(ofSize: 26)
+                : Theme.keyFont(ofSize: 17, weight: index == highlightedIndex ? .semibold : .regular)
             let text = (item.text as NSString).size(withAttributes: [.font: font]).width
             natural.append(item.text.isEmpty ? 0 : max(56, ceil(text) + 30))
         }

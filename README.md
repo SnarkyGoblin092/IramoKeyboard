@@ -74,7 +74,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   thin, bold or in the accent colour) and an accent glow (soft or strong); by default colour themes have raised
   keys and every theme but Native a thin outline.
 - Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
-  width, corners (square to round), the gaps between keys and rows, letter size, capitals that follow shift or
+  width, corners (square to round), the gaps between keys and rows, a font for the keys and the bar (the system
+  font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
   always show, accent hints in any corner (or off) at any size, and the space bar's text (your own, the
   language's name or its code) and size.
 - Highlights follow the theme's accent: the auto-correction pill, pressed suggestions, the hide-keyboard button
@@ -88,7 +89,9 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Laid out like the system Settings app: coloured icons, and each row showing what it is set to.
 - Screens that change the keyboard keep a live preview pinned at the top while their settings scroll below it
   (drag the bar under it to make it bigger or smaller): the keyboard itself (Keys, Themes), the suggestion bar, a
-  swipe being drawn, the keys' touch areas, the vibration's feel (tap to play it) and a text shortcut.
+  swipe being drawn, the keys' touch areas, the vibration's feel (tap to play it) and a text shortcut, all drawn
+  in the chosen theme with its key style. The keyboard previews show it as it opens (number row, shift, sizes,
+  font) and follow sliders while they are dragged.
 - Shows what still needs setting up (adding the keyboard, Full Access) with a button to Settings, and a field
   to try the keyboard.
 - Themes with previews that look like the real keyboard, in light and dark mode (the Liquid Glass theme with real

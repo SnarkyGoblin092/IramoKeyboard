@@ -103,11 +103,11 @@ final class KeyView: UIView {
         } else {
             label.text = spec.title
             if spec.action == .space {
-                label.font = UIFont.systemFont(ofSize: CGFloat(Prefs.spaceTextSize))
+                label.font = Theme.keyFont(ofSize: CGFloat(Prefs.spaceTextSize))
             } else if spec.title.count == 1 {
-                label.font = UIFont.systemFont(ofSize: 23 * CGFloat(Prefs.letterSize), weight: .light)
+                label.font = Theme.keyFont(ofSize: 23 * CGFloat(Prefs.letterSize), weight: .light)
             } else {
-                label.font = UIFont.systemFont(ofSize: 16)
+                label.font = Theme.keyFont(ofSize: 16)
             }
             label.isHidden = false
             iconView.isHidden = true

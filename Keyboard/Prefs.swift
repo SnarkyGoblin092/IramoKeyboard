@@ -45,6 +45,7 @@ final class Prefs {
     static var keySurface = SettingDefault.keySurface
     static var keyBorderStyle = SettingDefault.keyBorderStyle
     static var keyGlow = SettingDefault.keyGlow
+    static var keyFont = SettingDefault.keyFont
     static var deleteSwipedWord = SettingDefault.deleteSwipedWord
     static var twoThumbSwipe = SettingDefault.twoThumbSwipe
     static var spaceCommits = SettingDefault.spaceCommits
@@ -109,6 +110,7 @@ final class Prefs {
         keySurface = s.keySurface
         keyBorderStyle = s.keyBorderStyle
         keyGlow = s.keyGlow
+        keyFont = s.keyFont
         deleteSwipedWord = s.deleteSwipedWord
         twoThumbSwipe = s.twoThumbSwipe
         spaceCommits = s.spaceCommits

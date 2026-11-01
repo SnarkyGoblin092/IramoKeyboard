@@ -329,13 +329,6 @@ struct StatusChip: View {
     }
 }
 
-extension View {
-    /// A soft tap when the view is touched, alongside what it does (rows that open a screen).
-    func hapticTap() -> some View {
-        return self.simultaneousGesture(TapGesture().onEnded { Feedback.tap() })
-    }
-}
-
 /// Applies the chosen accent colour as the tint of everything inside.
 struct AccentTint: ViewModifier {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent

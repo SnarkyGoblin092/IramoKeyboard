@@ -83,8 +83,8 @@ enum GlassMetrics {
 
 // MARK: - Controls on glass screens
 
-/// A slider bound straight to a stored value: it follows the value when something else changes it (a preset),
-/// and only saves when the finger lifts.
+/// A slider bound straight to a stored value: it follows the value when something else changes it (a preset), and
+/// saves as the finger moves, so the previews above it change while dragging.
 struct GlassSlider: View {
     let title: String
     let symbol: String
@@ -93,7 +93,8 @@ struct GlassSlider: View {
     let step: Double
     let format: (Double) -> String
 
-    @State private var dragging: Double?
+    /// The finger is on the slider (a preset changing the value must not click).
+    @State private var editing = false
 
     // Spelled out: the private state would make the memberwise initializer private.
     init(title: String, symbol: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double,
@@ -111,19 +112,14 @@ struct GlassSlider: View {
             HStack {
                 Label(title, systemImage: symbol)
                 Spacer()
-                Text(format(dragging ?? value))
+                Text(format(value))
                     .foregroundColor(.secondary)
                     .monospacedDigit()
             }
-            Slider(value: Binding(get: { dragging ?? value }, set: { dragging = $0 }), in: range, step: step) { editing in
-                if !editing, let final = dragging {
-                    value = final
-                    dragging = nil
-                }
-            }
-            .accessibilityLabel(title)
-            .accessibilityValue(format(dragging ?? value))
-            .onChange(of: dragging) { new in if new != nil { Feedback.tick() } }
+            Slider(value: $value, in: range, step: step) { editing = $0 }
+                .accessibilityLabel(title)
+                .accessibilityValue(format(value))
+                .onChange(of: value) { _ in if editing { Feedback.tick() } }
         }
     }
 }

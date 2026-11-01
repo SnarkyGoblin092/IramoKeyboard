@@ -5,8 +5,11 @@ import UIKit
 /// it looks and feels, and the data it keeps. Every section is its own small view, so changing one control only
 /// redraws that section; rows that open a screen show what it is set to.
 struct ContentView: View {
+    /// The screens opened from the main list (ScreenRow pushes onto it).
+    @State private var path: [Screen] = []
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             // Liquid Glass: frosted rows on the tinted backdrop (Glass.swift).
             List {
                 HeaderSection()
@@ -22,7 +25,9 @@ struct ContentView: View {
             .navigationTitle("Iramo")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
+            .navigationDestination(for: Screen.self) { $0.view }
         }
+        .environment(\.openScreen, { path.append($0) })
         .modifier(AccentTint())
         .onAppear {
             Feedback.prepare()
@@ -160,28 +165,23 @@ private struct KeyboardSection: View {
 
     var body: some View {
         Section {
-            NavigationLink { LanguagesView() } label: {
+            ScreenRow(.languages) {
                 SettingsRow(title: "Languages", symbol: "globe", color: .blue, value: languageSummary)
             }
-            .hapticTap()
-            NavigationLink { SuggestionsView() } label: {
+            ScreenRow(.suggestions) {
                 SettingsRow(title: "Suggestion bar", symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo,
                             value: barSummary)
             }
-            .hapticTap()
-            NavigationLink { GesturesView() } label: {
+            ScreenRow(.gestures) {
                 SettingsRow(title: "Gestures", symbol: "hand.draw.fill", color: .teal, value: swipe ? "Swipe on" : "Swipe off")
             }
-            .hapticTap()
-            NavigationLink { HitboxesView() } label: {
+            ScreenRow(.hitboxes) {
                 SettingsRow(title: "Hitboxes", symbol: "scope", color: .cyan, value: touchSummary)
             }
-            .hapticTap()
-            NavigationLink { ShortcutsView() } label: {
+            ScreenRow(.shortcuts) {
                 SettingsRow(title: "Text shortcuts", symbol: "bolt.fill", color: .orange,
                             value: shortcutCount > 0 ? "\(shortcutCount)" : nil)
             }
-            .hapticTap()
         } header: {
             SectionHeader("Keyboard", symbol: "keyboard", color: .blue)
         } footer: {
@@ -224,6 +224,10 @@ private struct LookSection: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    // The preview's proportions follow these too (ThemePreview.aspectWithStrip); observed so it resizes at once.
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
     @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
 
@@ -237,7 +241,7 @@ private struct LookSection: View {
 
     var body: some View {
         Section {
-            NavigationLink { ThemesView() } label: {
+            ScreenRow(.themes) {
                 VStack(alignment: .leading, spacing: 12) {
                     ThemePreview(theme: theme, accent: accent, cornerRadius: 12)
                         .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
@@ -246,15 +250,12 @@ private struct LookSection: View {
                 }
                 .padding(.vertical, 6)
             }
-            .hapticTap()
-            NavigationLink { KeysView() } label: {
+            ScreenRow(.keys) {
                 SettingsRow(title: "Keys", symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
             }
-            .hapticTap()
-            NavigationLink { HapticsView() } label: {
+            ScreenRow(.haptics) {
                 SettingsRow(title: "Haptics", symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
             }
-            .hapticTap()
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     IconTile(symbol: "drop.fill", color: accent)
@@ -311,13 +312,10 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
-            NavigationLink {
-                LearnedWordsView()
-            } label: {
+            ScreenRow(.learnedWords) {
                 SettingsRow(title: "Learned words", symbol: "character.book.closed", color: .brown,
                             value: learnedCount > 0 ? "\(learnedCount)" : nil)
             }
-            .hapticTap()
             // Orange: they remove things (each asks first), short of red Reset, which undoes every setting.
             row(.learned, "Forget learned words", symbol: "text.book.closed", color: .orange)
             row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath", color: .orange)
@@ -382,14 +380,77 @@ private struct DataSection: View {
 private struct AboutSection: View {
     var body: some View {
         Section {
-            NavigationLink { LicensesView() } label: {
+            ScreenRow(.licences) {
                 SettingsRow(title: "Licences", symbol: "doc.text.fill", color: .gray)
             }
-            .hapticTap()
         } header: {
             SectionHeader("About", symbol: "info.circle", color: .gray)
         } footer: {
             Text("Iramo. Copyright \u{00A9} 2026 Ors\u{00F3}s Emil.")
+        }
+    }
+}
+
+// MARK: - Screens
+
+/// The screens the main list opens.
+enum Screen: Hashable {
+    case languages, suggestions, gestures, hitboxes, shortcuts, themes, keys, haptics, learnedWords, licences
+
+    @ViewBuilder var view: some View {
+        switch self {
+        case .languages: LanguagesView()
+        case .suggestions: SuggestionsView()
+        case .gestures: GesturesView()
+        case .hitboxes: HitboxesView()
+        case .shortcuts: ShortcutsView()
+        case .themes: ThemesView()
+        case .keys: KeysView()
+        case .haptics: HapticsView()
+        case .learnedWords: LearnedWordsView()
+        case .licences: LicensesView()
+        }
+    }
+}
+
+private struct OpenScreenKey: EnvironmentKey {
+    static let defaultValue: (Screen) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    /// Opens a screen of the main list (set by ContentView).
+    var openScreen: (Screen) -> Void {
+        get { return self[OpenScreenKey.self] }
+        set { self[OpenScreenKey.self] = newValue }
+    }
+}
+
+/// A row that opens a screen: the whole row is one button (a soft tap, then the screen), with the disclosure arrow
+/// on the right. A plain button rather than a NavigationLink with an extra tap gesture, which in a list could take
+/// the tap and leave the screen unopened.
+struct ScreenRow<Label: View>: View {
+    let screen: Screen
+    @ViewBuilder let label: () -> Label
+    @Environment(\.openScreen) private var openScreen
+
+    init(_ screen: Screen, @ViewBuilder label: @escaping () -> Label) {
+        self.screen = screen
+        self.label = label
+    }
+
+    var body: some View {
+        Button {
+            Feedback.tap()
+            openScreen(screen)
+        } label: {
+            HStack(spacing: 8) {
+                label()
+                Image(systemName: "chevron.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+            .foregroundColor(.primary)
+            .contentShape(Rectangle())
         }
     }
 }
@@ -826,7 +887,8 @@ struct LearnedWordsView: View {
     }
 }
 
-/// What a shortcut does, as the suggestion bar shows it: the trigger typed, then the phrase space will write.
+/// What a shortcut does, as the suggestion bar shows it: the trigger typed (on a key of the theme), then the phrase
+/// space will write (on the theme's accent pill).
 private struct ShortcutPreview: View {
     let trigger: String
     let phrase: String
@@ -835,25 +897,28 @@ private struct ShortcutPreview: View {
         let typed = trigger.trimmingCharacters(in: .whitespaces)
         let written = phrase.trimmingCharacters(in: .whitespaces)
         PreviewCard(caption: "Type the trigger and press space: the phrase takes its place.") {
-            HStack(spacing: 10) {
-                Text(typed.isEmpty ? "omw" : typed)
-                    .font(.system(size: 15, design: .monospaced))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color(.systemBackground)))
-                Image(systemName: "arrow.right")
-                    .foregroundColor(.secondary)
-                Text(written.isEmpty ? "On my way!" : written)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.tint))
+            CurrentThemeLook { look in
+                HStack(spacing: 10) {
+                    Text(typed.isEmpty ? "omw" : typed)
+                        .font(.system(size: 15, design: .monospaced))
+                        .foregroundColor(look.textColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(look.keyShape(.letter, radius: 8))
+                    Image(systemName: "arrow.right")
+                        .foregroundColor(look.stripText.opacity(0.6))
+                    Text(written.isEmpty ? "On my way!" : written)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                        .foregroundColor(look.onAccent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(look.pill(radius: 15))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .opacity(typed.isEmpty && written.isEmpty ? 0.6 : 1)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .opacity(typed.isEmpty && written.isEmpty ? 0.6 : 1)
         }
     }
 }

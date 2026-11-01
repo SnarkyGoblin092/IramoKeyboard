@@ -15,6 +15,7 @@ struct KeysView: View {
     @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var surface = SettingDefault.keySurface
     @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var borderStyle = SettingDefault.keyBorderStyle
     @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var glow = SettingDefault.keyGlow
+    @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFont = SettingDefault.keyFont
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.alwaysCapitals, store: SharedStore.defaults) private var alwaysCapitals = SettingDefault.alwaysCapitals
@@ -142,6 +143,20 @@ struct KeysView: View {
             .glassRows()
 
             Section {
+                // Each font's name is shown in that font.
+                Picker(selection: Binding(get: { keyFont }, set: { value in
+                    Feedback.choose()
+                    keyFont = value
+                })) {
+                    ForEach(KeyFont.allCases, id: \.self) { font in
+                        Text(font.displayName)
+                            .font(font.font(size: 17))
+                            .tag(font.rawValue)
+                    }
+                } label: {
+                    Label("Font", systemImage: "textformat.alt")
+                }
+                .pickerStyle(.navigationLink)
                 SegmentedChoice(names: ["Follow shift", "Always capitals"], selected: alwaysCapitals ? 1 : 0) {
                     alwaysCapitals = $0 == 1
                 }
@@ -149,6 +164,8 @@ struct KeysView: View {
                             range: Settings.letterSizeRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
             } header: {
                 SectionHeader("Letters", symbol: "textformat", color: .orange)
+            } footer: {
+                Text("The font of the keys, their pop-ups and the suggestion bar. Letters a font lacks (Arabic, Cyrillic) use the system font.")
             }
             .glassRows()
 
