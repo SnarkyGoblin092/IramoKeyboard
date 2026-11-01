@@ -79,9 +79,10 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
   always show, accent hints in any corner (or off) at any size, and the space bar's text (your own, the
   language's name or its code) and size.
-- Highlights follow the theme's accent: the auto-correction pill, pressed suggestions, the hide-keyboard button
-  and the emoji category tabs; in the Liquid Glass theme the pill, the bar's tiles and the emoji tab highlight
-  are glass too.
+- Highlights follow the theme's accent: the auto-correction pill, pressed suggestions (a tapped word gets exactly
+  the auto-correction's pill, in every theme), the hide-keyboard button
+  and the emoji category tabs; in the Liquid Glass theme the pill, a pressed word, the bar's tiles and the emoji
+  tab highlight are glass too.
 - Works on iPhone and iPad, in portrait and landscape.
 
 ### The Iramo app
@@ -99,7 +100,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   glass keys over a colourful backdrop), down to the auto-correction pill in the bar.
 - Haptics throughout, with a feel for each kind of action: a light click for switches and sliders, a soft tap
   for opening screens, a fuller knock for choosing a theme or preset, a success pattern for adding, a sharp tap
-  for deleting and a warning buzz for resetting everything.
+  for deleting, and for Reset all settings a half-second strong buzz before it asks and a warning buzz when it
+  is done.
 - Languages, text shortcuts and learned words, each swiped left to remove an entry.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.

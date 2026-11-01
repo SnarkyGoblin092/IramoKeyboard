@@ -498,17 +498,20 @@ struct HitboxPreview: View {
                 ForEach(letters, id: \.self) { letter in
                     let likely = adaptive && letter == "e"
                     let factor = size * (adaptive ? (likely ? 1 + grow * strength : 1 - shrink * strength) : 1)
-                    ZStack {
-                        MiniKey(look: look, letter: letter, letterColor: likely ? look.accentColor : nil, fontSize: 20)
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                            .foregroundColor(look.accentColor)
-                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(likely ? look.accentColor.opacity(0.12) : Color.clear))
-                            .frame(width: 36 * factor, height: 50 * factor)
-                    }
-                    .frame(width: 32, height: 44)
-                    .zIndex(likely ? 1 : 0)
+                    // The key keeps its size: only its touch area (the dashed outline, an overlay that takes no
+                    // room of its own) grows and shrinks.
+                    MiniKey(look: look, letter: letter, letterColor: likely ? look.accentColor : nil, fontSize: 20)
+                        .frame(width: 32, height: 44)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                                .foregroundColor(look.accentColor)
+                                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(likely ? look.accentColor.opacity(0.12) : Color.clear))
+                                .frame(width: 36 * factor, height: 50 * factor)
+                                .allowsHitTesting(false)
+                        }
+                        .zIndex(likely ? 1 : 0)
                 }
                 functionKey("delete.left", look: look)
             }

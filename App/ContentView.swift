@@ -338,7 +338,8 @@ private struct DataSection: View {
     /// One option with its own confirmation, so the dialog's arrow points at the option that was tapped.
     private func row(_ action: Action, _ title: String, symbol: String, color: Color, role: ButtonRole? = nil) -> some View {
         Button(role: role) {
-            Feedback.tap()
+            // Resetting everything warns with a long, strong buzz before the question; the others a soft tap.
+            if action == .reset { Feedback.danger() } else { Feedback.tap() }
             pending = action
         } label: {
             HStack(spacing: 12) {

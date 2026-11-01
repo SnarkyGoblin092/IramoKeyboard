@@ -1,3 +1,4 @@
+import CoreHaptics
 import SwiftUI
 import UIKit
 
@@ -62,6 +63,38 @@ enum Feedback {
     static func warning() {
         notification.notificationOccurred(.warning)
         notification.prepare()
+    }
+
+    /// The haptic engine, for the long buzz (nil on hardware without one).
+    private static let engine: CHHapticEngine? = {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return nil }
+        let engine = try? CHHapticEngine()
+        engine?.isAutoShutdownEnabled = true
+        return engine
+    }()
+
+    /// Something dangerous is about to happen (Reset all settings): half a second of strong, continuous buzz.
+    static func danger() {
+        if let engine = engine {
+            do {
+                try engine.start()
+                let buzz = CHHapticEvent(eventType: .hapticContinuous,
+                                         parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+                                                      CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.75)],
+                                         relativeTime: 0,
+                                         duration: 0.5)
+                try engine.makePlayer(with: CHHapticPattern(events: [buzz], parameters: [])).start(atTime: CHHapticTimeImmediate)
+                return
+            } catch {
+                // Fall through to the taps below.
+            }
+        }
+        // Without the engine: ten strong taps over the same half second.
+        for step in 0..<10 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * 0.05) {
+                rigid.impactOccurred(intensity: 1)
+            }
+        }
     }
 
     /// Plays the keyboard's key-press vibration at the given strength (0...1), with the feel's sharpness

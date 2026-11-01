@@ -52,6 +52,8 @@ final class SuggestionBar: UIView {
     private let usesGlass = Theme.usesRealGlass
     private var pillGlass: UIVisualEffectView?
     private var segmentGlass: [UIVisualEffectView?] = []
+    /// The pressed highlight behind a word: drawn exactly like the pill (accent fill, or accent-tinted glass).
+    private var highlightGlass: [UIVisualEffectView?] = []
     private let separatorLayer = CAShapeLayer()
 
     private var suggestions: [Suggestion] = []
@@ -174,20 +176,25 @@ final class SuggestionBar: UIView {
                 segmentViews[index].isHidden = true
                 continue
             }
-            let item = suggestions[index]
-            let isBest = index == highlightedIndex
             label.isHidden = false
-            label.text = item.text
-            label.font = item.kind == .emoji ? UIFont.systemFont(ofSize: 26)
-                : Theme.keyFont(ofSize: 17, weight: isBest ? .semibold : .regular)
-            label.textColor = isBest ? Theme.onAccent : textColor
-            segmentViews[index].isHidden = !segments || item.text.isEmpty
+            label.text = suggestions[index].text
+            styleLabel(index, onPill: index == highlightedIndex)
+            segmentViews[index].isHidden = !segments || suggestions[index].text.isEmpty
         }
         bestPill.isHidden = highlightedIndex == nil
         strip.contentOffset = .zero
         setPressed(nil)
         refreshVisibility()
         setNeedsLayout()
+    }
+
+    /// A word on the pill (the auto-correction, or one being pressed) is semibold in the colour that reads on the
+    /// accent; the others are regular in the bar's text colour.
+    private func styleLabel(_ index: Int, onPill: Bool) {
+        guard index < labels.count, index < suggestions.count else { return }
+        labels[index].font = suggestions[index].kind == .emoji ? UIFont.systemFont(ofSize: 26)
+            : Theme.keyFont(ofSize: 17, weight: onPill ? .semibold : .regular)
+        labels[index].textColor = onPill ? Theme.onAccent : textColor
     }
 
     private func addSlot() {
@@ -200,12 +207,13 @@ final class SuggestionBar: UIView {
         segmentGlass.append(usesGlass ? GlassSupport.addBackground(to: segment, tint: nil) : nil)
 
         let highlight = UIView()
-        highlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
+        highlight.backgroundColor = Theme.accent
         highlight.layer.cornerCurve = .continuous
         highlight.alpha = 0
         highlight.isUserInteractionEnabled = false
         strip.addSubview(highlight)
         highlights.append(highlight)
+        highlightGlass.append(usesGlass ? GlassSupport.addBackground(to: highlight, tint: Theme.accent.withAlphaComponent(0.85)) : nil)
 
         let label = UILabel()
         label.textAlignment = .center
@@ -263,8 +271,14 @@ final class SuggestionBar: UIView {
             }
             let frame = frames[index]
             label.frame = frame.insetBy(dx: 6, dy: 0)
-            highlights[index].frame = frame.insetBy(dx: 2, dy: 2)
-            highlights[index].layer.cornerRadius = segments ? segmentRadius : Theme.keyCornerRadius(for: frame.size)
+            let (pillFrame, pillRadius) = pillShape(for: index, in: frame, areaHeight: area.height, segmentRadius: segmentRadius)
+            highlights[index].frame = pillFrame
+            highlights[index].layer.cornerRadius = pillRadius
+            if let glassPiece = highlightGlass[index] {
+                glassPiece.frame = highlights[index].bounds
+                GlassSupport.applyShape(glassPiece, radius: highlights[index].layer.cornerRadius,
+                                        size: highlights[index].bounds.size)
+            }
             segmentViews[index].frame = frame.insetBy(dx: 2.5, dy: 3)
             segmentViews[index].layer.cornerRadius = segmentRadius
             if let glassPiece = segmentGlass[index] {
@@ -282,24 +296,29 @@ final class SuggestionBar: UIView {
         separatorLayer.strokeColor = separatorColor.resolvedColor(with: traitCollection).cgColor
 
         if let best = highlightedIndex, best < frames.count, frames[best].width > 0 {
-            let frame = frames[best]
-            if segments {
-                // The chosen segment itself turns accent-coloured.
-                bestPill.frame = frame.insetBy(dx: 2.5, dy: 3)
-                bestPill.layer.cornerRadius = segmentRadius
-            } else {
-                // Hugs the word, like the system's auto-correction bubble, with the keys' corner style.
-                let textWidth = labels[best].intrinsicContentSize.width
-                let width = min(frame.width - 4, max(textWidth + 28, area.height * 1.6))
-                let height = max(0, area.height - 8)
-                bestPill.frame = CGRect(x: frame.midX - width / 2, y: (area.height - height) / 2, width: width, height: height)
-                bestPill.layer.cornerRadius = min(height / 2, Theme.keyCornerRadius(for: bestPill.bounds.size) * 1.6)
-            }
+            let (pillFrame, pillRadius) = pillShape(for: best, in: frames[best], areaHeight: area.height, segmentRadius: segmentRadius)
+            bestPill.frame = pillFrame
+            bestPill.layer.cornerRadius = pillRadius
             if let glassPiece = pillGlass {
                 glassPiece.frame = bestPill.bounds
                 GlassSupport.applyShape(glassPiece, radius: bestPill.layer.cornerRadius, size: bestPill.bounds.size)
             }
         }
+    }
+
+    /// The accent pill of a slot (the auto-correction's, and a pressed word's): with segments the segment itself;
+    /// otherwise a bubble hugging the word, like the system's auto-correction bubble, with the keys' corner style.
+    private func pillShape(for index: Int, in frame: CGRect, areaHeight: CGFloat, segmentRadius: CGFloat) -> (CGRect, CGFloat) {
+        if segments || index >= suggestions.count { return (frame.insetBy(dx: 2.5, dy: 3), segmentRadius) }
+        let item = suggestions[index]
+        // Measured in the pill's semibold, so a pressed word gets the same bubble as the auto-correction would.
+        let textWidth = item.kind == .emoji ? labels[index].intrinsicContentSize.width
+            : ceil((item.text as NSString).size(withAttributes: [.font: Theme.keyFont(ofSize: 17, weight: .semibold)]).width)
+        let width = min(frame.width - 4, max(textWidth + 28, areaHeight * 1.6))
+        let height = max(0, areaHeight - 8)
+        let size = CGSize(width: width, height: height)
+        return (CGRect(x: frame.midX - width / 2, y: (areaHeight - height) / 2, width: width, height: height),
+                min(height / 2, Theme.keyCornerRadius(for: size) * 1.6))
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -386,15 +405,22 @@ final class SuggestionBar: UIView {
     }
 
     private func highlight(_ index: Int, on: Bool) {
-        let view = (index == dismissIndex) ? dismissHighlight : highlights[index]
-        view.alpha = on ? 1 : 0
+        if index == dismissIndex {
+            dismissHighlight.alpha = on ? 1 : 0
+            return
+        }
+        guard index < highlights.count else { return }
+        highlights[index].alpha = on ? 1 : 0
+        styleLabel(index, onPill: on || index == highlightedIndex)
     }
 
     @objc private func stripTapped(_ recognizer: UITapGestureRecognizer) {
         guard let index = slot(atContentX: recognizer.location(in: strip).x), !suggestions[index].text.isEmpty else { return }
-        highlights[index].alpha = 1
-        UIView.animate(withDuration: 0.25) { self.highlights[index].alpha = 0 }
-        delegate?.suggestionBar(self, didSelect: suggestions[index])
+        let picked = suggestions[index]
+        highlight(index, on: true)
+        UIView.animate(withDuration: 0.25, animations: { self.highlights[index].alpha = 0 },
+                       completion: { _ in self.styleLabel(index, onPill: index == self.highlightedIndex) })
+        delegate?.suggestionBar(self, didSelect: picked)
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
