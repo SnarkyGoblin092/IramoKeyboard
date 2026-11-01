@@ -899,6 +899,12 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         guard target >= 0, target < sections.count else { return }
         Haptics.shared.keyPress()
         dismissVariantPopup()
+        // The swipe fires while the grid's own pan is still dragging; cancel it (and any momentum) first,
+        // or its deceleration takes over from the animated jump and rolls past the category's start.
+        let pan = collectionView.panGestureRecognizer
+        pan.isEnabled = false
+        pan.isEnabled = true
+        collectionView.setContentOffset(collectionView.contentOffset, animated: false)
         scrollToSection(target, animated: true)
     }
 
