@@ -310,8 +310,9 @@ private struct DataSection: View {
                 SettingsRow(title: "Learned words", symbol: "character.book.closed", color: .brown,
                             value: learnedCount > 0 ? "\(learnedCount)" : nil)
             }
+            // Orange: they remove things (each asks first), short of red Reset, which undoes every setting.
             row(.learned, "Forget learned words", symbol: "text.book.closed", color: .orange)
-            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath", color: .yellow)
+            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath", color: .orange)
             row(.reset, "Reset all settings", symbol: "arrow.counterclockwise", color: .red, role: .destructive)
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
@@ -333,7 +334,9 @@ private struct DataSection: View {
         Button(role: role) { pending = action } label: {
             HStack(spacing: 12) {
                 IconTile(symbol: symbol, color: color)
-                Text(title).foregroundColor(role == .destructive ? .red : .primary)
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundColor(role == .destructive ? .red : color)
             }
         }
             .confirmationDialog(action.title,

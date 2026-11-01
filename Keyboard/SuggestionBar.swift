@@ -130,8 +130,9 @@ final class SuggestionBar: UIView {
 
         dismissIcon.tintColor = Theme.accent
         dismissIcon.contentMode = .center
+        // Drawn smaller than its touch area, which is still the bar's whole right end (`dismissMinX`).
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
 
         // Nothing but the strip takes touches itself: the bar decides from the x position.
@@ -242,12 +243,12 @@ final class SuggestionBar: UIView {
 
         dismissIcon.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
         // The pressed state is a circle around the icon.
-        let circle = min(area.height - 2, dismissWidth - 6)
+        let circle = min(area.height - 8, 34)
         dismissHighlight.frame = CGRect(x: dismissIcon.frame.midX - circle / 2, y: (area.height - circle) / 2,
                                         width: circle, height: circle)
         dismissHighlight.layer.cornerRadius = circle / 2
         if dismissGlass != nil {
-            let side = min(area.height - 6, 38)
+            let side = min(area.height - 10, 30)
             dismissBackground.frame = CGRect(x: dismissIcon.frame.midX - side / 2, y: (area.height - side) / 2,
                                              width: side, height: side)
             glass.contentView.insertSubview(dismissBackground, belowSubview: dismissIcon)

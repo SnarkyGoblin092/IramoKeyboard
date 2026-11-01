@@ -209,10 +209,29 @@ struct ThemePreview: View {
             // The keyboard's frosted panel over the app (Theme.panelBackground).
             Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
         } else {
-            // Liquid Glass has no panel: the app shows straight through.
-            Rectangle().fill(pick(Color(white: 0.97), Color(white: 0.05)))
+            // Liquid Glass has no panel: the app shows straight through. A colourful backdrop stands in for the
+            // app, so the glass keys have something to bend and blur.
+            ZStack {
+                LinearGradient(colors: pick([Color(red: 0.62, green: 0.80, blue: 1.0), Color(red: 1.0, green: 0.80, blue: 0.86)],
+                                            [Color(red: 0.10, green: 0.16, blue: 0.38), Color(red: 0.36, green: 0.12, blue: 0.34)]),
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                GeometryReader { geometry in
+                    Circle()
+                        .fill(pick(Color(red: 1.0, green: 0.86, blue: 0.45), Color(red: 0.95, green: 0.45, blue: 0.30)).opacity(0.75))
+                        .frame(width: geometry.size.width * 0.45)
+                        .blur(radius: geometry.size.width * 0.06)
+                        .offset(x: geometry.size.width * 0.55, y: -geometry.size.width * 0.08)
+                    Circle()
+                        .fill(pick(Color(red: 0.45, green: 0.85, blue: 0.75), Color(red: 0.20, green: 0.55, blue: 0.70)).opacity(0.7))
+                        .frame(width: geometry.size.width * 0.38)
+                        .blur(radius: geometry.size.width * 0.05)
+                        .offset(x: -geometry.size.width * 0.06, y: geometry.size.height * 0.45)
+                }
+            }
         }
     }
+
+    private func pick(_ light: [Color], _ darkColors: [Color]) -> [Color] { return dark ? darkColors : light }
 
     // MARK: Body
 
@@ -329,7 +348,7 @@ struct ThemePreview: View {
                     }
             }
             Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: 18 * s))
+                .font(.system(size: 15 * s))
                 .foregroundColor(accentColor)
                 .frame(width: 52 * s)
         }
@@ -364,12 +383,19 @@ struct ThemePreview: View {
         let hint = keyHints && k.title.count == 1 ? hints[k.title.lowercased()] : nil
         let hintScale = CGFloat(hintSize)
         return ZStack {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(fill)
-                .shadow(color: keyShadow, radius: 0, x: 0, y: s)
-                .overlay(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(borderColor, lineWidth: drawsBorder ? 0.5 : 0))
+            if theme.kind == .liquidGlass {
+                // As the keyboard draws it: a piece of Liquid Glass, tinted for function keys and the accent.
+                GlassKeyShape(radius: radius,
+                              tint: k.accent ? accentColor : (k.function ? Color.black.opacity(dark ? 0.0 : 0.06) : nil),
+                              dark: dark)
+            } else {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(fill)
+                    .shadow(color: keyShadow, radius: 0, x: 0, y: s)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .stroke(borderColor, lineWidth: drawsBorder ? 0.5 : 0))
+            }
             if let tabIcon = k.tabIcon, let image = EmojiTabIcons.icon(forKey: tabIcon, side: 36, weight: 1.8) {
                 // Same size and line weight as KeyView's emoji key, scaled with the preview.
                 Image(uiImage: image)
@@ -421,5 +447,36 @@ struct ThemePreview: View {
             if #available(iOS 26, *) { return false }
         }
         return true
+    }
+}
+
+/// A key of the Liquid Glass theme: real Liquid Glass on iOS 26 and later; before that a frosted pane with the
+/// glass's bright rim and sheen, as the keyboard's fallback blur looks.
+private struct GlassKeyShape: View {
+    let radius: CGFloat
+    let tint: Color?
+    let dark: Bool
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: shape)
+        } else {
+            fallback(shape)
+        }
+        #else
+        fallback(shape)
+        #endif
+    }
+
+    private func fallback(_ shape: RoundedRectangle) -> some View {
+        shape
+            .fill(.ultraThinMaterial)
+            .overlay(shape.fill(tint ?? Color.clear).opacity(0.55))
+            .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.18 : 0.45), Color.white.opacity(0)],
+                                               startPoint: .top, endPoint: .center)))
+            .overlay(shape.strokeBorder(Color.white.opacity(dark ? 0.35 : 0.8), lineWidth: 0.8))
+            .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
     }
 }
