@@ -498,23 +498,9 @@ private struct GlassKeyShape: View {
 }
 
 extension View {
-    /// Liquid Glass keys share one glass container, as the keyboard's do (KeyboardView's `glassContainer`): glass
-    /// that close together bends and reflects its neighbours, so the accent keys' colour shows in the keys around
-    /// them. Without real glass (before iOS 26) the view is left as it is.
-    @ViewBuilder func glassKeyGroup(_ enabled: Bool, spacing: CGFloat) -> some View {
-        #if compiler(>=6.2)
-        if enabled {
-            if #available(iOS 26.0, *) {
-                GlassEffectContainer(spacing: spacing) { self }
-            } else {
-                self
-            }
-        } else {
-            self
-        }
-        #else
+    /// Left as it is: a GlassEffectContainer composites the keys' glass above their labels, hiding the letters.
+    func glassKeyGroup(_ enabled: Bool, spacing: CGFloat) -> some View {
         self
-        #endif
     }
 }
 
