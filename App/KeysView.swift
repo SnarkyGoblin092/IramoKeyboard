@@ -51,6 +51,14 @@ struct KeysView: View {
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
 
+    /// The Liquid Glass theme on iOS 26: its keys are real glass, so the key style (surface, border, glow) has
+    /// nothing to change (Theme.keySurface / drawsKeyBorder / keyGlow skip them); before iOS 26 they are drawn keys.
+    private var glassKeys: Bool {
+        guard ThemeCatalog.theme(id: themeID).kind == .liquidGlass else { return false }
+        if #available(iOS 26, *) { return true }
+        return false
+    }
+
     private var styleIndex: Int? {
         return styles.firstIndex {
             same($0.height, keyHeight) && same($0.roundness, roundness) && same($0.keyGap, keyGap) && same($0.rowGap, rowGap)
@@ -121,8 +129,12 @@ struct KeysView: View {
             } header: {
                 SectionHeader("Key style", symbol: "sparkles", color: .purple)
             } footer: {
-                Text("Auto follows the theme: colour themes have raised keys, and every theme but Native a thin outline. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour. Liquid Glass keys stay glass.")
+                Text(glassKeys
+                     ? "Not used by the Liquid Glass theme: its keys are real glass, without a surface, outline or glow of their own. These apply again with any other theme."
+                     : "Auto follows the theme: colour themes have raised keys, and every theme but Native a thin outline. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour.")
             }
+            .disabled(glassKeys)
+            .opacity(glassKeys ? 0.45 : 1)
             .glassRows()
 
             Section {

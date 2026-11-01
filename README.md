@@ -72,7 +72,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Follows light and dark mode; with the phone in dark mode, the keys stay dark even in apps that stay light.
 - Accent colour, and a key style: surface (flat, a soft sheen, or raised with a shadow under each key), border (none,
   thin, bold or in the accent colour) and an accent glow (soft or strong); by default colour themes have raised
-  keys and every theme but Native a thin outline.
+  keys and every theme but Native a thin outline. Settings a theme has no use for are greyed out (the key style
+  with Liquid Glass, whose keys are real glass).
 - Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
   width, corners (square to round), the gaps between keys and rows, a font for the keys and the bar (the system
   font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
