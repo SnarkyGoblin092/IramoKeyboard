@@ -22,7 +22,7 @@ protocol KeyboardViewDelegate: AnyObject {
 ///  - sliding left from backspace deletes word by word,
 ///  - dragging across the letter keys is recognised as swipe typing (handed between thumbs, and committed word by
 ///    word when it glides through the space bar),
-///  - a short flick up on a letter types it in capitals, a flick down its first accent,
+///  - a short flick up on a letter types it in capitals, a flick down its first accent (one that goes on becomes a swipe),
 ///  - the letter keys' touch areas follow the hitbox settings (size, adaptive keys, the hit map).
 final class KeyboardView: UIView {
     weak var delegate: KeyboardViewDelegate?
@@ -79,6 +79,9 @@ final class KeyboardView: UIView {
         /// The swipe glided onto the space bar: its word is committed, the next starts back on the letters.
         var awaitingLetter = false
         var committedAtSpace = false
+        /// A swipe that began as a down flick from the bottom letters runs onto the space bar first: the bar
+        /// commits nothing until the finger has reached another letter.
+        var spaceCommitWaits = false
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
@@ -430,6 +433,12 @@ final class KeyboardView: UIView {
                 state.visited.insert(ObjectIdentifier(keyViews[index.row][index.col]))
             }
 
+            if state.flick != 0 && !state.handedOff && flickBecomesSwipe(state) {
+                state.spaceCommitWaits = state.flick < 0
+                state.flick = 0
+                beginSwipe(state)
+                continue
+            }
             if state.handedOff || state.flick != 0 { continue }
             if state.isCursorMode {
                 moveCursor(state, to: point)
@@ -817,8 +826,12 @@ final class KeyboardView: UIView {
     /// The swiping finger moved. Gliding onto the space bar (with "space commits") ends the word there; the next
     /// word starts when the finger is back on the letters.
     private func moveSwipe(_ state: TouchState, to point: CGPoint) {
+        if state.spaceCommitWaits, let index = keyIndex(at: point), letter(of: rows[index.row][index.col]) != nil,
+           keyViews[index.row][index.col] !== state.startKey {
+            state.spaceCommitWaits = false
+        }
         // Well onto the bar only: a glide through the bottom letters that grazes its top edge is still one word.
-        if Prefs.spaceCommits, let index = keyIndex(at: point), rows[index.row][index.col].action == .space,
+        if Prefs.spaceCommits, !state.spaceCommitWaits, let index = keyIndex(at: point), rows[index.row][index.col].action == .space,
            index.row < hitRects.count, index.col < hitRects[index.row].count,
            point.y > hitRects[index.row][index.col].minY + hitRects[index.row][index.col].height * 0.35 {
             if !state.awaitingLetter {
@@ -916,6 +929,16 @@ final class KeyboardView: UIView {
         Haptics.shared.tick()
         return true
     }
+
+    /// A flick that goes on well past a flick's length (`flickSwipeLimit` key heights of travel) was the start of a
+    /// swiped word: it types no capital or accent, and swiping takes over.
+    private func flickBecomesSwipe(_ state: TouchState) -> Bool {
+        guard swipeAllowed, states.count == 1 else { return false }
+        return travel(of: state) > max(letterKeySize().height, 1) * KeyboardView.flickSwipeLimit
+    }
+
+    /// How far (in key heights) a flick may travel before it counts as a swipe.
+    private static let flickSwipeLimit: CGFloat = 1.3
 
     private func updateTrail(_ points: [CGPoint]) {
         guard let first = points.first else { return }

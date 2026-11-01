@@ -74,7 +74,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Glide onto the space bar to finish a word and carry on with the next one without lifting.
 - Optional phrase glides: one glide can read as two or three words ("do it", "in the morning").
 - Delete right after a swipe removes the whole word (can be turned off).
-- Optional flicks: up on a letter for a capital, down for its first accent.
+- Optional flicks: up on a letter for a capital, down for its first accent. A flick that keeps going (over about 1.3 key heights) becomes a swiped word instead (one that dips onto the space bar commits nothing there until it reaches another letter).
 - Hold a key for its accents and variants; hold the comma or the full stop for more punctuation.
 - Auto-capitalization at the start of sentences, double-tap shift for caps lock.
 - Double-tap the space bar for a full stop.
