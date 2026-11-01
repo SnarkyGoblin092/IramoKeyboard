@@ -38,6 +38,9 @@ extension Language {
             return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
         case .lithuanian, .latvian, .cantonese:
             return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .uzbek:
+            // The Latin alphabet, and the ʻ of oʻ and gʻ (also the tutuq belgisi) as its own key.
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm\u{02BB}")
         case .danish:
             return split("qwertyuiopå", "asdfghjklæø", "zxcvbnm")
         case .norwegian:
@@ -117,6 +120,8 @@ extension Language {
             return ["e": ["é"], "u": ["ü"]]
         case .lithuanian:
             return ["a": ["ą"], "c": ["č"], "e": ["ę", "ė"], "i": ["į"], "s": ["š"], "u": ["ų", "ū"], "z": ["ž"]]
+        case .uzbek:
+            return ["o": ["o\u{02BB}"], "g": ["g\u{02BB}"], "\u{02BB}": ["\u{02BC}"]]
         case .latvian:
             return ["a": ["ā"], "c": ["č"], "e": ["ē"], "g": ["ģ"], "i": ["ī"], "k": ["ķ"], "l": ["ļ"], "n": ["ņ"],
                     "s": ["š"], "u": ["ū"], "z": ["ž"]]
@@ -191,6 +196,7 @@ extension Language {
         case .swedish: return ["\u{201D}"]
         case .lithuanian: return ["\u{201E}", "\u{201C}"]
         case .latvian: return ["\u{201E}", "\u{201C}", "\u{00AB}", "\u{00BB}"]
+        case .uzbek: return ["\u{00AB}", "\u{00BB}", "\u{201C}", "\u{201D}"]
         case .arabic: return ["\u{00AB}", "\u{00BB}"]
         case .cantonese: return ["「", "」", "『", "』"]
         case .danish: return ["\u{00BB}", "\u{00AB}"]
@@ -452,7 +458,7 @@ enum LayoutBuilder {
             KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0, alternates: commaAlternates(language)),
             KeySpec(action: .space, title: language.displayName, weight: 3.9),
             KeySpec(action: .character(language.fullStop), title: language.fullStop, weight: 1.0, alternates: dotAlternates(language)),
-            KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
+            KeySpec(action: .enter, title: returnTitle, symbol: "return.left", weight: 1.8, isFunction: true)
         ])
         return result
     }
@@ -531,7 +537,7 @@ enum LayoutBuilder {
             KeySpec(action: .showLetters, title: pageKeyTitle, weight: 1.3, isFunction: true),
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
             KeySpec(action: .space, title: language.displayName, weight: 5.9),
-            KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
+            KeySpec(action: .enter, title: returnTitle, symbol: "return.left", weight: 1.8, isFunction: true)
         ]
     }
 }

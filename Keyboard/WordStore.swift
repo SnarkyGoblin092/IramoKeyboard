@@ -41,6 +41,7 @@ enum TextFolding {
 
     static func isApostrophe(_ character: Character) -> Bool {
         return character == "'" || character == "\u{2019}" || character == "\u{02BC}" || character == "\u{2018}"
+            || character == "\u{02BB}"
     }
 
     /// The match key: folded and without apostrophes, so "we're", "were" and "WE’RE" all become "were".
@@ -52,7 +53,7 @@ enum TextFolding {
 
     /// Straight apostrophes only ("don’t" -> "don't").
     static func normalizeApostrophes(_ text: String) -> String {
-        if !text.contains(where: { $0 == "\u{2019}" || $0 == "\u{02BC}" || $0 == "\u{2018}" }) { return text }
+        if !text.contains(where: { $0 == "\u{2019}" || $0 == "\u{02BC}" || $0 == "\u{2018}" || $0 == "\u{02BB}" }) { return text }
         return String(text.map { isApostrophe($0) ? Character("'") : $0 })
     }
 }

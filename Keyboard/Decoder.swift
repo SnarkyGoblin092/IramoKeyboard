@@ -21,6 +21,15 @@ enum Decoder {
     static let restoredLogProb = -8.5   // log10 probability of an unknown word with its accents restored
     static let taughtBonus = 2.0        // log10 boost for the word the user taught for a typo of theirs
     static let splitCost = 1.0          // log10 cost of a missing space ("nemakarom" -> "nem akarom")
+    /// A dictionary word rarer than this (log10 probability here) may still be two words run together: the
+    /// subtitle lists keep such slips as words ("tothe", "inthe", "alot"), which would block "to the".
+    static let splitWordFloor = -5.5
+    /// How far the layout's language leads before any word of the text says otherwise (log10): switching to a
+    /// layout is the clearest sign of the language about to be written.
+    static let activeLead = log10(5.0)
+    /// A word of the layout's language is kept among the suggestions when it is within this (log10) of the
+    /// last one shown, even if words of the other languages score a little higher.
+    static let activeKeep = 2.0
     /// Typing cost of each of the last one or two letters of a word left off ("appl" -> "apple"): stopping early
     /// is far more common than a wrong key, so "appl" means "apple", not "all".
     static let unfinishedLetter = 0.35
@@ -71,11 +80,11 @@ enum Decoder {
     private static let usageDecay = 0.995
 
     /// log10 prior of a language before any word of the text is seen: the share of the user's recent writing in
-    /// it (never below a floor, so every enabled language stays possible), and a small lean to the layout's.
+    /// it (never below a floor, so every enabled language stays possible), and a clear lead to the layout's.
     static func prior(_ language: Language, active: Language) -> Double {
         let total = languageUsage.values.reduce(0, +)
         let share = total > 0 ? (languageUsage[language] ?? 0) / total : 0
-        return log10(0.15 + share) + (language == active ? log10(1.3) : 0)
+        return log10(0.25 + share) + (language == active ? activeLead : 0)
     }
 
     /// Counts a finished word towards the languages, by how likely each one wrote it here.
@@ -433,15 +442,17 @@ enum Decoder {
                 }
             }
         }
-        result.append(contentsOf: splitRows(key: keyString, head: head, active: active, ordered: ordered,
+        result.append(contentsOf: splitRows(key: keyString, lower: lower, head: head, active: active, ordered: ordered,
                                             stores: stores, context: context, field: field))
         return (result, lower, context)
     }
 
     /// Two words typed without the space between them ("nemakarom" -> "nem akarom", "inthe" -> "in the"): every
     /// place where the typed letters split into a dictionary word and a word (or the start of one), scored as the two
-    /// words in a row. Only when the typed letters are no word themselves.
+    /// words in a row. Not when the typed letters are a real word themselves; a rare "word" that is really a slip
+    /// ("tothe" is in the English list) still splits, and the two words then compete with it on probability.
     private static func splitRows(key: String,
+                                  lower: String,
                                   head: String,
                                   active: Language,
                                   ordered: [Language],
@@ -449,12 +460,20 @@ enum Decoder {
                                   context: Context,
                                   field: Predictor.FieldContext?) -> [Row] {
         let letters = Array(key)
-        guard letters.count >= 3, !ordered.contains(where: { stores[$0]?.contains(key: key) == true }) else { return [] }
+        guard letters.count >= 3 else { return [] }
+        // A typed word that is in a dictionary: split only when it is rare, and only into words more likely than it.
+        var floor = -Double.infinity
+        if ordered.contains(where: { stores[$0]?.contains(key: key) == true }) {
+            let typedLogProb = logProb(lower, context: context, stores: stores, field: field)
+            if typedLogProb >= splitWordFloor { return [] }
+            floor = typedLogProb
+        }
         func candidates(_ part: String, exactOnly: Bool) -> Set<String> {
             var found = Set<String>()
             for language in ordered {
                 guard let store = stores[language] else { continue }
-                for candidate in store.completionCandidates(forKey: part, typedLower: part, limit: 8)
+                // Wider for the exact word, which more common longer words could push out of a short list.
+                for candidate in store.completionCandidates(forKey: part, typedLower: part, limit: exactOnly ? 30 : 8)
                 where !exactOnly || TextFolding.key(candidate.word) == part {
                     found.insert(candidate.word)
                 }
@@ -467,7 +486,7 @@ enum Decoder {
             let right = String(letters[split...])
             let firsts = candidates(left, exactOnly: true)
             if firsts.isEmpty { continue }
-            let seconds = candidates(right, exactOnly: false)
+            let seconds = candidates(right, exactOnly: true).union(candidates(right, exactOnly: false))
             if seconds.isEmpty { continue }
             for first in firsts {
                 let firstLogProb = logProb(first, context: context, stores: stores, field: field)
@@ -476,9 +495,10 @@ enum Decoder {
                 for second in seconds {
                     // A second word that only starts with the typed letters is a completion, never a correction.
                     let isWhole = TextFolding.key(second) == right
+                    let pairLogProb = firstLogProb + logProb(second, context: after, stores: stores, field: field) - splitCost
+                    guard pairLogProb > floor else { continue }
                     result.append(Row(word: first + " " + second,
-                                      logProb: firstLogProb + logProb(second, context: after, stores: stores, field: field)
-                                          - splitCost,
+                                      logProb: pairLogProb,
                                       prefixCost: 0,
                                       wholeCost: isWhole ? 0 : maxCost + 1,
                                       firstWrong: false))
@@ -513,8 +533,29 @@ enum Decoder {
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
         let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field,
                          taps: taps)
-        return Array(ranked(found.rows, whole: false).map { $0.word }.filter { $0 != found.lower }.prefix(limit))
-            .map { written($0, context: found.context, stores: stores) }
+        return shown(found, active: active, stores: stores, limit: limit)
+    }
+
+    /// The suggestions to show, best first, written as their language writes them. When none of them is a word of
+    /// the layout's language but one nearly made it, it takes the last place: someone who switched to French and
+    /// typed "compli" gets a French word next to the English "compliment".
+    private static func shown(_ found: (rows: [Row], lower: String, context: Context),
+                              active: Language,
+                              stores: [Language: WordStore],
+                              limit: Int) -> [String] {
+        let all = ranked(found.rows, whole: false).filter { $0.word != found.lower }
+        var top = Array(all.prefix(limit))
+        if limit >= 2, top.count == limit, let store = stores[active], store.isLoaded {
+            func isActive(_ word: String) -> Bool {
+                return !word.contains(" ") && store.contains(key: TextFolding.key(word))
+            }
+            if !top.contains(where: { isActive($0.word) }),
+               let keep = all.dropFirst(limit).first(where: { isActive($0.word) }),
+               keep.score >= top[limit - 1].score - activeKeep {
+                top[limit - 1] = keep
+            }
+        }
+        return top.map { written($0.word, context: found.context, stores: stores) }
     }
 
     /// How to write `word`: as the language that most likely produced it writes it ("i'm" -> "I'm", "london" ->
@@ -564,8 +605,7 @@ enum Decoder {
         let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
         let found = rows(typed: typed, before: before, active: active, ordered: ordered, stores: stores, field: field,
                          taps: taps)
-        let words = Array(ranked(found.rows, whole: false).map { $0.word }.filter { $0 != found.lower }.prefix(limit))
-            .map { written($0, context: found.context, stores: stores) }
+        let words = shown(found, active: active, stores: stores, limit: limit)
         let fix = mayCorrect(typed, stores: stores, field: field)
             ? correction(typed: typed, found: found, stores: stores, field: field) : nil
         return (words, fix)

@@ -35,6 +35,7 @@ USED_SLOPE, USED_CAP = 0.25, 0.8        # dictionary words the user writes
 PAIR_SLOPE, PAIR_CAP = 0.5, 1.2         # words the user put after the previous word
 RESTORED = -8.5         # log10 probability of an unknown word with its accents restored (see accents.py)
 SPLIT = float(os.environ.get("HUNKEYS_SPLIT", 1.0))  # log10 cost of a missing space ("nemakarom" -> "nem akarom")
+SPLIT_WORD_FLOOR = -5.5  # a dictionary "word" rarer than this may be two words run together ("tothe")
 SPATIAL = 0.5           # tap positions: cost per squared key-width of extra distance to the intended key
 SHAPE = 10.0            # log10 cost of one unit of swipe shape mismatch (see baseline.decode_swipe)
 CANDIDATES = 30
@@ -286,15 +287,20 @@ class Engine(baseline.Engine):
         """Dictionary words whose key is exactly `part`."""
         found = set()
         for store in self.stores.values():
-            found.update(w for w, _ in store.completion_candidates(part, part, 8) if match_key(w) == part)
+            found.update(w for w, _ in store.completion_candidates(part, part, 30) if match_key(w) == part)
         return found
 
     def _splits(self, key, lower, head, context):
         """Two words typed without the space between them ("nemakarom" -> "nem akarom"): every place the typed
-        letters split into a dictionary word and a word (or the start of one), scored as both words in a row. Only
-        when the typed letters are not a word themselves."""
-        if len(key) < 3 or any(store.contains(key) for store in self.stores.values()):
+        letters split into a dictionary word and a word (or the start of one), scored as both words in a row. Not
+        when the typed letters are a real word; a rare one that is really a slip ("tothe") still splits."""
+        if len(key) < 3:
             return []
+        floor = -math.inf   # a typed dictionary word: split only when rare, into words more likely than it
+        if any(store.contains(key) for store in self.stores.values()):
+            floor = self._lm(lower, context)
+            if floor >= SPLIT_WORD_FLOOR:
+                return []
         rows = []
         for i in range(1, len(key)):
             left, right = key[:i], key[i:]
@@ -314,6 +320,8 @@ class Engine(baseline.Engine):
                 for second in seconds:
                     exact = match_key(second) == right
                     lm = p1 + self._lm(second, after) - self.params["split"]
+                    if lm <= floor:
+                        continue
                     rows.append((first + " " + second, lm, 0.0, 0.0 if exact else 9.0, False))
         return rows
 
@@ -342,7 +350,9 @@ class Engine(baseline.Engine):
 
     def suggest(self, before, typed, limit=4, taps=None):
         rows, lower, _ = self.features(before, typed, taps)
-        return suggestions(rows, lower, self.params, limit)
+        active = self.stores.get(self.active)
+        return suggestions(rows, lower, self.params, limit,
+                           is_active=(lambda w: " " not in w and active.contains(match_key(w))) if active else None)
 
     def on_space(self, before, typed, taps=None):
         lower = normalize_apostrophes(typed).lower()
@@ -383,8 +393,18 @@ def rank(rows, lower, params, whole):
     return scored
 
 
-def suggestions(rows, lower, params, limit=4):
-    return [w for _, w in rank(rows, lower, params, whole=False) if w != lower][:limit]
+ACTIVE_KEEP = 2.0  # Decoder.activeKeep
+
+
+def suggestions(rows, lower, params, limit=4, is_active=None):
+    """Best first; a word of the layout's language that nearly made it keeps the last place (Decoder.shown)."""
+    ranked = [(s, w) for s, w in rank(rows, lower, params, whole=False) if w != lower]
+    top = ranked[:limit]
+    if is_active and limit >= 2 and len(top) == limit and not any(is_active(w) for _, w in top):
+        keep = next(((s, w) for s, w in ranked[limit:] if is_active(w)), None)
+        if keep and keep[0] >= top[-1][0] - ACTIVE_KEEP:
+            top[-1] = keep
+    return [w for _, w in top]
 
 
 def correction(rows, lower, typed_lm, params):

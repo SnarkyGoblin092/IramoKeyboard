@@ -5,13 +5,13 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ## Features
 
 ### Languages
-- 37 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
-  Turkish, Russian, Ukrainian, Swedish, Lithuanian, Latvian, Arabic, Danish, Norwegian, Finnish, Greek, Hebrew, Persian,
+- 38 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
+  Turkish, Russian, Ukrainian, Swedish, Lithuanian, Latvian, Uzbek, Arabic, Danish, Norwegian, Finnish, Greek, Hebrew, Persian,
   Indonesian, Malay, Vietnamese, Slovak, Croatian, Bulgarian, Catalan, Korean, Hindi, Thai, Japanese, Cantonese
   and Mandarin.
 - Each with its own layout: QWERTY, QWERTZ, AZERTY, Turkish, Nordic (å æ ø / å ä ö), Croatian (š đ č ć ž),
   Cyrillic for Russian, Ukrainian and Bulgarian (phonetic), Greek, Hebrew, Persian and Arabic, plus the language's
-  extra letters on long-press (ñ, ç, ü ö ä, ğ ş ı, ą č ę ė į š ų ū ž, ā ē ģ ī ķ ļ ņ, ά έ ή ί ό ύ ώ, ľ ĺ ô ŕ, l·l...).
+  extra letters on long-press (ñ, ç, ü ö ä, ğ ş ı, ą č ę ė į š ų ū ž, ā ē ģ ī ķ ļ ņ, oʻ gʻ (Uzbek, with its own ʻ key), ά έ ή ί ό ύ ώ, ľ ĺ ô ŕ, l·l...).
 - Vietnamese: type without the marks and pick the word from the bar (tieng → tiếng), or long-press a vowel for
   its tones and ă â ê ô ơ ư, and d for đ.
 - Hebrew and Persian are written right to left like Arabic; Persian has its own letters (پ چ ژ ک گ ی), Persian
@@ -46,13 +46,17 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   auto-capitalization (scripts without capitals), and the double-space full stop (Thai, Chinese, Japanese; Hindi
   gets the danda "। "). In the app those settings name the enabled languages they're off in, and are greyed out
   when none of the enabled languages can use them.
-- The return key is labelled in the keyboard's language, to match the field (Go, Search, Send, Done, Next).
+- The return key shows the return symbol (⏎) instead of a word, in every language.
 
 ### Prediction and correction
 - Word suggestions as you type, from a word trigram language model per language.
 - Next-word suggestions before you start the next word.
+- The layout's language leads until the text shows another one: after switching to French, "compli" offers French
+  words first, and when words of the other enabled languages score higher, the best French one still keeps the
+  last place in the bar.
 - Auto-correction when you press space: typos ("vsgyok" -> "vagyok"), missing accents ("koszonom" -> "köszönöm"),
-  missing spaces ("nemakarom" -> "nem akarom"), apostrophes and capitals ("im" -> "I'm"); an unfinished word
+  missing spaces ("nemakarom" -> "nem akarom", "tothe" -> "to the", also when the word lists keep such a slip as a
+  rare word), apostrophes and capitals ("im" -> "I'm"); an unfinished word
   is completed rather than swapped for a short one ("appl" -> "apple", not "all").
 - The word space will write sits on an accent-coloured pill in the middle of the bar.
 - The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
@@ -91,7 +95,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - A hide-keyboard button at the right end of the suggestion bar (no background: the icon just dims while held).
 - A Functions button at the left end opens a panel of tools in place of the keys: one-handed (off, left hand,
   right hand), emoji, copy, cut, paste, clipboard, number row, swipe typing, auto-correct, vibration, next language,
-  split keyboard (iPad), hide keyboard and the Iramo app. Tools that are on light up in the accent. The app's
+  split keyboard (on the iPad's panel from the start), hide keyboard and the Iramo app. Tools that are on light up in the accent. The app's
   Functions panel screen picks which ones it shows and in what order (move up or down, swipe left to remove,
   add from the list).
 - Clipboard (Functions panel): the last 20 texts you copied, newest first; tap one to paste it, remove one
@@ -111,7 +115,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ### Emoji
 - An emoji picker like the iOS one: recently used emoji, categories with tabs, skin tones, and search in your
   language; the search bar takes the theme's key colours.
-- The app's Emoji screen sets up the picker, in five tabs:
+- The app's Emoji screen sets up the picker, in five tabs, under a preview of the picker that follows every
+  change (layout, tabs, size, spacing, skin tone):
   - General: show or hide Recently Used, order it by most recent or most used, keep 8-64 of them (with a
     preview and Clear), and add a space after each emoji.
   - Layout: quick setups (Familiar, Roomy, Dense, Grid only), horizontal or vertical scrolling, swipe across
@@ -146,6 +151,9 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   the arrow in the empty side moves it over. The split keyboard takes precedence on iPad.
 
 ### The Iramo app
+- Sliders are capsules that fill with the accent, drag sideways to change them, with a light click per step
+  (no hard knock at the ends). They show real values for this phone: points (key width, corner radius, letter
+  and emoji size, touch room), milliseconds or seconds; strengths with no unit read Faint ... Full.
 - A Liquid Glass design: on iOS 26 and later every section of every list (settings, languages, learned words,
   shortcuts) is one rounded card of real Liquid Glass over a backdrop tinted with your accent colour (frosted list
   rows before iOS 26). Languages, learned words and shortcuts swipe left to delete, the red Delete button growing

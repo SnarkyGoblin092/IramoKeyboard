@@ -71,6 +71,7 @@ struct ThemePreview: View {
         case .ukrainian: return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish: return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
         case .lithuanian, .latvian, .cantonese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .uzbek: return split("qwertyuiop", "asdfghjkl", "zxcvbnm\u{02BB}")
         case .arabic: return split("ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ")
         case .japanese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         case .korean: return split("ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ", "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ", "ㅋㅌㅊㅍㅠㅜㅡ")
@@ -110,6 +111,7 @@ struct ThemePreview: View {
         case .russian: return ["е": "ё"]
         case .swedish: return ["e": "é", "u": "ü"]
         case .lithuanian: return ["a": "ą", "c": "č", "e": "ę", "i": "į", "s": "š", "u": "ų", "z": "ž"]
+        case .uzbek: return ["o": "o\u{02BB}", "g": "g\u{02BB}"]
         case .latvian: return ["a": "ā", "c": "č", "e": "ē", "g": "ģ", "i": "ī", "k": "ķ", "l": "ļ", "n": "ņ", "s": "š", "u": "ū", "z": "ž"]
         case .arabic: return ["ا": "أ", "ي": "ى", "و": "ؤ", "ه": "ة", "ء": "أ"]
         case .korean: return ["ㅂ": "ㅃ", "ㅈ": "ㅉ", "ㄷ": "ㄸ", "ㄱ": "ㄲ", "ㅅ": "ㅆ", "ㅐ": "ㅒ", "ㅔ": "ㅖ"]
@@ -126,44 +128,6 @@ struct ThemePreview: View {
         case .bulgarian: return ["и": "ѝ"]
         case .catalan: return ["a": "à", "e": "è", "i": "í", "o": "ò", "u": "ú", "l": "·"]
         default: return [:]
-        }
-    }
-
-    /// Mirrors `returnKey` in Keyboard/Strings.swift.
-    private var returnTitle: String {
-        switch shownLanguage {
-        case .hungarian: return "Enter"
-        case .spanish: return "intro"
-        case .french: return "retour"
-        case .german: return "Return"
-        case .italian: return "invio"
-        case .portuguese: return "retorno"
-        case .russian: return "ввод"
-        case .ukrainian: return "ввід"
-        case .swedish: return "retur"
-        case .lithuanian: return "grįžti"
-        case .latvian: return "atgriezt"
-        case .arabic: return "إدخال"
-        case .cantonese: return "換行"
-        case .danish: return "retur"
-        case .norwegian: return "retur"
-        case .finnish: return "rivinvaihto"
-        case .greek: return "εισαγωγή"
-        case .hebrew: return "חזרה"
-        case .persian: return "ورود"
-        case .indonesian: return "enter"
-        case .malay: return "kembali"
-        case .vietnamese: return "xuống dòng"
-        case .slovak: return "enter"
-        case .croatian: return "povrat"
-        case .bulgarian: return "нов ред"
-        case .catalan: return "retorn"
-        case .mandarin: return "换行"
-        case .japanese: return "改行"
-        case .korean: return "줄바꿈"
-        case .hindi: return "एंटर"
-        case .thai: return "ขึ้นบรรทัด"
-        default: return "return"
         }
     }
 
@@ -267,7 +231,7 @@ struct ThemePreview: View {
                  : (shownLanguage == .japanese ? "\u{3001}" : (shownLanguage.usesPhoneticInput ? "\u{FF0C}" : ","))),
              PreviewKey(title: spaceTitle, weight: 3.9, space: true),
              PreviewKey(title: shownLanguage == .hindi ? "\u{0964}" : (shownLanguage.usesPhoneticInput ? "\u{3002}" : ".")),
-             PreviewKey(title: returnTitle, weight: 1.8, function: true, accent: true)]
+             PreviewKey(symbol: "return.left", weight: 1.8, function: true, accent: true)]
         ]
     }
 

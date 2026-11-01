@@ -133,6 +133,10 @@ class LanguageModel:
         return [(self.words[w], p) for p, w in scored[:limit]]
 
 
+# How far the layout's language leads before any word of the text says otherwise (Decoder.activeLead).
+ACTIVE_LEAD = math.log10(5.0)
+
+
 class Mixture:
     """Several languages' models; the language of the text is inferred from how well each model explains it."""
 
@@ -145,7 +149,7 @@ class Mixture:
         """log10 prior of a language before any word is seen (Decoder.prior in Decoder.swift)."""
         total = sum(self.usage.values())
         share = self.usage.get(lang, 0.0) / total if total > 0 else 0.0
-        return math.log10(0.15 + share) + (math.log10(1.3) if lang == self.active else 0.0)
+        return math.log10(0.25 + share) + (ACTIVE_LEAD if lang == self.active else 0.0)
 
     def language_weights(self, before):
         """P(language | recent words): each model's likelihood of the last 8 words (across sentence ends), and a

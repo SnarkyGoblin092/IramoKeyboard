@@ -26,6 +26,7 @@ LETTER_ROWS = {
     "sv": ["qwertyuiopå", "asdfghjklöä", "zxcvbnm"],
     "lt": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
     "lv": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
+    "uz": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
     "ar": ["ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ"],
     "da": ["qwertyuiopå", "asdfghjklæø", "zxcvbnm"],
     "no": ["qwertyuiopå", "asdfghjkløæ", "zxcvbnm"],
@@ -49,7 +50,7 @@ KEYBOARD_WIDTH = 390.0
 ROW_PITCH = 54.0     # key height plus the gap between rows
 
 SPECIAL_FOLDS = {"ł": "l", "đ": "d", "ø": "o", "ß": "ss", "æ": "ae", "œ": "oe", "ı": "i", "ð": "d", "þ": "th"}
-APOSTROPHES = "'’ʼ‘"
+APOSTROPHES = "'’ʼ‘ʻ"
 
 
 def fold(text: str) -> str:
