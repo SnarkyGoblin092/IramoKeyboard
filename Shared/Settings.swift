@@ -65,6 +65,7 @@ enum SettingKey {
     static let suggestionScroll = "hunkeys.suggestionScroll"
     static let suggestionDelay = "hunkeys.suggestionDelay"
     static let suggestionTransition = "hunkeys.suggestionTransition"
+    static let suggestionTransitionSpeed = "hunkeys.suggestionTransitionSpeed"
     static let keyRoundness = "hunkeys.keyRoundness"
     // Data
     static let language = "hunkeys.language"
@@ -106,7 +107,7 @@ enum SettingKey {
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
         theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
-        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceText, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceText, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition, suggestionTransitionSpeed,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
         hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
         hitMap, hitMapStrength
@@ -178,6 +179,8 @@ enum SettingDefault {
     static let suggestionDelay: Double = 0.06
     /// How new words replace the old ones: "instant", "fade", "rise", "slide" or "pop".
     static let suggestionTransition: String = "instant"
+    /// Multiplies the switch animation's speed: 2 is twice as fast.
+    static let suggestionTransitionSpeed: Double = 1
     static let keyRoundness = 0.26
     static let language = "en"
     static let enabledLanguages = ["en", "hu"]
@@ -357,6 +360,7 @@ final class Settings {
             SettingKey.suggestionScroll: SettingDefault.suggestionScroll,
             SettingKey.suggestionDelay: SettingDefault.suggestionDelay,
             SettingKey.suggestionTransition: SettingDefault.suggestionTransition,
+            SettingKey.suggestionTransitionSpeed: SettingDefault.suggestionTransitionSpeed,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.language: SettingDefault.language
         ])
@@ -534,6 +538,7 @@ final class Settings {
     static let hapticSharpnessRange: ClosedRange<Double> = 0...1
     static let suggestionHeightRange: ClosedRange<Double> = 32...56
     static let suggestionDelayRange: ClosedRange<Double> = 0...0.30
+    static let suggestionTransitionSpeedRange: ClosedRange<Double> = 0.5...2
 
     var keyHeight: Double { return clamp(readDouble(SettingKey.keyHeight), Settings.keyHeightRange) }
     var landscapeSeparate: Bool { return readBool(SettingKey.landscapeSeparate) }
@@ -558,6 +563,7 @@ final class Settings {
     var suggestionFit: Bool { return readBool(SettingKey.suggestionFit) }
     var suggestionScroll: Bool { return readBool(SettingKey.suggestionScroll) }
     var suggestionDelay: Double { return clamp(readDouble(SettingKey.suggestionDelay), Settings.suggestionDelayRange) }
+    var suggestionTransitionSpeed: Double { return clamp(readDouble(SettingKey.suggestionTransitionSpeed), Settings.suggestionTransitionSpeedRange) }
     var suggestionTransition: String { return readString(SettingKey.suggestionTransition) ?? SettingDefault.suggestionTransition }
 
     // MARK: Data

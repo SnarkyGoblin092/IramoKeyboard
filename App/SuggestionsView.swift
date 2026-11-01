@@ -12,6 +12,7 @@ struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.suggestionDelay, store: SharedStore.defaults) private var delay = SettingDefault.suggestionDelay
     @AppStorage(SettingKey.suggestionTransition, store: SharedStore.defaults) private var transition = SettingDefault.suggestionTransition
+    @AppStorage(SettingKey.suggestionTransitionSpeed, store: SharedStore.defaults) private var speed = SettingDefault.suggestionTransitionSpeed
 
     private let separators = ["solid", "dashed", "dotted", "none"]
     private let delays: [Double] = [0, 0.06, 0.2]
@@ -73,6 +74,9 @@ struct SuggestionsView: View {
                 Section {
                     SegmentedChoice(names: ["Instant", "Fade", "Rise", "Slide", "Pop"],
                                     selected: transitions.firstIndex(of: transition)) { transition = transitions[$0] }
+                    GlassSlider(title: "Speed", symbol: "hare", value: $speed,
+                                range: Settings.suggestionTransitionSpeedRange, step: 0.1) { String(format: "%.1f×", $0) }
+                        .disabled(transition == "instant")
                 } header: {
                     SectionHeader("Switching", symbol: "arrow.left.arrow.right", color: .orange)
                 } footer: {

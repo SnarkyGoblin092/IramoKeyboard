@@ -232,7 +232,7 @@ final class SuggestionBar: UIView {
         strip.alpha = 0
         strip.transform = incoming
         let damping: CGFloat = Prefs.suggestionTransition == "pop" ? 0.7 : 1
-        UIView.animate(withDuration: duration, delay: 0, usingSpringWithDamping: damping, initialSpringVelocity: 0,
+        UIView.animate(withDuration: duration / Prefs.suggestionTransitionSpeed, delay: 0, usingSpringWithDamping: damping, initialSpringVelocity: 0,
                        options: [.beginFromCurrentState, .allowUserInteraction], animations: {
             self.strip.alpha = 1
             self.strip.transform = .identity

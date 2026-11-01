@@ -213,6 +213,7 @@ struct SuggestionBarPreview: View {
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.suggestionTransition, store: SharedStore.defaults) private var transition = SettingDefault.suggestionTransition
+    @AppStorage(SettingKey.suggestionTransitionSpeed, store: SharedStore.defaults) private var speed = SettingDefault.suggestionTransitionSpeed
 
     /// What the bar offers as "hel", "help" and "he" are typed in turn; the preview keeps cycling through them so
     /// the Switching setting can be seen.
@@ -246,8 +247,8 @@ struct SuggestionBarPreview: View {
     private var switchAnimation: Animation? {
         switch transition {
         case "instant": return nil
-        case "pop": return .spring(response: 0.7, dampingFraction: 0.6)
-        default: return .easeInOut(duration: 0.5)
+        case "pop": return .spring(response: 0.7 / speed, dampingFraction: 0.6)
+        default: return .easeInOut(duration: 0.5 / speed)
         }
     }
 
@@ -267,10 +268,14 @@ struct SuggestionBarPreview: View {
                         HStack(spacing: 0) {
                             if enabled {
                                 ZStack {
+                                    // A view keeps the transition it was inserted with, so the words on screen are
+                                    // swapped out silently when Switching changes; otherwise the old style's removal
+                                    // would play once before the new one takes over.
                                     slots(width: barWidth, look: look)
-                                        .id(step)
+                                        .id("\(transition)-\(step)")
                                         .transition(switchTransition)
                                 }
+                                .animation(nil, value: transition)
                                 .frame(width: barWidth)
                                 .clipped()
                             } else {
