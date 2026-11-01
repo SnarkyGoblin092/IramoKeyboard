@@ -164,7 +164,7 @@ final class SuggestionBar: UIView {
         if Prefs.suggestionTransition != "instant", window != nil, !strip.bounds.isEmpty,
            incoming.map({ $0.text }) != suggestions.map({ $0.text }),
            suggestions.contains(where: { !$0.text.isEmpty }) || incoming.contains(where: { !$0.text.isEmpty }) {
-            outgoing = strip.snapshotView(afterScreenUpdates: false)
+            outgoing = pictureOfStrip()
         }
         suggestions = incoming
         highlightedIndex = nil
@@ -198,6 +198,14 @@ final class SuggestionBar: UIView {
                       width: strip.bounds.width, height: strip.bounds.height)
     }
 
+    /// The strip as it looks now, drawn into an image. `snapshotView` comes back blank in a keyboard extension (the
+    /// keyboard is drawn by the host app), so the old words would vanish at once instead of animating out.
+    private func pictureOfStrip() -> UIView {
+        let renderer = UIGraphicsImageRenderer(bounds: strip.bounds)
+        let image = renderer.image { context in strip.layer.render(in: context.cgContext) }
+        return UIImageView(image: image)
+    }
+
     /// The old words' picture, still on its way out when newer words arrive.
     private weak var leaving: UIView?
 
@@ -214,7 +222,7 @@ final class SuggestionBar: UIView {
         let shift: CGFloat = effectiveUserInterfaceLayoutDirection == .rightToLeft ? -18 : 18
         var outgoing = CGAffineTransform.identity
         var incoming = CGAffineTransform.identity
-        var duration = 0.18
+        var duration = 0.24
         switch Prefs.suggestionTransition {
         case "rise":
             outgoing = CGAffineTransform(translationX: 0, y: -10)
@@ -225,9 +233,9 @@ final class SuggestionBar: UIView {
         case "pop":
             outgoing = CGAffineTransform(scaleX: 0.92, y: 0.92)
             incoming = CGAffineTransform(scaleX: 0.85, y: 0.85)
-            duration = 0.26
+            duration = 0.34
         default:
-            duration = 0.16   // fade
+            duration = 0.22   // fade
         }
         strip.alpha = 0
         strip.transform = incoming

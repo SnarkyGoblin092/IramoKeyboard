@@ -176,7 +176,7 @@ enum SettingDefault {
     static let suggestionHeight: Double = 44.0
     static let suggestionFit: Bool = false
     static let suggestionScroll: Bool = false
-    static let suggestionDelay: Double = 0.06
+    static let suggestionDelay: Double = 0.3
     /// How new words replace the old ones: "instant", "fade", "rise", "slide" or "pop".
     static let suggestionTransition: String = "instant"
     /// Multiplies the switch animation's speed: 2 is twice as fast.
@@ -537,7 +537,7 @@ final class Settings {
     static let spaceTextSizeRange: ClosedRange<Double> = 11...22
     static let hapticSharpnessRange: ClosedRange<Double> = 0...1
     static let suggestionHeightRange: ClosedRange<Double> = 32...56
-    static let suggestionDelayRange: ClosedRange<Double> = 0...0.30
+    static let suggestionDelayRange: ClosedRange<Double> = 0.10...1.00
     static let suggestionTransitionSpeedRange: ClosedRange<Double> = 0.25...3
 
     var keyHeight: Double { return clamp(readDouble(SettingKey.keyHeight), Settings.keyHeightRange) }

@@ -15,7 +15,7 @@ struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestionTransitionSpeed, store: SharedStore.defaults) private var speed = SettingDefault.suggestionTransitionSpeed
 
     private let separators = ["solid", "dashed", "dotted", "none"]
-    private let delays: [Double] = [0, 0.06, 0.2]
+    private let delays: [Double] = [0.1, 0.3, 0.7]   // Fastest, Normal, Battery saver
     private let transitions = ["instant", "fade", "rise", "slide", "pop"]
     private let transitionNotes = ["New words simply replace the old ones, with nothing in between.",
                                    "The old words fade out as the new ones fade in.",
@@ -88,11 +88,11 @@ struct SuggestionsView: View {
                     SegmentedChoice(names: ["Fastest", "Normal", "Battery saver"],
                                     selected: delays.firstIndex { abs($0 - delay) < 0.001 }) { delay = delays[$0] }
                     GlassSlider(title: "Wait after typing", symbol: "timer", value: $delay,
-                                range: Settings.suggestionDelayRange, step: 0.01) { "\(Int(($0 * 1000).rounded())) ms" }
+                                range: Settings.suggestionDelayRange, step: 0.05) { "\(Int(($0 * 1000).rounded())) ms" }
                 } header: {
                     SectionHeader("Update speed", symbol: "speedometer", color: .green)
                 } footer: {
-                    Text("How long the bar waits for a pause in typing before working out new words: no wait is the quickest, a longer one saves battery.")
+                    Text("How long the bar waits for a pause in typing before working out new words: a short wait is the quickest, a longer one saves battery. Fastest waits 100 ms, Normal 300 ms, Battery saver 700 ms.")
                 }
                 .glassRows()
             }

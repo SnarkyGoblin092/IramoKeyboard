@@ -57,7 +57,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - The word space will write sits on an accent-coloured pill in the middle of the bar.
 - The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
   (solid, dashed, dotted or none) or key-like segments, in the theme's colours or neutral ones, at any height.
-- Update speed: Fastest, Normal or Battery saver (how long the bar waits for a pause in typing).
+- Update speed: Fastest, Normal or Battery saver (100, 300 or 700 ms), or any wait from 100 to 1000 ms (how long the bar waits for a pause in typing).
 - Switching: how new words replace the old ones — Instant, Fade, Rise, Slide (along the reading direction, so
   right to left in Arabic) or Pop, at a Speed from 0.25× to 3×; the settings preview keeps changing its words to show it.
 - Backspace right after an auto-correction undoes it.
