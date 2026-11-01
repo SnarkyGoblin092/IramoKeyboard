@@ -228,16 +228,17 @@ struct SuggestionBarPreview: View {
     private var words: [String] { return wordSets[step % wordSets.count] }
     private var shown: [String] { return Array(words.prefix(scroll ? 10 : (fit ? 6 : 3))) }
 
-    /// The keyboard's switch (Keyboard/SuggestionBar.animateSwitch) in SwiftUI terms.
+    /// The keyboard's switch (Keyboard/SuggestionBar.animateSwitch) in SwiftUI terms, exaggerated (further, about
+    /// three times slower) so it can be told apart at the preview's size.
     private var switchTransition: AnyTransition {
         switch transition {
         case "fade": return .opacity
-        case "rise": return .asymmetric(insertion: .offset(y: 10).combined(with: .opacity),
-                                        removal: .offset(y: -10).combined(with: .opacity))
-        case "slide": return .asymmetric(insertion: .offset(x: 18).combined(with: .opacity),
-                                         removal: .offset(x: -18).combined(with: .opacity))
-        case "pop": return .asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity),
-                                       removal: .scale(scale: 0.92).combined(with: .opacity))
+        case "rise": return .asymmetric(insertion: .offset(y: 18).combined(with: .opacity),
+                                        removal: .offset(y: -18).combined(with: .opacity))
+        case "slide": return .asymmetric(insertion: .offset(x: 40).combined(with: .opacity),
+                                         removal: .offset(x: -40).combined(with: .opacity))
+        case "pop": return .asymmetric(insertion: .scale(scale: 0.7).combined(with: .opacity),
+                                       removal: .scale(scale: 0.85).combined(with: .opacity))
         default: return .identity
         }
     }
@@ -245,9 +246,8 @@ struct SuggestionBarPreview: View {
     private var switchAnimation: Animation? {
         switch transition {
         case "instant": return nil
-        case "pop": return .spring(response: 0.3, dampingFraction: 0.7)
-        case "fade": return .easeOut(duration: 0.16)
-        default: return .easeOut(duration: 0.18)
+        case "pop": return .spring(response: 0.7, dampingFraction: 0.6)
+        default: return .easeInOut(duration: 0.5)
         }
     }
 
