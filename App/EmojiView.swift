@@ -126,13 +126,16 @@ struct EmojiPickerPreview: View {
             // The picker's own shape (440 x 337 on the stock phone), fitted into the pane.
             let fitWidth = min(geometry.size.width, geometry.size.height * 440 / 337)
             let height = fitWidth * 337 / 440
-            picker(width: fitWidth, height: height)
-                .frame(width: fitWidth, height: height)
-                .background(RoundedRectangle(cornerRadius: 14 * fitWidth / 440, style: .continuous)
-                    .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86)))
-                .clipShape(RoundedRectangle(cornerRadius: 14 * fitWidth / 440, style: .continuous))
-                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
-                .frame(width: geometry.size.width, height: geometry.size.height)
+            // The first layout pass can be zero-sized; drawing the grid then divides by zero.
+            if fitWidth > 1 {
+                picker(width: fitWidth, height: height)
+                    .frame(width: fitWidth, height: height)
+                    .background(RoundedRectangle(cornerRadius: 14 * fitWidth / 440, style: .continuous)
+                        .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86)))
+                    .clipShape(RoundedRectangle(cornerRadius: 14 * fitWidth / 440, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+            }
         }
         .onAppear(perform: loadTabs)
         .onChange(of: showRecents) { _ in loadTabs() }
@@ -198,12 +201,12 @@ struct EmojiPickerPreview: View {
         let inset: CGFloat
         if vertical {
             inset = side * 0.15
-            columns = max(1, Int((width - inset * 2 + gap) / (side + gap)))
-            cellWidth = (width - inset * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns)
+            columns = max(1, Int(max(0, width - inset * 2 + gap) / max(side + gap, 1)))
+            cellWidth = max(0, (width - inset * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns))
         } else {
             cellWidth = count == 4 ? 54.8 * s : side
             inset = count == 4 ? 7.3 * s : side * 0.2
-            columns = Int(ceil((width - inset) / (cellWidth + gap))) + 1
+            columns = Int(ceil(max(0, width - inset) / max(cellWidth + gap, 1))) + 1
         }
         let font = min(cellWidth, side) * CGFloat(size)
         let list = emoji
