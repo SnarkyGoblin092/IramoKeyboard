@@ -12,11 +12,12 @@ struct GesturesView: View {
     @AppStorage(SettingKey.flickUpCapital, store: SharedStore.defaults) private var flickUp = SettingDefault.flickUpCapital
     @AppStorage(SettingKey.flickDownAccent, store: SharedStore.defaults) private var flickDown = SettingDefault.flickDownAccent
 
+    // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
+        PinnedPreview(id: "gestures", height: 230) {
+            GesturePreview()
+        } content: {
         List {
-            Section {
-                GesturePreview().previewRow()
-            }
             Section {
                 GlassToggle(title: "Swipe typing",
                             subtitle: "Slide across the letters to write a word; the bar offers the other readings.",
@@ -84,7 +85,8 @@ struct GesturesView: View {
             .glassRows()
         }
         .listStyle(.insetGrouped)
-        .glassScreen()
+        .scrollContentBackground(.hidden)
+        }
         .navigationTitle("Gestures")
         .navigationBarTitleDisplayMode(.inline)
     }

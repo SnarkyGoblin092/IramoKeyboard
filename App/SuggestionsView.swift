@@ -18,11 +18,12 @@ struct SuggestionsView: View {
     /// Three equal words, words sized to fit (more of them), or a strip that scrolls.
     private var countIndex: Int { return scroll ? 2 : (fit ? 1 : 0) }
 
+    // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
+        PinnedPreview(id: "suggestions", height: 170) {
+            SuggestionBarPreview()
+        } content: {
         List {
-            Section {
-                SuggestionBarPreview().previewRow()
-            }
             Section {
                 GlassToggle(title: "Word suggestions",
                             subtitle: "Words to finish or fix what you're typing, above the keys.",
@@ -77,7 +78,8 @@ struct SuggestionsView: View {
             .disabled(!enabled)
         }
         .listStyle(.insetGrouped)
-        .glassScreen()
+        .scrollContentBackground(.hidden)
+        }
         .navigationTitle("Suggestion bar")
         .navigationBarTitleDisplayMode(.inline)
     }

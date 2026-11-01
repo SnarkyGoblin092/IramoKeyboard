@@ -415,12 +415,14 @@ struct ShortcutsView: View {
             && !phrase.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    // Grouped cards rather than a Form, so the shortcuts swipe to delete like the languages do.
+    // Grouped cards rather than a Form, so the shortcuts swipe to delete like the languages do; the example of
+    // the shortcut being typed stays pinned above them (PinnedPreview).
     var body: some View {
+        PinnedPreview(id: "shortcuts", height: 110) {
+            ShortcutPreview(trigger: trigger, phrase: phrase)
+        } content: {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                ShortcutPreview(trigger: trigger, phrase: phrase)
-                    .padding(.bottom, 8)
                 CardHeader("New shortcut")
                 VStack(spacing: 0) {
                     TextField("Trigger (e.g. omw)", text: $trigger)
@@ -458,7 +460,7 @@ struct ShortcutsView: View {
             .padding(.top, 12)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(GlassBackdrop())
+        }
         .navigationTitle("Text shortcuts")
         .navigationBarTitleDisplayMode(.inline)
         // Read again on every visit: the screen is built once with the parent, so the starting value above is

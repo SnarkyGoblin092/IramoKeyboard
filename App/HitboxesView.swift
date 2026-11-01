@@ -38,11 +38,12 @@ struct HitboxesView: View {
         return "Every key gets exactly the room it is drawn with."
     }
 
+    // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
+        PinnedPreview(id: "hitboxes", height: 150) {
+            HitboxPreview()
+        } content: {
         List {
-            Section {
-                HitboxPreview().previewRow()
-            }
             Section {
                 SegmentedChoice(names: ["Strict", "Normal", "Generous"],
                                 selected: sizes.firstIndex { same($0, size) }) { size = sizes[$0] }
@@ -90,7 +91,8 @@ struct HitboxesView: View {
             HitMapSection(isOn: $hitMap, strength: $hitMapStrength)
         }
         .listStyle(.insetGrouped)
-        .glassScreen()
+        .scrollContentBackground(.hidden)
+        }
         .navigationTitle("Hitboxes")
         .navigationBarTitleDisplayMode(.inline)
     }

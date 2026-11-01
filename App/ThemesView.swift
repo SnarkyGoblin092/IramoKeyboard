@@ -24,17 +24,17 @@ struct ThemesView: View {
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
+    // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to resize it.
     var body: some View {
+        PinnedPreview(id: "themes", height: 240, fills: true) {
+            PinnedKeyboard()
+        } content: {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                VStack(spacing: 8) {
-                    ThemePreview(theme: selected, accent: accent, cornerRadius: 20)
-                        .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
-                        .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 6)
-                    Text(selected.name)
-                        .font(.title3.weight(.semibold))
-                }
-                .padding(.top, 8)
+                Text(selected.name)
+                    .font(.title3.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
 
                 group("Basics", themes: basics)
                 ForEach(colourGroups) { entry in
@@ -44,7 +44,7 @@ struct ThemesView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
         }
-        .background(GlassBackdrop())
+        }
         .navigationTitle("Themes")
         .navigationBarTitleDisplayMode(.inline)
     }

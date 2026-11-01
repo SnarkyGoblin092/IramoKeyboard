@@ -27,11 +27,12 @@ struct HapticsView: View {
         return feels.firstIndex { abs($0.sharpness - sharpness) < 0.001 && abs($0.strength - strength) < 0.001 }
     }
 
+    // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
+        PinnedPreview(id: "haptics", height: 150) {
+            HapticPreview()
+        } content: {
         List {
-            Section {
-                HapticPreview().previewRow()
-            }
             Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
                     strength = on ? SettingDefault.vibration : 0
@@ -80,7 +81,8 @@ struct HapticsView: View {
             .glassRows()
         }
         .listStyle(.insetGrouped)
-        .glassScreen()
+        .scrollContentBackground(.hidden)
+        }
         .navigationTitle("Haptics")
         .navigationBarTitleDisplayMode(.inline)
     }

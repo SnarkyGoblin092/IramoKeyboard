@@ -37,12 +37,131 @@ struct PreviewCard<Content: View>: View {
     }
 }
 
-extension View {
-    /// The first row of a settings screen: the preview card on the backdrop, without a row of its own.
-    func previewRow() -> some View {
-        return self
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+// MARK: - Pinned preview
+
+/// A settings screen with its preview pinned at the top: the preview stays in view while the settings below it
+/// scroll, and the bar under the preview drags to make it bigger or smaller (remembered per screen).
+struct PinnedPreview<Preview: View, Content: View>: View {
+    @ViewBuilder let preview: () -> Preview
+    @ViewBuilder let content: () -> Content
+    /// The preview sizes itself to the pane (the keyboard) instead of being shown at its own size, scaled to fit.
+    let fills: Bool
+
+    @AppStorage private var storedHeight: Double
+    @State private var dragStartHeight: CGFloat?
+    @State private var liveHeight: CGFloat?
+
+    private static var minimumHeight: CGFloat { return 90 }
+
+    /// `id` names the screen (its height is remembered under it); `height` is where it starts.
+    init(id: String, height: CGFloat, fills: Bool = false,
+         @ViewBuilder preview: @escaping () -> Preview,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.preview = preview
+        self.content = content
+        self.fills = fills
+        _storedHeight = AppStorage(wrappedValue: Double(height), "previewHeight." + id)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let maximum = max(PinnedPreview.minimumHeight, geometry.size.height * 0.62)
+            let height = min(max(liveHeight ?? CGFloat(storedHeight), PinnedPreview.minimumHeight), maximum)
+            VStack(spacing: 0) {
+                Group {
+                    if fills {
+                        preview().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        FitToPane { preview() }
+                    }
+                }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .frame(height: height)
+                handle(height: height, maximum: maximum)
+                content()
+                    .frame(maxHeight: .infinity)
+            }
+        }
+        .background(GlassBackdrop())
+    }
+
+    /// The grip under the preview: drag it to resize; double-tap goes back to the starting size.
+    private func handle(height: CGFloat, maximum: CGFloat) -> some View {
+        Capsule()
+            .fill(Color.secondary.opacity(0.45))
+            .frame(width: 40, height: 5)
+            .frame(maxWidth: .infinity, minHeight: 26)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { value in
+                    if dragStartHeight == nil { dragStartHeight = height }
+                    liveHeight = min(max((dragStartHeight ?? height) + value.translation.height,
+                                         PinnedPreview.minimumHeight), maximum)
+                }
+                .onEnded { _ in
+                    if let final = liveHeight { storedHeight = Double(final) }
+                    liveHeight = nil
+                    dragStartHeight = nil
+                    Feedback.tick()
+                })
+            .overlay(alignment: .bottom) { Divider().opacity(0.6) }
+            .accessibilityElement()
+            .accessibilityLabel("Preview size")
+            .accessibilityValue("\(Int(height)) points")
+            .accessibilityAdjustableAction { direction in
+                let step: CGFloat = direction == .increment ? 30 : -30
+                storedHeight = Double(min(max(height + step, PinnedPreview.minimumHeight), maximum))
+            }
+    }
+}
+
+/// Shows a preview at its natural size, scaled down (never up) to fit the pane, and centred in it. Previews that
+/// size themselves to the space (the keyboard) simply fill it.
+private struct FitToPane<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var natural: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { geometry in
+            let scale = natural.height > 0 ? min(1, geometry.size.height / natural.height) : 1
+            content()
+                .frame(width: geometry.size.width)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(GeometryReader { inner in
+                    Color.clear.preference(key: NaturalSizeKey.self, value: inner.size)
+                })
+                .scaleEffect(scale, anchor: .center)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .onPreferenceChange(NaturalSizeKey.self) { natural = $0 }
+    }
+}
+
+private struct NaturalSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+}
+
+/// The keyboard preview for the pinned pane: as large as the pane allows, keeping the keyboard's proportions.
+struct PinnedKeyboard: View {
+    @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    var body: some View {
+        GeometryReader { geometry in
+            // The largest keyboard that fits: by width, or by height when the pane is short.
+            let aspect = ThemePreview.aspectWithStrip
+            let width = min(geometry.size.width, geometry.size.height * aspect)
+            ThemePreview(theme: ThemeCatalog.theme(id: themeID),
+                         accent: Color.currentAccent(name: accentName, hex: accentHex),
+                         cornerRadius: 14)
+                .frame(width: width, height: width / aspect)
+                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .frame(minHeight: 60)
     }
 }
 
