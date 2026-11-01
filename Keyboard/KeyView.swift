@@ -8,6 +8,8 @@ import UIKit
 ///  * transparent / gradient - translucent fills with a thin outline, no shadow
 ///  * liquid glass - a real `UIGlassEffect` piece (iOS 26) inside the keyboard's shared glass container,
 ///                   tinted a little for function keys, with a springy press
+///  * designed     - the theme's own fill (frosted over a blur if it says so), sheen and depth, outline,
+///                   shadow or glow, and glowing labels (ThemeStyle)
 final class KeyView: UIView {
     private(set) var spec: KeySpec
     let label = UILabel()
@@ -24,6 +26,13 @@ final class KeyView: UIView {
     private let glow: (radius: CGFloat, opacity: Float)
     /// Light at the top fading to a little shade at the bottom, over the fill (sheen and raised keys).
     private let sheen = CAGradientLayer()
+    /// A designed theme's frosted keys: the blur under the fill (the fill is then its content's background).
+    private let frostView: UIVisualEffectView?
+    /// A designed theme's shadow, at rest and pressed (nil: none).
+    private let designedShadow: (color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize)?
+    private let designedPressedShadow: (color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize)?
+    /// A designed theme's glow around the labels.
+    private let labelGlow: (radius: CGFloat, opacity: Float)?
 
     var isPressed = false {
         didSet {
@@ -41,6 +50,10 @@ final class KeyView: UIView {
         self.surface = Theme.keySurface
         self.glow = Theme.keyGlow
         self.glassView = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
+        self.frostView = Theme.frostedKeys ? UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial)) : nil
+        self.designedShadow = Theme.designedShadow(pressed: false)
+        self.designedPressedShadow = Theme.designedShadow(pressed: true)
+        self.labelGlow = Theme.labelGlow
         super.init(frame: .zero)
         // Keys on the app's light backdrop keep the light glass the theme shows in light mode.
         if Theme.contrastKeys { glassView?.overrideUserInterfaceStyle = .light }
@@ -55,6 +68,12 @@ final class KeyView: UIView {
             layer.cornerCurve = .continuous
             if drawsBorder {
                 layer.borderWidth = Theme.keyBorderWidth
+            }
+            if let frostView = frostView {
+                frostView.isUserInteractionEnabled = false
+                frostView.clipsToBounds = true
+                frostView.layer.cornerCurve = .continuous
+                addSubview(frostView)   // under the sheen, the label and the icon, added after it
             }
             if surface != .flat {
                 sheen.locations = [0, 0.55, 1]
@@ -77,6 +96,15 @@ final class KeyView: UIView {
 
         iconView.contentMode = .scaleAspectFit
         host.addSubview(iconView)
+
+        if let glow = labelGlow {
+            // Neon labels: a halo in the label's own colour (set with it in refreshAppearance).
+            for glowing in [label, iconView] as [UIView] {
+                glowing.layer.shadowRadius = glow.radius
+                glowing.layer.shadowOpacity = glow.opacity
+                glowing.layer.shadowOffset = .zero
+            }
+        }
 
         configureContent()
         refreshAppearance()
@@ -147,6 +175,11 @@ final class KeyView: UIView {
         }
         label.textColor = textColor
         iconView.tintColor = textColor
+        if labelGlow != nil {
+            let glowColor = textColor.resolvedColor(with: traitCollection).cgColor
+            label.layer.shadowColor = glowColor
+            iconView.layer.shadowColor = glowColor
+        }
 
         let fill: UIColor
         if usesAccent {
@@ -158,16 +191,26 @@ final class KeyView: UIView {
         }
         if let glassView = glassView {
             applyGlass(glassView, fill: fill)
+        } else if let frostView = frostView {
+            backgroundColor = UIColor.clear
+            frostView.contentView.backgroundColor = fill
+            applyShadow()
         } else {
             backgroundColor = fill
             applyShadow()
         }
     }
 
-    /// The shadow under or around the key: the accent glow, the raised key's drop shadow (flattened while pressed,
-    /// as if pushed in), or the native key's 1pt line.
+    /// The shadow under or around the key: a designed theme's own (soft, lift, block or glow, pulled in while
+    /// pressed, as if pushed in), the accent glow, the raised key's drop shadow (flattened while pressed), or the
+    /// native key's 1pt line.
     private func applyShadow() {
-        if glow.radius > 0 {
+        if let shadow = isPressed ? designedPressedShadow : designedShadow {
+            layer.shadowColor = shadow.color.resolvedColor(with: traitCollection).cgColor
+            layer.shadowOpacity = shadow.opacity
+            layer.shadowRadius = shadow.radius
+            layer.shadowOffset = shadow.offset
+        } else if glow.radius > 0 {
             layer.shadowColor = Theme.accent.resolvedColor(with: traitCollection).cgColor
             layer.shadowOpacity = isPressed ? glow.opacity * 0.6 : glow.opacity
             layer.shadowRadius = glow.radius
@@ -235,13 +278,15 @@ final class KeyView: UIView {
             }
             layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
             applyShadow()
+            if let frostView = frostView {
+                frostView.frame = bounds
+                frostView.layer.cornerRadius = radius
+            }
             if surface != .flat {
                 let dark = traitCollection.userInterfaceStyle == .dark
                 sheen.frame = bounds
                 sheen.cornerRadius = radius
-                sheen.colors = [UIColor(white: 1, alpha: dark ? 0.12 : 0.22).cgColor,
-                                UIColor(white: 1, alpha: 0).cgColor,
-                                UIColor(white: 0, alpha: dark ? 0.16 : 0.08).cgColor]
+                sheen.colors = Theme.sheenColors(dark: dark)
             }
         }
         label.frame = bounds.insetBy(dx: 2, dy: 0)

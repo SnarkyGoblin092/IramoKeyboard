@@ -289,7 +289,7 @@ struct SettingSlider: View {
                     }
                     Spacer()
                     if showsTest {
-                        Button("Test") { Feedback.test(strength: local) }
+                        Button(tr("Test")) { Feedback.test(strength: local) }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                     }
@@ -412,7 +412,7 @@ struct AccentPicker: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableStyle())
-                .accessibilityLabel(choice.displayName)
+                .accessibilityLabel(tr(choice.displayName))
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
             customSwatch
@@ -423,7 +423,7 @@ struct AccentPicker: View {
     /// The system colour well: choosing a colour sets the custom accent (a grey chosen before still shows as it).
     private var customSwatch: some View {
         let selected = isCustom || accentName == AccentChoice.graphite.rawValue
-        return ColorPicker("Custom colour", selection: Binding(
+        return ColorPicker(tr("Custom colour"), selection: Binding(
             get: { Color.currentAccent(name: accentName, hex: accentHex) },
             set: { newColor in
                 let hex = newColor.hexString
@@ -482,8 +482,10 @@ struct FeatureNote: View {
     private var text: String? {
         let lacking = languages.lacking(feature)
         guard !lacking.languages.isEmpty else { return nil }
-        let names = ListFormatter.localizedString(byJoining: lacking.languages.map { $0.displayName })
-        return lacking.all ? "Not available in \(names)." : "Off while typing in \(names)."
+        let formatter = ListFormatter()
+        formatter.locale = AppLanguage.locale
+        let names = formatter.string(from: lacking.languages.map { $0.localizedName }) ?? ""
+        return lacking.all ? tr("Not available in %@.", "\(names)") : tr("Off while typing in %@.", "\(names)")
     }
 
     var body: some View {

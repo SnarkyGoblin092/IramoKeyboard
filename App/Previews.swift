@@ -19,6 +19,8 @@ struct PreviewCard<Content: View>: View {
                     .padding(10)
                     .background(look.backdrop())
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    // The keyboard is laid out left to right, also when the app reads right to left.
+                    .environment(\.layoutDirection, .leftToRight)
                 Text(caption)
                     .font(.footnote)
                     .foregroundColor(.secondary)
@@ -42,6 +44,8 @@ private struct MiniKey: View {
     var letterColor: Color? = nil
     var fontSize: CGFloat = 14
 
+    private var tint: Color { return letterColor ?? (kind == .accent ? look.onAccent : look.textColor) }
+
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
@@ -50,11 +54,13 @@ private struct MiniKey: View {
                 if let letter = letter {
                     Text(letter)
                         .font(KeyFont.named(keyFont).font(size: fontSize))
-                        .foregroundColor(letterColor ?? (kind == .accent ? look.onAccent : look.textColor))
+                        .foregroundColor(tint)
+                        .keyLabelGlow(look, color: tint)
                 } else if let symbol = symbol {
                     Image(systemName: symbol)
                         .font(.system(size: fontSize))
-                        .foregroundColor(letterColor ?? (kind == .accent ? look.onAccent : look.textColor))
+                        .foregroundColor(tint)
+                        .keyLabelGlow(look, color: tint)
                 }
             }
         }
@@ -119,7 +125,10 @@ struct PinnedPreview<Preview: View, Content: View>: View {
             VStack(spacing: 0) {
                 Group {
                     if fills {
+                        // A keyboard (or the emoji picker) is laid out left to right, also when the app reads
+                        // right to left.
                         preview().frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .environment(\.layoutDirection, .leftToRight)
                     } else {
                         // At its own height (measured for the minimum), centred in a taller pane.
                         preview()
@@ -170,8 +179,8 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                 })
             .overlay(alignment: .bottom) { Divider().opacity(0.6) }
             .accessibilityElement()
-            .accessibilityLabel("Preview size")
-            .accessibilityValue("\(Int(height)) points")
+            .accessibilityLabel(tr("Preview size"))
+            .accessibilityValue(tr("%@ points", "\(Int(height))"))
             .accessibilityAdjustableAction { direction in
                 let step: CGFloat = direction == .increment ? 30 : -30
                 storedHeight = Double(clamped(height + step, maximum: maximum))
@@ -187,6 +196,7 @@ private struct NaturalHeightKey: PreferenceKey {
 /// The keyboard preview for the pinned pane: as large as the pane allows, keeping the keyboard's proportions.
 struct PinnedKeyboard: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
+    @AppStorage(SettingKey.themeEdits, store: SharedStore.defaults) private var themeEdits = SettingDefault.themeEdits
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     // Its proportions (ThemePreview.aspectWithStrip): read here so a change redraws it at once.
@@ -201,7 +211,7 @@ struct PinnedKeyboard: View {
             let rows: Double = (numberRow ? 5 : 4) + Double(ThemePreview.extraLetterRows)
             let aspect = CGFloat(440 / (barHeight + 8 + rows * (keyHeight + rowGap)))
             let width = min(geometry.size.width, geometry.size.height * aspect)
-            ThemePreview(theme: ThemeCatalog.theme(id: themeID),
+            ThemePreview(theme: ThemeCatalog.theme(id: themeID, edits: themeEdits),
                          accent: Color.currentAccent(name: accentName, hex: accentHex),
                          cornerRadius: 14)
                 .frame(width: width, height: width / aspect)
@@ -264,10 +274,10 @@ struct SuggestionBarPreview: View {
     }
 
     private var caption: String {
-        if !enabled { return "The bar stays empty: no suggestions while you type." }
-        if scroll { return "Up to ten words; swipe the bar sideways for the rest." }
-        if fit { return "Each word as wide as it needs, so more of them fit." }
-        return "Three words; the one space will write sits on the accent pill."
+        if !enabled { return tr("The bar stays empty: no suggestions while you type.") }
+        if scroll { return tr("Up to ten words; swipe the bar sideways for the rest.") }
+        if fit { return tr("Each word as wide as it needs, so more of them fit.") }
+        return tr("Three words; the one space will write sits on the accent pill.")
     }
 
     var body: some View {
@@ -427,11 +437,11 @@ struct GesturePreview: View {
     private let rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
 
     private var caption: String {
-        if !swipe { return "Swipe typing is off: words are typed key by key." }
-        if throughSpace { return "One glide writes \u{201C}hello you\u{201D}: through the space bar, then on to the next word." }
-        if phrase { return "One glide can read as a few words; the single word stays in the bar." }
-        if handoff { return "The second half of the word comes from your other thumb." }
-        return "Glide across the letters of \u{201C}hello\u{201D} and lift at the end."
+        if !swipe { return tr("Swipe typing is off: words are typed key by key.") }
+        if throughSpace { return tr("One glide writes \u{201C}hello you\u{201D}: through the space bar, then on to the next word.") }
+        if phrase { return tr("One glide can read as a few words; the single word stays in the bar.") }
+        if handoff { return tr("The second half of the word comes from your other thumb.") }
+        return tr("Glide across the letters of \u{201C}hello\u{201D} and lift at the end.")
     }
 
     var body: some View {
@@ -500,7 +510,7 @@ struct GesturePreview: View {
     }
 
     private var word: [Character] {
-        return throughSpace ? Array("hello you") : Array("hello")
+        return throughSpace ? Array("hello you") : Array("hello")   // l10n: keep
     }
 
     private func trail(centers: [Character: CGPoint], size: CGSize, progress: CGFloat, look: ThemeLook) -> some View {
@@ -565,10 +575,10 @@ struct HitboxPreview: View {
     private let letters = ["w", "e", "r", "t", "y"]
 
     private var caption: String {
-        let likely = adaptive ? " After \u{201C}th\u{201D}, the likely \u{201C}e\u{201D} gets more room." : ""
-        if size < 0.999 { return "Letters give up room to the keys beside them." + likely }
-        if size > 1.001 { return "Letters take room from the keys beside them." + likely }
-        return "Each key's touch area is the key you see." + likely
+        let likely = adaptive ? tr(" After \u{201C}th\u{201D}, the likely \u{201C}e\u{201D} gets more room.") : ""
+        if size < 0.999 { return tr("Letters give up room to the keys beside them.") + likely }
+        if size > 1.001 { return tr("Letters take room from the keys beside them.") + likely }
+        return tr("Each key's touch area is the key you see.") + likely
     }
 
     var body: some View {
@@ -622,8 +632,8 @@ struct HapticPreview: View {
     @State private var pulse = false
 
     private var caption: String {
-        if strength < 0.01 { return "No vibration on key presses." }
-        return "Tap the key to feel it. Wider means softer, taller means stronger."
+        if strength < 0.01 { return tr("No vibration on key presses.") }
+        return tr("Tap the key to feel it. Wider means softer, taller means stronger.")
     }
 
     var body: some View {
@@ -641,7 +651,7 @@ struct HapticPreview: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(strength < 0.01)
-                .accessibilityLabel("Play the vibration")
+                .accessibilityLabel(tr("Play the vibration"))
                 FeelShape(sharpness: sharpness, strength: strength < 0.01 ? 0.02 : strength)
                     .stroke(look.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                     .background(FeelShape(sharpness: sharpness, strength: strength < 0.01 ? 0.02 : strength, closed: true)

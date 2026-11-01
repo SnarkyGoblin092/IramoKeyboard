@@ -40,6 +40,10 @@ enum SettingKey {
     static let numberRow = "hunkeys.numberRow"
     static let keyHints = "hunkeys.keyHints"
     static let theme = "hunkeys.theme"
+    /// The theme editor's changes to the designed themes (ThemeEdits: JSON by theme id; "" for none).
+    static let themeEdits = "hunkeys.themeEdits"
+    /// The app's own language: "system" (the phone's) or a Language code (AppLanguage). Kept by "Reset settings".
+    static let appLanguage = "hunkeys.appLanguage"
     static let accent = "hunkeys.accent"
     static let accentHex = "hunkeys.accentHex"
     // Keys, haptics and the suggestion bar (the app's Keys, Haptics and Suggestions screens)
@@ -132,7 +136,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
-        theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
+        theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
@@ -179,11 +183,13 @@ enum SettingDefault {
     static let numberRow = false
     static let keyHints = true
     static let theme = "native"
+    static let themeEdits = ""
+    static let appLanguage = "system"
     static let accent = "blue"
     static let accentHex = ""
-    /// Flat, sheen or raised keys; "auto": raised on the colour themes, flat on the others.
+    /// Flat, sheen or raised keys for the system themes; "auto": flat. Designed themes set their own.
     static let keySurface = "auto"
-    /// None, thin, bold or accent outlines; "auto": thin on every theme but Native.
+    /// None, thin, bold or accent outlines for the system themes; "auto": thin on every theme but Native.
     static let keyBorderStyle = "auto"
     /// Off, soft or strong accent glow around the keys.
     static let keyGlow = "off"
@@ -394,6 +400,8 @@ final class Settings {
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
             SettingKey.theme: SettingDefault.theme,
+            SettingKey.themeEdits: SettingDefault.themeEdits,
+            SettingKey.appLanguage: SettingDefault.appLanguage,
             SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,
             SettingKey.accentHex: SettingDefault.accentHex,

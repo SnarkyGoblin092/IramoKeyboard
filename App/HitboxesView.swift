@@ -34,12 +34,12 @@ struct HitboxesView: View {
     private var sizeFooter: String {
         let room = DeviceMetrics.points(keyWidth * size)
         if size < 0.999 {
-            return "Letters take \(room) of room each: shift, delete and space take more of the edges next to them."
+            return tr("Letters take %@ of room each: shift, delete and space take more of the edges next to them.", "\(room)")
         }
         if size > 1.001 {
-            return "Letters take \(room) of room each: they take more of the edges next to shift, delete and space."
+            return tr("Letters take %@ of room each: they take more of the edges next to shift, delete and space.", "\(room)")
         }
-        return "Every key gets exactly the room it is drawn with."
+        return tr("Every key gets exactly the room it is drawn with.")
     }
 
     // The preview stays pinned above the settings (PinnedPreview).
@@ -49,23 +49,23 @@ struct HitboxesView: View {
         } content: {
         GlassList {
             Section {
-                SegmentedChoice(names: ["Strict", "Normal", "Generous"],
+                SegmentedChoice(names: [tr("Strict"), tr("Normal"), tr("Generous")],
                                 selected: sizes.firstIndex { same($0, size) }) { size = sizes[$0] }
-                GlassSlider(title: "Letter room", symbol: "square.dashed", value: $size,
+                GlassSlider(title: tr("Letter room"), symbol: "square.dashed", value: $size,
                             range: Settings.hitboxSizeRange, step: 0.05) { DeviceMetrics.points(keyWidth * $0) }
             } header: {
-                SectionHeader("Letter keys", symbol: "square.dashed", color: .blue)
+                SectionHeader(tr("Letter keys"), symbol: "square.dashed", color: .blue)
             } footer: {
                 Text(sizeFooter)
             }
             .glassRows()
 
             Section {
-                GlassToggle(title: "Adaptive keys",
-                            subtitle: "The letters you're likely to type next get more room, the unlikely ones less.",
+                GlassToggle(title: tr("Adaptive keys"),
+                            subtitle: tr("The letters you're likely to type next get more room, the unlikely ones less."),
                             isOn: $adaptive, feature: .keyLearning)
                 Group {
-                    SegmentedChoice(names: ["Gentle", "Normal", "Strong"],
+                    SegmentedChoice(names: [tr("Gentle"), tr("Normal"), tr("Strong")],
                                     selected: adaptiveLevels.firstIndex {
                                         same($0.grow, grow) && same($0.shrink, shrink) && same($0.strength, strength)
                                     }) { index in
@@ -73,22 +73,22 @@ struct HitboxesView: View {
                         shrink = adaptiveLevels[index].shrink
                         strength = adaptiveLevels[index].strength
                     }
-                    GlassToggle(title: "Before the first letter",
-                                subtitle: "Favour the letters words usually begin with.",
+                    GlassToggle(title: tr("Before the first letter"),
+                                subtitle: tr("Favour the letters words usually begin with."),
                                 isOn: $wordStart)
-                    GlassSlider(title: "Likely letters", symbol: "plus.magnifyingglass", value: $grow,
+                    GlassSlider(title: tr("Likely letters"), symbol: "plus.magnifyingglass", value: $grow,
                                 range: Settings.adaptiveGrowRange, step: 0.05) { "+" + DeviceMetrics.points(keyWidth * $0) }
-                    GlassSlider(title: "Unlikely letters", symbol: "minus.magnifyingglass", value: $shrink,
+                    GlassSlider(title: tr("Unlikely letters"), symbol: "minus.magnifyingglass", value: $shrink,
                                 range: Settings.adaptiveShrinkRange, step: 0.05) { "\u{2212}" + DeviceMetrics.points(keyWidth * $0) }
-                    GlassSlider(title: "Strength", symbol: "dial.medium", value: $strength,
+                    GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: $strength,
                                 range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 }
                 .disabled(!adaptive || EnabledLanguages.shared.lacking(.keyLearning).all)
                 .opacity(adaptive && !EnabledLanguages.shared.lacking(.keyLearning).all ? 1 : 0.45)
             } header: {
-                SectionHeader("Adaptive keys", symbol: "sparkles", color: .purple)
+                SectionHeader(tr("Adaptive keys"), symbol: "sparkles", color: .purple)
             } footer: {
-                Text("The middle of a key always types that key, however the room around it shifts.")
+                Text(tr("The middle of a key always types that key, however the room around it shifts."))
             }
             .glassRows()
 
@@ -96,7 +96,7 @@ struct HitboxesView: View {
         }
         .scrollContentBackground(.hidden)
         }
-        .navigationTitle("Hitboxes")
+        .navigationTitle(tr("Hitboxes"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -127,16 +127,16 @@ private struct HitMapSection: View {
 
     var body: some View {
         Section {
-            GlassToggle(title: "Learn my taps",
-                        subtitle: "Notices where you really tap each key and moves its room there.",
+            GlassToggle(title: tr("Learn my taps"),
+                        subtitle: tr("Notices where you really tap each key and moves its room there."),
                         isOn: $isOn, feature: .keyLearning)
             // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
             HStack {
-                Label("Language", systemImage: "globe")
+                Label(tr("Language"), systemImage: "globe")
                 Spacer()
-                Picker("Language", selection: $language) {
+                Picker(tr("Language"), selection: $language) {
                     ForEach(languages, id: \.self) { language in
-                        Text(language.displayName).tag(language)
+                        Text(language.localizedName).tag(language)
                     }
                 }
                 .pickerStyle(.menu)
@@ -144,13 +144,13 @@ private struct HitMapSection: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 HitMapDrawing(rows: ThemePreview.letterRows(for: language), data: data)
-                Text("\(samples) taps learned \u{00B7} \(keysLearned) keys moved")
+                Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .monospacedDigit()
             }
             .padding(.vertical, 6)
-            GlassSlider(title: "Strength", symbol: "dial.medium", value: $strength,
+            GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: $strength,
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 .disabled(!isOn)
                 .opacity(isOn ? 1 : 0.45)
@@ -158,25 +158,25 @@ private struct HitMapSection: View {
                 Feedback.tap()
                 confirmReset = true
             } label: {
-                Label("Forget learned taps", systemImage: "trash")
+                Label(tr("Forget learned taps"), systemImage: "trash")
             }
             .disabled(data.isEmpty)
-            .confirmationDialog("Forget learned taps?", isPresented: $confirmReset, titleVisibility: .visible) {
-                Button("Forget", role: .destructive) {
+            .confirmationDialog(tr("Forget learned taps?"), isPresented: $confirmReset, titleVisibility: .visible) {
+                Button(tr("Forget"), role: .destructive) {
                     Settings.shared.setHitMapData([:], for: language.rawValue)
                     data = [:]
                     Feedback.delete()
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(tr("Cancel"), role: .cancel) {}
             } message: {
-                Text("Everything learned about your taps in \(language.displayName) is forgotten.")
+                Text(tr("Everything learned about your taps in %@ is forgotten.", "\(language.localizedName)"))
             }
         } header: {
-            SectionHeader("Hit map", symbol: "scope", color: .teal)
+            SectionHeader(tr("Hit map"), symbol: "scope", color: .teal)
         } footer: {
             Text(data.isEmpty
-                 ? "Nothing learned yet. Type on the keyboard and come back."
-                 : "Each dot is where you tap that key on average; a key moves once it has 8 taps.")
+                 ? tr("Nothing learned yet. Type on the keyboard and come back.")
+                 : tr("Each dot is where you tap that key on average; a key moves once it has 8 taps."))
         }
         .glassRows()
         .onAppear { reload() }

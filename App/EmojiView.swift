@@ -9,11 +9,11 @@ struct EmojiView: View {
 
         var title: String {
             switch self {
-            case .general: return "General"
-            case .layout: return "Layout"
-            case .panel: return "Panel"
-            case .categories: return "Categories"
-            case .skinTones: return "Skin tones"
+            case .general: return tr("General")
+            case .layout: return tr("Layout")
+            case .panel: return tr("Panel")
+            case .categories: return tr("Categories")
+            case .skinTones: return tr("Skin tones")
             }
         }
 
@@ -50,7 +50,7 @@ struct EmojiView: View {
         }
         .scrollContentBackground(.hidden)
         }
-        .navigationTitle("Emoji")
+        .navigationTitle(tr("Emoji"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -141,7 +141,7 @@ struct EmojiPickerPreview: View {
         .onChange(of: showRecents) { _ in loadTabs() }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in loadTabs() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Preview of the emoji picker")
+        .accessibilityLabel(tr("Preview of the emoji picker"))
     }
 
     private func picker(width: CGFloat, height: CGFloat) -> some View {
@@ -181,7 +181,7 @@ struct EmojiPickerPreview: View {
     private func searchField(width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
         HStack(spacing: 6 * s) {
             Image(systemName: "magnifyingglass")
-            Text("Search Emoji")
+            Text(tr("Search Emoji"))
             Spacer(minLength: 0)
         }
         .font(.system(size: 18 * s))
@@ -364,12 +364,12 @@ private struct EmojiGeneralTab: View {
 
     var body: some View {
         Section {
-            GlassToggle(title: "Show recent emoji",
-                        subtitle: "A tab of the emoji you used lately. Move it anywhere on the Categories tab.",
+            GlassToggle(title: tr("Show recent emoji"),
+                        subtitle: tr("A tab of the emoji you used lately. Move it anywhere on the Categories tab."),
                         isOn: $showRecents)
             HStack(spacing: 6) {
                 if recents.isEmpty {
-                    Text("No recent emoji yet").foregroundColor(.secondary)
+                    Text(tr("No recent emoji yet")).foregroundColor(.secondary)
                 } else {
                     ForEach(recents.prefix(6), id: \.self) { emoji in
                         Text(emoji)
@@ -379,7 +379,7 @@ private struct EmojiGeneralTab: View {
                     }
                 }
                 Spacer(minLength: 8)
-                Button("Clear") {
+                Button(tr("Clear")) {
                     Settings.shared.clearRecentEmoji()
                     Feedback.delete()
                     withAnimation(.easeOut(duration: 0.2)) { recents = [] }
@@ -387,15 +387,15 @@ private struct EmojiGeneralTab: View {
                 .disabled(recents.isEmpty)
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Order").font(.subheadline).foregroundColor(.secondary)
+                Text(tr("Order")).font(.subheadline).foregroundColor(.secondary)
                 HStack(spacing: 8) {
-                    OptionCard(title: "Most recent", isOn: order == "recent") { choose("recent") } picture: {
+                    OptionCard(title: tr("Most recent"), isOn: order == "recent") { choose("recent") } picture: {
                         HStack(spacing: 4) {
                             Image(systemName: "clock").foregroundStyle(.tint)
                             Text("😇😉😁")
                         }
                     }
-                    OptionCard(title: "Most used", isOn: order == "used") { choose("used") } picture: {
+                    OptionCard(title: tr("Most used"), isOn: order == "used") { choose("used") } picture: {
                         HStack(alignment: .bottom, spacing: 6) {
                             ForEach(0..<3, id: \.self) { index in
                                 VStack(spacing: 3) {
@@ -410,23 +410,23 @@ private struct EmojiGeneralTab: View {
             .padding(.vertical, 4)
             .disabled(!showRecents)
             .opacity(showRecents ? 1 : 0.45)
-            GlassSlider(title: "How many to keep", symbol: "clock.arrow.circlepath", value: $limit,
+            GlassSlider(title: tr("How many to keep"), symbol: "clock.arrow.circlepath", value: $limit,
                         range: Settings.emojiRecentLimitRange, step: 1) { "\(Int($0.rounded()))" }
                 .disabled(!showRecents)
                 .opacity(showRecents ? 1 : 0.45)
         } header: {
-            SectionHeader("Recent emoji", symbol: "clock.fill", color: .orange)
+            SectionHeader(tr("Recent emoji"), symbol: "clock.fill", color: .orange)
         }
         .glassRows()
         .onAppear { recents = Settings.shared.orderedRecentEmoji() }
         .onChange(of: order) { _ in recents = Settings.shared.orderedRecentEmoji() }
 
         Section {
-            GlassToggle(title: "Add a space after",
-                        subtitle: "A space follows each emoji picked, so a run of them doesn't come out as one block.",
+            GlassToggle(title: tr("Add a space after"),
+                        subtitle: tr("A space follows each emoji picked, so a run of them doesn't come out as one block."),
                         isOn: $spaceAfter)
         } header: {
-            SectionHeader("Typing", symbol: "character.cursor.ibeam", color: .blue)
+            SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .blue)
         }
         .glassRows()
     }
@@ -460,10 +460,10 @@ private struct EmojiLayoutTab: View {
     }
 
     private let setups = [
-        Setup(title: "Familiar", symbol: "square.grid.3x3", rows: 4, size: 0.79, spacing: 0, search: "top", tabs: "bottom"),
-        Setup(title: "Roomy", symbol: "square.grid.2x2", rows: 3, size: 0.85, spacing: 4, search: "top", tabs: "bottom"),
-        Setup(title: "Dense", symbol: "square.grid.4x3.fill", rows: 6, size: 0.80, spacing: 0, search: "top", tabs: "bottom"),
-        Setup(title: "Grid only", symbol: "circle.grid.3x3", rows: 5, size: 0.79, spacing: 0, search: "hidden", tabs: "hidden")
+        Setup(title: tr("Familiar"), symbol: "square.grid.3x3", rows: 4, size: 0.79, spacing: 0, search: "top", tabs: "bottom"),
+        Setup(title: tr("Roomy"), symbol: "square.grid.2x2", rows: 3, size: 0.85, spacing: 4, search: "top", tabs: "bottom"),
+        Setup(title: tr("Dense"), symbol: "square.grid.4x3.fill", rows: 6, size: 0.80, spacing: 0, search: "top", tabs: "bottom"),
+        Setup(title: tr("Grid only"), symbol: "circle.grid.3x3", rows: 5, size: 0.79, spacing: 0, search: "hidden", tabs: "hidden")
     ]
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
@@ -492,27 +492,27 @@ private struct EmojiLayoutTab: View {
             }
             .padding(.vertical, 4)
         } header: {
-            SectionHeader("Quick setups", symbol: "wand.and.stars", color: .purple)
+            SectionHeader(tr("Quick setups"), symbol: "wand.and.stars", color: .purple)
         } footer: {
-            Text("Grid only hides the search field and the category tabs; ABC and delete stay.")
+            Text(tr("Grid only hides the search field and the category tabs; ABC and delete stay."))
         }
         .glassRows()
 
         Section {
-            OptionRow(title: "Scroll direction",
-                      options: [("vertical", "Vertical", "arrow.down"), ("horizontal", "Horizontal", "arrow.right")],
+            OptionRow(title: tr("Scroll direction"),
+                      options: [("vertical", tr("Vertical"), "arrow.down"), ("horizontal", tr("Horizontal"), "arrow.right")],
                       selection: $scroll)
-            GlassToggle(title: "Swipe to switch tabs",
-                        subtitle: "Swipe across the scroll direction for the next or the previous category.",
+            GlassToggle(title: tr("Swipe to switch tabs"),
+                        subtitle: tr("Swipe across the scroll direction for the next or the previous category."),
                         isOn: $swipeTabs)
-            GlassSlider(title: "Rows", symbol: "rectangle.split.1x2", value: $rows,
+            GlassSlider(title: tr("Rows"), symbol: "rectangle.split.1x2", value: $rows,
                         range: Settings.emojiRowsRange, step: 1) { "\(Int($0.rounded()))" }
-            GlassSlider(title: "Emoji size", symbol: "textformat.size", value: $size,
+            GlassSlider(title: tr("Emoji size"), symbol: "textformat.size", value: $size,
                         range: Settings.emojiSizeRange, step: 0.01) { DeviceMetrics.points(EmojiPickerMetrics.cell(rows: Int(rows.rounded())) * $0) }
-            GlassSlider(title: "Cell spacing", symbol: "arrow.left.and.right", value: $spacing,
+            GlassSlider(title: tr("Cell spacing"), symbol: "arrow.left.and.right", value: $spacing,
                         range: Settings.emojiSpacingRange, step: 1) { "\(Int($0.rounded())) pt" }
         } header: {
-            SectionHeader("Grid", symbol: "square.grid.3x3.fill", color: .blue)
+            SectionHeader(tr("Grid"), symbol: "square.grid.3x3.fill", color: .blue)
         }
         .glassRows()
     }
@@ -528,20 +528,20 @@ private struct EmojiPanelTab: View {
 
     var body: some View {
         Section {
-            OptionRow(title: "Search field",
-                      options: [("top", "Top", "rectangle.topthird.inset.filled"),
-                                ("bottom", "Bottom", "rectangle.bottomthird.inset.filled"),
-                                ("hidden", "Hidden", "eye.slash")],
+            OptionRow(title: tr("Search field"),
+                      options: [("top", tr("Top"), "rectangle.topthird.inset.filled"),
+                                ("bottom", tr("Bottom"), "rectangle.bottomthird.inset.filled"),
+                                ("hidden", tr("Hidden"), "eye.slash")],
                       selection: $search)
-            OptionRow(title: "Category tabs",
-                      options: [("top", "Top", "rectangle.topthird.inset.filled"),
-                                ("bottom", "Bottom", "rectangle.bottomthird.inset.filled"),
-                                ("hidden", "Hidden", "eye.slash")],
+            OptionRow(title: tr("Category tabs"),
+                      options: [("top", tr("Top"), "rectangle.topthird.inset.filled"),
+                                ("bottom", tr("Bottom"), "rectangle.bottomthird.inset.filled"),
+                                ("hidden", tr("Hidden"), "eye.slash")],
                       selection: $tabs)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Tab style").font(.subheadline).foregroundColor(.secondary)
+                Text(tr("Tab style")).font(.subheadline).foregroundColor(.secondary)
                 HStack(spacing: 8) {
-                    OptionCard(title: "Symbols", isOn: tabStyle == "symbols") { chooseStyle("symbols") } picture: {
+                    OptionCard(title: tr("Symbols"), isOn: tabStyle == "symbols") { chooseStyle("symbols") } picture: {
                         HStack(spacing: 8) {
                             Image(systemName: "clock")
                             Image(systemName: "face.smiling")
@@ -550,7 +550,7 @@ private struct EmojiPanelTab: View {
                         .font(.system(size: 18))
                         .foregroundStyle(.secondary)
                     }
-                    OptionCard(title: "Emoji", isOn: tabStyle == "emoji") { chooseStyle("emoji") } picture: {
+                    OptionCard(title: tr("Emoji"), isOn: tabStyle == "emoji") { chooseStyle("emoji") } picture: {
                         Text("🕘 😀 🐶").font(.system(size: 18))
                     }
                 }
@@ -558,11 +558,11 @@ private struct EmojiPanelTab: View {
             .padding(.vertical, 4)
             .disabled(tabs == "hidden")
             .opacity(tabs == "hidden" ? 0.45 : 1)
-            GlassToggle(title: "Delete key",
-                        subtitle: "Delete beside the tabs. ABC always stays, so there is a way back to the letters.",
+            GlassToggle(title: tr("Delete key"),
+                        subtitle: tr("Delete beside the tabs. ABC always stays, so there is a way back to the letters."),
                         isOn: $backspace)
         } header: {
-            SectionHeader("Panel", symbol: "rectangle.3.group", color: .teal)
+            SectionHeader(tr("Panel"), symbol: "rectangle.3.group", color: .teal)
         }
         .glassRows()
     }
@@ -584,15 +584,15 @@ private struct EmojiCategoriesTab: View {
 
     /// The system emoji keyboard's order (EmojiCategory.layout in the keyboard), Recently Used first.
     static let standard: [(key: String, title: String, emoji: String)] = [
-        ("recent", "Recently used", "🕘"),
-        ("smileys", "Smileys & people", "😀"),
-        ("animals", "Animals & nature", "🐶"),
-        ("food", "Food & drink", "🍎"),
-        ("activity", "Activity", "⚽"),
-        ("travel", "Travel & places", "🚗"),
-        ("objects", "Objects", "💡"),
-        ("symbols", "Symbols", "❤️"),
-        ("flags", "Flags", "🏁")
+        ("recent", tr("Recently used"), "🕘"),
+        ("smileys", tr("Smileys & people"), "😀"),
+        ("animals", tr("Animals & nature"), "🐶"),
+        ("food", tr("Food & drink"), "🍎"),
+        ("activity", tr("Activity"), "⚽"),
+        ("travel", tr("Travel & places"), "🚗"),
+        ("objects", tr("Objects"), "💡"),
+        ("symbols", tr("Symbols"), "❤️"),
+        ("flags", tr("Flags"), "🏁")
     ]
 
     private func info(_ key: String) -> (key: String, title: String, emoji: String) {
@@ -617,16 +617,16 @@ private struct EmojiCategoriesTab: View {
                     }
                 }
             }
-            Button("Restore the standard order") {
+            Button(tr("Restore the standard order")) {
                 Feedback.choose()
                 withAnimation(.easeOut(duration: 0.2)) { order = EmojiCategoriesTab.standard.map { $0.key } }
                 SharedStore.defaults.set([String](), forKey: SettingKey.emojiCategoryOrder)
             }
             .disabled(order == EmojiCategoriesTab.standard.map { $0.key })
         } header: {
-            SectionHeader("Categories", symbol: "square.stack.fill", color: .indigo)
+            SectionHeader(tr("Categories"), symbol: "square.stack.fill", color: .indigo)
         } footer: {
-            Text("The picker's tabs, top to bottom here and left to right on the keyboard. At least one category stays shown.")
+            Text(tr("The picker's tabs, top to bottom here and left to right on the keyboard. At least one category stays shown."))
         }
         .glassRows()
         .onAppear(perform: load)
@@ -641,7 +641,7 @@ private struct EmojiCategoriesTab: View {
         }
         .buttonStyle(.borderless)
         .disabled(!enabled)
-        .accessibilityLabel(symbol == "chevron.up" ? "Move up" : "Move down")
+        .accessibilityLabel(symbol == "chevron.up" ? tr("Move up") : tr("Move down"))
     }
 
     private func load() {
@@ -683,7 +683,7 @@ private struct EmojiSkinToneTab: View {
     @AppStorage(SettingKey.emojiSkinTone, store: SharedStore.defaults) private var tone = SettingDefault.emojiSkinTone
     @AppStorage(SettingKey.emojiHoldDelay, store: SharedStore.defaults) private var holdDelay = SettingDefault.emojiHoldDelay
 
-    private static let names = ["Default", "Light", "Medium-light", "Medium", "Medium-dark", "Dark"]
+    private static var names: [String] { return [tr("Default"), tr("Light"), tr("Medium-light"), tr("Medium"), tr("Medium-dark"), tr("Dark")] }
     private static let waves = ["👋", "👋🏻", "👋🏼", "👋🏽", "👋🏾", "👋🏿"]
 
     private var current: Int { return min(max(Int(tone.rounded()), 0), 5) }
@@ -707,13 +707,13 @@ private struct EmojiSkinToneTab: View {
                     .font(.system(size: 26))
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(Color(.tertiarySystemFill)))
-                GlassSlider(title: "Hold to pick a tone", symbol: "hand.tap", value: $holdDelay,
+                GlassSlider(title: tr("Hold to pick a tone"), symbol: "hand.tap", value: $holdDelay,
                             range: Settings.emojiHoldDelayRange, step: 0.01) { "\(Int(($0 * 1000).rounded())) ms" }
             }
         } header: {
-            SectionHeader("Default skin tone", symbol: "hand.raised.fill", color: .orange)
+            SectionHeader(tr("Default skin tone"), symbol: "hand.raised.fill", color: .orange)
         } footer: {
-            Text("Emoji with skin tones show in this one. Hold an emoji for the others.")
+            Text(tr("Emoji with skin tones show in this one. Hold an emoji for the others."))
         }
         .glassRows()
     }

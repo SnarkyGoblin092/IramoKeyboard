@@ -19,7 +19,7 @@ struct FunctionsView: View {
         GlassList {
             Section {
                 if tools.isEmpty {
-                    Text("No functions yet: add some below.").foregroundColor(.secondary)
+                    Text(tr("No functions yet: add some below.")).foregroundColor(.secondary)
                 } else {
                     ForEach(tools, id: \.self) { tool in
                         let index = tools.firstIndex(of: tool) ?? 0
@@ -35,10 +35,9 @@ struct FunctionsView: View {
                     }
                 }
             } header: {
-                SectionHeader("On the panel", symbol: "square.grid.2x2.fill", color: .pink)
+                SectionHeader(tr("On the panel"), symbol: "square.grid.2x2.fill", color: .pink)
             } footer: {
-                Text("Tap the grid button at the left of the suggestion bar to open the panel; the order here is the "
-                     + "panel's, left to right and row by row. Swipe a function left to remove it.")
+                Text(tr("Tap the grid button at the left of the suggestion bar to open the panel; the order here is the panel's, left to right and row by row. Swipe a function left to remove it."))
             }
             .glassRows()
 
@@ -60,15 +59,15 @@ struct FunctionsView: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    SectionHeader("Add", symbol: "plus", color: .green)
+                    SectionHeader(tr("Add"), symbol: "plus", color: .green)
                 } footer: {
-                    Text("Copy, cut, paste, the clipboard and vibration need Full Access.")
+                    Text(tr("Copy, cut, paste, the clipboard and vibration need Full Access."))
                 }
                 .glassRows()
             }
 
             Section {
-                Button("Restore the standard functions") {
+                Button(tr("Restore the standard functions")) {
                     Feedback.choose()
                     keepsSplit = !isPad
                     save(KeyboardTool.standard.filter { $0 != .split || isPad })
@@ -78,7 +77,7 @@ struct FunctionsView: View {
             .glassRows()
         }
         .glassScreen()
-        .navigationTitle("Functions panel")
+        .navigationTitle(tr("Functions panel"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             let stored = KeyboardTool.list(from: SharedStore.defaults.stringArray(forKey: SettingKey.keyboardTools)
@@ -97,7 +96,7 @@ struct FunctionsView: View {
         }
         .buttonStyle(.borderless)
         .disabled(!enabled)
-        .accessibilityLabel(symbol == "chevron.up" ? "Move up" : "Move down")
+        .accessibilityLabel(symbol == "chevron.up" ? tr("Move up") : tr("Move down"))
     }
 
     private func move(_ index: Int, by step: Int) {
@@ -134,8 +133,8 @@ private struct ToolRow: View {
         HStack(spacing: 12) {
             IconTile(symbol: tool.symbol, color: .pink)
             VStack(alignment: .leading, spacing: 2) {
-                Text(tool.title).foregroundColor(.primary)
-                Text(tool.subtitle).font(.footnote).foregroundColor(.secondary)
+                Text(tr(tool.title)).foregroundColor(.primary)
+                Text(tr(tool.subtitle)).font(.footnote).foregroundColor(.secondary)
             }
         }
     }

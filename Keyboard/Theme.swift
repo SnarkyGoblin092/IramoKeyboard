@@ -15,8 +15,8 @@ extension ThemeRGBA {
 
 /// Resolves the active theme (see `ThemeCatalog`) into the colours and flags the keyboard draws with.
 ///
-/// `Theme.reload()` re-reads the theme id; the controller calls it whenever it (re)builds the interface,
-/// so a theme change picked in the app takes effect the next time the keyboard appears.
+/// `Theme.reload()` re-reads the theme id and the theme editor's changes; the controller calls it whenever it
+/// (re)builds the interface, so a theme change picked in the app takes effect the next time the keyboard appears.
 enum Theme {
 
     struct Palette {
@@ -49,9 +49,14 @@ enum Theme {
         return SharedStore.defaults.string(forKey: SettingKey.theme) ?? ThemeCatalog.defaultID
     }
 
-    /// Re-reads the theme and accent from the settings.
+    /// The stored theme editor changes, without touching the cached theme.
+    static func storedEdits() -> String {
+        return SharedStore.defaults.string(forKey: SettingKey.themeEdits) ?? ""
+    }
+
+    /// Re-reads the theme (with the editor's changes) and accent from the settings.
     static func reload() {
-        let theme = ThemeCatalog.theme(id: storedID())
+        let theme = ThemeCatalog.theme(id: storedID(), edits: storedEdits())
         definition = theme
         palette = makePalette(for: theme)
         contrastPalette = makeContrastPalette(from: palette, kind: theme.kind)
@@ -65,40 +70,59 @@ enum Theme {
     /// Real Liquid Glass (iOS 26 SDK + iOS 26 phone + the Liquid Glass theme).
     static var usesRealGlass: Bool { return isLiquidGlass && GlassSupport.isAvailable }
 
-    /// Dark/light forced by the theme (gradient themes), or `.unspecified` to follow the system.
+    /// A designed theme's look (nil for the system themes).
+    static var style: ThemeStyle? { return definition.style }
+
+    /// Dark/light forced by the theme (designed themes, by their backdrop), or `.unspecified` to follow the system.
     static var interfaceStyle: UIUserInterfaceStyle {
         guard let dark = definition.isDark else { return .unspecified }
         return dark ? .dark : .light
     }
 
-    /// Corner radius of a key of this size: the user's roundness (0...1) times half the shorter side.
-    /// 0.26 gives about the native 5.5pt on a phone-sized key; 1 is a full capsule.
+    /// Corner radius of a key of this size: the roundness (0...1) times half the shorter side; a designed theme's
+    /// own, else the user's (the Keys screen). 0.26 gives about the native 5.5pt on a phone-sized key; 1 is a
+    /// full capsule.
     static func keyCornerRadius(for size: CGSize) -> CGFloat {
         let half = min(size.width, size.height) / 2
         guard half > 0 else { return 0 }
-        return min(half, CGFloat(Prefs.keyRoundness) * half)
+        let roundness = min(max(style?.roundness ?? Prefs.keyRoundness, 0), 1)
+        return min(half, CGFloat(roundness) * half)
     }
 
     /// Native keys carry the 1pt shadow line under them.
     static var drawsKeyShadow: Bool { return kind == .native }
-    // MARK: Key style (the Keys screen's Surface, Border and Glow; "auto" follows the theme)
+    // MARK: Key style (the Keys screen's Surface, Border and Glow for the system themes; designed themes bring
+    // their own sheen and depth, outline, shadow or glow)
 
     enum KeySurface { case flat, sheen, raised }
     enum KeyBorderStyle { case none, thin, bold, accent }
 
-    /// Flat fills, a soft light-to-shade sheen, or the sheen with a drop shadow under the key (the colour themes'
-    /// own look). Real Liquid Glass keys are glass and stay as they are.
+    /// Flat fills, a soft light-to-shade sheen, or the sheen with a drop shadow under the key. Real Liquid Glass
+    /// keys are glass and stay as they are; a designed theme has the sheen layer when it has sheen or depth (its
+    /// shadow is `designedShadow`).
     static var keySurface: KeySurface {
         guard !usesRealGlass else { return .flat }
+        if let style = style { return style.hasSheen ? .sheen : .flat }
         switch Prefs.keySurface {
         case "flat": return .flat
         case "sheen": return .sheen
         case "raised": return .raised
-        default: return kind == .colored ? .raised : .flat
+        default: return .flat
         }
     }
 
+    /// The sheen layer's colours, top to bottom (at 0, 0.55 and 1): a designed theme's sheen and depth, else the
+    /// Keys screen's soft light and shade.
+    static func sheenColors(dark: Bool) -> [CGColor] {
+        if let style = style {
+            let alphas = style.sheenAlphas
+            return [white(CGFloat(alphas.top)).cgColor, white(0).cgColor, black(CGFloat(alphas.bottom)).cgColor]
+        }
+        return [white(dark ? 0.12 : 0.22).cgColor, white(0).cgColor, black(dark ? 0.16 : 0.08).cgColor]
+    }
+
     static var keyBorderStyle: KeyBorderStyle {
+        if let style = style { return style.borderWidth > 0.01 ? .thin : .none }
         switch Prefs.keyBorderStyle {
         case "none": return .none
         case "thin": return .thin
@@ -128,6 +152,7 @@ enum Theme {
     }
 
     static var keyBorderWidth: CGFloat {
+        if let style = style { return CGFloat(min(max(style.borderWidth, 0), ThemeStyle.borderWidthRange.upperBound)) }
         switch keyBorderStyle {
         case .none: return 0
         case .thin: return 0.5
@@ -136,8 +161,10 @@ enum Theme {
         }
     }
 
-    /// The outline: the theme's hairline, a stronger line in the key label's colour, or the accent.
+    /// The outline: a designed theme's line colour, or the theme's hairline, a stronger line in the key label's
+    /// colour, or the accent.
     static var keyBorderColor: UIColor {
+        if let style = style { return style.line.uiColor }
         switch keyBorderStyle {
         case .none: return UIColor.clear
         case .thin: return kind == .native ? pick(black(0.18), white(0.28)) : palette.keyBorder
@@ -146,15 +173,32 @@ enum Theme {
         }
     }
 
-    /// The accent glow around the keys: its blur radius and strength (0: none).
+    /// The Keys screen's accent glow around the keys: its blur radius and strength (0: none). Designed themes
+    /// have their own (`designedShadow`).
     static var keyGlow: (radius: CGFloat, opacity: Float) {
-        guard !usesRealGlass else { return (0, 0) }
+        guard !usesRealGlass, style == nil else { return (0, 0) }
         switch Prefs.keyGlow {
         case "soft": return (5, 0.55)
         case "strong": return (10, 0.95)
         default: return (0, 0)
         }
     }
+
+    /// A designed theme's shadow under a key (soft, lift, block or glow), pressed or not; nil for none.
+    static func designedShadow(pressed: Bool) -> (color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize)? {
+        guard let metrics = style?.shadowMetrics(pressed: pressed) else { return nil }
+        return (metrics.color.uiColor, Float(metrics.opacity), CGFloat(metrics.radius),
+                CGSize(width: metrics.x, height: metrics.y))
+    }
+
+    /// A designed theme's glow around the key labels (radius, opacity), or nil.
+    static var labelGlow: (radius: CGFloat, opacity: Float)? {
+        guard let glow = style?.labelGlow else { return nil }
+        return (CGFloat(glow.radius), Float(glow.opacity))
+    }
+
+    /// A designed theme's frosted keys: a blur of the backdrop under each key's fill.
+    static var frostedKeys: Bool { return style?.frosted == true && !usesRealGlass }
 
     // MARK: Colours (read at use time, so they follow the cached palette)
 
@@ -201,6 +245,10 @@ enum Theme {
                               secondaryText: UIColor.secondaryLabel, glass: false)
         case .liquidGlass where usesRealGlass:
             return SearchLook(fill: UIColor.clear, text: p.keyText, secondaryText: p.keySecondaryText, glass: true)
+        case .designed:
+            // A clear key would leave the pill invisible: it is at least half solid.
+            let fill = style.map { $0.key.withAlpha(max($0.key.a * $0.keyOpacity, 0.5)).uiColor } ?? p.letterKey
+            return SearchLook(fill: fill, text: p.keyText, secondaryText: p.keySecondaryText, glass: false)
         default:
             return SearchLook(fill: p.letterKey, text: p.keyText, secondaryText: p.keySecondaryText, glass: false)
         }
@@ -230,10 +278,6 @@ enum Theme {
         let rgb = HexColor.parse(customHex) ?? (AccentChoice(rawValue: accentName) ?? .blue).rgb
         let userAccent = UIColor(red: CGFloat(rgb.red), green: CGFloat(rgb.green), blue: CGFloat(rgb.blue), alpha: 1)
         let userOnAccent = contrastingText(on: rgb)
-        // Any accent the user picked wins; a gradient theme only keeps its own accent while the default is untouched.
-        let userPicked = !customHex.isEmpty || accentName != SettingDefault.accent
-        let gradientAccent = userPicked ? userAccent : theme.accent.uiColor
-        let gradientOnAccent = userPicked ? userOnAccent : theme.onAccent.uiColor
 
         switch theme.kind {
         case .native:
@@ -296,38 +340,39 @@ enum Theme {
                 stripFill: UIColor.clear,
                 separator: pick(black(0.12), white(0.20)))
 
-        case .colored:
-            // A lighter shade in light mode (ThemeDefinition.lightModeVariant), the theme's own colours in dark.
-            let light = theme.lightModeVariant
+        case .designed:
+            // Fixed colours (the theme forces light or dark by its backdrop) and its own accent, which the theme
+            // editor changes, rather than the app's.
+            guard let style = theme.style else { return makePalette(for: ThemeCatalog.native) }
             return Palette(
-                accent: gradientAccent,
-                onAccent: gradientOnAccent,
-                text: UIColor.label,
-                keyText: pick(light.text.uiColor, theme.text.uiColor),
-                secondaryText: UIColor.secondaryLabel,
-                keySecondaryText: pick(light.secondaryText.uiColor, theme.secondaryText.uiColor),
-                letterKey: pick(light.key.uiColor, theme.key.uiColor),
-                functionKey: pick(light.function.uiColor, theme.function.uiColor),
-                letterKeyPressed: pick(light.keyPressed.uiColor, theme.keyPressed.uiColor),
-                functionKeyPressed: pick(light.functionPressed.uiColor, theme.functionPressed.uiColor),
+                accent: style.accent.uiColor,
+                onAccent: style.onAccent.uiColor,
+                text: style.text.uiColor,
+                keyText: style.text.uiColor,
+                secondaryText: style.secondaryText.uiColor,
+                keySecondaryText: style.secondaryText.uiColor,
+                letterKey: style.keyFill.uiColor,
+                functionKey: style.functionFill.uiColor,
+                letterKeyPressed: style.keyPressedFill.uiColor,
+                functionKeyPressed: style.functionPressedFill.uiColor,
                 keyShadow: UIColor.clear,
-                keyBorder: pick(white(0.60), white(0.28)),
-                popupFill: pick(light.popup.uiColor, theme.popup.uiColor),
-                panelBackground: pick(UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1), grey(0.17)),
+                keyBorder: style.line.uiColor,
+                popupFill: style.popupFill.uiColor,
+                panelBackground: style.background.uiColor,
                 stripFill: UIColor.clear,
-                separator: pick(black(0.12), white(0.20)))
+                separator: style.text.withAlpha(0.2).uiColor)
         }
     }
 
     /// The theme's key fills for a backdrop of the other style: the same look, but standing out from it. Dark
     /// keys (on a light backdrop) are a light grey with black letters; the see-through themes stay see-through
-    /// with a stronger tint. (`pick`: light keys on a dark backdrop, dark keys on a light one.)
+    /// with a stronger tint. (`pick`: light keys on a dark backdrop, dark keys on a light one.) Designed themes
+    /// force their own light or dark, so they never need it.
     private static func makeContrastPalette(from base: Palette, kind: ThemeDefinition.Kind) -> Palette {
         var p = base
-        if kind != .colored {
-            p.keyText = UIColor.black
-            p.keySecondaryText = black(0.55)
-        }
+        guard kind != .designed else { return p }
+        p.keyText = UIColor.black
+        p.keySecondaryText = black(0.55)
         switch kind {
         case .native:
             let nativeFunction = UIColor(red: 0.675, green: 0.702, blue: 0.745, alpha: 1)
@@ -347,8 +392,8 @@ enum Theme {
             p.functionKey = black(0.14)
             p.letterKeyPressed = black(0.22)
             p.functionKeyPressed = black(0.06)
-        case .colored:
-            break   // dark keys keep the theme's own colours, which stand out on the light backdrop too
+        case .designed:
+            break
         }
         return p
     }

@@ -218,7 +218,7 @@ enum DeviceMetrics {
     /// A strength with no unit of its own (how much a feature acts), in words.
     static func level(_ value: Double, in range: ClosedRange<Double>) -> String {
         let share = (value - range.lowerBound) / max(range.upperBound - range.lowerBound, .ulpOfOne)
-        let names = ["Off", "Faint", "Light", "Medium", "Strong", "Full"]
+        let names = [tr("Off"), tr("Faint"), tr("Light"), tr("Medium"), tr("Strong"), tr("Full")]
         if share <= 0.001 && range.lowerBound <= 0 { return names[0] }
         return names[1 + min(4, max(0, Int(share * 5)))]
     }
@@ -273,7 +273,7 @@ struct SegmentedChoice: View {
             if let title = title {
                 Text(title).font(.subheadline).foregroundColor(.secondary)
             }
-            Picker(title ?? "Preset", selection: Binding(get: { selected ?? -1 }, set: { index in
+            Picker(title ?? tr("Preset"), selection: Binding(get: { selected ?? -1 }, set: { index in
                 guard index != selected else { return }
                 if knock { Feedback.choose() }
                 choose(index)
@@ -477,7 +477,7 @@ extension View {
     private func listSwipeToDelete(enabled: Bool, perform: @escaping () -> Void) -> some View {
         return self.swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if enabled {
-                Button(role: .destructive, action: perform) { Label("Delete", systemImage: "trash") }
+                Button(role: .destructive, action: perform) { Label(tr("Delete"), systemImage: "trash") }
             }
         }
     }
@@ -518,7 +518,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
             .onTapGesture { close() }
             .overlay(alignment: .trailing) {
                 Button(action: delete) {
-                    Text("Delete")
+                    Text(tr("Delete"))
                         .font(.body.weight(.semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)

@@ -21,76 +21,76 @@ struct GesturesView: View {
         } content: {
         GlassList {
             Section {
-                GlassToggle(title: "Swipe typing",
-                            subtitle: "Slide across the letters to write a word; the bar offers the other readings.",
+                GlassToggle(title: tr("Swipe typing"),
+                            subtitle: tr("Slide across the letters to write a word; the bar offers the other readings."),
                             isOn: $swipe, feature: .swipe)
                 Group {
-                    GlassToggle(title: "Thumb handoff",
-                                subtitle: "Touch a letter with your other thumb while gliding, or just after lifting, and the same word goes on.",
+                    GlassToggle(title: tr("Thumb handoff"),
+                                subtitle: tr("Touch a letter with your other thumb while gliding, or just after lifting, and the same word goes on."),
                                 isOn: $twoThumbs)
-                    GlassToggle(title: "Glide through space",
-                                subtitle: "Slide onto the space bar to finish a word, then back onto the letters for the next one.",
+                    GlassToggle(title: tr("Glide through space"),
+                                subtitle: tr("Slide onto the space bar to finish a word, then back onto the letters for the next one."),
                                 isOn: $spaceCommits)
-                    GlassToggle(title: "Phrase glide",
-                                subtitle: "One glide may read as two or three words (\u{201C}do it\u{201D}); the single word stays in the bar.",
+                    GlassToggle(title: tr("Phrase glide"),
+                                subtitle: tr("One glide may read as two or three words (\u{201C}do it\u{201D}); the single word stays in the bar."),
                                 isOn: $multiWord)
-                    GlassToggle(title: "Undo a swipe with one delete",
-                                subtitle: "Delete right after a swipe removes the whole word. Off: one letter at a time.",
+                    GlassToggle(title: tr("Undo a swipe with one delete"),
+                                subtitle: tr("Delete right after a swipe removes the whole word. Off: one letter at a time."),
                                 isOn: $deleteSwiped)
-                    GlassSlider(title: "Trail length", symbol: "scribble", value: $trailLength,
+                    GlassSlider(title: tr("Trail length"), symbol: "scribble", value: $trailLength,
                                 range: Settings.swipeTrailLengthRange, step: 10) { "\(Int($0.rounded())) pt" }
                 }
                 .disabled(!swipe || languages.lacking(.swipe).all)
             } header: {
-                SectionHeader("Letters", symbol: "hand.draw.fill", color: .blue)
+                SectionHeader(tr("Letters"), symbol: "hand.draw.fill", color: .blue)
             }
             .glassRows()
 
             Section {
-                SettingSlider("Hold delay",
+                SettingSlider(tr("Hold delay"),
                               key: SettingKey.holdDelay,
                               defaultValue: SettingDefault.holdDelay,
                               range: Settings.holdDelayRange,
                               step: 0.05,
-                              subtitle: "How long to hold a key before its accents appear") { String(format: "%.2f s", $0) }
-                GlassToggle(title: "Flick up for a capital",
-                            subtitle: "A short flick up on a letter types it as a capital.",
+                              subtitle: tr("How long to hold a key before its accents appear")) { String(format: "%.2f s", $0) }
+                GlassToggle(title: tr("Flick up for a capital"),
+                            subtitle: tr("A short flick up on a letter types it as a capital."),
                             isOn: $flickUp, feature: .capitals)
-                GlassToggle(title: "Flick down for an accent",
-                            subtitle: "A short flick straight down types the key's first accent.",
+                GlassToggle(title: tr("Flick down for an accent"),
+                            subtitle: tr("A short flick straight down types the key's first accent."),
                             isOn: $flickDown)
             } header: {
-                SectionHeader("Accents and capitals", symbol: "textformat.abc.dottedunderline", color: .orange)
+                SectionHeader(tr("Accents and capitals"), symbol: "textformat.abc.dottedunderline", color: .orange)
             } footer: {
-                Text("Flicks are short and straight; a longer slide is still swipe typing.")
+                Text(tr("Flicks are short and straight; a longer slide is still swipe typing."))
             }
             .glassRows()
 
             Section {
-                GlassToggle(title: "Move the cursor",
-                            subtitle: "Hold the space bar until the letters fade, then slide left or right.",
+                GlassToggle(title: tr("Move the cursor"),
+                            subtitle: tr("Hold the space bar until the letters fade, then slide left or right."),
                             isOn: $cursor)
             } header: {
-                SectionHeader("Space bar", symbol: "space", color: .teal)
+                SectionHeader(tr("Space bar"), symbol: "space", color: .teal)
             } footer: {
-                Text("A quick sideways swipe on the space bar switches the language instead.")
+                Text(tr("A quick sideways swipe on the space bar switches the language instead."))
             }
             .glassRows()
 
             Section {
-                GlassToggle(title: "Delete whole words",
-                            subtitle: "Slide left from the delete key: each step removes one more word.",
+                GlassToggle(title: tr("Delete whole words"),
+                            subtitle: tr("Slide left from the delete key: each step removes one more word."),
                             isOn: $deleteWords)
             } header: {
-                SectionHeader("Delete key", symbol: "delete.left.fill", color: .red)
+                SectionHeader(tr("Delete key"), symbol: "delete.left.fill", color: .red)
             } footer: {
-                Text("Holding delete repeats it, letter by letter.")
+                Text(tr("Holding delete repeats it, letter by letter."))
             }
             .glassRows()
         }
         .scrollContentBackground(.hidden)
         }
-        .navigationTitle("Gestures")
+        .navigationTitle(tr("Gestures"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -295,7 +295,7 @@ final class KeyboardViewController: UIInputViewController {
     private func settingsSignature() -> String {
         let s = settings
         return [
-            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
+            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), Theme.storedEdits(), s.accentName,
             "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle, s.keyGlow, s.keyFont,
             s.enabledLanguages.joined(separator: ","),
             SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
@@ -386,7 +386,18 @@ final class KeyboardViewController: UIInputViewController {
         clipboardPanel = nil
         for sub in container.subviews { sub.removeFromSuperview() }
 
-        if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
+        if let style = Theme.style {
+            // A designed theme paints its own backdrop (gradient and texture) behind everything.
+            let backdrop = ThemeBackdropView(style: style)
+            backdrop.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(backdrop)
+            NSLayoutConstraint.activate([
+                backdrop.topAnchor.constraint(equalTo: container.topAnchor),
+                backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        } else if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
             // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
             // normal keyboard background, so paint one.
             let solid = UIView()

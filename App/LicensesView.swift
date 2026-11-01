@@ -19,24 +19,23 @@ struct LicensesView: View {
     var body: some View {
         GlassList {
             Section {
-                Text("Iramo. Copyright © 2026 Orsós Emil. All rights reserved.").glassRows()
+                Text(tr("Iramo. Copyright © 2026 Orsós Emil. All rights reserved.")).glassRows()
             } footer: {
-                Text("The third-party material below keeps its own licences.")
+                Text(tr("The third-party material below keeps its own licences."))
             }
             Section {
                 ForEach(Licenses.data) { item in row(item) }.glassRows()
             } header: {
-                Text("Words and emoji")
+                Text(tr("Words and emoji"))
             } footer: {
-                Text("The keyboard's dictionaries are adapted from FrequencyWords and are shared under the same "
-                     + "licence, CC BY-SA 4.0.")
+                Text(tr("The keyboard's dictionaries are adapted from FrequencyWords and are shared under the same licence, CC BY-SA 4.0."))
             }
-            Section("Emoji tab icons") {
+            Section(tr("Emoji tab icons")) {
                 ForEach(Licenses.icons) { item in row(item) }.glassRows()
             }
         }
         .glassScreen()
-        .navigationTitle("Licences")
+        .navigationTitle(tr("Licences"))
         .navigationBarTitleDisplayMode(.inline)
     }
 

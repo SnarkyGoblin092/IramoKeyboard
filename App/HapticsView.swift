@@ -15,11 +15,11 @@ struct HapticsView: View {
         let strength: Double
     }
 
-    private let feels = [Feel(name: "Soft", sharpness: 0.1, strength: 0.45),
-                         Feel(name: "Light", sharpness: 0.3, strength: 0.38),
-                         Feel(name: "Medium", sharpness: 0.5, strength: 0.55),
-                         Feel(name: "Firm", sharpness: 0.7, strength: 0.75),
-                         Feel(name: "Crisp", sharpness: 0.9, strength: 0.6)]
+    private let feels = [Feel(name: tr("Soft"), sharpness: 0.1, strength: 0.45),
+                         Feel(name: tr("Light"), sharpness: 0.3, strength: 0.38),
+                         Feel(name: tr("Medium"), sharpness: 0.5, strength: 0.55),
+                         Feel(name: tr("Firm"), sharpness: 0.7, strength: 0.75),
+                         Feel(name: tr("Crisp"), sharpness: 0.9, strength: 0.6)]
 
     private var isOn: Bool { return strength > 0.01 }
 
@@ -38,51 +38,51 @@ struct HapticsView: View {
                     strength = on ? SettingDefault.vibration : 0
                     Feedback.tick()
                 })) {
-                    Label("Vibrate on key presses", systemImage: "iphone.radiowaves.left.and.right")
+                    Label(tr("Vibrate on key presses"), systemImage: "iphone.radiowaves.left.and.right")
                 }
                 if isOn {
-                    SegmentedChoice(title: "Feel", names: feels.map { $0.name }, selected: feelIndex, knock: false) { index in
+                    SegmentedChoice(title: tr("Feel"), names: feels.map { $0.name }, selected: feelIndex, knock: false) { index in
                         sharpness = feels[index].sharpness
                         strength = feels[index].strength
                         Feedback.test(strength: strength, sharpness: sharpness)
                     }
-                    GlassSlider(title: "Strength", symbol: "speaker.wave.2", value: $strength,
+                    GlassSlider(title: tr("Strength"), symbol: "speaker.wave.2", value: $strength,
                                 range: 0.1...1, step: 0.05) { DeviceMetrics.level($0, in: 0.1...1) }
-                    GlassSlider(title: "Sharpness", symbol: "waveform.path", value: $sharpness,
+                    GlassSlider(title: tr("Sharpness"), symbol: "waveform.path", value: $sharpness,
                                 range: 0...1, step: 0.05) { value in
-                        ["Soft", "Light", "Medium", "Firm", "Crisp"][min(4, max(0, Int(value * 5)))]
+                        [tr("Soft"), tr("Light"), tr("Medium"), tr("Firm"), tr("Crisp")][min(4, max(0, Int(value * 5)))]
                     }
                 }
             } header: {
-                SectionHeader("Vibration", symbol: "iphone.radiowaves.left.and.right", color: .pink)
+                SectionHeader(tr("Vibration"), symbol: "iphone.radiowaves.left.and.right", color: .pink)
             } footer: {
-                Text("Needs Full Access for the keyboard. Sharpness goes from a soft thud to a crisp tap.")
+                Text(tr("Needs Full Access for the keyboard. Sharpness goes from a soft thud to a crisp tap."))
             }
             .glassRows()
 
             Section {
-                GlassToggle(title: "When cursor mode starts",
-                            subtitle: "One tick when holding the space bar turns it into a trackpad.",
+                GlassToggle(title: tr("When cursor mode starts"),
+                            subtitle: tr("One tick when holding the space bar turns it into a trackpad."),
                             isOn: $cursorStart)
-                GlassToggle(title: "For each character",
-                            subtitle: "A light tick for every character the cursor moves past.",
+                GlassToggle(title: tr("For each character"),
+                            subtitle: tr("A light tick for every character the cursor moves past."),
                             isOn: $cursorTick)
             } header: {
-                SectionHeader("Cursor ticks", symbol: "character.cursor.ibeam", color: .teal)
+                SectionHeader(tr("Cursor ticks"), symbol: "character.cursor.ibeam", color: .teal)
             }
             .glassRows()
 
             Section {
-                GlassToggle(title: "Key clicks", subtitle: "The system key sound, muted by the silent switch.",
+                GlassToggle(title: tr("Key clicks"), subtitle: tr("The system key sound, muted by the silent switch."),
                             isOn: $clicks)
             } header: {
-                SectionHeader("Sound", symbol: "speaker.wave.2.fill", color: .orange)
+                SectionHeader(tr("Sound"), symbol: "speaker.wave.2.fill", color: .orange)
             }
             .glassRows()
         }
         .scrollContentBackground(.hidden)
         }
-        .navigationTitle("Haptics")
+        .navigationTitle(tr("Haptics"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
