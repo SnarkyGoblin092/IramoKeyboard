@@ -152,6 +152,8 @@ struct SegmentedChoice: View {
     var title: String? = nil
     let names: [String]
     let selected: Int?
+    /// Off where choosing plays a haptic of its own (the Haptics screen's feels).
+    var knock = true
     let choose: (Int) -> Void
 
     var body: some View {
@@ -161,7 +163,7 @@ struct SegmentedChoice: View {
             }
             Picker(title ?? "Preset", selection: Binding(get: { selected ?? -1 }, set: { index in
                 guard index != selected else { return }
-                Feedback.tick()
+                if knock { Feedback.choose() }
                 choose(index)
             })) {
                 ForEach(names.indices, id: \.self) { index in

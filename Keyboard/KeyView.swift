@@ -19,6 +19,11 @@ final class KeyView: UIView {
     private var lastGlassState = ""
     private let drawsBorder: Bool
     private let drawsShadow: Bool
+    /// The Keys screen's Surface and Glow (Theme.keySurface, Theme.keyGlow).
+    private let surface: Theme.KeySurface
+    private let glow: (radius: CGFloat, opacity: Float)
+    /// Light at the top fading to a little shade at the bottom, over the fill (sheen and raised keys).
+    private let sheen = CAGradientLayer()
 
     var isPressed = false {
         didSet {
@@ -33,6 +38,8 @@ final class KeyView: UIView {
         self.spec = spec
         self.drawsBorder = Theme.drawsKeyBorder
         self.drawsShadow = Theme.drawsKeyShadow
+        self.surface = Theme.keySurface
+        self.glow = Theme.keyGlow
         self.glassView = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
         super.init(frame: .zero)
         // Keys on the app's light backdrop keep the light glass the theme shows in light mode.
@@ -47,12 +54,12 @@ final class KeyView: UIView {
             host = self
             layer.cornerCurve = .continuous
             if drawsBorder {
-                layer.borderWidth = 0.5
+                layer.borderWidth = Theme.keyBorderWidth
             }
-            if drawsShadow {
-                layer.shadowOpacity = 1
-                layer.shadowRadius = 0
-                layer.shadowOffset = CGSize(width: 0, height: 1)
+            if surface != .flat {
+                sheen.locations = [0, 0.55, 1]
+                sheen.cornerCurve = .continuous
+                layer.addSublayer(sheen)   // under the label and icon, added after it
             }
         }
 
@@ -153,7 +160,38 @@ final class KeyView: UIView {
             applyGlass(glassView, fill: fill)
         } else {
             backgroundColor = fill
+            applyShadow()
         }
+    }
+
+    /// The shadow under or around the key: the accent glow, the raised key's drop shadow (flattened while pressed,
+    /// as if pushed in), or the native key's 1pt line.
+    private func applyShadow() {
+        if glow.radius > 0 {
+            layer.shadowColor = Theme.accent.resolvedColor(with: traitCollection).cgColor
+            layer.shadowOpacity = isPressed ? glow.opacity * 0.6 : glow.opacity
+            layer.shadowRadius = glow.radius
+            layer.shadowOffset = .zero
+        } else if surface == .raised {
+            let dark = traitCollection.userInterfaceStyle == .dark
+            layer.shadowColor = UIColor.black.cgColor
+            layer.shadowOpacity = isPressed ? 0.08 : (dark ? 0.45 : 0.25)
+            layer.shadowRadius = isPressed ? 0.5 : 1.5
+            layer.shadowOffset = CGSize(width: 0, height: isPressed ? 0.5 : 1.5)
+        } else if drawsShadow {
+            layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
+            layer.shadowOpacity = 1
+            layer.shadowRadius = 0
+            layer.shadowOffset = CGSize(width: 0, height: 1)
+        } else {
+            layer.shadowOpacity = 0
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        refreshAppearance()   // the shadow and sheen colours follow light and dark
+        setNeedsLayout()
     }
 
     /// Tints the glass for the key's state (plain letter keys stay untinted) and gives it the springy press.
@@ -193,10 +231,17 @@ final class KeyView: UIView {
         } else {
             layer.cornerRadius = radius
             if drawsBorder {
-                layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
-            } else if drawsShadow {
-                layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
-                layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
+                layer.borderColor = Theme.keyBorderColor.resolvedColor(with: traitCollection).cgColor
+            }
+            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
+            applyShadow()
+            if surface != .flat {
+                let dark = traitCollection.userInterfaceStyle == .dark
+                sheen.frame = bounds
+                sheen.cornerRadius = radius
+                sheen.colors = [UIColor(white: 1, alpha: dark ? 0.12 : 0.22).cgColor,
+                                UIColor(white: 1, alpha: 0).cgColor,
+                                UIColor(white: 0, alpha: dark ? 0.16 : 0.08).cgColor]
             }
         }
         label.frame = bounds.insetBy(dx: 2, dy: 0)

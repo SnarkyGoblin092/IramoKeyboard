@@ -42,7 +42,9 @@ final class Prefs {
     static var suggestionFit = SettingDefault.suggestionFit
     static var suggestionScroll = SettingDefault.suggestionScroll
     static var suggestionDelay = SettingDefault.suggestionDelay
-    static var keyBorders = true
+    static var keySurface = SettingDefault.keySurface
+    static var keyBorderStyle = SettingDefault.keyBorderStyle
+    static var keyGlow = SettingDefault.keyGlow
     static var deleteSwipedWord = SettingDefault.deleteSwipedWord
     static var twoThumbSwipe = SettingDefault.twoThumbSwipe
     static var spaceCommits = SettingDefault.spaceCommits
@@ -104,7 +106,9 @@ final class Prefs {
         suggestionFit = s.suggestionFit
         suggestionScroll = s.suggestionScroll
         suggestionDelay = s.suggestionDelay
-        keyBorders = s.keyBorders
+        keySurface = s.keySurface
+        keyBorderStyle = s.keyBorderStyle
+        keyGlow = s.keyGlow
         deleteSwipedWord = s.deleteSwipedWord
         twoThumbSwipe = s.twoThumbSwipe
         spaceCommits = s.spaceCommits

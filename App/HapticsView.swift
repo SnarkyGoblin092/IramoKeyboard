@@ -41,7 +41,7 @@ struct HapticsView: View {
                     Label("Vibrate on key presses", systemImage: "iphone.radiowaves.left.and.right")
                 }
                 if isOn {
-                    SegmentedChoice(title: "Feel", names: feels.map { $0.name }, selected: feelIndex) { index in
+                    SegmentedChoice(title: "Feel", names: feels.map { $0.name }, selected: feelIndex, knock: false) { index in
                         sharpness = feels[index].sharpness
                         strength = feels[index].strength
                         Feedback.test(strength: strength, sharpness: sharpness)

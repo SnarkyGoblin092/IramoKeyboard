@@ -12,6 +12,9 @@ struct KeysView: View {
     @AppStorage(SettingKey.landscapeSeparate, store: SharedStore.defaults) private var landscapeSeparate = SettingDefault.landscapeSeparate
     @AppStorage(SettingKey.landscapeKeyHeight, store: SharedStore.defaults) private var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
+    @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var surface = SettingDefault.keySurface
+    @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var borderStyle = SettingDefault.keyBorderStyle
+    @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var glow = SettingDefault.keyGlow
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.alwaysCapitals, store: SharedStore.defaults) private var alwaysCapitals = SettingDefault.alwaysCapitals
@@ -40,6 +43,10 @@ struct KeysView: View {
     private let heights: [Double] = [38, 40, 45, 48, 52, 56]
     private let corners: [Double] = [0, 0.12, 0.26, 1]
     private let gaps: [(key: Double, row: Double)] = [(4, 8), (6, 11), (8, 14), (10, 17)]
+
+    private let surfaces = ["auto", "flat", "sheen", "raised"]
+    private let borders = ["auto", "none", "thin", "bold", "accent"]
+    private let glows = ["off", "soft", "strong"]
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
 
@@ -104,6 +111,20 @@ struct KeysView: View {
             .glassRows()
 
             Section {
+                SegmentedChoice(title: "Surface", names: ["Auto", "Flat", "Sheen", "Raised"],
+                                selected: surfaces.firstIndex(of: surface)) { surface = surfaces[$0] }
+                SegmentedChoice(title: "Border", names: ["Auto", "None", "Thin", "Bold", "Accent"],
+                                selected: borders.firstIndex(of: borderStyle)) { borderStyle = borders[$0] }
+                SegmentedChoice(title: "Glow", names: ["Off", "Soft", "Strong"],
+                                selected: glows.firstIndex(of: glow)) { glow = glows[$0] }
+            } header: {
+                SectionHeader("Key style", symbol: "sparkles", color: .purple)
+            } footer: {
+                Text("Auto follows the theme: colour themes have raised keys, and every theme but Native a thin outline. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour. Liquid Glass keys stay glass.")
+            }
+            .glassRows()
+
+            Section {
                 SegmentedChoice(names: ["Narrow", "Standard", "Wide", "Extra wide"],
                                 selected: gaps.firstIndex { same($0.key, keyGap) && same($0.row, rowGap) }) { index in
                     keyGap = gaps[index].key
@@ -133,7 +154,7 @@ struct KeysView: View {
 
             Section {
                 Picker(selection: Binding(get: { keyHints ? hintPosition : "off" }, set: { value in
-                    Feedback.tick()
+                    Feedback.choose()
                     if value == "off" {
                         keyHints = false
                     } else {
@@ -169,7 +190,7 @@ struct KeysView: View {
                                                                     set: { spaceText = String($0.prefix(32)) }))
                     if !spaceText.isEmpty {
                         Button {
-                            Feedback.tick()
+                            Feedback.delete()
                             spaceText = ""
                         } label: {
                             Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)

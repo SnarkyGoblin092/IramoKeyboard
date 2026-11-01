@@ -148,6 +148,7 @@ private struct HitMapSection: View {
                 .disabled(!isOn)
                 .opacity(isOn ? 1 : 0.45)
             Button(role: .destructive) {
+                Feedback.tap()
                 confirmReset = true
             } label: {
                 Label("Forget learned taps", systemImage: "trash")
@@ -157,7 +158,7 @@ private struct HitMapSection: View {
                 Button("Forget", role: .destructive) {
                     Settings.shared.setHitMapData([:], for: language.rawValue)
                     data = [:]
-                    Feedback.tick()
+                    Feedback.delete()
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {

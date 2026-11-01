@@ -48,12 +48,10 @@ final class SuggestionBar: UIView {
     private var labels: [UILabel] = []
     private var highlights: [UIView] = []
     private var segmentViews: [UIView] = []
-    /// Liquid Glass theme: real glass behind the pill, the segments and the hide-keyboard button.
+    /// Liquid Glass theme: real glass behind the pill and the segments.
     private let usesGlass = Theme.usesRealGlass
     private var pillGlass: UIVisualEffectView?
     private var segmentGlass: [UIVisualEffectView?] = []
-    private let dismissBackground = UIView()
-    private var dismissGlass: UIVisualEffectView?
     private let separatorLayer = CAShapeLayer()
 
     private var suggestions: [Suggestion] = []
@@ -118,10 +116,6 @@ final class SuggestionBar: UIView {
         if usesGlass {
             // Accent-tinted glass, like the keys' glass.
             pillGlass = GlassSupport.addBackground(to: bestPill, tint: Theme.accent.withAlphaComponent(0.85))
-            // The hide-keyboard button sits on a glass circle of its own.
-            dismissBackground.isUserInteractionEnabled = false
-            glass.contentView.addSubview(dismissBackground)
-            dismissGlass = GlassSupport.addBackground(to: dismissBackground, tint: nil)
         }
 
         dismissHighlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
@@ -247,12 +241,6 @@ final class SuggestionBar: UIView {
         dismissHighlight.frame = CGRect(x: dismissIcon.frame.midX - circle / 2, y: (area.height - circle) / 2,
                                         width: circle, height: circle)
         dismissHighlight.layer.cornerRadius = circle / 2
-        if dismissGlass != nil {
-            let side = min(area.height - 10, 30)
-            dismissBackground.frame = CGRect(x: dismissIcon.frame.midX - side / 2, y: (area.height - side) / 2,
-                                             width: side, height: side)
-            glass.contentView.insertSubview(dismissBackground, belowSubview: dismissIcon)
-        }
         hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
         strip.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
 

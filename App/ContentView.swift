@@ -76,6 +76,7 @@ private struct HeaderSection: View {
                     if SharedStore.isShared, let url = URL(string: UIApplication.openSettingsURLString) {
                         // The app's own page in Settings lists Keyboards > Iramo and Allow Full Access.
                         Button {
+                            Feedback.tap()
                             openURL(url)
                         } label: {
                             Text("Open Settings")
@@ -162,20 +163,25 @@ private struct KeyboardSection: View {
             NavigationLink { LanguagesView() } label: {
                 SettingsRow(title: "Languages", symbol: "globe", color: .blue, value: languageSummary)
             }
+            .hapticTap()
             NavigationLink { SuggestionsView() } label: {
                 SettingsRow(title: "Suggestion bar", symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo,
                             value: barSummary)
             }
+            .hapticTap()
             NavigationLink { GesturesView() } label: {
                 SettingsRow(title: "Gestures", symbol: "hand.draw.fill", color: .teal, value: swipe ? "Swipe on" : "Swipe off")
             }
+            .hapticTap()
             NavigationLink { HitboxesView() } label: {
                 SettingsRow(title: "Hitboxes", symbol: "scope", color: .cyan, value: touchSummary)
             }
+            .hapticTap()
             NavigationLink { ShortcutsView() } label: {
                 SettingsRow(title: "Text shortcuts", symbol: "bolt.fill", color: .orange,
                             value: shortcutCount > 0 ? "\(shortcutCount)" : nil)
             }
+            .hapticTap()
         } header: {
             SectionHeader("Keyboard", symbol: "keyboard", color: .blue)
         } footer: {
@@ -240,12 +246,15 @@ private struct LookSection: View {
                 }
                 .padding(.vertical, 6)
             }
+            .hapticTap()
             NavigationLink { KeysView() } label: {
                 SettingsRow(title: "Keys", symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
             }
+            .hapticTap()
             NavigationLink { HapticsView() } label: {
                 SettingsRow(title: "Haptics", symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
             }
+            .hapticTap()
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     IconTile(symbol: "drop.fill", color: accent)
@@ -259,8 +268,6 @@ private struct LookSection: View {
             }
             .padding(.vertical, 2)
             AccentCustomRow()
-            SettingToggle("Key borders", key: SettingKey.keyBorders, defaultValue: SettingDefault.keyBorders,
-                          subtitle: "A thin outline on translucent themes", symbol: "square.dashed", color: .gray)
             SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
                           subtitle: "Numbers above the letters", symbol: "number", color: .orange)
         } header: {
@@ -310,6 +317,7 @@ private struct DataSection: View {
                 SettingsRow(title: "Learned words", symbol: "character.book.closed", color: .brown,
                             value: learnedCount > 0 ? "\(learnedCount)" : nil)
             }
+            .hapticTap()
             // Orange: they remove things (each asks first), short of red Reset, which undoes every setting.
             row(.learned, "Forget learned words", symbol: "text.book.closed", color: .orange)
             row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath", color: .orange)
@@ -331,7 +339,10 @@ private struct DataSection: View {
 
     /// One option with its own confirmation, so the dialog's arrow points at the option that was tapped.
     private func row(_ action: Action, _ title: String, symbol: String, color: Color, role: ButtonRole? = nil) -> some View {
-        Button(role: role) { pending = action } label: {
+        Button(role: role) {
+            Feedback.tap()
+            pending = action
+        } label: {
             HStack(spacing: 12) {
                 IconTile(symbol: symbol, color: color)
                 Text(title)
@@ -363,25 +374,18 @@ private struct DataSection: View {
             NotificationCenter.default.post(name: .hunKeysSettingsReset, object: nil)
             note = "Settings reset to defaults."
         }
-        Feedback.tick()
+        if action == .reset { Feedback.warning() } else { Feedback.delete() }
     }
 }
 
-/// Credits and licences for the word data, emoji data and icons the app ships (LicensesView), and the version.
+/// Credits and licences for the word data, emoji data and icons the app ships (LicensesView).
 private struct AboutSection: View {
-    private var version: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "\(short) (\(build))"
-    }
-
     var body: some View {
         Section {
             NavigationLink { LicensesView() } label: {
                 SettingsRow(title: "Licences", symbol: "doc.text.fill", color: .gray)
             }
-            SettingsRow(title: "Version", symbol: "info.circle.fill", color: .blue, value: version)
+            .hapticTap()
         } header: {
             SectionHeader("About", symbol: "info.circle", color: .gray)
         } footer: {
@@ -478,12 +482,13 @@ struct ShortcutsView: View {
         items.removeAll { $0.trigger.lowercased() == key.lowercased() }
         items.append(TextShortcut(trigger: key, phrase: text))
         save()
+        Feedback.success()
         trigger = ""
         phrase = ""
     }
 
     private func remove(_ item: TextShortcut) {
-        Feedback.tick()
+        Feedback.delete()
         withAnimation(.easeOut(duration: 0.2)) { items.removeAll { $0.id == item.id } }
         save()
     }
@@ -558,7 +563,7 @@ struct LanguagesView: View {
     private func save(_ list: [String]) {
         let ordered = Language.allCases.map { $0.rawValue }.filter { list.contains($0) }
         guard !ordered.isEmpty, ordered != enabled else { return }
-        Feedback.tick()
+        if ordered.count > enabled.count { Feedback.success() } else { Feedback.delete() }
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
     }
@@ -693,7 +698,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
                 let target = min(0, settled + dx)
                 // Past the full-delete point the button resists instead of stopping dead.
                 let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
-                if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.tick() }   // crossing it
+                if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.threshold() }   // crossing it
                 offset = resisted
             }
             .onEnded { value in
@@ -816,7 +821,7 @@ struct LearnedWordsView: View {
         for word in removed { Settings.shared.removeLearnedWord(word, for: language.rawValue) }
         var list = words[language.rawValue] ?? []
         list.removeAll { removed.contains($0) }
-        Feedback.tick()
+        Feedback.delete()
         withAnimation(.easeOut(duration: 0.2)) { words[language.rawValue] = list.isEmpty ? nil : list }
     }
 }

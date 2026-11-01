@@ -151,7 +151,7 @@ final class FlatPanel: UIView {
             backgroundColor = background ?? UIColor.clear
             layer.cornerCurve = .continuous
             layer.cornerRadius = cornerRadius
-            if drawsKeyBorder { layer.borderWidth = 0.5 }
+            if drawsKeyBorder { layer.borderWidth = Theme.keyBorderWidth }
         }
     }
 
@@ -162,7 +162,7 @@ final class FlatPanel: UIView {
 
     private func updateBorderColor() {
         if drawsKeyBorder && effectView == nil {
-            layer.borderColor = Theme.keyBorder.resolvedColor(with: traitCollection).cgColor
+            layer.borderColor = Theme.keyBorderColor.resolvedColor(with: traitCollection).cgColor
         }
     }
 

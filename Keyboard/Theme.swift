@@ -81,8 +81,63 @@ enum Theme {
 
     /// Native keys carry the 1pt shadow line under them.
     static var drawsKeyShadow: Bool { return kind == .native }
-    /// Everything but the native theme gets a hairline outline.
-    static var drawsKeyBorder: Bool { return kind != .native && !usesRealGlass && Prefs.keyBorders }
+    // MARK: Key style (the Keys screen's Surface, Border and Glow; "auto" follows the theme)
+
+    enum KeySurface { case flat, sheen, raised }
+    enum KeyBorderStyle { case none, thin, bold, accent }
+
+    /// Flat fills, a soft light-to-shade sheen, or the sheen with a drop shadow under the key (the colour themes'
+    /// own look). Real Liquid Glass keys are glass and stay as they are.
+    static var keySurface: KeySurface {
+        guard !usesRealGlass else { return .flat }
+        switch Prefs.keySurface {
+        case "flat": return .flat
+        case "sheen": return .sheen
+        case "raised": return .raised
+        default: return kind == .colored ? .raised : .flat
+        }
+    }
+
+    static var keyBorderStyle: KeyBorderStyle {
+        switch Prefs.keyBorderStyle {
+        case "none": return .none
+        case "thin": return .thin
+        case "bold": return .bold
+        case "accent": return .accent
+        default: return kind == .native ? .none : .thin
+        }
+    }
+
+    static var drawsKeyBorder: Bool { return !usesRealGlass && keyBorderStyle != .none }
+
+    static var keyBorderWidth: CGFloat {
+        switch keyBorderStyle {
+        case .none: return 0
+        case .thin: return 0.5
+        case .bold: return 1.5
+        case .accent: return 1.2
+        }
+    }
+
+    /// The outline: the theme's hairline, a stronger line in the key label's colour, or the accent.
+    static var keyBorderColor: UIColor {
+        switch keyBorderStyle {
+        case .none: return UIColor.clear
+        case .thin: return kind == .native ? pick(black(0.18), white(0.28)) : palette.keyBorder
+        case .bold: return keyText.withAlphaComponent(0.4)
+        case .accent: return accent
+        }
+    }
+
+    /// The accent glow around the keys: its blur radius and strength (0: none).
+    static var keyGlow: (radius: CGFloat, opacity: Float) {
+        guard !usesRealGlass else { return (0, 0) }
+        switch Prefs.keyGlow {
+        case "soft": return (5, 0.55)
+        case "strong": return (10, 0.95)
+        default: return (0, 0)
+        }
+    }
 
     // MARK: Colours (read at use time, so they follow the cached palette)
 

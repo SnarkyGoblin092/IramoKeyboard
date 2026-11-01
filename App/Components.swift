@@ -3,19 +3,65 @@ import UIKit
 
 // MARK: - Haptics
 
-/// Generators are created once and kept ready, so taps feel instant.
+/// The app's haptics: each kind of action has its own feel, so the hand learns them. Generators are created once
+/// and kept ready, so taps feel instant (and the system's Haptics switch turns them all off).
 enum Feedback {
     private static let selection = UISelectionFeedbackGenerator()
     private static let impact = UIImpactFeedbackGenerator(style: .rigid)
+    private static let soft = UIImpactFeedbackGenerator(style: .soft)
+    private static let medium = UIImpactFeedbackGenerator(style: .medium)
+    private static let rigid = UIImpactFeedbackGenerator(style: .rigid)
+    private static let notification = UINotificationFeedbackGenerator()
 
     static func prepare() {
         selection.prepare()
         impact.prepare()
+        soft.prepare()
+        medium.prepare()
+        rigid.prepare()
+        notification.prepare()
     }
 
+    /// A value moved a step: a switch flipped, a slider passed a mark. The lightest click.
     static func tick() {
         selection.selectionChanged()
         selection.prepare()
+    }
+
+    /// Opening a screen or pressing an ordinary button: a soft, cushioned tap.
+    static func tap() {
+        soft.impactOccurred(intensity: 0.7)
+        soft.prepare()
+    }
+
+    /// Choosing something (a theme, a colour, a preset): a fuller, rounder knock.
+    static func choose() {
+        medium.impactOccurred(intensity: 0.75)
+        medium.prepare()
+    }
+
+    /// Something added (a language, a shortcut): the system's two-beat success.
+    static func success() {
+        notification.notificationOccurred(.success)
+        notification.prepare()
+    }
+
+    /// Something removed or forgotten: short and sharp.
+    static func delete() {
+        rigid.impactOccurred(intensity: 1)
+        rigid.prepare()
+    }
+
+    /// A swipe passing the point where letting go deletes: a lighter sharp click, before the real one.
+    static func threshold() {
+        rigid.impactOccurred(intensity: 0.5)
+        rigid.prepare()
+    }
+
+    /// Every setting put back: the system's warning buzz.
+    static func warning() {
+        notification.notificationOccurred(.warning)
+        notification.prepare()
     }
 
     /// Plays the keyboard's key-press vibration at the given strength (0...1), with the feel's sharpness
@@ -283,6 +329,13 @@ struct StatusChip: View {
     }
 }
 
+extension View {
+    /// A soft tap when the view is touched, alongside what it does (rows that open a screen).
+    func hapticTap() -> some View {
+        return self.simultaneousGesture(TapGesture().onEnded { Feedback.tap() })
+    }
+}
+
 /// Applies the chosen accent colour as the tint of everything inside.
 struct AccentTint: ViewModifier {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
@@ -310,7 +363,7 @@ struct AccentPicker: View {
                 let selected = !isCustom && accentName == choice.rawValue
                 Button {
                     guard isCustom || accentName != choice.rawValue else { return }
-                    Feedback.tick()
+                    Feedback.choose()
                     accentName = choice.rawValue
                     accentHex = ""
                 } label: {

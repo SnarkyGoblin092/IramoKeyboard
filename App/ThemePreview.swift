@@ -9,7 +9,9 @@ struct ThemePreview: View {
     var showsStrip = true
     var cornerRadius: CGFloat = 14
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
-    @AppStorage(SettingKey.keyBorders, store: SharedStore.defaults) private var keyBorders = SettingDefault.keyBorders
+    @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
+    @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
+    @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var keyGlow = SettingDefault.keyGlow
     @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
     // The Keys and Suggestions screens' settings, drawn as the keyboard does.
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
@@ -315,19 +317,36 @@ struct ThemePreview: View {
         let words = shownLanguage == .hungarian ? ["A", "Én", "Nem"] : ["I", "The", "It"]
         let segments = suggestionStyle == "segments"
         let radius = CGFloat(min(1, max(0, roundness))) * (height - 13 * s) / 2
+        // The word space would write sits on the accent pill (SuggestionBar.bestPill), hugging it with the keys'
+        // corner style; on segments the whole middle segment takes the accent.
+        let pillHeight = max(1, height - 18 * s)
+        let pillRadius = min(pillHeight / 2, CGFloat(min(1, max(0, roundness))) * pillHeight / 2 * 1.6)
         return HStack(spacing: 0) {
             ForEach(0..<words.count, id: \.self) { i in
+                let best = i == 1
                 Text(words[i])
-                    .font(.system(size: 17 * s))
-                    .foregroundColor(segments && followTheme ? textColor : stripText)
+                    .font(.system(size: 17 * s, weight: best ? .semibold : .regular))
+                    .foregroundColor(best ? onAccent : (segments && followTheme ? textColor : stripText))
                     .lineLimit(1)
+                    .padding(.horizontal, best && !segments ? 14 * s : 0)
+                    .frame(minWidth: best && !segments ? pillHeight * 1.6 : 0)
+                    .frame(height: best && !segments ? pillHeight : nil)
+                    .background {
+                        if best && !segments { bestPill(radius: pillRadius) }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background {
                         if segments {
-                            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                                .fill(followTheme ? keyFill : pick(Color.black.opacity(0.06), Color.white.opacity(0.12)))
-                                .padding(.horizontal, 2.5 * s)
-                                .padding(.vertical, 3 * s)
+                            Group {
+                                if best {
+                                    bestPill(radius: radius)
+                                } else {
+                                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                        .fill(followTheme ? keyFill : pick(Color.black.opacity(0.06), Color.white.opacity(0.12)))
+                                }
+                            }
+                            .padding(.horizontal, 2.5 * s)
+                            .padding(.vertical, 3 * s)
                         }
                     }
                     .overlay(alignment: .trailing) {
@@ -360,6 +379,15 @@ struct ThemePreview: View {
 
     private var separatorColor: Color { return pick(Color.black.opacity(0.12), Color.white.opacity(0.20)) }
 
+    /// The auto-correction pill: the accent colour, or accent-tinted glass in the Liquid Glass theme.
+    @ViewBuilder private func bestPill(radius: CGFloat) -> some View {
+        if theme.kind == .liquidGlass {
+            GlassKeyShape(radius: radius, tint: accentColor, dark: dark)
+        } else {
+            RoundedRectangle(cornerRadius: radius, style: .continuous).fill(accentColor)
+        }
+    }
+
     /// "Follow theme": a faded version of the key labels, else the neutral hairline.
     private var stripSeparator: Color { return followTheme ? textColor.opacity(0.35) : separatorColor }
 
@@ -389,12 +417,21 @@ struct ThemePreview: View {
                               tint: k.accent ? accentColor : (k.function ? Color.black.opacity(dark ? 0.0 : 0.06) : nil),
                               dark: dark)
             } else {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                // As KeyView draws it: the fill, the sheen, the outline, and the glow or shadow under it.
+                let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+                let shadow = keyShadowStyle
+                shape
                     .fill(fill)
-                    .shadow(color: keyShadow, radius: 0, x: 0, y: s)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .stroke(borderColor, lineWidth: drawsBorder ? 0.5 : 0))
+                    .overlay {
+                        if surface != "flat" {
+                            shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity(dark ? 0.12 : 0.22), location: 0),
+                                                              .init(color: Color.white.opacity(0), location: 0.55),
+                                                              .init(color: Color.black.opacity(dark ? 0.16 : 0.08), location: 1)],
+                                                      startPoint: .top, endPoint: .bottom))
+                        }
+                    }
+                    .overlay(shape.strokeBorder(keyOutline, lineWidth: keyOutlineWidth * max(s, 0.6)))
+                    .shadow(color: shadow.color, radius: shadow.radius * s, x: 0, y: shadow.y * s)
             }
             if let tabIcon = k.tabIcon, let image = EmojiTabIcons.icon(forKey: tabIcon, side: 36, weight: 1.8) {
                 // Same size and line weight as KeyView's emoji key, scaled with the preview.
@@ -440,13 +477,49 @@ struct ThemePreview: View {
         }
     }
 
-    /// Outlines: every theme but Native (and real Liquid Glass) when Key borders is on.
-    private var drawsBorder: Bool {
-        guard keyBorders, theme.kind != .native else { return false }
+    // MARK: Key style (mirrors Theme.keySurface / keyBorderStyle / keyGlow)
+
+    /// "flat", "sheen" or "raised"; "auto": raised on the colour themes.
+    private var surface: String {
+        if keySurface != "auto" { return keySurface }
+        return theme.kind == .colored ? "raised" : "flat"
+    }
+
+    private var borderStyle: String {
         if theme.kind == .liquidGlass {
-            if #available(iOS 26, *) { return false }
+            if #available(iOS 26, *) { return "none" }   // real glass keys have no outline
         }
-        return true
+        if keyBorderStyle != "auto" { return keyBorderStyle }
+        return theme.kind == .native ? "none" : "thin"
+    }
+
+    private var keyOutlineWidth: CGFloat {
+        switch borderStyle {
+        case "thin": return 0.5
+        case "bold": return 1.5
+        case "accent": return 1.2
+        default: return 0
+        }
+    }
+
+    private var keyOutline: Color {
+        switch borderStyle {
+        case "thin": return theme.kind == .native ? pick(Color.black.opacity(0.18), Color.white.opacity(0.28)) : borderColor
+        case "bold": return textColor.opacity(0.4)
+        case "accent": return accentColor
+        default: return .clear
+        }
+    }
+
+    /// The accent glow, the raised key's drop shadow, or the native key's 1pt line.
+    private var keyShadowStyle: (color: Color, radius: CGFloat, y: CGFloat) {
+        switch keyGlow {
+        case "soft": return (accentColor.opacity(0.55), 5, 0)
+        case "strong": return (accentColor.opacity(0.95), 10, 0)
+        default: break
+        }
+        if surface == "raised" { return (Color.black.opacity(dark ? 0.45 : 0.25), 1.5, 1.5) }
+        return (keyShadow, 0, 1)
     }
 }
 

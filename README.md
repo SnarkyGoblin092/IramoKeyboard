@@ -21,7 +21,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Word suggestions as you type, from a word trigram language model per language.
 - Next-word suggestions before you start the next word.
 - Auto-correction when you press space: typos ("vsgyok" -> "vagyok"), missing accents ("koszonom" -> "köszönöm"),
-  missing spaces ("nemakarom" -> "nem akarom"), apostrophes and capitals ("im" -> "I'm").
+  missing spaces ("nemakarom" -> "nem akarom"), apostrophes and capitals ("im" -> "I'm"); an unfinished word
+  is completed rather than swapped for a short one ("appl" -> "apple", not "all").
 - The word space will write sits on an accent-coloured pill in the middle of the bar.
 - The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
   (solid, dashed, dotted or none) or key-like segments, in the theme's colours or neutral ones, at any height.
@@ -69,13 +70,16 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ### Look
 - 75 themes: Native, Transparent, Liquid Glass and 72 colour themes, which are a lighter shade in light mode.
 - Follows light and dark mode; with the phone in dark mode, the keys stay dark even in apps that stay light.
-- Accent colour and key borders.
+- Accent colour, and a key style: surface (flat, a soft sheen, or raised with a shadow under each key), border (none,
+  thin, bold or in the accent colour) and an accent glow (soft or strong); by default colour themes have raised
+  keys and every theme but Native a thin outline.
 - Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
   width, corners (square to round), the gaps between keys and rows, letter size, capitals that follow shift or
   always show, accent hints in any corner (or off) at any size, and the space bar's text (your own, the
   language's name or its code) and size.
 - Highlights follow the theme's accent: the auto-correction pill, pressed suggestions, the hide-keyboard button
-  and the emoji category tabs.
+  and the emoji category tabs; in the Liquid Glass theme the pill, the bar's tiles and the emoji tab highlight
+  are glass too.
 - Works on iPhone and iPad, in portrait and landscape.
 
 ### The Iramo app
@@ -87,7 +91,11 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   swipe being drawn, the keys' touch areas, the vibration's feel (tap to play it) and a text shortcut.
 - Shows what still needs setting up (adding the keyboard, Full Access) with a button to Settings, and a field
   to try the keyboard.
-- Themes with previews that look like the real keyboard, in light and dark mode.
+- Themes with previews that look like the real keyboard, in light and dark mode (the Liquid Glass theme with real
+  glass keys over a colourful backdrop), down to the auto-correction pill in the bar.
+- Haptics throughout, with a feel for each kind of action: a light click for switches and sliders, a soft tap
+  for opening screens, a fuller knock for choosing a theme or preset, a success pattern for adding, a sharp tap
+  for deleting and a warning buzz for resetting everything.
 - Languages, text shortcuts and learned words, each swiped left to remove an entry.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
@@ -97,7 +105,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Everything the keyboard learns stays on the device; the keyboard makes no network connections.
 - Full Access is only needed for vibration and for saving recent emoji and learned words; the keyboard works
   without it.
-- Search and remove single learned words, clear recent emoji, forget all learned words or reset all settings from the app.
+- Search and remove single learned words, clear recent emoji, forget all learned words or reset all settings from the
+  app (each asks first; the removing ones are marked in orange, resetting in red).
 
 ## License
 Copyright (C) 2026 Orsós Emil. All rights reserved. The code and the app may not be used, copied, changed or

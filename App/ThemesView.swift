@@ -56,7 +56,7 @@ struct ThemesView: View {
                 ForEach(themes, id: \.id) { theme in
                     ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
                         guard theme.id != themeID else { return }
-                        Feedback.tick()
+                        Feedback.choose()
                         themeID = theme.id
                     }
                 }

@@ -270,7 +270,8 @@ final class KeyboardViewController: UIInputViewController {
         let s = settings
         return [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
-            "\(s.keyPopups)", "\(Prefs.keyRoundness)", "\(s.keyBorders)", s.enabledLanguages.joined(separator: ","),
+            "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle, s.keyGlow,
+            s.enabledLanguages.joined(separator: ","),
             SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             // Keys and the suggestion bar (the app's Keys and Suggestions screens)
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
