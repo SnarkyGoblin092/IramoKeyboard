@@ -41,6 +41,9 @@ struct HitboxesView: View {
     var body: some View {
         List {
             Section {
+                HitboxPreview().previewRow()
+            }
+            Section {
                 SegmentedChoice(names: ["Strict", "Normal", "Generous"],
                                 selected: sizes.firstIndex { same($0, size) }) { size = sizes[$0] }
                 GlassSlider(title: "Letter room", symbol: "square.dashed", value: $size,

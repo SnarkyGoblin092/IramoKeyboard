@@ -15,6 +15,9 @@ struct GesturesView: View {
     var body: some View {
         List {
             Section {
+                GesturePreview().previewRow()
+            }
+            Section {
                 GlassToggle(title: "Swipe typing",
                             subtitle: "Slide across the letters to write a word; the bar offers the other readings.",
                             isOn: $swipe)

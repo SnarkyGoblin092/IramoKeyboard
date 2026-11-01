@@ -87,24 +87,72 @@ extension Color {
 struct SettingToggle: View {
     private let title: String
     private let subtitle: String?
+    private let symbol: String?
+    private let color: Color
     @AppStorage private var isOn: Bool
 
-    init(_ title: String, key: String, defaultValue: Bool, subtitle: String? = nil) {
+    /// `symbol`: an icon tile in front of the title (as on the main screen).
+    init(_ title: String, key: String, defaultValue: Bool, subtitle: String? = nil,
+         symbol: String? = nil, color: Color = .gray) {
         self.title = title
         self.subtitle = subtitle
+        self.symbol = symbol
+        self.color = color
         _isOn = AppStorage(wrappedValue: defaultValue, key, store: SharedStore.defaults)
     }
 
     var body: some View {
         Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                if let subtitle = subtitle {
-                    Text(subtitle).font(.footnote).foregroundColor(.secondary)
+            HStack(spacing: 12) {
+                if let symbol = symbol { IconTile(symbol: symbol, color: color) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    if let subtitle = subtitle {
+                        Text(subtitle).font(.footnote).foregroundColor(.secondary)
+                    }
                 }
             }
         }
         .onChange(of: isOn) { _ in Feedback.tick() }
+    }
+}
+
+/// A white symbol on a small rounded square of colour, like the icons of the system Settings app.
+struct IconTile: View {
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
+            .frame(width: 29, height: 29)
+            .overlay(
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white))
+            .accessibilityHidden(true)
+    }
+}
+
+/// A row of the main screen: icon tile, title and (dimmed, on the right) what it is set to.
+struct SettingsRow: View {
+    let title: String
+    let symbol: String
+    let color: Color
+    var value: String? = nil
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(symbol: symbol, color: color)
+            Text(title)
+            Spacer(minLength: 8)
+            if let value = value {
+                Text(value)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -188,7 +236,8 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// Section title with an SF Symbol in a coloured rounded square.
+/// A section's title: quiet text, as in the system Settings app (the rows carry the colour). `symbol` and
+/// `color` tint a small glyph in front of it.
 struct SectionHeader: View {
     let title: String
     let symbol: String
@@ -201,19 +250,17 @@ struct SectionHeader: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 24, height: 24)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(color))
+                .font(.caption.weight(.semibold))
+                .foregroundColor(color)
                 .accessibilityHidden(true)
             Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.primary)
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.secondary)
         }
-        .textCase(nil)
-        .padding(.vertical, 2)
+        .textCase(.uppercase)
+        .padding(.leading, -4)
     }
 }
 

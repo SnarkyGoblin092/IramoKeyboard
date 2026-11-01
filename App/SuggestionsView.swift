@@ -21,6 +21,9 @@ struct SuggestionsView: View {
     var body: some View {
         List {
             Section {
+                SuggestionBarPreview().previewRow()
+            }
+            Section {
                 GlassToggle(title: "Word suggestions",
                             subtitle: "Words to finish or fix what you're typing, above the keys.",
                             isOn: $enabled)

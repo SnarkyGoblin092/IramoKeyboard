@@ -1,27 +1,26 @@
 import SwiftUI
 import UIKit
 
-/// The keyboard's settings. Every section is its own small view, so changing one control only redraws that section.
+/// The keyboard's settings, grouped like the system Settings app: what the keyboard does, how typing behaves, how
+/// it looks and feels, and the data it keeps. Every section is its own small view, so changing one control only
+/// redraws that section; rows that open a screen show what it is set to.
 struct ContentView: View {
     var body: some View {
         NavigationStack {
             // Liquid Glass: frosted rows on the tinted backdrop (Glass.swift).
             List {
-                HeaderSection().glassRows()
+                HeaderSection()
                 TestFieldSection().glassRows()
+                KeyboardSection().glassRows()
                 TypingSection().glassRows()
-                LanguagesSection().glassRows()
-                GesturesSection().glassRows()
-                FeedbackSection().glassRows()
-                AppearanceSection().glassRows()
-                ShortcutsSection().glassRows()
+                LookSection().glassRows()
                 DataSection().glassRows()
-                CreditsSection().glassRows()
+                AboutSection().glassRows()
             }
             .listStyle(.insetGrouped)
             .glassScreen()
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("Iramo")
+            .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
         }
         .modifier(AccentTint())
@@ -34,51 +33,63 @@ struct ContentView: View {
 
 // MARK: - Sections
 
-/// App name, a few status chips and a hint about what to do next.
+/// The app icon, name and motto, and (only while something still needs doing) a note on setting it up.
 private struct HeaderSection: View {
     @State private var status = KeyboardStatus.read()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    // The app icon (AppLogo is a small copy of it, written by scripts/make_icon.py), with the
-                    // home screen's corner shape.
-                    Image("AppLogo")
-                        .resizable()
-                        .frame(width: 56, height: 56)
-                        .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Iramo").font(.title2.weight(.bold))
-                        Text("Your words, your keyboard")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                // Only what still needs setting up is shown.
-                if !status.isReady {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8, alignment: .leading)],
-                              alignment: .leading, spacing: 8) {
-                        if !status.seen {
-                            StatusChip(text: "Not set up yet", symbol: "exclamationmark.circle.fill", color: .orange)
-                        } else if !status.fullAccess {
-                            StatusChip(text: "Full Access off", symbol: "lock.fill", color: .orange)
-                        }
-                        if !SharedStore.isShared {
-                            StatusChip(text: "Not synced", symbol: "arrow.triangle.2.circlepath", color: .red)
-                        }
-                    }
-
-                    Text(hint)
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            VStack(spacing: 10) {
+                // The app icon (AppLogo is a small copy of it, written by scripts/make_icon.py), with the home
+                // screen's corner shape.
+                Image("AppLogo")
+                    .resizable()
+                    .frame(width: 78, height: 78)
+                    .clipShape(RoundedRectangle(cornerRadius: 17.5, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.18), radius: 10, x: 0, y: 5)
+                    .accessibilityHidden(true)
+                Text("Iramo").font(.largeTitle.weight(.bold))
+                Text("Your words, your keyboard")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .listRowBackground(Color.clear)
+
+            // Only what still needs setting up is shown.
+            if !status.isReady {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        IconTile(symbol: SharedStore.isShared ? "exclamationmark.triangle.fill" : "arrow.triangle.2.circlepath",
+                                 color: SharedStore.isShared ? .orange : .red)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(title).font(.headline)
+                            Text(hint)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if SharedStore.isShared, let url = URL(string: UIApplication.openSettingsURLString) {
+                        // The app's own page in Settings lists Keyboards > Iramo and Allow Full Access.
+                        Button {
+                            openURL(url)
+                        } label: {
+                            Text("Open Settings")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                                .background(Capsule().fill(.tint))
+                                .foregroundColor(.white)
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+                .padding(.vertical, 6)
+                .listRowBackground(GlassRowFill())
+            }
         }
         // Read when the screen opens or the app comes back to the front - no polling.
         .onAppear { status = KeyboardStatus.read() }
@@ -87,14 +98,19 @@ private struct HeaderSection: View {
         }
     }
 
+    private var title: String {
+        if !SharedStore.isShared { return "Settings can't reach the keyboard" }
+        return status.seen ? "Allow Full Access" : "Add the keyboard"
+    }
+
     private var hint: String {
         if !SharedStore.isShared {
             return "This install can't share settings with the keyboard (no App Group). Install the IPA with iloader."
         }
         if !status.seen {
-            return "Add Iramo in Settings > General > Keyboard > Keyboards, turn on Allow Full Access, then open the keyboard once."
+            return "In Settings, open Keyboards, switch on Iramo and Allow Full Access, then open the keyboard once."
         }
-        return "Allow Full Access is off: no vibration, and the keyboard can't save recent emoji or learned words."
+        return "Without it there is no vibration, and the keyboard can't save recent emoji or learned words."
     }
 }
 
@@ -103,9 +119,71 @@ private struct TestFieldSection: View {
 
     var body: some View {
         Section {
-            TextField("Tap here and type to try it", text: $text)
+            HStack(spacing: 12) {
+                IconTile(symbol: "keyboard", color: .gray)
+                TextField("Tap here and type to try it", text: $text)
+            }
         } header: {
-            SectionHeader("Try the keyboard", symbol: "text.cursor", color: .gray)
+            SectionHeader("Try it", symbol: "text.cursor", color: .gray)
+        }
+    }
+}
+
+/// Screens for what the keyboard does: languages, the suggestion bar, gestures, touch and shortcuts.
+private struct KeyboardSection: View {
+    // (A list can't be an @AppStorage value: read on appear, like the shortcuts.)
+    @State private var languages = Settings.shared.enabledLanguages
+    @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var suggestions = SettingDefault.suggestions
+    @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
+    @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
+    @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
+    @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var hitboxSize = SettingDefault.hitboxSize
+    @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes
+    @State private var shortcutCount = Settings.shared.shortcuts.count
+
+    private var languageSummary: String {
+        let names = Language.list(from: languages).map { $0.displayName }
+        if names.count <= 2 { return names.joined(separator: ", ") }
+        return "\(names[0]) +\(names.count - 1)"
+    }
+
+    private var barSummary: String {
+        if !suggestions { return "Off" }
+        return scroll ? "Scrolling" : (fit ? "Fit to words" : "Three words")
+    }
+
+    private var touchSummary: String {
+        let room = abs(hitboxSize - 0.85) < 0.001 ? "Strict" : (abs(hitboxSize - 1.2) < 0.001 ? "Generous" : "Normal")
+        return adaptive ? "\(room), adaptive" : room
+    }
+
+    var body: some View {
+        Section {
+            NavigationLink { LanguagesView() } label: {
+                SettingsRow(title: "Languages", symbol: "globe", color: .blue, value: languageSummary)
+            }
+            NavigationLink { SuggestionsView() } label: {
+                SettingsRow(title: "Suggestion bar", symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo,
+                            value: barSummary)
+            }
+            NavigationLink { GesturesView() } label: {
+                SettingsRow(title: "Gestures", symbol: "hand.draw.fill", color: .teal, value: swipe ? "Swipe on" : "Swipe off")
+            }
+            NavigationLink { HitboxesView() } label: {
+                SettingsRow(title: "Hitboxes", symbol: "scope", color: .cyan, value: touchSummary)
+            }
+            NavigationLink { ShortcutsView() } label: {
+                SettingsRow(title: "Text shortcuts", symbol: "bolt.fill", color: .orange,
+                            value: shortcutCount > 0 ? "\(shortcutCount)" : nil)
+            }
+        } header: {
+            SectionHeader("Keyboard", symbol: "keyboard", color: .blue)
+        } footer: {
+            Text("Swipe the space bar left or right to switch languages.")
+        }
+        .onAppear {
+            languages = Settings.shared.enabledLanguages
+            shortcutCount = Settings.shared.shortcuts.count
         }
     }
 }
@@ -113,181 +191,80 @@ private struct TestFieldSection: View {
 private struct TypingSection: View {
     var body: some View {
         Section {
-            NavigationLink {
-                SuggestionsView()
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Suggestion bar")
-                        Text("Word suggestions, how many words, look and speed")
-                            .font(.footnote).foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "text.line.first.and.arrowtriangle.forward")
-                }
-            }
             SettingToggle("Auto-correction", key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
-                          subtitle: "Fixes typos, missing accents and missing spaces when you press space")
+                          subtitle: "Fixes typos, accents and missing spaces on space",
+                          symbol: "checkmark.seal.fill", color: .green)
             SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions,
-                          subtitle: "Offers an emoji that matches the word you typed")
+                          subtitle: "An emoji that matches the word you typed",
+                          symbol: "face.smiling.inverse", color: .yellow)
             SettingToggle("Auto-capitalization", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
-                          subtitle: "Starts each sentence with a capital letter")
+                          subtitle: "A capital at the start of each sentence",
+                          symbol: "textformat", color: .blue)
             SettingToggle("\u{201C}.\u{201D} shortcut", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
-                          subtitle: "Tap the space bar twice to end a sentence")
-        } header: {
-            SectionHeader("Typing", symbol: "keyboard", color: .blue)
-        }
-    }
-}
-
-private struct GesturesSection: View {
-    var body: some View {
-        Section {
-            NavigationLink {
-                GesturesView()
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Gestures")
-                        Text("Swipe typing, thumb handoff, flicks, cursor and delete")
-                            .font(.footnote).foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "hand.draw")
-                }
-            }
-            NavigationLink {
-                HitboxesView()
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Hitboxes")
-                        Text("Letter room, adaptive keys and your hit map")
-                            .font(.footnote).foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "scope")
-                }
-            }
-        } header: {
-            SectionHeader("Gestures & touch", symbol: "hand.draw.fill", color: .teal)
-        }
-    }
-}
-
-private struct FeedbackSection: View {
-    var body: some View {
-        Section {
-            NavigationLink {
-                HapticsView()
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Haptics")
-                        Text("Vibration, cursor ticks and key clicks")
-                            .font(.footnote).foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "iphone.radiowaves.left.and.right")
-                }
-            }
+                          subtitle: "Tap the space bar twice to end a sentence",
+                          symbol: "circle.fill", color: .gray)
             SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
-                          subtitle: "Shows the letter above your finger")
+                          subtitle: "The letter shows above your finger",
+                          symbol: "rectangle.and.hand.point.up.left.fill", color: .purple)
         } header: {
-            SectionHeader("Sound & haptics", symbol: "speaker.wave.2.fill", color: .pink)
+            SectionHeader("Typing", symbol: "character.cursor.ibeam", color: .green)
         }
     }
 }
 
-private struct LanguagesSection: View {
-    var body: some View {
-        Section {
-            NavigationLink {
-                LanguagesView()
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Languages")
-                    Text("Swipe the space bar left or right to switch")
-                        .font(.footnote).foregroundColor(.secondary)
-                }
-            }
-        } header: {
-            SectionHeader("Languages", symbol: "globe", color: .green)
-        }
-    }
-}
-
-private struct AppearanceSection: View {
+/// The theme (with a live preview), the keys, haptics and the accent colour.
+private struct LookSection: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
+    @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
+    private var hapticSummary: String {
+        if vibration < 0.01 { return "Off" }
+        return ["Soft", "Light", "Medium", "Firm", "Crisp"][min(4, max(0, Int(sharpness * 5)))]
+    }
+
     var body: some View {
         Section {
-            NavigationLink {
-                ThemesView()
-            } label: {
-                VStack(alignment: .leading, spacing: 10) {
+            NavigationLink { ThemesView() } label: {
+                VStack(alignment: .leading, spacing: 12) {
                     ThemePreview(theme: theme, accent: accent, cornerRadius: 12)
                         .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
-                    HStack {
-                        Text("Theme")
-                        Spacer()
-                        Text(theme.name).foregroundColor(.secondary)
+                        .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
+                    SettingsRow(title: "Theme", symbol: "paintbrush.fill", color: .purple, value: theme.name)
+                }
+                .padding(.vertical, 6)
+            }
+            NavigationLink { KeysView() } label: {
+                SettingsRow(title: "Keys", symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
+            }
+            NavigationLink { HapticsView() } label: {
+                SettingsRow(title: "Haptics", symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    IconTile(symbol: "drop.fill", color: accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Accent colour")
+                        Text("Return key and highlights; colour themes keep their own until you pick one.")
+                            .font(.footnote).foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 4)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Accent colour")
-                Text("The return key and highlights. Colour themes keep their own until you pick one.")
-                    .font(.footnote).foregroundColor(.secondary)
                 AccentPicker()
             }
             .padding(.vertical, 2)
             AccentCustomRow()
-
-            NavigationLink {
-                KeysView()
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Keys")
-                        Text("Size, corners, spacing, labels and the space bar")
-                            .font(.footnote).foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "keyboard")
-                }
-            }
             SettingToggle("Key borders", key: SettingKey.keyBorders, defaultValue: SettingDefault.keyBorders,
-                          subtitle: "A thin outline around keys on translucent themes")
+                          subtitle: "A thin outline on translucent themes", symbol: "square.dashed", color: .gray)
             SettingToggle("Number row", key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
-                          subtitle: "Numbers above the letters")
+                          subtitle: "Numbers above the letters", symbol: "number", color: .orange)
         } header: {
-            SectionHeader("Appearance", symbol: "paintpalette.fill", color: .purple)
-        }
-    }
-}
-
-private struct ShortcutsSection: View {
-    var body: some View {
-        Section {
-            NavigationLink {
-                ShortcutsView()
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Text shortcuts")
-                    Text("Type a trigger and press space to expand it")
-                        .font(.footnote).foregroundColor(.secondary)
-                }
-            }
-        } header: {
-            SectionHeader("Shortcuts", symbol: "bolt.fill", color: .orange)
+            SectionHeader("Look & feel", symbol: "paintpalette.fill", color: .purple)
         }
     }
 }
@@ -323,17 +300,19 @@ private struct DataSection: View {
 
     @State private var pending: Action?
     @State private var note: String?
+    @State private var learnedCount = 0
 
     var body: some View {
         Section {
             NavigationLink {
                 LearnedWordsView()
             } label: {
-                Label("Learned words", systemImage: "character.book.closed")
+                SettingsRow(title: "Learned words", symbol: "character.book.closed", color: .brown,
+                            value: learnedCount > 0 ? "\(learnedCount)" : nil)
             }
-            row(.learned, "Forget learned words", symbol: "text.book.closed")
-            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath")
-            row(.reset, "Reset all settings", symbol: "arrow.counterclockwise", role: .destructive)
+            row(.learned, "Forget learned words", symbol: "text.book.closed", color: .orange)
+            row(.recents, "Clear recent emoji", symbol: "clock.arrow.circlepath", color: .yellow)
+            row(.reset, "Reset all settings", symbol: "arrow.counterclockwise", color: .red, role: .destructive)
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
             }
@@ -342,11 +321,21 @@ private struct DataSection: View {
         } footer: {
             Text("Everything the keyboard learns stays on this device.")
         }
+        .onAppear { learnedCount = DataSection.countLearned() }
+    }
+
+    private static func countLearned() -> Int {
+        return Language.allCases.reduce(0) { $0 + Settings.shared.learnedWordList(for: $1.rawValue).count }
     }
 
     /// One option with its own confirmation, so the dialog's arrow points at the option that was tapped.
-    private func row(_ action: Action, _ title: String, symbol: String, role: ButtonRole? = nil) -> some View {
-        Button(role: role) { pending = action } label: { Label(title, systemImage: symbol) }
+    private func row(_ action: Action, _ title: String, symbol: String, color: Color, role: ButtonRole? = nil) -> some View {
+        Button(role: role) { pending = action } label: {
+            HStack(spacing: 12) {
+                IconTile(symbol: symbol, color: color)
+                Text(title).foregroundColor(role == .destructive ? .red : .primary)
+            }
+        }
             .confirmationDialog(action.title,
                                 isPresented: Binding(get: { pending == action }, set: { if !$0 { pending = nil } }),
                                 titleVisibility: .visible) {
@@ -364,6 +353,7 @@ private struct DataSection: View {
             note = "Recent emoji cleared."
         case .learned:
             Settings.shared.clearLearnedWords()
+            learnedCount = 0
             note = "Learned words forgotten."
         case .reset:
             Settings.shared.resetPreferences()
@@ -374,21 +364,25 @@ private struct DataSection: View {
     }
 }
 
-/// Credits and licences for the word data, emoji data and icons the app ships (LicensesView).
-private struct CreditsSection: View {
+/// Credits and licences for the word data, emoji data and icons the app ships (LicensesView), and the version.
+private struct AboutSection: View {
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+
     var body: some View {
         Section {
-            NavigationLink {
-                LicensesView()
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Licences")
-                    Text("Copyright, and the word lists, emoji data and icons the keyboard uses")
-                        .font(.footnote).foregroundColor(.secondary)
-                }
+            NavigationLink { LicensesView() } label: {
+                SettingsRow(title: "Licences", symbol: "doc.text.fill", color: .gray)
             }
+            SettingsRow(title: "Version", symbol: "info.circle.fill", color: .blue, value: version)
         } header: {
-            SectionHeader("Acknowledgements", symbol: "info.circle.fill", color: .gray)
+            SectionHeader("About", symbol: "info.circle", color: .gray)
+        } footer: {
+            Text("Iramo. Copyright \u{00A9} 2026 Ors\u{00F3}s Emil.")
         }
     }
 }
@@ -425,6 +419,8 @@ struct ShortcutsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
+                ShortcutPreview(trigger: trigger, phrase: phrase)
+                    .padding(.bottom, 8)
                 CardHeader("New shortcut")
                 VStack(spacing: 0) {
                     TextField("Trigger (e.g. omw)", text: $trigger)
@@ -505,7 +501,15 @@ struct LanguagesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 DeletableCard(items: languages, id: { $0.rawValue }, canDelete: languages.count > 1, onDelete: remove) { language in
-                    Text(language.displayName).cardRow()
+                    // The language and its layout (the first letters of its top row).
+                    HStack {
+                        Text(language.displayName)
+                        Spacer()
+                        Text(ThemePreview.letterRows(for: language)[0].prefix(6).joined().uppercased())
+                            .font(.footnote.monospaced())
+                            .foregroundColor(.secondary)
+                    }
+                    .cardRow()
                 }
 
                 CardFooter("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
@@ -573,17 +577,18 @@ private extension View {
     }
 }
 
-/// The title above a grouped card, like a list section header.
+/// The title above a grouped card, styled like the list sections' headers (SectionHeader).
 private struct CardHeader: View {
     let title: String
     init(_ title: String) { self.title = title }
 
     var body: some View {
-        if #available(iOS 26, *) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundColor(.secondary).padding(.horizontal, 16)
-        } else {
-            Text(title.uppercased()).font(.footnote).foregroundColor(.secondary).padding(.horizontal, 16)
-        }
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(.secondary)
+            .textCase(.uppercase)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
     }
 }
 
@@ -808,5 +813,37 @@ struct LearnedWordsView: View {
         list.removeAll { removed.contains($0) }
         Feedback.tick()
         withAnimation(.easeOut(duration: 0.2)) { words[language.rawValue] = list.isEmpty ? nil : list }
+    }
+}
+
+/// What a shortcut does, as the suggestion bar shows it: the trigger typed, then the phrase space will write.
+private struct ShortcutPreview: View {
+    let trigger: String
+    let phrase: String
+
+    var body: some View {
+        let typed = trigger.trimmingCharacters(in: .whitespaces)
+        let written = phrase.trimmingCharacters(in: .whitespaces)
+        PreviewCard(caption: "Type the trigger and press space: the phrase takes its place.") {
+            HStack(spacing: 10) {
+                Text(typed.isEmpty ? "omw" : typed)
+                    .font(.system(size: 15, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color(.systemBackground)))
+                Image(systemName: "arrow.right")
+                    .foregroundColor(.secondary)
+                Text(written.isEmpty ? "On my way!" : written)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(.tint))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .opacity(typed.isEmpty && written.isEmpty ? 0.6 : 1)
+        }
     }
 }

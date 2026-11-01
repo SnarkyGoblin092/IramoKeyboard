@@ -42,6 +42,20 @@ enum GlassSupport {
         return UIVisualEffectView(effect: nil)
     }
 
+    /// A piece of glass filling `host` (behind its other content): the Liquid Glass theme's backgrounds for the
+    /// suggestion pill and segments, the hide-keyboard button and the emoji tab highlight. Its shape follows the
+    /// host's size (capsule by default; `applyShape` for rounded rectangles).
+    @discardableResult
+    static func addBackground(to host: UIView, tint: UIColor?) -> UIVisualEffectView {
+        let glass = makeEffectView(clear: false, tint: tint)
+        glass.isUserInteractionEnabled = false
+        glass.frame = host.bounds
+        glass.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.backgroundColor = UIColor.clear
+        host.insertSubview(glass, at: 0)
+        return glass
+    }
+
     /// Replaces the effect of a glass view (used for the pressed look).
     static func setTint(_ view: UIVisualEffectView, clear: Bool, tint: UIColor?, interactive: Bool = false) {
         #if compiler(>=6.2)

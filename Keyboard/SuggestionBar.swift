@@ -48,6 +48,12 @@ final class SuggestionBar: UIView {
     private var labels: [UILabel] = []
     private var highlights: [UIView] = []
     private var segmentViews: [UIView] = []
+    /// Liquid Glass theme: real glass behind the pill, the segments and the hide-keyboard button.
+    private let usesGlass = Theme.usesRealGlass
+    private var pillGlass: UIVisualEffectView?
+    private var segmentGlass: [UIVisualEffectView?] = []
+    private let dismissBackground = UIView()
+    private var dismissGlass: UIVisualEffectView?
     private let separatorLayer = CAShapeLayer()
 
     private var suggestions: [Suggestion] = []
@@ -109,6 +115,14 @@ final class SuggestionBar: UIView {
         bestPill.layer.cornerCurve = .continuous
         bestPill.isHidden = true
         strip.addSubview(bestPill)
+        if usesGlass {
+            // Accent-tinted glass, like the keys' glass.
+            pillGlass = GlassSupport.addBackground(to: bestPill, tint: Theme.accent.withAlphaComponent(0.85))
+            // The hide-keyboard button sits on a glass circle of its own.
+            dismissBackground.isUserInteractionEnabled = false
+            glass.contentView.addSubview(dismissBackground)
+            dismissGlass = GlassSupport.addBackground(to: dismissBackground, tint: nil)
+        }
 
         dismissHighlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
         dismissHighlight.alpha = 0
@@ -187,6 +201,7 @@ final class SuggestionBar: UIView {
         segment.isUserInteractionEnabled = false
         strip.insertSubview(segment, at: 0)
         segmentViews.append(segment)
+        segmentGlass.append(usesGlass ? GlassSupport.addBackground(to: segment, tint: nil) : nil)
 
         let highlight = UIView()
         highlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
@@ -231,6 +246,12 @@ final class SuggestionBar: UIView {
         dismissHighlight.frame = CGRect(x: dismissIcon.frame.midX - circle / 2, y: (area.height - circle) / 2,
                                         width: circle, height: circle)
         dismissHighlight.layer.cornerRadius = circle / 2
+        if dismissGlass != nil {
+            let side = min(area.height - 6, 38)
+            dismissBackground.frame = CGRect(x: dismissIcon.frame.midX - side / 2, y: (area.height - side) / 2,
+                                             width: side, height: side)
+            glass.contentView.insertSubview(dismissBackground, belowSubview: dismissIcon)
+        }
         hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
         strip.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
 
@@ -256,6 +277,10 @@ final class SuggestionBar: UIView {
             highlights[index].layer.cornerRadius = segments ? segmentRadius : Theme.keyCornerRadius(for: frame.size)
             segmentViews[index].frame = frame.insetBy(dx: 2.5, dy: 3)
             segmentViews[index].layer.cornerRadius = segmentRadius
+            if let glassPiece = segmentGlass[index] {
+                glassPiece.frame = segmentViews[index].bounds
+                GlassSupport.applyShape(glassPiece, radius: segmentRadius, size: segmentViews[index].bounds.size)
+            }
         }
         // A line between neighbouring slots (also the empty ones of the three-slot bar, like the native bar).
         for frame in frames.dropFirst() where frame.minX > 0 && frame.width > 0 {
@@ -279,6 +304,10 @@ final class SuggestionBar: UIView {
                 let height = max(0, area.height - 8)
                 bestPill.frame = CGRect(x: frame.midX - width / 2, y: (area.height - height) / 2, width: width, height: height)
                 bestPill.layer.cornerRadius = min(height / 2, Theme.keyCornerRadius(for: bestPill.bounds.size) * 1.6)
+            }
+            if let glassPiece = pillGlass {
+                glassPiece.frame = bestPill.bounds
+                GlassSupport.applyShape(glassPiece, radius: bestPill.layer.cornerRadius, size: bestPill.bounds.size)
             }
         }
     }

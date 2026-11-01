@@ -320,6 +320,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         addSubview(tabGlass)
         tabSelection.isUserInteractionEnabled = false
         tabSelection.backgroundColor = Theme.accent   // the theme's highlight colour, like the suggestion bar
+        if Theme.usesRealGlass {
+            // Liquid Glass theme: an accent-tinted glass circle, like the suggestion bar's pill.
+            GlassSupport.addBackground(to: tabSelection, tint: Theme.accent.withAlphaComponent(0.85))
+        }
         tabSelection.layer.cornerCurve = .continuous
         tabGlass.contentView.addSubview(tabSelection)
         abcButton.setTitle("ABC", for: .normal)

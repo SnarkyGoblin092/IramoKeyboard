@@ -21,6 +21,9 @@ enum Decoder {
     static let restoredLogProb = -8.5   // log10 probability of an unknown word with its accents restored
     static let taughtBonus = 2.0        // log10 boost for the word the user taught for a typo of theirs
     static let splitCost = 1.0          // log10 cost of a missing space ("nemakarom" -> "nem akarom")
+    /// Typing cost of each of the last one or two letters of a word left off ("appl" -> "apple"): stopping early
+    /// is far more common than a wrong key, so "appl" means "apple", not "all".
+    static let unfinishedLetter = 0.35
     private static let candidateLimit = 30
     private static let maxCost = 2.0
     private static let weightFloor = 0.02
@@ -407,10 +410,15 @@ enum Decoder {
             }
             let cost = typingCost(key, wordKey, costs: costs)
             guard cost.prefix <= maxCost else { continue }
+            var whole = cost.whole
+            let missing = wordKey.count - key.count
+            if cost.prefix < 0.001 && (1...2).contains(missing) {
+                whole = min(whole, unfinishedLetter * Double(missing))
+            }
             result.append(Row(word: word,
                               logProb: logProb(word, context: context, stores: stores, field: field),
                               prefixCost: cost.prefix,
-                              wholeCost: cost.whole,
+                              wholeCost: whole,
                               firstWrong: wordKey[0] != first))
         }
         // A word no dictionary has, typed without accents: its accents restored (AccentModel), in the languages of

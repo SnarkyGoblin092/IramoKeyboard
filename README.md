@@ -81,7 +81,11 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ### The Iramo app
 - A Liquid Glass design: glass cards and rows over a backdrop tinted with your accent colour (frosted glass
   before iOS 26).
-- Shows what still needs setting up (adding the keyboard, Full Access), and a field to try the keyboard.
+- Laid out like the system Settings app: coloured icons, and each row showing what it is set to.
+- Every settings screen opens with a live preview of what it changes: the keys, the suggestion bar, a swipe being
+  drawn, the keys' touch areas, the vibration's feel (tap to play it), and a text shortcut being expanded.
+- Shows what still needs setting up (adding the keyboard, Full Access) with a button to Settings, and a field
+  to try the keyboard.
 - Themes with previews that look like the real keyboard, in light and dark mode.
 - Languages, text shortcuts and learned words, each swiped left to remove an entry.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,

@@ -40,6 +40,9 @@ SHAPE = 10.0            # log10 cost of one unit of swipe shape mismatch (see ba
 CANDIDATES = 30
 
 
+UNFINISHED_LETTER = 0.35   # Decoder.unfinishedLetter
+
+
 def typing_cost(typed, word, costs):
     """(prefix cost, whole cost) of typing `typed` for `word` (both match keys). `costs[j]` maps a letter to the
     cost of the j-th typed key standing for it (see Engine.substitution_costs; missing letters cost 1)."""
@@ -263,6 +266,11 @@ class Engine(baseline.Engine):
             prefix_cost, whole_cost = typing_cost(key, word_key, near)
             if prefix_cost > 2.0:
                 continue
+            # The last one or two letters left off ("appl" -> "apple") cost far less than a wrong key
+            # (Decoder.unfinishedLetter).
+            missing = len(word_key) - len(key)
+            if prefix_cost < 0.001 and 1 <= missing <= 2:
+                whole_cost = min(whole_cost, UNFINISHED_LETTER * missing)
             rows.append((word, self._lm(word, context), prefix_cost, whole_cost, word_key[0] != key[0]))
         # A word no dictionary has, typed without accents: its accents restored, in the languages of the text.
         if key and key == lower and not any(store.contains(key) for store in self.stores.values()):

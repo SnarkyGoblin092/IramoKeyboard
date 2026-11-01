@@ -30,6 +30,9 @@ struct HapticsView: View {
     var body: some View {
         List {
             Section {
+                HapticPreview().previewRow()
+            }
+            Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
                     strength = on ? SettingDefault.vibration : 0
                     Feedback.tick()
@@ -47,11 +50,6 @@ struct HapticsView: View {
                     GlassSlider(title: "Sharpness", symbol: "waveform.path", value: $sharpness,
                                 range: 0...1, step: 0.05) { value in
                         ["Soft", "Light", "Medium", "Firm", "Crisp"][min(4, max(0, Int(value * 5)))]
-                    }
-                    Button {
-                        Feedback.test(strength: strength, sharpness: sharpness)
-                    } label: {
-                        Label("Try it", systemImage: "hand.tap")
                     }
                 }
             } header: {

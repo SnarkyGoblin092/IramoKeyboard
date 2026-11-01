@@ -54,9 +54,15 @@ struct KeysView: View {
             Section {
                 ThemePreview(theme: ThemeCatalog.theme(id: themeID),
                              accent: Color.currentAccent(name: accentName, hex: accentHex),
-                             cornerRadius: 12)
+                             cornerRadius: 14)
                     .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
-                    .listRowInsets(EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10))
+                    .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                    .padding(.vertical, 6)
+                    .previewRow()
+            } footer: {
+                Text("Your keyboard with these settings, in the current theme.")
+            }
+            Section {
                 SegmentedChoice(title: "Overall", names: styles.map { $0.name }, selected: styleIndex) { index in
                     let style = styles[index]
                     withAnimation(.easeOut(duration: 0.2)) {
