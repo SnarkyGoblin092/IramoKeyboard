@@ -41,6 +41,11 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Swipe the space bar left or right to switch; the space bar shows the language's name.
 - Several languages at once: words from any enabled language are suggested and corrected, and the keyboard
   learns which ones you write in most.
+- Features a language can't use are left out while typing in it: swipe typing, adaptive keys and the hit map
+  (Korean, Hindi, Thai, Chinese, Japanese), auto-correction (Korean, Thai, Chinese, Japanese), capitals and
+  auto-capitalization (scripts without capitals), and the double-space full stop (Thai, Chinese, Japanese; Hindi
+  gets the danda "। "). In the app those settings name the enabled languages they're off in, and are greyed out
+  when none of the enabled languages can use them.
 - The return key is labelled in the keyboard's language, to match the field (Go, Search, Send, Done, Next).
 
 ### Prediction and correction

@@ -546,7 +546,7 @@ final class KeyboardViewController: UIInputViewController {
     /// typed, or what auto-correction made of it when that has as many letters).
     private func recordHitMap(typed: String, word: String) {
         guard Prefs.hitMap, page == .letters, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true,
-              word.count == typed.count, wordTaps.count == typed.count else { return }
+              language.supports(.keyLearning), word.count == typed.count, wordTaps.count == typed.count else { return }
         let points = wordTaps.compactMap { $0 }
         guard points.count == typed.count else { return }
         hitMap(for: language).record(word: word, points: points,
@@ -558,6 +558,7 @@ final class KeyboardViewController: UIInputViewController {
     /// areas, the unlikely ones smaller (see KeyboardView.letterBias).
     private func updateAdaptiveHitboxes() {
         guard Prefs.adaptiveHitboxes, Prefs.adaptiveStrength > 0, page == .letters, !isSearchingEmoji,
+              language.supports(.keyLearning),
               textDocumentProxy.isSecureTextEntry != true, let store = stores[language], store.isLoaded else {
             if !keyboardView.letterBias.isEmpty { keyboardView.letterBias = [:] }
             adaptiveFor = nil
@@ -858,14 +859,14 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         // Double space -> ". "
-        if Prefs.doubleSpacePeriod,
+        if Prefs.doubleSpacePeriod, language.supports(.sentencePeriod),
            Date().timeIntervalSince(lastSpaceTime) < 0.4, before.hasSuffix(" "), before.count >= 2 {
             let characters = Array(before)
             let previous = characters[characters.count - 2]
             if previous.isLetter || previous.isNumber {
                 clearSwipeState()
                 textDocumentProxy.deleteBackward()
-                textDocumentProxy.insertText(". ")
+                textDocumentProxy.insertText(language.fullStop + " ")   // the language's own: "। " in Hindi
                 lastSpaceTime = Date.distantPast
                 afterTyping()
                 return
@@ -925,7 +926,7 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Auto-correction is on and the field accepts it (not passwords, addresses or codes).
     private var autoCorrectAllowed: Bool {
-        return Prefs.suggestions && Prefs.autoCorrect && language.autoCorrects && textDocumentProxy.isSecureTextEntry != true
+        return Prefs.suggestions && Prefs.autoCorrect && language.supports(.autoCorrect) && textDocumentProxy.isSecureTextEntry != true
             && textDocumentProxy.autocorrectionType != .no
             && ![UIKeyboardType.URL, .emailAddress].contains(textDocumentProxy.keyboardType ?? .default)
     }

@@ -11,6 +11,7 @@ struct GesturesView: View {
     @AppStorage(SettingKey.cursorControl, store: SharedStore.defaults) private var cursor = SettingDefault.cursorControl
     @AppStorage(SettingKey.flickUpCapital, store: SharedStore.defaults) private var flickUp = SettingDefault.flickUpCapital
     @AppStorage(SettingKey.flickDownAccent, store: SharedStore.defaults) private var flickDown = SettingDefault.flickDownAccent
+    @ObservedObject private var languages = EnabledLanguages.shared
 
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
@@ -21,7 +22,7 @@ struct GesturesView: View {
             Section {
                 GlassToggle(title: "Swipe typing",
                             subtitle: "Slide across the letters to write a word; the bar offers the other readings.",
-                            isOn: $swipe)
+                            isOn: $swipe, feature: .swipe)
                 Group {
                     GlassToggle(title: "Thumb handoff",
                                 subtitle: "Touch a letter with your other thumb while gliding, or just after lifting, and the same word goes on.",
@@ -36,7 +37,7 @@ struct GesturesView: View {
                                 subtitle: "Delete right after a swipe removes the whole word. Off: one letter at a time.",
                                 isOn: $deleteSwiped)
                 }
-                .disabled(!swipe)
+                .disabled(!swipe || languages.lacking(.swipe).all)
             } header: {
                 SectionHeader("Letters", symbol: "hand.draw.fill", color: .blue)
             }
@@ -51,7 +52,7 @@ struct GesturesView: View {
                               subtitle: "How long to hold a key before its accents appear") { String(format: "%.2f s", $0) }
                 GlassToggle(title: "Flick up for a capital",
                             subtitle: "A short flick up on a letter types it as a capital.",
-                            isOn: $flickUp)
+                            isOn: $flickUp, feature: .capitals)
                 GlassToggle(title: "Flick down for an accent",
                             subtitle: "A short flick straight down types the key's first accent.",
                             isOn: $flickDown)

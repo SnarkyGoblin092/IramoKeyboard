@@ -168,17 +168,23 @@ struct SettingToggle: View {
     private let subtitle: String?
     private let symbol: String?
     private let color: Color
+    private let feature: LanguageFeature?
     @AppStorage private var isOn: Bool
+    @ObservedObject private var languages = EnabledLanguages.shared
 
-    /// `symbol`: an icon tile in front of the title (as on the main screen).
+    /// `symbol`: an icon tile in front of the title (as on the main screen). `feature`: one some languages can't
+    /// use (greyed out when none of the enabled languages can, with a note naming the ones that can't).
     init(_ title: String, key: String, defaultValue: Bool, subtitle: String? = nil,
-         symbol: String? = nil, color: Color = .gray) {
+         symbol: String? = nil, color: Color = .gray, feature: LanguageFeature? = nil) {
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
         self.color = color
+        self.feature = feature
         _isOn = AppStorage(wrappedValue: defaultValue, key, store: SharedStore.defaults)
     }
+
+    private var unavailable: Bool { return feature.map { languages.lacking($0).all } ?? false }
 
     var body: some View {
         Toggle(isOn: $isOn) {
@@ -189,10 +195,13 @@ struct SettingToggle: View {
                     if let subtitle = subtitle {
                         Text(subtitle).font(.footnote).foregroundColor(.secondary)
                     }
+                    if let feature = feature { FeatureNote(feature) }
                 }
             }
         }
         .onChange(of: isOn) { _ in Feedback.tick() }
+        .disabled(unavailable)
+        .opacity(unavailable ? 0.45 : 1)
     }
 }
 
@@ -435,6 +444,64 @@ struct AccentCustomRow: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }
+        }
+    }
+}
+
+// MARK: - Features some languages can't use
+
+/// The enabled languages, kept current while the app runs (the Languages screen changes them), so the settings a
+/// language can't use follow at once.
+final class EnabledLanguages: ObservableObject {
+    static let shared = EnabledLanguages()
+
+    @Published private(set) var list: [Language]
+    private var observer: NSObjectProtocol?
+
+    private init() {
+        list = EnabledLanguages.read()
+        observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+                                                          object: SharedStore.defaults, queue: .main) { [weak self] _ in
+            let current = EnabledLanguages.read()
+            if current != self?.list { self?.list = current }
+        }
+    }
+
+    /// Straight from the shared defaults (the Settings snapshot can lag a moment behind a change).
+    private static func read() -> [Language] {
+        let codes = SharedStore.defaults.stringArray(forKey: SettingKey.enabledLanguages) ?? SettingDefault.enabledLanguages
+        return Language.list(from: codes)
+    }
+
+    /// The enabled languages that can't use `feature`, and whether that is all of them.
+    func lacking(_ feature: LanguageFeature) -> (languages: [Language], all: Bool) {
+        return Language.lacking(feature, among: list)
+    }
+}
+
+/// Names the enabled languages that can't use a setting: "Off while typing in 한국어 and ไทย." when the others can
+/// (the keyboard leaves it out only in those), "Not available in 日本語." when none can (the setting is greyed out).
+struct FeatureNote: View {
+    let feature: LanguageFeature
+    @ObservedObject private var languages = EnabledLanguages.shared
+
+    init(_ feature: LanguageFeature) {
+        self.feature = feature
+    }
+
+    private var text: String? {
+        let lacking = languages.lacking(feature)
+        guard !lacking.languages.isEmpty else { return nil }
+        let names = ListFormatter.localizedString(byJoining: lacking.languages.map { $0.displayName })
+        return lacking.all ? "Not available in \(names)." : "Off while typing in \(names)."
+    }
+
+    var body: some View {
+        if let text = text {
+            Label(text, systemImage: "globe")
+                .font(.footnote)
+                .foregroundColor(.orange)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

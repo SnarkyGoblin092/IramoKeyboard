@@ -173,7 +173,8 @@ private struct KeyboardSection: View {
                             value: barSummary)
             }
             ScreenRow(.gestures) {
-                SettingsRow(title: "Gestures", symbol: "hand.draw.fill", color: .teal, value: swipe ? "Swipe on" : "Swipe off")
+                SettingsRow(title: "Gestures", symbol: "hand.draw.fill", color: .teal,
+                            value: swipe && !Language.lacking(.swipe, among: Language.list(from: languages)).all ? "Swipe on" : "Swipe off")
             }
             ScreenRow(.hitboxes) {
                 SettingsRow(title: "Hitboxes", symbol: "scope", color: .cyan, value: touchSummary)
@@ -199,16 +200,16 @@ private struct TypingSection: View {
         Section {
             SettingToggle("Auto-correction", key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: "Fixes typos, accents and missing spaces on space",
-                          symbol: "checkmark.seal.fill", color: .green)
+                          symbol: "checkmark.seal.fill", color: .green, feature: .autoCorrect)
             SettingToggle("Emoji suggestions", key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions,
                           subtitle: "An emoji that matches the word you typed",
                           symbol: "face.smiling.inverse", color: .yellow)
             SettingToggle("Auto-capitalization", key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
                           subtitle: "A capital at the start of each sentence",
-                          symbol: "textformat", color: .blue)
+                          symbol: "textformat", color: .blue, feature: .capitals)
             SettingToggle("\u{201C}.\u{201D} shortcut", key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
                           subtitle: "Tap the space bar twice to end a sentence",
-                          symbol: "circle.fill", color: .gray)
+                          symbol: "circle.fill", color: .gray, feature: .sentencePeriod)
             SettingToggle("Key pop-ups", key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
                           subtitle: "The letter shows above your finger",
                           symbol: "rectangle.and.hand.point.up.left.fill", color: .purple)

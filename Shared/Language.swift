@@ -107,6 +107,18 @@ enum Language: String, CaseIterable {
     /// written without spaces between words.
     var autoCorrects: Bool { return !usesPhoneticInput && self != .korean && self != .thai }
 
+    /// Whether typing in this language can use `feature` (the keyboard leaves it out while typing in a language
+    /// that can't; the app greys a setting out when none of the enabled languages can).
+    func supports(_ feature: LanguageFeature) -> Bool {
+        switch feature {
+        case .swipe, .keyLearning: return supportsSwipe
+        case .autoCorrect: return autoCorrects
+        case .capitals: return hasCapitals
+        // Chinese and Japanese need no space after a full stop; Thai ends sentences with a space, not a full stop.
+        case .sentencePeriod: return !usesPhoneticInput && self != .thai
+        }
+    }
+
     /// How a language typed by sound is spelled ("Jyutping", "Pinyin"), shown in place of its layout.
     var phoneticSystem: String? {
         switch self {
@@ -115,6 +127,12 @@ enum Language: String, CaseIterable {
         case .japanese: return "Romaji"
         default: return nil
         }
+    }
+
+    /// The enabled languages that can't use `feature`, and whether that is every one of them.
+    static func lacking(_ feature: LanguageFeature, among languages: [Language]) -> (languages: [Language], all: Bool) {
+        let lacking = languages.filter { !$0.supports(feature) }
+        return (lacking, !languages.isEmpty && lacking.count == languages.count)
     }
 
     /// Languages from a list of ISO codes (unknown codes are ignored; never returns an empty list).
@@ -127,4 +145,17 @@ enum Language: String, CaseIterable {
         }
         return result.isEmpty ? [fallback] : result
     }
+}
+
+/// Keyboard features that only work in some languages (`Language.supports`).
+enum LanguageFeature {
+    /// Swipe typing and its options: the keys must be the letters words are written with.
+    case swipe
+    case autoCorrect
+    /// Auto-capitalization, flick up for a capital and capitals on the keys.
+    case capitals
+    /// Double space for a full stop.
+    case sentencePeriod
+    /// Adaptive keys and the hit map, which learn from words spelled with the keys' letters.
+    case keyLearning
 }

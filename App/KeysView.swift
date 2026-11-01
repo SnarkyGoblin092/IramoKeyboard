@@ -19,6 +19,7 @@ struct KeysView: View {
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.alwaysCapitals, store: SharedStore.defaults) private var alwaysCapitals = SettingDefault.alwaysCapitals
+    @ObservedObject private var languages = EnabledLanguages.shared
     @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize
     @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
     @AppStorage(SettingKey.hintPosition, store: SharedStore.defaults) private var hintPosition = SettingDefault.hintPosition
@@ -169,8 +170,13 @@ struct KeysView: View {
                     Label("Font", systemImage: "textformat.alt")
                 }
                 .pickerStyle(.navigationLink)
-                SegmentedChoice(names: ["Follow shift", "Always capitals"], selected: alwaysCapitals ? 1 : 0) {
-                    alwaysCapitals = $0 == 1
+                VStack(alignment: .leading, spacing: 6) {
+                    SegmentedChoice(names: ["Follow shift", "Always capitals"], selected: alwaysCapitals ? 1 : 0) {
+                        alwaysCapitals = $0 == 1
+                    }
+                    .disabled(languages.lacking(.capitals).all)
+                    .opacity(languages.lacking(.capitals).all ? 0.45 : 1)
+                    FeatureNote(.capitals)
                 }
                 GlassSlider(title: "Letter size", symbol: "textformat.size", value: $letterSize,
                             range: Settings.letterSizeRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }

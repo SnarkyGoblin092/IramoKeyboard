@@ -59,7 +59,7 @@ struct HitboxesView: View {
             Section {
                 GlassToggle(title: "Adaptive keys",
                             subtitle: "The letters you're likely to type next get more room, the unlikely ones less.",
-                            isOn: $adaptive)
+                            isOn: $adaptive, feature: .keyLearning)
                 Group {
                     SegmentedChoice(names: ["Gentle", "Normal", "Strong"],
                                     selected: adaptiveLevels.firstIndex {
@@ -79,8 +79,8 @@ struct HitboxesView: View {
                     GlassSlider(title: "Strength", symbol: "dial.medium", value: $strength,
                                 range: 0...1, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
                 }
-                .disabled(!adaptive)
-                .opacity(adaptive ? 1 : 0.45)
+                .disabled(!adaptive || EnabledLanguages.shared.lacking(.keyLearning).all)
+                .opacity(adaptive && !EnabledLanguages.shared.lacking(.keyLearning).all ? 1 : 0.45)
             } header: {
                 SectionHeader("Adaptive keys", symbol: "sparkles", color: .purple)
             } footer: {
@@ -126,7 +126,7 @@ private struct HitMapSection: View {
         Section {
             GlassToggle(title: "Learn my taps",
                         subtitle: "Notices where you really tap each key and moves its room there.",
-                        isOn: $isOn)
+                        isOn: $isOn, feature: .keyLearning)
             Picker(selection: $language) {
                 ForEach(languages, id: \.self) { language in
                     Text(language.displayName).tag(language)

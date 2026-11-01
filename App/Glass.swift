@@ -129,6 +129,19 @@ struct GlassToggle: View {
     let title: String
     let subtitle: String
     @Binding var isOn: Bool
+    /// A feature some languages can't use: greyed out when none of the enabled languages can, with a note naming
+    /// the ones that can't.
+    let feature: LanguageFeature?
+    @ObservedObject private var languages = EnabledLanguages.shared
+
+    init(title: String, subtitle: String, isOn: Binding<Bool>, feature: LanguageFeature? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isOn = isOn
+        self.feature = feature
+    }
+
+    private var unavailable: Bool { return feature.map { languages.lacking($0).all } ?? false }
 
     var body: some View {
         Toggle(isOn: $isOn) {
@@ -136,9 +149,12 @@ struct GlassToggle: View {
                 Text(title)
                 Text(subtitle).font(.footnote).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let feature = feature { FeatureNote(feature) }
             }
         }
         .onChange(of: isOn) { _ in Feedback.tick() }
+        .disabled(unavailable)
+        .opacity(unavailable ? 0.45 : 1)
     }
 }
 
