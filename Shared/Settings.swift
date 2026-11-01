@@ -538,7 +538,7 @@ final class Settings {
     static let hapticSharpnessRange: ClosedRange<Double> = 0...1
     static let suggestionHeightRange: ClosedRange<Double> = 32...56
     static let suggestionDelayRange: ClosedRange<Double> = 0...0.30
-    static let suggestionTransitionSpeedRange: ClosedRange<Double> = 0.5...2
+    static let suggestionTransitionSpeedRange: ClosedRange<Double> = 0.25...3
 
     var keyHeight: Double { return clamp(readDouble(SettingKey.keyHeight), Settings.keyHeightRange) }
     var landscapeSeparate: Bool { return readBool(SettingKey.landscapeSeparate) }

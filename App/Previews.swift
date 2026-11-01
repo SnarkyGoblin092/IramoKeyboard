@@ -275,6 +275,7 @@ struct SuggestionBarPreview: View {
                                         .id("\(transition)-\(step)")
                                         .transition(switchTransition)
                                 }
+                                .animation(switchAnimation, value: step)
                                 .animation(nil, value: transition)
                                 .frame(width: barWidth)
                                 .clipped()
@@ -298,8 +299,10 @@ struct SuggestionBarPreview: View {
         .task {
             // New words every so often, switched the chosen way.
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_800_000_000)
-                withAnimation(switchAnimation) { step += 1 }
+                // Long enough for a slowed-down switch to finish before the next one starts.
+                let pause = 1.2 + 0.7 / speed
+                try? await Task.sleep(nanoseconds: UInt64(pause * 1_000_000_000))
+                step += 1
             }
         }
     }

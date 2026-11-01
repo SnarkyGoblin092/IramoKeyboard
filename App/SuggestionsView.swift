@@ -75,7 +75,7 @@ struct SuggestionsView: View {
                     SegmentedChoice(names: ["Instant", "Fade", "Rise", "Slide", "Pop"],
                                     selected: transitions.firstIndex(of: transition)) { transition = transitions[$0] }
                     GlassSlider(title: "Speed", symbol: "hare", value: $speed,
-                                range: Settings.suggestionTransitionSpeedRange, step: 0.1) { String(format: "%.1f×", $0) }
+                                range: Settings.suggestionTransitionSpeedRange, step: 0.25) { String(format: "%g×", $0) }
                         .disabled(transition == "instant")
                 } header: {
                     SectionHeader("Switching", symbol: "arrow.left.arrow.right", color: .orange)
