@@ -129,8 +129,10 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   the arrow in the empty side moves it over. The split keyboard takes precedence on iPad.
 
 ### The Iramo app
-- A Liquid Glass design: every list (settings, languages, learned words, shortcuts) has real glass rows over a
-  backdrop tinted with your accent colour (frosted glass before iOS 26).
+- A Liquid Glass design: on iOS 26 and later every section of every list (settings, languages, learned words,
+  shortcuts) is one rounded card of real Liquid Glass over a backdrop tinted with your accent colour (frosted list
+  rows before iOS 26). Languages, learned words and shortcuts swipe left to delete, the red Delete button growing
+  inside the row itself; a long swipe deletes at once.
 - Laid out like the system Settings app: coloured icons, and each row showing what it is set to.
 - Screens that change the keyboard keep a live preview pinned at the top while their settings scroll below it
   (on Themes, drag the bar under it to make it smaller): the keyboard itself (Keys, Themes), the suggestion bar, a

@@ -197,3 +197,291 @@ struct SegmentedChoice: View {
         .padding(.vertical, 2)
     }
 }
+
+// MARK: - Glass lists
+
+/// A settings list. With real Liquid Glass (iOS 26 and later) every section is one rounded piece of glass with its
+/// rows inside, like the system's own glass cards; a List can only give each row its own background, which shows
+/// as a stack of separate panes. Earlier systems keep the inset grouped List with frosted rows (glassRows).
+/// Takes the same `Section { } header: { } footer: { }` content as a List.
+struct GlassList<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Group(sections: content) { sections in
+                        ForEach(sections) { section in
+                            GlassCardSection(section: section)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+            .environment(\.inGlassCards, true)
+        } else {
+            list
+        }
+        #else
+        list
+        #endif
+    }
+
+    private var list: some View {
+        List { content }
+            .listStyle(.insetGrouped)
+    }
+}
+
+#if compiler(>=6.2)
+/// One section of a GlassList: its header, its rows in a glass card, its footer.
+@available(iOS 26.0, *)
+private struct GlassCardSection: View {
+    let section: SectionConfiguration
+
+    var body: some View {
+        // Rows marked glassOutsideCard (the app logo) stand on the backdrop; the rows between them share a card.
+        let runs = Self.runs(Array(section.content))
+        VStack(alignment: .leading, spacing: 0) {
+            if !section.header.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(section.header) { $0 }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 7)
+            }
+            VStack(spacing: 12) {
+                ForEach(runs.indices, id: \.self) { index in
+                    let run = runs[index]
+                    if run.outside {
+                        ForEach(run.rows) { $0 }
+                    } else {
+                        card(run.rows)
+                    }
+                }
+            }
+            if !section.footer.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(section.footer) { $0 }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16)
+                .padding(.top, 7)
+            }
+        }
+        .padding(.top, section.header.isEmpty ? 20 : 24)
+    }
+
+    private func card(_ rows: [Subview]) -> some View {
+        let shape = RoundedRectangle(cornerRadius: GlassMetrics.cardRadius, style: .continuous)
+        return VStack(spacing: 0) {
+            ForEach(rows.indices, id: \.self) { index in
+                let row = rows[index]
+                if row.containerValues.glassBareRow {
+                    row
+                } else {
+                    row.glassRowPadding()
+                }
+                if index < rows.count - 1 {
+                    Divider().padding(.leading, 16)
+                }
+            }
+        }
+        .clipShape(shape)   // a row's Delete button keeps the card's corners
+        .glassEffect(.regular, in: shape)
+    }
+
+    private struct Run {
+        var outside: Bool
+        var rows: [Subview]
+    }
+
+    private static func runs(_ rows: [Subview]) -> [Run] {
+        var runs: [Run] = []
+        for row in rows {
+            let outside = row.containerValues.glassOutsideCard
+            if !outside, let last = runs.last, !last.outside {
+                runs[runs.count - 1].rows.append(row)
+            } else {
+                runs.append(Run(outside: outside, rows: [row]))
+            }
+        }
+        return runs
+    }
+}
+
+@available(iOS 26.0, *)
+extension ContainerValues {
+    /// The row pads itself (SwipeToDeleteRow), so its Delete button reaches the card's edges.
+    @Entry var glassBareRow: Bool = false
+    /// The row stands on the backdrop rather than in a card (a List row with a clear background).
+    @Entry var glassOutsideCard: Bool = false
+}
+#endif
+
+private struct InGlassCardsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Inside a GlassList drawn as glass cards (a List draws its own disclosure arrows and swipe actions).
+    var inGlassCards: Bool {
+        get { return self[InGlassCardsKey.self] }
+        set { self[InGlassCardsKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// A card row's insets and height, like a List row's.
+    func glassRowPadding() -> some View {
+        return self
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: 48)
+    }
+
+    /// A row that stands on the backdrop, without a card (clear in a List).
+    @ViewBuilder
+    func glassOutsideCard() -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            self.listRowBackground(Color.clear).containerValue(\.glassOutsideCard, true)
+        } else {
+            self.listRowBackground(Color.clear)
+        }
+        #else
+        self.listRowBackground(Color.clear)
+        #endif
+    }
+
+    /// Swipe the row left to delete it: on the glass cards the red Delete button grows inside the row itself
+    /// (SwipeToDeleteRow); in a List, the system's swipe action.
+    @ViewBuilder
+    func swipeToDelete(enabled: Bool = true, perform: @escaping () -> Void) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            SwipeToDeleteRow(canDelete: enabled, onDelete: perform) { self.glassRowPadding() }
+                .containerValue(\.glassBareRow, true)
+        } else {
+            listSwipeToDelete(enabled: enabled, perform: perform)
+        }
+        #else
+        listSwipeToDelete(enabled: enabled, perform: perform)
+        #endif
+    }
+
+    private func listSwipeToDelete(enabled: Bool, perform: @escaping () -> Void) -> some View {
+        return self.swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if enabled {
+                Button(role: .destructive, action: perform) { Label("Delete", systemImage: "trash") }
+            }
+        }
+    }
+}
+
+/// The disclosure arrow of a NavigationLink row on the glass cards (a List draws its own).
+struct DisclosureChevron: View {
+    @Environment(\.inGlassCards) private var inGlassCards
+
+    var body: some View {
+        if inGlassCards {
+            Image(systemName: "chevron.forward")
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(Color(.tertiaryLabel))
+        }
+    }
+}
+
+/// A row that slides left to show a red Delete button inside the row itself; a long swipe deletes at once.
+private struct SwipeToDeleteRow<Content: View>: View {
+    let canDelete: Bool
+    let onDelete: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var offset: CGFloat = 0
+    @State private var settled: CGFloat = 0
+    /// Whether the current drag is a sideways swipe (decided once, at its start); nil until it is known.
+    @State private var horizontal: Bool?
+    private let buttonWidth: CGFloat = 84
+    /// How far the Delete button may grow: a long swipe that reaches it deletes at once.
+    private let maxReveal: CGFloat = 200
+    private let settle = Animation.spring(response: 0.35, dampingFraction: 0.86)
+
+    var body: some View {
+        // The row stays put (the name never slides off screen); the Delete button grows in from the right edge.
+        content()
+            .contentShape(Rectangle())   // the card's glass shows through; the whole row still takes taps
+            .onTapGesture { close() }
+            .overlay(alignment: .trailing) {
+                Button(action: delete) {
+                    Text("Delete")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(width: max(0, -offset))
+                        .frame(maxHeight: .infinity)
+                        .background(Color.red)
+                        .clipped()
+                }
+                .buttonStyle(.plain)
+                .allowsHitTesting(offset < 0)
+            }
+            // Alongside the scroll view's own pan, so the row follows the finger from the first point instead
+            // of waiting for the scroll view to give up (the stall partway into a slow swipe).
+            .simultaneousGesture(drag, including: canDelete ? .all : .subviews)
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { value in
+                let dx = value.translation.width, dy = value.translation.height
+                if horizontal == nil { horizontal = abs(dx) > abs(dy) }
+                guard horizontal == true else { return }
+                let target = min(0, settled + dx)
+                // Past the full-delete point the button resists instead of stopping dead.
+                let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
+                if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.threshold() }   // crossing it
+                offset = resisted
+            }
+            .onEnded { value in
+                defer { horizontal = nil }
+                guard horizontal == true else { return }
+                let end = min(0, settled + value.translation.width)
+                if end <= -maxReveal {
+                    delete()
+                    return
+                }
+                // A quick flick counts as far as it was heading.
+                let heading = min(0, settled + value.predictedEndTranslation.width)
+                let open = min(end, heading) < -buttonWidth / 2
+                withAnimation(settle) { offset = open ? -buttonWidth : 0 }
+                settled = open ? -buttonWidth : 0
+            }
+    }
+
+    private func close() {
+        guard offset != 0 else { return }
+        withAnimation(settle) { offset = 0 }
+        settled = 0
+    }
+
+    private func delete() {
+        offset = 0
+        settled = 0
+        onDelete()
+    }
+}

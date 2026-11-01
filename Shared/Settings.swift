@@ -191,7 +191,7 @@ enum SettingDefault {
     static let swipeTrailLength: Double = 220
     static let keyRoundness = 0.26
     static let language = "en"
-    static let enabledLanguages = ["en", "hu"]
+    static let enabledLanguages = ["en"]
 }
 
 enum AccentChoice: String, CaseIterable {

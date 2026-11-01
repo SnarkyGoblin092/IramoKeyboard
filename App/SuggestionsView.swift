@@ -32,7 +32,7 @@ struct SuggestionsView: View {
         PinnedPreview(id: "suggestions", height: 170) {
             SuggestionBarPreview()
         } content: {
-        List {
+        GlassList {
             Section {
                 GlassToggle(title: "Word suggestions",
                             subtitle: "Words to finish or fix what you're typing, above the keys.",
@@ -99,7 +99,6 @@ struct SuggestionsView: View {
             }
             .disabled(!enabled)
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         }
         .navigationTitle("Suggestion bar")

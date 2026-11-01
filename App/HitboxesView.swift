@@ -43,7 +43,7 @@ struct HitboxesView: View {
         PinnedPreview(id: "hitboxes", height: 150) {
             HitboxPreview()
         } content: {
-        List {
+        GlassList {
             Section {
                 SegmentedChoice(names: ["Strict", "Normal", "Generous"],
                                 selected: sizes.firstIndex { same($0, size) }) { size = sizes[$0] }
@@ -90,7 +90,6 @@ struct HitboxesView: View {
 
             HitMapSection(isOn: $hitMap, strength: $hitMapStrength)
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         }
         .navigationTitle("Hitboxes")
@@ -127,14 +126,18 @@ private struct HitMapSection: View {
             GlassToggle(title: "Learn my taps",
                         subtitle: "Notices where you really tap each key and moves its room there.",
                         isOn: $isOn, feature: .keyLearning)
-            Picker(selection: $language) {
-                ForEach(languages, id: \.self) { language in
-                    Text(language.displayName).tag(language)
-                }
-            } label: {
+            // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
+            HStack {
                 Label("Language", systemImage: "globe")
+                Spacer()
+                Picker("Language", selection: $language) {
+                    ForEach(languages, id: \.self) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
             }
-            .pickerStyle(.menu)
             VStack(alignment: .leading, spacing: 10) {
                 HitMapDrawing(rows: ThemePreview.letterRows(for: language), data: data)
                 Text("\(samples) taps learned \u{00B7} \(keysLearned) keys moved")

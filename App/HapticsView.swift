@@ -32,7 +32,7 @@ struct HapticsView: View {
         PinnedPreview(id: "haptics", height: 150) {
             HapticPreview()
         } content: {
-        List {
+        GlassList {
             Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
                     strength = on ? SettingDefault.vibration : 0
@@ -80,7 +80,6 @@ struct HapticsView: View {
             }
             .glassRows()
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         }
         .navigationTitle("Haptics")

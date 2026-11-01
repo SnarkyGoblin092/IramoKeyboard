@@ -10,8 +10,8 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            // Liquid Glass: frosted rows on the tinted backdrop (Glass.swift).
-            List {
+            // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
+            GlassList {
                 HeaderSection()
                 TestFieldSection().glassRows()
                 KeyboardSection().glassRows()
@@ -20,7 +20,6 @@ struct ContentView: View {
                 DataSection().glassRows()
                 AboutSection().glassRows()
             }
-            .listStyle(.insetGrouped)
             .glassScreen()
             .navigationTitle("Iramo")
             .navigationBarTitleDisplayMode(.inline)
@@ -62,7 +61,7 @@ private struct HeaderSection: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .listRowBackground(Color.clear)
+            .glassOutsideCard()
 
             // Only what still needs setting up is shown.
             if !status.isReady {
@@ -480,7 +479,7 @@ struct ShortcutsView: View {
         PinnedPreview(id: "shortcuts", height: 110) {
             ShortcutPreview(trigger: trigger, phrase: phrase)
         } content: {
-        List {
+        GlassList {
             Section {
                 TextField("Trigger (e.g. omw)", text: $trigger)
                     .textInputAutocapitalization(.never)
@@ -503,9 +502,7 @@ struct ShortcutsView: View {
                             Text(item.phrase).font(.subheadline).foregroundColor(.secondary)
                         }
                         .padding(.vertical, 2)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) { remove(item) } label: { Label("Delete", systemImage: "trash") }
-                        }
+                        .swipeToDelete { remove(item) }
                     }
                 }
             } header: {
@@ -515,7 +512,6 @@ struct ShortcutsView: View {
             }
             .glassRows()
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         }
@@ -551,15 +547,15 @@ struct ShortcutsView: View {
 
 // MARK: - Languages
 
-/// The enabled languages only; more are added from a separate list. A Liquid Glass list like the main screen's,
-/// with the system's swipe to delete.
+/// The enabled languages only; more are added from a separate list. A Liquid Glass list like the main screen's;
+/// a language swipes left to delete, the Delete button inside its row.
 struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
 
     private var languages: [Language] { return enabled.compactMap { Language(rawValue: $0) } }
 
     var body: some View {
-        List {
+        GlassList {
             Section {
                 ForEach(languages, id: \.rawValue) { language in
                     // The language and its layout (the first letters of its top row), or how it is typed.
@@ -571,11 +567,7 @@ struct LanguagesView: View {
                             .font(.footnote.monospaced())
                             .foregroundColor(.secondary)
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if languages.count > 1 {
-                            Button(role: .destructive) { remove(language) } label: { Label("Delete", systemImage: "trash") }
-                        }
-                    }
+                    .swipeToDelete(enabled: languages.count > 1) { remove(language) }
                 }
             } footer: {
                 Text("Swipe the space bar left or right to switch. Swipe a language left to remove it.")
@@ -589,13 +581,17 @@ struct LanguagesView: View {
                             save(enabled + [language.rawValue])
                         }
                     } label: {
-                        Label("Add a language", systemImage: "plus")
+                        HStack {
+                            Label("Add a language", systemImage: "plus")
+                            Spacer()
+                            DisclosureChevron()
+                        }
+                        .contentShape(Rectangle())
                     }
                 }
                 .glassRows()
             }
         }
-        .listStyle(.insetGrouped)
         .glassScreen()
         .navigationTitle("Languages")
         .navigationBarTitleDisplayMode(.inline)
@@ -625,13 +621,16 @@ private struct AddLanguageView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List {
+        GlassList {
             ForEach(Language.allCases.filter { !enabled.contains($0.rawValue) }, id: \.rawValue) { language in
                 Button {
                     add(language)
                     dismiss()
                 } label: {
-                    Text(language.displayName).foregroundColor(.primary)
+                    Text(language.displayName)
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
             }
             .glassRows()
@@ -657,9 +656,9 @@ struct LearnedWordsView: View {
         return words.filter { $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
     }
 
-    // A Liquid Glass list like the main screen's, with the system's swipe to delete.
+    // A Liquid Glass list like the main screen's; a word swipes left to delete.
     var body: some View {
-        List {
+        GlassList {
             Section {
                 if words.isEmpty {
                     Text("No learned words yet").foregroundColor(.secondary)
@@ -668,9 +667,7 @@ struct LearnedWordsView: View {
                 } else {
                     ForEach(matches, id: \.self) { word in
                         Text(word)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) { remove(word) } label: { Label("Delete", systemImage: "trash") }
-                            }
+                            .swipeToDelete { remove(word) }
                     }
                 }
             } footer: {
@@ -682,7 +679,6 @@ struct LearnedWordsView: View {
             }
             .glassRows()
         }
-        .listStyle(.insetGrouped)
         .glassScreen()
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search learned words")
         .autocorrectionDisabled()

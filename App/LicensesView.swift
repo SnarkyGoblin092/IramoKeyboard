@@ -17,7 +17,7 @@ struct LicenseItem: Identifiable {
 /// licences require the notice to ship with the app).
 struct LicensesView: View {
     var body: some View {
-        List {
+        GlassList {
             Section {
                 Text("Iramo. Copyright © 2026 Orsós Emil. All rights reserved.").glassRows()
             } footer: {
@@ -44,10 +44,16 @@ struct LicensesView: View {
         NavigationLink {
             LicenseDetailView(item: item)
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                Text(item.licenseName).font(.footnote).foregroundColor(.secondary)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.name)
+                    Text(item.licenseName).font(.footnote).foregroundColor(.secondary)
+                }
+                .foregroundColor(.primary)
+                Spacer()
+                DisclosureChevron()
             }
+            .contentShape(Rectangle())
         }
     }
 }
@@ -56,7 +62,7 @@ private struct LicenseDetailView: View {
     let item: LicenseItem
 
     var body: some View {
-        List {
+        GlassList {
             Section {
                 Text(item.credit).glassRows()
                 if let url = URL(string: item.source) {

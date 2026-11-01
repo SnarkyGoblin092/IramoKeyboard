@@ -74,7 +74,7 @@ struct KeysView: View {
         PinnedPreview(id: "keys", height: 240, fills: true) {
             PinnedKeyboard()
         } content: {
-        List {
+        GlassList {
             Section {
                 SegmentedChoice(title: "Overall", names: styles.map { $0.name }, selected: styleIndex) { index in
                     let style = styles[index]
@@ -178,20 +178,18 @@ struct KeysView: View {
             .glassRows()
 
             Section {
-                // Each font's name is shown in that font.
-                Picker(selection: Binding(get: { keyFont }, set: { value in
-                    Feedback.choose()
-                    keyFont = value
-                })) {
-                    ForEach(KeyFont.allCases, id: \.self) { font in
-                        Text(font.displayName)
-                            .font(font.font(size: 17))
-                            .tag(font.rawValue)
-                    }
+                NavigationLink {
+                    KeyFontChoice(keyFont: $keyFont)
                 } label: {
-                    Label("Font", systemImage: "textformat.alt")
+                    HStack {
+                        Label("Font", systemImage: "textformat.alt")
+                        Spacer()
+                        Text(KeyFont.named(keyFont).displayName).foregroundColor(.secondary)
+                        DisclosureChevron()
+                    }
+                    .foregroundColor(.primary)
+                    .contentShape(Rectangle())
                 }
-                .pickerStyle(.navigationLink)
                 VStack(alignment: .leading, spacing: 6) {
                     SegmentedChoice(names: ["Follow shift", "Always capitals"], selected: alwaysCapitals ? 1 : 0) {
                         alwaysCapitals = $0 == 1
@@ -210,26 +208,30 @@ struct KeysView: View {
             .glassRows()
 
             Section {
-                Picker(selection: Binding(get: { keyHints ? hintPosition : "off" }, set: { value in
-                    Feedback.choose()
-                    if value == "off" {
-                        keyHints = false
-                    } else {
-                        keyHints = true
-                        hintPosition = value
-                    }
-                })) {
-                    Text("Off").tag("off")
-                    Text("Top right").tag("topRight")
-                    Text("Top centre").tag("topCenter")
-                    Text("Top left").tag("topLeft")
-                    Text("Bottom right").tag("bottomRight")
-                    Text("Bottom centre").tag("bottomCenter")
-                    Text("Bottom left").tag("bottomLeft")
-                } label: {
+                // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
+                HStack {
                     Label("Position", systemImage: "square.grid.3x3.topright.filled")
+                    Spacer()
+                    Picker("Position", selection: Binding(get: { keyHints ? hintPosition : "off" }, set: { value in
+                        Feedback.choose()
+                        if value == "off" {
+                            keyHints = false
+                        } else {
+                            keyHints = true
+                            hintPosition = value
+                        }
+                    })) {
+                        Text("Off").tag("off")
+                        Text("Top right").tag("topRight")
+                        Text("Top centre").tag("topCenter")
+                        Text("Top left").tag("topLeft")
+                        Text("Bottom right").tag("bottomRight")
+                        Text("Bottom centre").tag("bottomCenter")
+                        Text("Bottom left").tag("bottomLeft")
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
-                .pickerStyle(.menu)
                 GlassSlider(title: "Hint size", symbol: "textformat.size.smaller", value: $hintSize,
                             range: Settings.hintSizeRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
                     .disabled(!keyHints)
@@ -254,11 +256,45 @@ struct KeysView: View {
             }
             .glassRows()
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Keys")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The keys' font, each name shown in that font; picking one goes back.
+private struct KeyFontChoice: View {
+    @Binding var keyFont: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        GlassList {
+            Section {
+                ForEach(KeyFont.allCases, id: \.self) { font in
+                    Button {
+                        Feedback.choose()
+                        keyFont = font.rawValue
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(font.displayName)
+                                .font(font.font(size: 17))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if KeyFont.named(keyFont) == font {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold))
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+            }
+            .glassRows()
+        }
+        .glassScreen()
+        .navigationTitle("Font")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

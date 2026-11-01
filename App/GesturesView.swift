@@ -19,7 +19,7 @@ struct GesturesView: View {
         PinnedPreview(id: "gestures", height: 230) {
             GesturePreview()
         } content: {
-        List {
+        GlassList {
             Section {
                 GlassToggle(title: "Swipe typing",
                             subtitle: "Slide across the letters to write a word; the bar offers the other readings.",
@@ -88,7 +88,6 @@ struct GesturesView: View {
             }
             .glassRows()
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         }
         .navigationTitle("Gestures")
