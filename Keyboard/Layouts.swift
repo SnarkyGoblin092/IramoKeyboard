@@ -35,8 +35,44 @@ extension Language {
             return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish:
             return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
-        case .lithuanian:
+        case .lithuanian, .cantonese:
             return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .danish:
+            return split("qwertyuiopå", "asdfghjklæø", "zxcvbnm")
+        case .norwegian:
+            return split("qwertyuiopå", "asdfghjkløæ", "zxcvbnm")
+        case .finnish:
+            return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
+        case .greek:
+            return split("ςερτυθιοπ", "ασδφγηξκλ", "ζχψωβνμ")
+        case .hebrew:
+            return split("קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ")
+        case .persian:
+            return split("ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطژزرذدپو")
+        case .indonesian:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .malay:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .vietnamese:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .slovak:
+            return split("qwertzuiop", "asdfghjkl", "yxcvbnm")
+        case .croatian:
+            return split("qwertzuiopšđ", "asdfghjklčćž", "yxcvbnm")
+        case .bulgarian:
+            return split("явертъуиопчш", "асдфгхйклщ", "зьцжбнмю")
+        case .catalan:
+            return split("qwertyuiop", "asdfghjklç", "zxcvbnm")
+        case .mandarin:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .japanese:
+            return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .korean:
+            return split("ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ", "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ", "ㅋㅌㅊㅍㅠㅜㅡ")
+        case .hindi:
+            return split("ौैाीूबहगदजड", "ोे्िुपरकतचट", "ंमनवलसयश")
+        case .thai:
+            return split("ภถุึคตจขช", "ๆไำพะัีรนยบล", "ฟหกดเ้่าสวง", "ผปแอิืทมใฝ")
         case .arabic:
             // Left to right as the keys appear (the Arabic PC layout; ذ from the key left of 1 starts the last row).
             return split("ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ")
@@ -83,6 +119,44 @@ extension Language {
         case .arabic:
             // Hamza and madda forms of alef, and the other seats of hamza.
             return ["ا": ["أ", "إ", "آ", "ٱ"], "ي": ["ى", "ئ"], "و": ["ؤ"], "ه": ["ة"], "ء": ["أ", "إ", "ؤ", "ئ"]]
+        case .cantonese:
+            return [:]   // Jyutping is plain a-z
+        case .danish:
+            return ["e": ["é"], "o": ["ö"], "a": ["ä"]]
+        case .norwegian:
+            return ["e": ["é", "è", "ê"], "o": ["ó", "ò", "ô"]]
+        case .finnish:
+            return ["s": ["š"], "z": ["ž"]]
+        case .greek:
+            return ["α": ["ά"], "ε": ["έ"], "η": ["ή"], "ι": ["ί", "ϊ", "ΐ"], "ο": ["ό"], "υ": ["ύ", "ϋ", "ΰ"], "ω": ["ώ"]]
+        case .hebrew:
+            return [:]
+        case .persian:
+            return ["ا": ["آ", "أ", "إ"], "ی": ["ئ", "ي"], "و": ["ؤ"], "ه": ["ة", "ۀ"], "ک": ["ك"]]
+        case .indonesian:
+            return ["e": ["é"]]
+        case .malay:
+            return [:]
+        case .vietnamese:
+            return ["a": ["á", "à", "ả", "ã", "ạ", "ă", "â"], "e": ["é", "è", "ẻ", "ẽ", "ẹ", "ê"], "i": ["í", "ì", "ỉ", "ĩ", "ị"], "o": ["ó", "ò", "ỏ", "õ", "ọ", "ô", "ơ"], "u": ["ú", "ù", "ủ", "ũ", "ụ", "ư"], "y": ["ý", "ỳ", "ỷ", "ỹ", "ỵ"], "d": ["đ"]]
+        case .slovak:
+            return ["a": ["á", "ä"], "c": ["č"], "d": ["ď"], "e": ["é"], "i": ["í"], "l": ["ľ", "ĺ"], "n": ["ň"], "o": ["ó", "ô"], "r": ["ŕ"], "s": ["š"], "t": ["ť"], "u": ["ú"], "y": ["ý"], "z": ["ž"]]
+        case .croatian:
+            return [:]
+        case .bulgarian:
+            return ["и": ["ѝ"]]
+        case .catalan:
+            return ["a": ["à"], "e": ["è", "é"], "i": ["í", "ï"], "o": ["ò", "ó"], "u": ["ú", "ü"], "l": ["·"]]
+        case .mandarin:
+            return [:]
+        case .japanese:
+            return [:]
+        case .korean:
+            return ["ㅂ": ["ㅃ"], "ㅈ": ["ㅉ"], "ㄷ": ["ㄸ"], "ㄱ": ["ㄲ"], "ㅅ": ["ㅆ"], "ㅐ": ["ㅒ"], "ㅔ": ["ㅖ"]]
+        case .hindi:
+            return ["ा": ["आ"], "ि": ["इ"], "ी": ["ई"], "ु": ["उ"], "ू": ["ऊ"], "े": ["ए"], "ै": ["ऐ"], "ो": ["ओ", "ॉ", "ऑ"], "ौ": ["औ"], "्": ["अ", "ृ", "ऋ"], "ं": ["ँ", "ः"], "क": ["ख", "क़", "ख़"], "ग": ["घ", "ग़"], "ज": ["झ", "ज़", "ञ"], "त": ["थ", "त्र"], "द": ["ध"], "ट": ["ठ"], "ड": ["ढ", "ड़", "ढ़"], "प": ["फ", "फ़"], "ब": ["भ"], "च": ["छ"], "न": ["ण", "ङ"], "स": ["ष"], "श": ["क्ष", "ज्ञ", "श्र"], "ल": ["ळ"], "य": ["य़"]]
+        case .thai:
+            return ["เ": ["โ"], "ส": ["ศ", "ษ", "ซ"], "ท": ["ธ", "ฒ"], "น": ["ณ"], "ย": ["ญ"], "ด": ["ฎ"], "ต": ["ฏ"], "ถ": ["ฐ"], "ล": ["ฬ", "ฦ"], "ร": ["ฤ"], "ห": ["ฮ"], "่": ["๋", "๊", "์", "็"], "้": ["๊", "๋", "์", "็"], "ข": ["ฃ"], "ค": ["ฅ", "ฆ"], "ช": ["ฉ", "ซ"], "พ": ["ฑ"], "ะ": ["ฯ"], "ั": ["ํ"], "ุ": ["ู"], "ี": ["ื"]]
         }
     }
 
@@ -113,6 +187,19 @@ extension Language {
         case .swedish: return ["\u{201D}"]
         case .lithuanian: return ["\u{201E}", "\u{201C}"]
         case .arabic: return ["\u{00AB}", "\u{00BB}"]
+        case .cantonese: return ["「", "」", "『", "』"]
+        case .danish: return ["\u{00BB}", "\u{00AB}"]
+        case .norwegian: return ["\u{00AB}", "\u{00BB}"]
+        case .finnish: return ["\u{201D}"]
+        case .greek: return ["\u{00AB}", "\u{00BB}"]
+        case .hebrew: return ["\u{201E}", "\u{201D}"]
+        case .persian: return ["\u{00AB}", "\u{00BB}"]
+        case .slovak: return ["\u{201E}", "\u{201C}"]
+        case .croatian: return ["\u{201E}", "\u{201C}", "\u{00BB}", "\u{00AB}"]
+        case .bulgarian: return ["\u{201E}", "\u{201C}"]
+        case .catalan: return ["\u{00AB}", "\u{00BB}"]
+        case .mandarin: return ["\u{201C}", "\u{201D}", "\u{2018}", "\u{2019}", "\u{300A}", "\u{300B}"]
+        case .japanese: return ["\u{300C}", "\u{300D}", "\u{300E}", "\u{300F}"]
         default: return []
         }
     }
@@ -129,18 +216,55 @@ extension Language {
         case .russian: return ["₽", "€", "£", "¥"]
         case .ukrainian: return ["₴", "€", "£", "¥"]
         case .arabic: return ["﷼", "€", "£", "¥"]
+        case .cantonese: return ["HK$", "¥", "€", "£"]
+        case .danish: return ["kr", "€", "£", "$"]
+        case .norwegian: return ["kr", "€", "£", "$"]
+        case .finnish: return ["€", "$", "£", "¥"]
+        case .greek: return ["€", "$", "£", "¥"]
+        case .hebrew: return ["₪", "$", "€", "£"]
+        case .persian: return ["﷼", "$", "€", "£"]
+        case .indonesian: return ["Rp", "$", "€", "£"]
+        case .malay: return ["RM", "$", "€", "£"]
+        case .vietnamese: return ["₫", "$", "€", "£"]
+        case .slovak: return ["€", "Kč", "$", "£"]
+        case .croatian: return ["€", "$", "£", "¥"]
+        case .bulgarian: return ["лв", "€", "$", "£"]
+        case .catalan: return ["€", "$", "£", "¥"]
+        case .mandarin: return ["¥", "$", "€", "£"]
+        case .japanese: return ["¥", "$", "€", "£"]
+        case .korean: return ["₩", "$", "€", "£"]
+        case .hindi: return ["₹", "$", "€", "£"]
+        case .thai: return ["฿", "$", "€", "£"]
         default: return ["€", "£", "¥", "¢"]
         }
     }
 
-    /// The language's own comma, question mark and semicolon (Arabic turns them: "،" "؟" "؛").
-    var comma: String { return self == .arabic ? "\u{060C}" : "," }
-    var questionMark: String { return self == .arabic ? "\u{061F}" : "?" }
-    var semicolon: String { return self == .arabic ? "\u{061B}" : ";" }
+    /// The language's own punctuation: Arabic turns the comma, question mark and semicolon ("،" "؟" "؛"); Chinese
+    /// uses the full-width marks ("，" "。" "？" "！" "；").
+    var comma: String {
+        if usesArabicPunctuation { return "\u{060C}" }
+        if self == .japanese { return "\u{3001}" }
+        return usesPhoneticInput ? "\u{FF0C}" : ","
+    }
+    var questionMark: String {
+        if usesArabicPunctuation { return "\u{061F}" }
+        return usesPhoneticInput ? "\u{FF1F}" : "?"
+    }
+    var semicolon: String {
+        if usesArabicPunctuation { return "\u{061B}" }
+        return usesPhoneticInput ? "\u{FF1B}" : ";"
+    }
+    var fullStop: String {
+        if self == .hindi { return "\u{0964}" }   // the danda ।
+        return usesPhoneticInput ? "\u{3002}" : "."
+    }
+    var exclamation: String { return usesPhoneticInput ? "\u{FF01}" : "!" }
 
-    /// Digits on the numbers page: Arabic-Indic for Arabic (the Western ones on long-press), else 0-9.
+    /// Digits on the numbers page: Arabic-Indic for Arabic, their Persian forms for Persian (the Western ones on
+    /// long-press), else 0-9.
     var digits: [String] {
         if self == .arabic { return ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "٠"] }
+        if self == .persian { return ["۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹", "۰"] }
         return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
     }
 }
@@ -227,24 +351,28 @@ enum LayoutBuilder {
             result.append(digits.map { KeySpec(action: .character($0), title: $0) })
         }
 
-        let topCount = letters[0].count
-        result.append(letters[0].map(letterKey))
+        // Every row but the last is centred under the longest one (Thai has four rows of letters); the last has
+        // shift and delete at its ends.
+        let upper = letters.dropLast()
+        let last = letters[letters.count - 1]
+        let topCount = upper.map { $0.count }.max() ?? last.count
+        for letterRow in upper {
+            var row: [KeySpec] = []
+            let sidePad = CGFloat(max(0, topCount - letterRow.count)) / 2
+            if sidePad > 0 { row.append(KeySpec(action: .spacer, weight: sidePad)) }
+            row.append(contentsOf: letterRow.map(letterKey))
+            if sidePad > 0 { row.append(KeySpec(action: .spacer, weight: sidePad)) }
+            result.append(row)
+        }
 
-        var row2: [KeySpec] = []
-        let sidePad = CGFloat(max(0, topCount - letters[1].count)) / 2
-        if sidePad > 0 { row2.append(KeySpec(action: .spacer, weight: sidePad)) }
-        row2.append(contentsOf: letters[1].map(letterKey))
-        if sidePad > 0 { row2.append(KeySpec(action: .spacer, weight: sidePad)) }
-        result.append(row2)
-
-        let edgeWeight = min(1.8, max(1.0, CGFloat(topCount - letters[2].count) / 2))
+        let edgeWeight = min(1.8, max(1.0, CGFloat(topCount - last.count) / 2))
         var row3: [KeySpec] = []
         if language.hasCapitals {
             row3.append(KeySpec(action: .shift, symbol: "shift", weight: edgeWeight, isFunction: true))
         }
-        row3.append(contentsOf: letters[2].map(letterKey))
+        row3.append(contentsOf: last.map(letterKey))
         // Without a shift key (Arabic) the delete key takes its room too.
-        let deleteWeight = language.hasCapitals ? edgeWeight : max(1.5, CGFloat(topCount - letters[2].count))
+        let deleteWeight = language.hasCapitals ? edgeWeight : max(1.5, CGFloat(topCount - last.count))
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: deleteWeight, isFunction: true))
         result.append(row3)
 
@@ -253,7 +381,7 @@ enum LayoutBuilder {
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
             KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0, alternates: commaAlternates(language)),
             KeySpec(action: .space, title: language.displayName, weight: 3.9),
-            KeySpec(action: .character("."), title: ".", weight: 1.0, alternates: dotAlternates(language)),
+            KeySpec(action: .character(language.fullStop), title: language.fullStop, weight: 1.0, alternates: dotAlternates(language)),
             KeySpec(action: .enter, title: returnTitle, weight: 1.8, isFunction: true)
         ])
         return result
@@ -263,15 +391,22 @@ enum LayoutBuilder {
     /// The comma's long-press: marks used inside a sentence.
     private static func commaAlternates(_ language: Language) -> [String] {
         var marks = [language.semicolon, ":", "'", "-", "\u{2013}", "(", ")"]
-        if language == .arabic { marks.insert(",", at: 0) }
+        if language.usesArabicPunctuation || language.usesPhoneticInput { marks.insert(",", at: 0) }
+        if language == .japanese {
+            marks.insert(contentsOf: ["\u{30FC}", "\u{FF0C}", "\u{30FB}"], at: 1)   // the long-vowel mark ー, ， and ・
+        } else if language.usesPhoneticInput {
+            marks.insert("\u{3001}", at: 1)   // the enumeration comma 、
+        }
         if language == .ukrainian { marks.insert("\u{02BC}", at: 3) }   // the Ukrainian apostrophe
         return marks
     }
 
     /// The full stop's long-press: marks that end or start a sentence.
     private static func dotAlternates(_ language: Language) -> [String] {
-        var marks = [language.questionMark, "!", "\u{2026}", "\""]
-        if language == .arabic { marks.insert("?", at: 1) }
+        var marks = [language.questionMark, language.exclamation, "\u{2026}", "\""]
+        if language.usesArabicPunctuation { marks.insert("?", at: 1) }
+        if language.usesPhoneticInput { marks.insert(contentsOf: [".", "?", "!"], at: 0) }
+        if language == .hindi { marks.insert(contentsOf: [".", "\u{0965}"], at: 0) }   // . and the double danda ॥
         if language == .spanish { marks.insert(contentsOf: ["\u{00BF}", "\u{00A1}"], at: 2) }   // ¿ ¡
         return marks + language.quoteMarks
     }
@@ -294,7 +429,7 @@ enum LayoutBuilder {
         }
 
         var row3: [KeySpec] = [KeySpec(action: .showSymbols, title: "#+=", weight: 1.5, isFunction: true)]
-        for symbol in [".", language.comma, language.questionMark, "!", "'"] {
+        for symbol in [language.fullStop, language.comma, language.questionMark, language.exclamation, "'"] {
             row3.append(KeySpec(action: .character(symbol), title: symbol, weight: 1.4))
         }
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))
@@ -313,7 +448,7 @@ enum LayoutBuilder {
         }
 
         var row3: [KeySpec] = [KeySpec(action: .showNumbers, title: "123", weight: 1.5, isFunction: true)]
-        for symbol in [".", language.comma, language.questionMark, "!", "'"] {
+        for symbol in [language.fullStop, language.comma, language.questionMark, language.exclamation, "'"] {
             row3.append(KeySpec(action: .character(symbol), title: symbol, weight: 1.4))
         }
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))

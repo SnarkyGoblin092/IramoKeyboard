@@ -79,13 +79,14 @@ final class WordStore {
     private(set) var isFull = false
     /// The word limit the dictionary was loaded with (nil = none), for the languages that are not the active layout.
     private(set) var loadedLimit: Int?
-    private var learned: [String: Int]
+    /// The user's own words, shared by every language (`LearnedWords`).
+    private var learned: [String: Int] { return LearnedWords.shared.counts }
     /// "typed\tmeant" -> how often the user replaced the typed word by the meant one (their own typos).
     private var corrections: [String: Int]
     /// Dictionary words the user wrote -> how often, so their own vocabulary outranks the corpus's.
     private var used: [String: Int]
-    private var learnedKeys: [String: String] = [:]   // learned word -> match key
-    private var learnedKeySet: Set<String> = []
+    private var learnedKeys: [String: String] { return LearnedWords.shared.keys }   // learned word -> match key
+    private var learnedKeySet: Set<String> { return LearnedWords.shared.keySet }
     private var bigrams: [String: Int]
     private var trigrams: [String: Int]
     /// "word" / "a b" / "a b c" -> last day it was used (days since 1970); older use counts for less.
@@ -105,20 +106,12 @@ final class WordStore {
     init(language: Language) {
         self.language = language
         self.keyLetters = language.keyLetterSet
-        self.learned = Settings.shared.learnedWords(for: language.rawValue)
         self.corrections = Settings.shared.corrections(for: language.rawValue)
         self.used = Settings.shared.usedWords(for: language.rawValue)
         self.bigrams = Settings.shared.learnedBigrams(for: language.rawValue)
         self.trigrams = Settings.shared.learnedTrigrams(for: language.rawValue)
         self.usage = Settings.shared.learnedUsage(for: language.rawValue)
         self.neighbors = WordStore.neighborMap(for: language)
-        rebuildLearnedKeys()
-    }
-
-    private func rebuildLearnedKeys() {
-        learnedKeys = [:]
-        for word in learned.keys { learnedKeys[word] = TextFolding.key(word) }
-        learnedKeySet = Set(learnedKeys.values)
     }
 
     // MARK: Loading (parse off the main thread, then apply on the main thread)
@@ -433,7 +426,7 @@ final class WordStore {
         for (word, count) in learned where count >= WordStore.learnAfter {
             guard let learnedKey = learnedKeys[word], learnedKey.hasPrefix(key) else { continue }
             if contractionsOnly && !word.contains("'") { continue }
-            var score = 0.50 + min(0.35, log(effective(count, key: word) + 1) * 0.12)
+            var score = 0.50 + min(0.35, log(LearnedWords.shared.effective(word) + 1) * 0.12)
             if word.hasPrefix(typedLower) { score += 0.12 }
             consider(word, score)
         }
@@ -646,8 +639,7 @@ final class WordStore {
     func personalStrengths() -> [String: Double] {
         var result: [String: Double] = [:]
         for (word, count) in learned where count >= WordStore.learnAfter {
-            let key = learnedKeys[word] ?? TextFolding.key(word)
-            let strength = effective(count, key: key)
+            let strength = LearnedWords.shared.effective(word)
             result[word] = min(1, log(1 + strength) / log(31))
         }
         for (word, count) in used {
@@ -790,17 +782,8 @@ final class WordStore {
         if !asTyped, index < entries.count, entries[index].folded == key { return }   // already known
 
         // Taking back an auto-correction is a deliberate choice: the word counts as the user's own at once.
-        learned[lower, default: 0] += asTyped ? WordStore.learnAfter : 1
-        touch(lower)
-        if learned.count > 1500 {
-            let weakest = learned.sorted { $0.value < $1.value }.prefix(300)
-            for (weakWord, _) in weakest { learned.removeValue(forKey: weakWord) }
-            rebuildLearnedKeys()
-        } else if learnedKeys[lower] == nil {
-            learnedKeys[lower] = key
-            learnedKeySet.insert(key)
-        }
-        scheduleSave()
+        // Learned once, it is the user's word in every language.
+        LearnedWords.shared.add(lower, key: key, by: asTyped ? WordStore.learnAfter : 1)
     }
 
     /// Counts that `next` followed `previous`. Old, unused pairs fade (by last-use date) when the list fills up.
@@ -862,14 +845,12 @@ final class WordStore {
 
     /// Reads the learned data again (the app removed words or cleared them); unsaved changes are dropped.
     func reloadPersonal() {
-        learned = Settings.shared.learnedWords(for: language.rawValue)
         corrections = Settings.shared.corrections(for: language.rawValue)
         used = Settings.shared.usedWords(for: language.rawValue)
         bigrams = Settings.shared.learnedBigrams(for: language.rawValue)
         trigrams = Settings.shared.learnedTrigrams(for: language.rawValue)
         usage = Settings.shared.learnedUsage(for: language.rawValue)
         saveScheduled = false
-        rebuildLearnedKeys()
     }
 
     private func scheduleSave() {
@@ -884,7 +865,6 @@ final class WordStore {
     func saveNow() {
         guard saveScheduled else { return }
         saveScheduled = false
-        Settings.shared.setLearnedWords(learned, for: language.rawValue)
         Settings.shared.setCorrections(corrections, for: language.rawValue)
         Settings.shared.setUsedWords(used, for: language.rawValue)
         Settings.shared.setLearnedBigrams(bigrams, for: language.rawValue)
@@ -937,7 +917,7 @@ extension WordStore {
     /// it is not one.
     func learnedLogProb(_ word: String) -> Double? {
         guard let count = learned[word], count >= WordStore.learnAfter else { return nil }
-        return -5.5 + min(2.0, 0.6 * log(1 + effective(count, key: word)))
+        return -5.5 + min(2.0, 0.6 * log(1 + LearnedWords.shared.effective(word)))
     }
 
     /// log10 boost for this user's habits: dictionary words they write, and words they put after `previous`.
@@ -1063,5 +1043,84 @@ extension WordStore {
         }
         commonWords = list
         return list
+    }
+}
+
+// MARK: - Learned words
+
+/// The words the user taught the keyboard (names, slang, words no dictionary has), shared by every language: a word
+/// learned while typing in one language is suggested, kept and swiped in all of them. Saved as one list in the
+/// shared settings (`Settings.learnedWords()`), with the day each word was last used.
+final class LearnedWords {
+    static let shared = LearnedWords()
+
+    /// word -> how often it was written.
+    private(set) var counts: [String: Int]
+    /// word -> its match key (`TextFolding.key`).
+    private(set) var keys: [String: String] = [:]
+    private(set) var keySet: Set<String> = []
+    /// word -> last day it was used (days since 1970).
+    private var days: [String: Int]
+    private var saveScheduled = false
+    /// Most words kept; the least used are forgotten first.
+    private let maxWords = 3000
+
+    private init() {
+        counts = Settings.shared.learnedWords()
+        days = Settings.shared.learnedWordDays()
+        rebuildKeys()
+    }
+
+    private func rebuildKeys() {
+        keys = [:]
+        for word in counts.keys { keys[word] = TextFolding.key(word) }
+        keySet = Set(keys.values)
+    }
+
+    private static var today: Int { return Int(Date().timeIntervalSince1970 / 86_400) }
+
+    /// How much the word is used: its count, halving every ~45 days without use.
+    func effective(_ word: String) -> Double {
+        guard let count = counts[word] else { return 0 }
+        let age = days[word].map { max(0, LearnedWords.today - $0) } ?? 0
+        return Double(count) * pow(0.5, Double(age) / 45)
+    }
+
+    func add(_ word: String, key: String, by amount: Int) {
+        counts[word, default: 0] += amount
+        days[word] = LearnedWords.today
+        if counts.count > maxWords {
+            let weakest = counts.keys.sorted { effective($0) < effective($1) }.prefix(maxWords / 5)
+            for weak in weakest {
+                counts.removeValue(forKey: weak)
+                days.removeValue(forKey: weak)
+            }
+            rebuildKeys()
+        } else if keys[word] == nil {
+            keys[word] = key
+            keySet.insert(key)
+        }
+        scheduleSave()
+    }
+
+    /// Reads the list again (the app removed words or cleared them); unsaved changes are dropped.
+    func reload() {
+        counts = Settings.shared.learnedWords()
+        days = Settings.shared.learnedWordDays()
+        saveScheduled = false
+        rebuildKeys()
+    }
+
+    private func scheduleSave() {
+        if saveScheduled { return }
+        saveScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.saveNow() }
+    }
+
+    func saveNow() {
+        guard saveScheduled else { return }
+        saveScheduled = false
+        Settings.shared.setLearnedWords(counts)
+        Settings.shared.setLearnedWordDays(days)
     }
 }

@@ -42,6 +42,7 @@ final class Prefs {
     static var suggestionFit = SettingDefault.suggestionFit
     static var suggestionScroll = SettingDefault.suggestionScroll
     static var suggestionDelay = SettingDefault.suggestionDelay
+    static var suggestionTransition = SettingDefault.suggestionTransition
     static var keySurface = SettingDefault.keySurface
     static var keyBorderStyle = SettingDefault.keyBorderStyle
     static var keyGlow = SettingDefault.keyGlow
@@ -107,6 +108,7 @@ final class Prefs {
         suggestionFit = s.suggestionFit
         suggestionScroll = s.suggestionScroll
         suggestionDelay = s.suggestionDelay
+        suggestionTransition = s.suggestionTransition
         keySurface = s.keySurface
         keyBorderStyle = s.keyBorderStyle
         keyGlow = s.keyGlow

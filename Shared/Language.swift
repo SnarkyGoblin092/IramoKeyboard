@@ -20,6 +20,25 @@ enum Language: String, CaseIterable {
     case swedish = "sv"
     case lithuanian = "lt"
     case arabic = "ar"
+    case cantonese = "yue"
+    case danish = "da"
+    case norwegian = "no"
+    case finnish = "fi"
+    case greek = "el"
+    case hebrew = "he"
+    case persian = "fa"
+    case indonesian = "id"
+    case malay = "ms"
+    case vietnamese = "vi"
+    case slovak = "sk"
+    case croatian = "hr"
+    case bulgarian = "bg"
+    case catalan = "ca"
+    case mandarin = "zh"
+    case japanese = "ja"
+    case korean = "ko"
+    case hindi = "hi"
+    case thai = "th"
 
     /// The language's own name.
     var displayName: String {
@@ -41,14 +60,62 @@ enum Language: String, CaseIterable {
         case .swedish: return "Svenska"
         case .lithuanian: return "Lietuvių"
         case .arabic: return "العربية"
+        case .cantonese: return "粵語"
+        case .danish: return "Dansk"
+        case .norwegian: return "Norsk"
+        case .finnish: return "Suomi"
+        case .greek: return "Ελληνικά"
+        case .hebrew: return "עברית"
+        case .persian: return "فارسی"
+        case .indonesian: return "Bahasa Indonesia"
+        case .malay: return "Bahasa Melayu"
+        case .vietnamese: return "Tiếng Việt"
+        case .slovak: return "Slovenčina"
+        case .croatian: return "Hrvatski"
+        case .bulgarian: return "Български"
+        case .catalan: return "Català"
+        case .mandarin: return "普通话 (简体)"
+        case .japanese: return "日本語"
+        case .korean: return "한국어"
+        case .hindi: return "हिन्दी"
+        case .thai: return "ไทย"
         }
     }
 
     /// Written right to left (the cursor gesture is mirrored for it).
-    var isRightToLeft: Bool { return self == .arabic }
+    var isRightToLeft: Bool { return self == .arabic || self == .hebrew || self == .persian }
+
+    /// Uses the Arabic comma, question mark and semicolon ("،" "؟" "؛").
+    var usesArabicPunctuation: Bool { return self == .arabic || self == .persian }
 
     /// Has capital letters (no shift key, auto-capitalization or capitalised suggestions without them).
-    var hasCapitals: Bool { return self != .arabic }
+    var hasCapitals: Bool {
+        return !isRightToLeft && !usesPhoneticInput && self != .korean && self != .hindi && self != .thai
+    }
+
+    /// Typed by its sound and turned into characters picked from the suggestion bar (Keyboard/PhoneticInput.swift):
+    /// Cantonese in Jyutping, Mandarin in Pinyin, Japanese in romaji (shown as kana while typing). No swiping,
+    /// auto-correction or spaces between words.
+    var usesPhoneticInput: Bool { return self == .cantonese || self == .mandarin || self == .japanese }
+
+    /// Swiping across the letters works: the keys are the letters the words are written with. Not for Korean (its
+    /// keys are jamo that build syllables), Hindi and Thai (their vowel signs combine with the letters), or the
+    /// languages typed by sound.
+    var supportsSwipe: Bool { return !usesPhoneticInput && self != .korean && self != .hindi && self != .thai }
+
+    /// Words are auto-corrected on space. Not for Korean, whose syllables change as they are typed, nor Thai,
+    /// written without spaces between words.
+    var autoCorrects: Bool { return !usesPhoneticInput && self != .korean && self != .thai }
+
+    /// How a language typed by sound is spelled ("Jyutping", "Pinyin"), shown in place of its layout.
+    var phoneticSystem: String? {
+        switch self {
+        case .cantonese: return "Jyutping"
+        case .mandarin: return "Pinyin"
+        case .japanese: return "Romaji"
+        default: return nil
+        }
+    }
 
     /// Languages from a list of ISO codes (unknown codes are ignored; never returns an empty list).
     static func list(from codes: [String], fallback: Language = .english) -> [Language] {

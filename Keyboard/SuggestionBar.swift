@@ -40,7 +40,6 @@ final class SuggestionBar: UIView {
     /// Holds the slots. It scrolls only in the scrollable layout; otherwise the bar handles the touches itself.
     private let strip = UIScrollView()
     private let dismissIcon = UIImageView()
-    private let dismissHighlight = UIView()
     private let hintLabel = UILabel()
     /// The accent pill behind the word space will write (the auto-correction).
     private let bestPill = UIView()
@@ -120,10 +119,6 @@ final class SuggestionBar: UIView {
             pillGlass = GlassSupport.addBackground(to: bestPill, tint: Theme.accent.withAlphaComponent(0.85))
         }
 
-        dismissHighlight.backgroundColor = Theme.accent.withAlphaComponent(0.25)
-        dismissHighlight.alpha = 0
-        glass.contentView.addSubview(dismissHighlight)
-
         dismissIcon.tintColor = Theme.accent
         dismissIcon.contentMode = .center
         // Drawn smaller than its touch area, which is still the bar's whole right end (`dismissMinX`).
@@ -132,7 +127,7 @@ final class SuggestionBar: UIView {
         glass.contentView.addSubview(dismissIcon)
 
         // Nothing but the strip takes touches itself: the bar decides from the x position.
-        for view in [glass as UIView, hintLabel, dismissIcon, dismissHighlight, bestPill] { view.isUserInteractionEnabled = false }
+        for view in [glass as UIView, hintLabel, dismissIcon, bestPill] { view.isUserInteractionEnabled = false }
         if layoutMode != .scroll { glass.contentView.isUserInteractionEnabled = false }
 
         refreshVisibility()
@@ -163,7 +158,15 @@ final class SuggestionBar: UIView {
 
     /// `highlighted`: the slot space will write (the auto-correction), shown on an accent-coloured pill.
     func update(_ newSuggestions: [Suggestion], highlighted: Int? = nil) {
-        suggestions = Array(newSuggestions.prefix(SuggestionBar.capacity))
+        let incoming = Array(newSuggestions.prefix(SuggestionBar.capacity))
+        // A picture of the old words, animated away while the new ones come in (the Switching setting).
+        var outgoing: UIView?
+        if Prefs.suggestionTransition != "instant", window != nil, !strip.bounds.isEmpty,
+           incoming.map({ $0.text }) != suggestions.map({ $0.text }),
+           suggestions.contains(where: { !$0.text.isEmpty }) || incoming.contains(where: { !$0.text.isEmpty }) {
+            outgoing = strip.snapshotView(afterScreenUpdates: false)
+        }
+        suggestions = incoming
         highlightedIndex = nil
         if let index = highlighted, index < suggestions.count, !suggestions[index].text.isEmpty {
             highlightedIndex = index
@@ -186,6 +189,56 @@ final class SuggestionBar: UIView {
         setPressed(nil)
         refreshVisibility()
         setNeedsLayout()
+        if let old = outgoing { animateSwitch(from: old) }
+    }
+
+    /// Where the strip sits in the bar, whatever transform a switch has on it.
+    private var stripRect: CGRect {
+        return CGRect(x: strip.center.x - strip.bounds.width / 2, y: strip.center.y - strip.bounds.height / 2,
+                      width: strip.bounds.width, height: strip.bounds.height)
+    }
+
+    /// The old words' picture, still on its way out when newer words arrive.
+    private weak var leaving: UIView?
+
+    /// Moves the old words (a snapshot) out and the new ones in, the way the Switching setting says: a cross-fade,
+    /// rising up, sliding along in the reading direction, or popping in.
+    private func animateSwitch(from old: UIView) {
+        leaving?.removeFromSuperview()
+        layoutIfNeeded()
+        old.frame = stripRect
+        old.isUserInteractionEnabled = false
+        glass.contentView.insertSubview(old, aboveSubview: strip)
+        leaving = old
+
+        let shift: CGFloat = effectiveUserInterfaceLayoutDirection == .rightToLeft ? -18 : 18
+        var outgoing = CGAffineTransform.identity
+        var incoming = CGAffineTransform.identity
+        var duration = 0.18
+        switch Prefs.suggestionTransition {
+        case "rise":
+            outgoing = CGAffineTransform(translationX: 0, y: -10)
+            incoming = CGAffineTransform(translationX: 0, y: 10)
+        case "slide":
+            outgoing = CGAffineTransform(translationX: -shift, y: 0)
+            incoming = CGAffineTransform(translationX: shift, y: 0)
+        case "pop":
+            outgoing = CGAffineTransform(scaleX: 0.92, y: 0.92)
+            incoming = CGAffineTransform(scaleX: 0.85, y: 0.85)
+            duration = 0.26
+        default:
+            duration = 0.16   // fade
+        }
+        strip.alpha = 0
+        strip.transform = incoming
+        let damping: CGFloat = Prefs.suggestionTransition == "pop" ? 0.7 : 1
+        UIView.animate(withDuration: duration, delay: 0, usingSpringWithDamping: damping, initialSpringVelocity: 0,
+                       options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+            self.strip.alpha = 1
+            self.strip.transform = .identity
+            old.alpha = 0
+            old.transform = outgoing
+        }, completion: { _ in old.removeFromSuperview() })
     }
 
     /// A word on the pill (the auto-correction, or one being pressed) is semibold in the colour that reads on the
@@ -245,13 +298,10 @@ final class SuggestionBar: UIView {
         dismissMinX = area.width - dismissWidth
 
         dismissIcon.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
-        // The pressed state is a circle around the icon.
-        let circle = min(area.height - 8, 34)
-        dismissHighlight.frame = CGRect(x: dismissIcon.frame.midX - circle / 2, y: (area.height - circle) / 2,
-                                        width: circle, height: circle)
-        dismissHighlight.layer.cornerRadius = circle / 2
         hintLabel.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
-        strip.frame = CGRect(x: 6, y: 0, width: contentWidth, height: area.height)
+        // Bounds and centre rather than frame: the strip may be mid-switch with a transform.
+        strip.bounds.size = CGSize(width: contentWidth, height: area.height)
+        strip.center = CGPoint(x: 6 + contentWidth / 2, y: area.height / 2)
 
         var frames: [CGRect] = []
         for width in slotWidths(contentWidth: contentWidth) {
@@ -394,7 +444,7 @@ final class SuggestionBar: UIView {
     private func index(at point: CGPoint) -> Int? {
         let x = point.x - glass.frame.minX
         if x >= dismissMinX { return dismissIndex }
-        return slot(atContentX: x - strip.frame.minX + strip.contentOffset.x)
+        return slot(atContentX: x - stripRect.minX + strip.contentOffset.x)
     }
 
     private func setPressed(_ index: Int?) {
@@ -406,7 +456,8 @@ final class SuggestionBar: UIView {
 
     private func highlight(_ index: Int, on: Bool) {
         if index == dismissIndex {
-            dismissHighlight.alpha = on ? 1 : 0
+            // No background behind the icon: it just dims while held, like a system button.
+            dismissIcon.alpha = on ? 0.35 : 1
             return
         }
         guard index < highlights.count else { return }

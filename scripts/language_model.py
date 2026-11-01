@@ -38,8 +38,14 @@ FIRST_WORD = 3
 SHIFT = 18                       # ids are below 2^18 (the largest dictionary has 160k words)
 MASK = (1 << SHIFT) - 1
 
-TOKENS = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*|[.!?…]+|,|\S")
-SENTENCE_END = re.compile(r"^[.!?…]+$")
+# A letter, or a mark that combines with the letter before it (Python's \w has no marks, which would cut "नहीं"
+# into "नह", "ी", "ं"): accents, Hebrew points, Arabic vowel marks, Devanagari vowel signs, Thai vowels and tones.
+MARKS = "̀-֑ͯ-ׇؐ-ًؚ-ٰٟۖ-ۭऀ-ःऺ-ॏ" \
+        "॑-ॗॢॣัิ-ฺ็-๎"
+WORD = rf"[^\W\d_](?:[^\W\d_]|[{MARKS}])*"
+# Sentence ends include the Devanagari dandas (। ॥) and the Arabic question mark (؟).
+TOKENS = re.compile(rf"{WORD}(?:['’]{WORD})*|[.!?…।॥؟]+|,|\S")
+SENTENCE_END = re.compile(r"^[.!?…।॥؟]+$")
 
 # How much text and how big the model may get (the app ships every language).
 SUBTITLE_BYTES = int(os.environ.get("HUNKEYS_SUBTITLE_BYTES", 60_000_000))   # compressed bytes read from the start of the subtitles file (~25M words)

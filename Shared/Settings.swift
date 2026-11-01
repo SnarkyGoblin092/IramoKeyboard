@@ -64,6 +64,7 @@ enum SettingKey {
     static let suggestionFit = "hunkeys.suggestionFit"
     static let suggestionScroll = "hunkeys.suggestionScroll"
     static let suggestionDelay = "hunkeys.suggestionDelay"
+    static let suggestionTransition = "hunkeys.suggestionTransition"
     static let keyRoundness = "hunkeys.keyRoundness"
     // Data
     static let language = "hunkeys.language"
@@ -78,7 +79,12 @@ enum SettingKey {
     static let keyFont = "hunkeys.keyFont"
     /// The learned key-offset model (data written by the keyboard; not a preference).
     static let touchModel = "hunkeys.touchModel"
+    /// Before learned words were shared by every language: one list per language (moved into `learnedWords`).
     static let learnedPrefix = "hunkeys.learned."
+    /// The words the keyboard learned, word -> count, one list for every language.
+    static let learnedWords = "hunkeys.learnedWords"
+    /// Learned word -> last day it was used (days since 1970).
+    static let learnedWordDays = "hunkeys.learnedWordDays"
     /// "typed\tmeant" -> how often the user deleted the typed word and wrote the meant one in its place.
     static let correctionsPrefix = "hunkeys.corrections."
     /// Bumped whenever the app changes what the keyboard learned, so a running keyboard reloads it.
@@ -89,6 +95,8 @@ enum SettingKey {
     static let usedWordsPrefix = "hunkeys.usedWords."
     /// language code -> how much of what the user writes is in it (recent words count most).
     static let languageUsage = "hunkeys.languageUsage"
+    /// Chinese typed by sound, per language: "spelling|word" -> how often the user picked that word for those letters.
+    static let phoneticPicksPrefix = "hunkeys.phoneticPicks."
     // Written by the keyboard so the app can show its status
     static let lastSeen = "hunkeys.status.lastSeen"
     static let fullAccess = "hunkeys.status.fullAccess"
@@ -98,7 +106,7 @@ enum SettingKey {
         holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
         theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
-        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceText, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceText, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
         hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
         hitMap, hitMapStrength
@@ -168,6 +176,8 @@ enum SettingDefault {
     static let suggestionFit: Bool = false
     static let suggestionScroll: Bool = false
     static let suggestionDelay: Double = 0.06
+    /// How new words replace the old ones: "instant", "fade", "rise", "slide" or "pop".
+    static let suggestionTransition: String = "instant"
     static let keyRoundness = 0.26
     static let language = "en"
     static let enabledLanguages = ["en", "hu"]
@@ -346,6 +356,7 @@ final class Settings {
             SettingKey.suggestionFit: SettingDefault.suggestionFit,
             SettingKey.suggestionScroll: SettingDefault.suggestionScroll,
             SettingKey.suggestionDelay: SettingDefault.suggestionDelay,
+            SettingKey.suggestionTransition: SettingDefault.suggestionTransition,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.language: SettingDefault.language
         ])
@@ -547,6 +558,7 @@ final class Settings {
     var suggestionFit: Bool { return readBool(SettingKey.suggestionFit) }
     var suggestionScroll: Bool { return readBool(SettingKey.suggestionScroll) }
     var suggestionDelay: Double { return clamp(readDouble(SettingKey.suggestionDelay), Settings.suggestionDelayRange) }
+    var suggestionTransition: String { return readString(SettingKey.suggestionTransition) ?? SettingDefault.suggestionTransition }
 
     // MARK: Data
 
@@ -560,12 +572,37 @@ final class Settings {
         set { put(newValue, SettingKey.recentEmoji) }
     }
 
-    func learnedWords(for languageCode: String) -> [String: Int] {
-        return value(SettingKey.learnedPrefix + languageCode) as? [String: Int] ?? [:]
+    /// The words the keyboard learned, shared by every language. The per-language lists of earlier versions are
+    /// merged into it the first time it is read.
+    func learnedWords() -> [String: Int] {
+        if let words = value(SettingKey.learnedWords) as? [String: Int] { return words }
+        var merged: [String: Int] = [:]
+        var days: [String: Int] = [:]
+        for language in Language.allCases {
+            let code = language.rawValue
+            guard let words = value(SettingKey.learnedPrefix + code) as? [String: Int] else { continue }
+            let usage = learnedUsage(for: code)
+            for (word, count) in words {
+                merged[word, default: 0] += count
+                if let day = usage[word] { days[word] = max(days[word] ?? 0, day) }
+            }
+            put(nil, SettingKey.learnedPrefix + code)
+        }
+        put(merged, SettingKey.learnedWords)
+        put(days, SettingKey.learnedWordDays)
+        return merged
     }
 
-    func setLearnedWords(_ words: [String: Int], for languageCode: String) {
-        put(words, SettingKey.learnedPrefix + languageCode)
+    func setLearnedWords(_ words: [String: Int]) {
+        put(words, SettingKey.learnedWords)
+    }
+
+    func learnedWordDays() -> [String: Int] {
+        return value(SettingKey.learnedWordDays) as? [String: Int] ?? [:]
+    }
+
+    func setLearnedWordDays(_ days: [String: Int]) {
+        put(days, SettingKey.learnedWordDays)
     }
 
     var personalRevision: Int {
@@ -573,19 +610,26 @@ final class Settings {
     }
 
     /// The words the keyboard has learned (used at least `learnAfter` times), alphabetically.
-    func learnedWordList(for languageCode: String, learnAfter: Int = 2) -> [String] {
-        return learnedWords(for: languageCode).filter { $0.value >= learnAfter }.keys
+    func learnedWordList(learnAfter: Int = 2) -> [String] {
+        return learnedWords().filter { $0.value >= learnAfter }.keys
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    /// Removes one learned word (from the app's list); the keyboard picks the change up when it opens.
-    func removeLearnedWord(_ word: String, for languageCode: String) {
-        var words = learnedWords(for: languageCode)
+    /// Removes one learned word (from the app's list), in every language; the keyboard picks the change up when it
+    /// opens.
+    func removeLearnedWord(_ word: String) {
+        var words = learnedWords()
         words.removeValue(forKey: word)
-        setLearnedWords(words, for: languageCode)
-        var corrections = self.corrections(for: languageCode)
-        for key in corrections.keys where key.hasSuffix("\t" + word) { corrections.removeValue(forKey: key) }
-        setCorrections(corrections, for: languageCode)
+        setLearnedWords(words)
+        var days = learnedWordDays()
+        days.removeValue(forKey: word)
+        setLearnedWordDays(days)
+        for language in Language.allCases {
+            var corrections = self.corrections(for: language.rawValue)
+            let before = corrections.count
+            for key in corrections.keys where key.hasSuffix("\t" + word) { corrections.removeValue(forKey: key) }
+            if corrections.count != before { setCorrections(corrections, for: language.rawValue) }
+        }
         bumpPersonalRevision()
     }
 
@@ -647,11 +691,14 @@ final class Settings {
 
     func clearLearnedWords() {
         put(nil, SettingKey.languageUsage)
+        put([String: Int](), SettingKey.learnedWords)   // empty rather than missing: nothing left to merge
+        put(nil, SettingKey.learnedWordDays)
         for language in Language.allCases {
             put(nil, SettingKey.usedWordsPrefix + language.rawValue)
             put(nil, SettingKey.trigramPrefix + language.rawValue)
             put(nil, SettingKey.usagePrefix + language.rawValue)
             put(nil, SettingKey.learnedPrefix + language.rawValue)
+            put(nil, SettingKey.phoneticPicksPrefix + language.rawValue)
             put(nil, SettingKey.correctionsPrefix + language.rawValue)
             put(nil, SettingKey.bigramPrefix + language.rawValue)
         }

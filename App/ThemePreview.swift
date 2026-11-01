@@ -39,12 +39,17 @@ struct ThemePreview: View {
     /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
     var language: Language? = nil
 
-    private var shownLanguage: Language {
-        if let language = language { return language }
+    private var shownLanguage: Language { return language ?? ThemePreview.openingLanguage }
+
+    /// The language the keyboard opens in: the current one, if it is enabled.
+    static var openingLanguage: Language {
         let enabled = Language.list(from: Settings.shared.enabledLanguages)
         if let current = Language(rawValue: Settings.shared.languageCode), enabled.contains(current) { return current }
         return enabled.first ?? .english
     }
+
+    /// Rows of letters beyond the usual three (Thai has four), which make the keyboard taller.
+    static var extraLetterRows: Int { return max(0, letterRows(for: openingLanguage).count - 3) }
 
     private var letterRows: [[String]] { return ThemePreview.letterRows(for: shownLanguage) }
 
@@ -64,8 +69,26 @@ struct ThemePreview: View {
         case .russian: return split("йцукенгшщзхъ", "фывапролджэ", "ячсмитьбю")
         case .ukrainian: return split("йцукенгшщзхї", "фівапролджє", "ячсмитьбюґ")
         case .swedish: return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
-        case .lithuanian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .lithuanian, .cantonese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         case .arabic: return split("ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ")
+        case .japanese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .korean: return split("ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ", "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ", "ㅋㅌㅊㅍㅠㅜㅡ")
+        case .hindi: return split("ौैाीूबहगदजड", "ोे्िुपरकतचट", "ंमनवलसयश")
+        case .thai: return split("ภถุึคตจขช", "ๆไำพะัีรนยบล", "ฟหกดเ้่าสวง", "ผปแอิืทมใฝ")
+        case .danish: return split("qwertyuiopå", "asdfghjklæø", "zxcvbnm")
+        case .norwegian: return split("qwertyuiopå", "asdfghjkløæ", "zxcvbnm")
+        case .finnish: return split("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
+        case .greek: return split("ςερτυθιοπ", "ασδφγηξκλ", "ζχψωβνμ")
+        case .hebrew: return split("קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ")
+        case .persian: return split("ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطژزرذدپو")
+        case .indonesian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .malay: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .vietnamese: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
+        case .slovak: return split("qwertzuiop", "asdfghjkl", "yxcvbnm")
+        case .croatian: return split("qwertzuiopšđ", "asdfghjklčćž", "yxcvbnm")
+        case .bulgarian: return split("явертъуиопчш", "асдфгхйклщ", "зьцжбнмю")
+        case .catalan: return split("qwertyuiop", "asdfghjklç", "zxcvbnm")
+        case .mandarin: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")
         }
     }
 
@@ -87,6 +110,19 @@ struct ThemePreview: View {
         case .swedish: return ["e": "é", "u": "ü"]
         case .lithuanian: return ["a": "ą", "c": "č", "e": "ę", "i": "į", "s": "š", "u": "ų", "z": "ž"]
         case .arabic: return ["ا": "أ", "ي": "ى", "و": "ؤ", "ه": "ة", "ء": "أ"]
+        case .korean: return ["ㅂ": "ㅃ", "ㅈ": "ㅉ", "ㄷ": "ㄸ", "ㄱ": "ㄲ", "ㅅ": "ㅆ", "ㅐ": "ㅒ", "ㅔ": "ㅖ"]
+        case .hindi: return ["ा": "आ", "ि": "इ", "ी": "ई", "ु": "उ", "ू": "ऊ", "े": "ए", "ै": "ऐ", "ो": "ओ", "ौ": "औ", "्": "अ", "ं": "ँ", "क": "ख", "ग": "घ", "ज": "झ", "त": "थ", "द": "ध", "ट": "ठ", "ड": "ढ", "प": "फ", "ब": "भ", "च": "छ", "न": "ण", "स": "ष", "श": "क्ष", "ल": "ळ", "य": "य़"]
+        case .thai: return ["เ": "โ", "ส": "ศ", "ท": "ธ", "น": "ณ", "ย": "ญ", "ด": "ฎ", "ต": "ฏ", "ถ": "ฐ", "ล": "ฬ", "ร": "ฤ", "ห": "ฮ", "่": "๋", "้": "๊", "ข": "ฃ", "ค": "ฅ", "ช": "ฉ", "พ": "ฑ", "ะ": "ฯ", "ั": "ํ", "ุ": "ู", "ี": "ื"]
+        case .danish: return ["e": "é", "o": "ö", "a": "ä"]
+        case .norwegian: return ["e": "é", "o": "ó"]
+        case .finnish: return ["s": "š", "z": "ž"]
+        case .greek: return ["α": "ά", "ε": "έ", "η": "ή", "ι": "ί", "ο": "ό", "υ": "ύ", "ω": "ώ"]
+        case .persian: return ["ا": "آ", "ی": "ئ", "و": "ؤ", "ه": "ة", "ک": "ك"]
+        case .indonesian: return ["e": "é"]
+        case .vietnamese: return ["a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú", "y": "ý", "d": "đ"]
+        case .slovak: return ["a": "á", "c": "č", "d": "ď", "e": "é", "i": "í", "l": "ľ", "n": "ň", "o": "ó", "r": "ŕ", "s": "š", "t": "ť", "u": "ú", "y": "ý", "z": "ž"]
+        case .bulgarian: return ["и": "ѝ"]
+        case .catalan: return ["a": "à", "e": "è", "i": "í", "o": "ò", "u": "ú", "l": "·"]
         default: return [:]
         }
     }
@@ -105,6 +141,25 @@ struct ThemePreview: View {
         case .swedish: return "retur"
         case .lithuanian: return "grįžti"
         case .arabic: return "إدخال"
+        case .cantonese: return "換行"
+        case .danish: return "retur"
+        case .norwegian: return "retur"
+        case .finnish: return "rivinvaihto"
+        case .greek: return "εισαγωγή"
+        case .hebrew: return "חזרה"
+        case .persian: return "ورود"
+        case .indonesian: return "enter"
+        case .malay: return "kembali"
+        case .vietnamese: return "xuống dòng"
+        case .slovak: return "enter"
+        case .croatian: return "povrat"
+        case .bulgarian: return "нов ред"
+        case .catalan: return "retorn"
+        case .mandarin: return "换行"
+        case .japanese: return "改行"
+        case .korean: return "줄바꿈"
+        case .hindi: return "एंटर"
+        case .thai: return "ขึ้นบรรทัด"
         default: return "return"
         }
     }
@@ -131,38 +186,42 @@ struct ThemePreview: View {
 
     private var keyRows: [[PreviewKey]] {
         let letters = letterRows
-        let top = letters[0].count
+        let last = letters[letters.count - 1]
+        let top = letters.dropLast().map { $0.count }.max() ?? last.count
         let locale = Locale(identifier: shownLanguage.rawValue)
         // As the keyboard opens in an empty field: shift on (capitals) with auto-capitalization.
         let shiftOn = autoCapitalize && shownLanguage.hasCapitals
         let capitals = (shiftOn || alwaysCapitals) && shownLanguage.hasCapitals
         func letterKey(_ l: String) -> PreviewKey { return PreviewKey(title: capitals ? l.uppercased(with: locale) : l) }
-        let side = CGFloat(max(0, top - letters[1].count)) / 2
-        var row2: [PreviewKey] = []
-        if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
-        row2 += letters[1].map(letterKey)
-        if side > 0 { row2.append(PreviewKey(weight: side, spacer: true)) }
-        let edge = min(1.8, max(1.0, CGFloat(top - letters[2].count) / 2))
+        // Every row but the last centred under the longest (Thai has four rows of letters).
+        let upper: [[PreviewKey]] = letters.dropLast().map { (letterRow: [String]) -> [PreviewKey] in
+            let side = CGFloat(max(0, top - letterRow.count)) / 2
+            var row: [PreviewKey] = []
+            if side > 0 { row.append(PreviewKey(weight: side, spacer: true)) }
+            row += letterRow.map(letterKey)
+            if side > 0 { row.append(PreviewKey(weight: side, spacer: true)) }
+            return row
+        }
+        let edge = min(1.8, max(1.0, CGFloat(top - last.count) / 2))
         // As the keyboard: no shift key for a language without capitals; delete takes its room.
         var row3 = shownLanguage.hasCapitals
             ? [PreviewKey(symbol: shiftOn ? "shift.fill" : "shift", weight: edge, function: true, accent: shiftOn)] : []
-        row3 += letters[2].map(letterKey)
+        row3 += last.map(letterKey)
         row3.append(PreviewKey(symbol: "delete.left",
-                               weight: shownLanguage.hasCapitals ? edge : max(1.5, CGFloat(top - letters[2].count)),
+                               weight: shownLanguage.hasCapitals ? edge : max(1.5, CGFloat(top - last.count)),
                                function: true))
         var rows: [[PreviewKey]] = []
         if numberRow {
             rows.append(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map { PreviewKey(title: $0) })
         }
-        return rows + [
-            letters[0].map(letterKey),
-            row2,
+        return rows + upper + [
             row3,
             [PreviewKey(title: "123", weight: 1.3, function: true),
              PreviewKey(tabIcon: "smileys", function: true),
-             PreviewKey(title: shownLanguage == .arabic ? "\u{060C}" : ","),
+             PreviewKey(title: shownLanguage.usesArabicPunctuation ? "\u{060C}"
+                 : (shownLanguage == .japanese ? "\u{3001}" : (shownLanguage.usesPhoneticInput ? "\u{FF0C}" : ","))),
              PreviewKey(title: spaceTitle, weight: 3.9, space: true),
-             PreviewKey(title: "."),
+             PreviewKey(title: shownLanguage == .hindi ? "\u{0964}" : (shownLanguage.usesPhoneticInput ? "\u{3002}" : ".")),
              PreviewKey(title: returnTitle, weight: 1.8, function: true, accent: true)]
         ]
     }
@@ -200,7 +259,7 @@ struct ThemePreview: View {
 
     /// The rows of keys (the number row adds one) at the key height and row gap, and the padding.
     private static var keysHeight: CGFloat {
-        let rows = SharedStore.defaults.bool(forKey: SettingKey.numberRow) ? 5.0 : 4.0
+        let rows = (SharedStore.defaults.bool(forKey: SettingKey.numberRow) ? 5.0 : 4.0) + Double(extraLetterRows)
         return CGFloat(8 + rows * (stored(SettingKey.keyHeight) + stored(SettingKey.rowGap)))
     }
 
@@ -230,6 +289,8 @@ struct ThemePreview: View {
                             row(keyRows[index], rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
                         }
                     }
+                    // One glass container for all the keys, as the keyboard's (spacing 2pt).
+                    .glassKeyGroup(theme.kind == .liquidGlass, spacing: 2 * s)
                     .padding(.vertical, verticalPadding)
                 }
             }
@@ -436,6 +497,27 @@ private struct GlassKeyShape: View {
     }
 }
 
+extension View {
+    /// Liquid Glass keys share one glass container, as the keyboard's do (KeyboardView's `glassContainer`): glass
+    /// that close together bends and reflects its neighbours, so the accent keys' colour shows in the keys around
+    /// them. Without real glass (before iOS 26) the view is left as it is.
+    @ViewBuilder func glassKeyGroup(_ enabled: Bool, spacing: CGFloat) -> some View {
+        #if compiler(>=6.2)
+        if enabled {
+            if #available(iOS 26.0, *) {
+                GlassEffectContainer(spacing: spacing) { self }
+            } else {
+                self
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
 // MARK: - Theme look
 
 /// How a theme draws, in light or dark mode, with the user's key style: the colours, the backdrop behind the keys
@@ -539,8 +621,10 @@ struct ThemeLook {
     /// keyboard point.
     @ViewBuilder func keyShape(_ kind: KeyKind, radius: CGFloat, scale s: CGFloat = 1) -> some View {
         if theme.kind == .liquidGlass {
+            // The keyboard's tints (KeyView.applyGlass, Theme's Liquid Glass palette).
             GlassKeyShape(radius: radius,
-                          tint: kind == .accent ? accentColor : (kind == .function ? Color.black.opacity(dark ? 0.0 : 0.06) : nil),
+                          tint: kind == .accent ? accentColor.opacity(0.85)
+                              : (kind == .function ? (dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)) : nil),
                           dark: dark)
         } else {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)

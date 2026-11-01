@@ -15,7 +15,7 @@ jobs:
   # cached for a week and shared with the macOS job instead of downloading ~400 MB of word lists on every push.
   data:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 240   # 33 word lists, each with its language model
     outputs:
       key: ${{ steps.key.outputs.key }}
 
@@ -55,6 +55,10 @@ jobs:
             test -s "$lm" || echo "::warning::$lm is missing; that language has no language model"
           done
           du -ch Keyboard/Resources/lm_*.bin | tail -1
+          for f in Keyboard/Resources/phonetic_*.tsv; do
+            test -s "$f" || echo "::warning::$f is empty; that Chinese can only type letters"
+          done
+          wc -l Keyboard/Resources/phonetic_*.tsv || true
           du -ch Keyboard/Resources/dict_*.bin | tail -1
           python3 - <<'PY'
           import glob, json

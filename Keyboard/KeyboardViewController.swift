@@ -76,6 +76,15 @@ final class KeyboardViewController: UIInputViewController {
     private var isSearchingEmoji = false
     private var searchQuery = ""
 
+    // Languages typed by sound (Jyutping, Pinyin, romaji): the letters typed so far, shown underlined in the field
+    // (marked text) until a word is picked for them, and the words the bar offers for them.
+    private var composing = ""
+    private var phoneticCandidates: [PhoneticInput.Candidate] = []
+    /// The last word picked, for an emoji suggestion after it (開心 -> 😄).
+    private var lastPickedWord: String?
+    /// Korean: the syllable being built from jamo (the last character in the field).
+    private var hangul = HangulComposer()
+
     // MARK: Lifecycle
 
     /// True when the root view uses the system keyboard backdrop. The Liquid Glass theme asks for a plain
@@ -196,6 +205,10 @@ final class KeyboardViewController: UIInputViewController {
         let revision = settings.personalRevision
         if let seen = seenPersonalRevision, seen != revision {
             for store in stores.values { store.reloadPersonal() }
+            LearnedWords.shared.reload()
+            for language in Language.allCases where language.usesPhoneticInput {
+                PhoneticInput.shared(for: language).reloadPicks()
+            }
         }
         seenPersonalRevision = revision
         // The app may have reset the hit map or changed the hitbox settings.
@@ -236,6 +249,11 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        finishComposing()
+        for language in Language.allCases where language.usesPhoneticInput {
+            PhoneticInput.shared(for: language).saveNow()
+        }
+        LearnedWords.shared.saveNow()
         for store in stores.values { store.saveNow() }
         for map in hitMaps.values { map.saveNow() }
         var usage: [String: Double] = [:]
@@ -445,7 +463,8 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             keyHeight = CGFloat(Prefs.keyHeight)
         }
-        let rowCount: CGFloat = Prefs.numberRow ? 5 : 4
+        // The letter rows (Thai has four), the bottom row and the number row.
+        let rowCount = CGFloat(language.letterRows.count + 1 + (Prefs.numberRow ? 1 : 0))
         let barHeight = CGFloat(Prefs.suggestionHeight) * (isLandscape ? 36.0 / 44.0 : 1.0)
         var total = barHeight + 8 + rowCount * (keyHeight + CGFloat(Prefs.rowGap))
         // The emoji picker always shows four full rows: the keyboard grows to fit while it is open. An iPhone in
@@ -594,9 +613,15 @@ final class KeyboardViewController: UIInputViewController {
     /// language (up to `maxSecondaryStores`) sharing `secondaryWordBudget` words, so suggestions and swiping
     /// work in all of them.
     private func ensureStores() {
-        loadStore(for: language, limit: nil)
-        var wanted: Set<Language> = [language]
-        let others = Array(enabledLanguages.filter { $0 != language }.prefix(maxSecondaryStores))
+        // Languages typed by sound have no word list of this kind: their dictionary is loaded on its own (PhoneticInput).
+        var wanted: Set<Language> = []
+        if language.usesPhoneticInput {
+            PhoneticInput.shared(for: language).loadIfNeeded { [weak self] in self?.scheduleRefresh() }
+        } else {
+            loadStore(for: language, limit: nil)
+            wanted.insert(language)
+        }
+        let others = Array(enabledLanguages.filter { $0 != language && !$0.usesPhoneticInput }.prefix(maxSecondaryStores))
         let share = others.isEmpty ? 0 : max(minimumSecondaryWords, secondaryWordBudget / others.count)
         for other in others {
             wanted.insert(other)
@@ -634,6 +659,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func selectLanguage(_ target: Language) {
         guard target != language else { return }
+        finishComposing()
         lastOtherLanguage = language
         language = target
         settings.languageCode = target.rawValue
@@ -643,6 +669,7 @@ final class KeyboardViewController: UIInputViewController {
         returnTitle = ""
         updateReturnTitle()
         reloadKeyboardLayout()
+        applyHeight()   // Thai's fourth row of letters
         scheduleRefresh()
     }
 
@@ -756,6 +783,35 @@ final class KeyboardViewController: UIInputViewController {
             refreshEmojiSearch()
             return
         }
+        if language.usesPhoneticInput && textDocumentProxy.isSecureTextEntry != true {
+            // Letters build up the spelling; anything else first turns all the letters so far into words.
+            if page == .letters, text.count == 1, let letter = text.first, letter.isASCII, letter.isLetter {
+                composing += text.lowercased()
+                showComposing()
+                return
+            }
+            // Japanese: the long-vowel mark (on the comma's long-press) belongs to the word being typed.
+            if language == .japanese, text == "\u{30FC}", !composing.isEmpty {
+                composing += "-"
+                showComposing()
+                return
+            }
+            while !composing.isEmpty { commitCandidate(phoneticCandidates.first) }
+        }
+        if language == .korean && textDocumentProxy.isSecureTextEntry != true {
+            // Jamo build up the syllable being typed; anything else ends it.
+            if text.count == 1, let jamo = text.first, HangulComposer.isJamo(jamo) {
+                applyHangul(hangul.type(jamo))
+                autoSpaceMarker = nil
+                lastSpaceTime = Date.distantPast
+                afterTyping()
+                return
+            }
+            hangul.reset()
+        }
+        if language == .hindi, let independent = independentVowel(for: text) {
+            output = independent
+        }
         // Punctuation that normally ends a word goes right after the word when the space in front of it was
         // added automatically (by a swipe or a picked suggestion) and nothing was typed since.
         if text.count == 1, ".,!?;:)]}\u{2026}\u{060C}\u{061F}\u{061B}".contains(text) {
@@ -772,11 +828,22 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleSpace() {
+        hangul.reset()
         let pendingMarker = autoSpaceMarker
         autoSpaceMarker = nil
         if isSearchingEmoji {
             if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
             refreshEmojiSearch()
+            return
+        }
+        if language.usesPhoneticInput {
+            // Space writes the best word for the letters (no spaces between words); with nothing typed, a space.
+            if !composing.isEmpty {
+                commitCandidate(phoneticCandidates.first)
+            } else {
+                textDocumentProxy.insertText(" ")
+                afterTyping()
+            }
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -858,17 +925,25 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Auto-correction is on and the field accepts it (not passwords, addresses or codes).
     private var autoCorrectAllowed: Bool {
-        return Prefs.suggestions && Prefs.autoCorrect && textDocumentProxy.isSecureTextEntry != true
+        return Prefs.suggestions && Prefs.autoCorrect && language.autoCorrects && textDocumentProxy.isSecureTextEntry != true
             && textDocumentProxy.autocorrectionType != .no
             && ![UIKeyboardType.URL, .emailAddress].contains(textDocumentProxy.keyboardType ?? .default)
     }
 
     private func handleEnter() {
+        hangul.reset()
         if isSearchingEmoji {
             // Enter picks the first match, like pressing search in the system keyboard.
             if let first = EmojiStore.shared.search(searchQuery, limit: 1).first {
                 pickEmoji(first)
             }
+            return
+        }
+        if !composing.isEmpty {
+            // Return keeps the letters as typed (for a name or an English word; the kana for Japanese), like the
+            // system's keyboards.
+            finishComposing()
+            scheduleRefresh()
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -889,6 +964,17 @@ final class KeyboardViewController: UIInputViewController {
         if isSearchingEmoji {
             if !searchQuery.isEmpty { searchQuery.removeLast() }
             refreshEmojiSearch()
+            return
+        }
+        if !composing.isEmpty {
+            composing.removeLast()
+            showComposing()
+            return
+        }
+        // Korean: one jamo of the syllable being typed at a time.
+        if let step = hangul.backspace() {
+            applyHangul(step)
+            scheduleRefresh()
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -915,12 +1001,19 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Deletes one word to the left (sliding left from the backspace key).
     private func deleteWordBackward() {
+        hangul.reset()
         if isSearchingEmoji {
             var characters = Array(searchQuery)
             while let last = characters.last, last == " " { characters.removeLast() }
             while let last = characters.last, last != " " { characters.removeLast() }
             searchQuery = String(characters)
             refreshEmojiSearch()
+            return
+        }
+        if !composing.isEmpty {
+            // The letters typed so far go all at once.
+            composing = ""
+            showComposing()
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -1087,6 +1180,101 @@ final class KeyboardViewController: UIInputViewController {
         return language == .english || stores[language]?.contains(key: TextFolding.key(word)) != true
     }
 
+    // MARK: Typed by sound (Jyutping, Pinyin, romaji)
+
+    /// Shows the letters typed so far in the field, underlined (as kana for Japanese), and the words for them in
+    /// the bar.
+    private func showComposing() {
+        let shown = PhoneticInput.shared(for: language).display(composing)
+        let length = (shown as NSString).length
+        textDocumentProxy.setMarkedText(shown, selectedRange: NSRange(location: length, length: 0))
+        if composing.isEmpty { textDocumentProxy.unmarkText() }
+        lastPickedWord = nil
+        updatePhoneticCandidates()
+        refreshSuggestions()
+    }
+
+    private func updatePhoneticCandidates() {
+        phoneticCandidates = composing.isEmpty ? [] : PhoneticInput.shared(for: language).candidates(for: composing)
+    }
+
+    /// Writes `candidate` in place of the letters it stands for; the letters after them stay, for the next word.
+    /// Without a candidate the letters are written as typed.
+    private func commitCandidate(_ candidate: PhoneticInput.Candidate?) {
+        // (A word must stand for at least one letter, or the loops that commit every letter would never end.)
+        guard let candidate = candidate, candidate.length > 0 else {
+            finishComposing()
+            scheduleRefresh()
+            return
+        }
+        let rest = String(composing.dropFirst(candidate.length))
+        textDocumentProxy.setMarkedText(candidate.word, selectedRange: NSRange(location: (candidate.word as NSString).length, length: 0))
+        textDocumentProxy.unmarkText()
+        PhoneticInput.shared(for: language).learn(candidate)
+        composing = rest
+        if !rest.isEmpty {
+            showComposing()
+        } else {
+            phoneticCandidates = []
+            lastPickedWord = candidate.word
+            scheduleRefresh()
+        }
+    }
+
+    /// Korean: replaces the syllable shown so far with what the composer made of it.
+    private func applyHangul(_ step: (delete: Int, insert: String)) {
+        for _ in 0..<step.delete { textDocumentProxy.deleteBackward() }
+        if !step.insert.isEmpty { textDocumentProxy.insertText(step.insert) }
+    }
+
+    /// Hindi: a vowel sign typed where it has no consonant to sit on (at the start of a word, after a vowel) is
+    /// the vowel itself: ा -> आ, ि -> इ, े -> ए ...; the virama there is अ.
+    private func independentVowel(for text: String) -> String? {
+        let independents: [String: String] = [
+            "\u{093E}": "आ", "\u{093F}": "इ", "\u{0940}": "ई", "\u{0941}": "उ", "\u{0942}": "ऊ", "\u{0943}": "ऋ",
+            "\u{0947}": "ए", "\u{0948}": "ऐ", "\u{094B}": "ओ", "\u{094C}": "औ", "\u{0949}": "ऑ", "\u{094D}": "अ"
+        ]
+        guard let independent = independents[text] else { return nil }
+        guard let last = (textDocumentProxy.documentContextBeforeInput ?? "").unicodeScalars.last else { return independent }
+        // Consonants (क ... ह, the nukta forms क़ ... य़) and the nukta itself carry a vowel sign.
+        let carries = (0x0915...0x0939).contains(last.value) || (0x0958...0x095F).contains(last.value)
+            || (0x0978...0x097F).contains(last.value) || last.value == 0x093C
+        return carries ? nil : independent
+    }
+
+    /// Leaves the letters typed so far in the field as they are (switching language, hiding the keyboard).
+    private func finishComposing() {
+        hangul.reset()
+        guard !composing.isEmpty else { return }
+        if language == .japanese {
+            // The kana as typed, a final "n" as ん.
+            let kana = Romaji.finish(composing)
+            textDocumentProxy.setMarkedText(kana, selectedRange: NSRange(location: (kana as NSString).length, length: 0))
+        }
+        textDocumentProxy.unmarkText()
+        composing = ""
+        phoneticCandidates = []
+    }
+
+    /// The bar while typing by sound: the words for the letters, best first (space writes it), or an emoji for
+    /// the word just picked.
+    private func refreshPhoneticSuggestions() {
+        if composing.isEmpty {
+            var shown: [Suggestion] = []
+            if Prefs.emojiSuggestions, let word = lastPickedWord, EmojiStore.shared.isReady,
+               let emoji = EmojiStore.shared.suggestions(for: word, languages: [language], limit: 1).first {
+                shown = [Suggestion(text: emoji, kind: .emoji)]
+            }
+            suggestionBar.update(shown)
+            return
+        }
+        if !PhoneticInput.shared(for: language).isLoaded { ensureStores() }
+        var shown = phoneticCandidates.prefix(SuggestionBar.capacity).map { Suggestion(text: $0.word, kind: .word) }
+        // No word for these letters (yet): offer them as typed.
+        if shown.isEmpty { shown = [Suggestion(text: composing, kind: .literal)] }
+        suggestionBar.update(shown, highlighted: phoneticCandidates.isEmpty ? nil : 0)
+    }
+
     // MARK: Suggestions
 
     private func scheduleRefresh() {
@@ -1118,6 +1306,12 @@ final class KeyboardViewController: UIInputViewController {
     private func refreshSuggestions() {
         shownFix = nil
         if isSearchingEmoji { return }
+        // Chinese and Japanese need the bar to pick their words, whatever the suggestion settings say.
+        if language.usesPhoneticInput && textDocumentProxy.isSecureTextEntry != true {
+            if !composing.isEmpty && phoneticCandidates.isEmpty && PhoneticInput.shared(for: language).isLoaded { updatePhoneticCandidates() }
+            refreshPhoneticSuggestions()
+            return
+        }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
         if textDocumentProxy.isSecureTextEntry == true
@@ -1307,6 +1501,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func showEmojiPanel() {
         guard emojiPanel == nil else { return }
+        finishComposing()
         let panel = EmojiPanel()
         panel.delegate = self
         panel.language = language
@@ -1379,6 +1574,8 @@ final class KeyboardViewController: UIInputViewController {
         searchQuery = ""
         searchBar.isHidden = true
         suggestionBar.isHidden = false
+        // The search left the emoji key out: put it back.
+        reloadKeyboardLayout()
         updateAutoShift()
         if returnToPicker {
             showEmojiPanel()
@@ -1447,6 +1644,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
 
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {
         guard offset != 0, !isSearchingEmoji else { return }
+        finishComposing()
         // In right-to-left text, sliding right goes back towards the start of the text.
         textDocumentProxy.adjustTextPosition(byCharacterOffset: language.isRightToLeft ? -offset : offset)
         if Prefs.cursorTickHaptic { Haptics.shared.tick() }
@@ -1560,7 +1758,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
     /// Everything the decoder needs for one swipe, read on the main thread: the key geometry and every loaded
     /// dictionary with its context. The decoder only gets copies.
     private func makeSwipeContext() -> SwipeContext? {
-        guard let store = stores[language], store.isLoaded else { return nil }
+        guard language.supportsSwipe, let store = stores[language], store.isLoaded else { return nil }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         var previous: String? = nil
         if before.isEmpty || before.last == " " || before.last == "\n" {
@@ -1645,6 +1843,26 @@ extension KeyboardViewController: KeyboardViewDelegate {
 extension KeyboardViewController: SuggestionBarDelegate {
     func suggestionBar(_ bar: SuggestionBar, didSelect suggestion: Suggestion) {
         Haptics.shared.keyPress()
+        hangul.reset()
+        if language.usesPhoneticInput && !composing.isEmpty {
+            if suggestion.kind == .literal {
+                finishComposing()
+                scheduleRefresh()
+            } else if let candidate = phoneticCandidates.first(where: { $0.word == suggestion.text }) {
+                commitCandidate(candidate)
+            }
+            return
+        }
+        if language.usesPhoneticInput && suggestion.kind == .emoji {
+            // The emoji goes after the picked word (the word is not replaced by its emoji).
+            textDocumentProxy.insertText(suggestion.text)
+            var recents = settings.recentEmoji.filter { $0 != suggestion.text }
+            recents.insert(suggestion.text, at: 0)
+            settings.recentEmoji = Array(recents.prefix(32))
+            lastPickedWord = nil
+            scheduleRefresh()
+            return
+        }
         switch suggestion.kind {
         case .literal, .word:
             guard !suggestion.text.isEmpty else { return }

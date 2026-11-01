@@ -403,7 +403,7 @@ final class KeyboardView: UIView {
             let key = keyViews[index.row][index.col]
             // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
             // that same word.
-            if Prefs.twoThumbSwipe && Prefs.swipe && page == .letters && letter(of: key.spec) != nil {
+            if Prefs.twoThumbSwipe && swipeAllowed && page == .letters && letter(of: key.spec) != nil {
                 if let pending = pendingSwipe {
                     continueSwipe(state, from: pending.path, at: point)
                     continue
@@ -781,8 +781,11 @@ final class KeyboardView: UIView {
 
     // MARK: Swipe typing
 
+    /// Swiping is on, and the language's words can be swiped (see `Language.supportsSwipe`).
+    private var swipeAllowed: Bool { return Prefs.swipe && typingLanguage.supportsSwipe }
+
     private func shouldStartSwipe(_ state: TouchState, at point: CGPoint) -> Bool {
-        guard Prefs.swipe, page == .letters, state.startedOnLetter, states.count == 1 else {
+        guard swipeAllowed, page == .letters, state.startedOnLetter, states.count == 1 else {
             return false
         }
         // A real swipe crosses at least two other keys; a sloppy tap or a quick drift never does.

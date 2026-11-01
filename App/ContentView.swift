@@ -332,7 +332,7 @@ private struct DataSection: View {
     }
 
     private static func countLearned() -> Int {
-        return Language.allCases.reduce(0) { $0 + Settings.shared.learnedWordList(for: $1.rawValue).count }
+        return Settings.shared.learnedWordList().count
     }
 
     /// One option with its own confirmation, so the dialog's arrow points at the option that was tapped.
@@ -573,11 +573,12 @@ struct LanguagesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 DeletableCard(items: languages, id: { $0.rawValue }, canDelete: languages.count > 1, onDelete: remove) { language in
-                    // The language and its layout (the first letters of its top row).
+                    // The language and its layout (the first letters of its top row), or how it is typed.
                     HStack {
                         Text(language.displayName)
                         Spacer()
-                        Text(ThemePreview.letterRows(for: language)[0].prefix(6).joined().uppercased())
+                        Text(language.phoneticSystem
+                             ?? ThemePreview.letterRows(for: language)[0].prefix(6).joined().uppercased())
                             .font(.footnote.monospaced())
                             .foregroundColor(.secondary)
                     }
@@ -818,43 +819,33 @@ private struct AddLanguageView: View {
 
 // MARK: - Learned words
 
-/// Words the keyboard learned (ones no dictionary has, used at least twice), per language, with a search
-/// field and swipe to remove.
+/// Words the keyboard learned (ones no dictionary has, used at least twice), one list for every language, with a
+/// search field and swipe to remove.
 struct LearnedWordsView: View {
-    @State private var words: [String: [String]] = [:]
+    @State private var words: [String] = []
     @State private var query = ""
 
-    /// The words of each language that match the search.
-    private func matches(for language: Language) -> [String] {
-        let list = words[language.rawValue] ?? []
+    /// The words that match the search.
+    private var matches: [String] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return list }
-        return list.filter { $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        guard !trimmed.isEmpty else { return words }
+        return words.filter { $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
     }
 
-    private var languages: [Language] {
-        return Language.allCases.filter { !matches(for: $0).isEmpty }
-    }
-
-    // Grouped cards rather than a List, so the words swipe to delete like the languages do.
+    // A grouped card rather than a List, so the words swipe to delete like the languages do.
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 if words.isEmpty {
                     Text("No learned words yet").foregroundColor(.secondary).cardRow().groupedCard()
-                    CardFooter("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar.")
-                } else if languages.isEmpty {
+                    CardFooter("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar. Learned words work in every language.")
+                } else if matches.isEmpty {
                     Text("No matching words").foregroundColor(.secondary).cardRow().groupedCard()
-                }
-                ForEach(languages, id: \.rawValue) { language in
-                    CardHeader(language.displayName)
-                    DeletableCard(items: matches(for: language), id: { $0 }, onDelete: { remove([$0], from: language) }) { word in
+                } else {
+                    DeletableCard(items: matches, id: { $0 }, onDelete: { remove($0) }) { word in
                         Text(word).cardRow()
                     }
-                    .padding(.bottom, 16)
-                }
-                if !languages.isEmpty {
-                    CardFooter("Swipe a word left to remove it.")
+                    CardFooter("Learned words work in every language. Swipe a word left to remove it.")
                 }
             }
             .padding(.horizontal, 16)
@@ -867,24 +858,13 @@ struct LearnedWordsView: View {
         .navigationTitle("Learned words")
         .navigationBarTitleDisplayMode(.inline)
         // Reloaded on every visit: a NavigationLink builds this view's initial state only once.
-        .onAppear { words = LearnedWordsView.load() }
+        .onAppear { words = Settings.shared.learnedWordList() }
     }
 
-    private static func load() -> [String: [String]] {
-        var result: [String: [String]] = [:]
-        for language in Language.allCases {
-            let list = Settings.shared.learnedWordList(for: language.rawValue)
-            if !list.isEmpty { result[language.rawValue] = list }
-        }
-        return result
-    }
-
-    private func remove(_ removed: [String], from language: Language) {
-        for word in removed { Settings.shared.removeLearnedWord(word, for: language.rawValue) }
-        var list = words[language.rawValue] ?? []
-        list.removeAll { removed.contains($0) }
+    private func remove(_ word: String) {
+        Settings.shared.removeLearnedWord(word)
         Feedback.delete()
-        withAnimation(.easeOut(duration: 0.2)) { words[language.rawValue] = list.isEmpty ? nil : list }
+        withAnimation(.easeOut(duration: 0.2)) { words.removeAll { $0 == word } }
     }
 }
 

@@ -8,7 +8,11 @@ from pathlib import Path
 from keyboard import normalize_apostrophes
 
 START, UNKNOWN, COMMA, FIRST_WORD = 0, 1, 2, 3
-TOKENS = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*|[.!?…]+|,|\S")
+# As scripts/language_model.py: letters with the marks that combine with them, and the sentence ends.
+MARKS = "\u0300-\u036F\u0591-\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0900-\u0903\u093A-\u094F" \
+        "\u0951-\u0957\u0962\u0963\u0E31\u0E34-\u0E3A\u0E47-\u0E4E"
+WORD = rf"[^\W\d_](?:[^\W\d_]|[{MARKS}])*"
+TOKENS = re.compile(rf"{WORD}(?:['’]{WORD})*|[.!?…।॥؟]+|,|\S")
 LN10 = math.log(10)
 
 

@@ -100,6 +100,31 @@ enum Licenses {
             source: "https://opus.nlpl.eu/",
             text: "No subtitle text is included in the app; only counts of which words follow which."),
         LicenseItem(
+            name: "CC-CEDICT",
+            credit: "Chinese words in simplified characters with their Pinyin, from the community-maintained "
+                + "CC-CEDICT dictionary published by MDBG (based on CEDICT by Paul Andrew Denisowski). The "
+                + "Mandarin dictionary is built from it, ranked by the FrequencyWords Chinese word counts, and is "
+                + "shared under the same licence.",
+            licenseName: "CC BY-SA 4.0",
+            source: "https://www.mdbg.net/chinese/dictionary?page=cc-cedict",
+            text: creativeCommons("Attribution-ShareAlike 4.0 International", "https://creativecommons.org/licenses/by-sa/4.0/")),
+        LicenseItem(
+            name: "JMdict",
+            credit: "Japanese words with their readings, from the JMdict dictionary files, the property of the "
+                + "Electronic Dictionary Research and Development Group (EDRDG), used in conformance with the "
+                + "Group's licence. The Japanese dictionary is built from them and is shared under the same licence.",
+            licenseName: "CC BY-SA 4.0",
+            source: "https://www.edrdg.org/edrdg/licence.html",
+            text: creativeCommons("Attribution-ShareAlike 4.0 International", "https://creativecommons.org/licenses/by-sa/4.0/")),
+        LicenseItem(
+            name: "rime-cantonese",
+            credit: "Cantonese characters and words with their Jyutping, and how often they are used, by the "
+                + "Cantonese Computational Linguistics Infrastructure Development Workgroup (CanCLID). The "
+                + "Cantonese dictionary is built from them.",
+            licenseName: "CC BY 4.0",
+            source: "https://github.com/rime/rime-cantonese",
+            text: creativeCommons("Attribution 4.0 International", "https://creativecommons.org/licenses/by/4.0/")),
+        LicenseItem(
             name: "Unicode emoji data and CLDR",
             credit: "The emoji list (emoji-test.txt) and the emoji names and keywords used for search and "
                 + "suggestions (CLDR annotations), by Unicode, Inc.",

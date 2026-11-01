@@ -187,7 +187,7 @@ struct PinnedKeyboard: View {
     var body: some View {
         GeometryReader { geometry in
             // The largest keyboard that fits: by width, or by height when the pane is short.
-            let rows: Double = numberRow ? 5 : 4
+            let rows: Double = (numberRow ? 5 : 4) + Double(ThemePreview.extraLetterRows)
             let aspect = CGFloat(440 / (barHeight + 8 + rows * (keyHeight + rowGap)))
             let width = min(geometry.size.width, geometry.size.height * aspect)
             ThemePreview(theme: ThemeCatalog.theme(id: themeID),
@@ -212,12 +212,44 @@ struct SuggestionBarPreview: View {
     @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separator = SettingDefault.separatorStyle
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
+    @AppStorage(SettingKey.suggestionTransition, store: SharedStore.defaults) private var transition = SettingDefault.suggestionTransition
 
-    private let words = ["\u{201C}hel\u{201D}", "hello", "help", "held", "helmet", "helps", "helping", "helpful", "helper", "hell"]
+    /// What the bar offers as "hel", "help" and "he" are typed in turn; the preview keeps cycling through them so
+    /// the Switching setting can be seen.
+    private let wordSets = [
+        ["\u{201C}hel\u{201D}", "hello", "help", "held", "helmet", "helps", "helping", "helpful", "helper", "hell"],
+        ["\u{201C}help\u{201D}", "helpful", "helped", "helping", "helps", "helper", "helpers", "helpless", "helpline", "helpdesk"],
+        ["\u{201C}he\u{201D}", "he", "her", "here", "hey", "help", "head", "health", "hear", "heart"],
+    ]
+    @State private var step = 0
     /// The word space would write, on the accent pill.
     private let best = 1
 
+    private var words: [String] { return wordSets[step % wordSets.count] }
     private var shown: [String] { return Array(words.prefix(scroll ? 10 : (fit ? 6 : 3))) }
+
+    /// The keyboard's switch (Keyboard/SuggestionBar.animateSwitch) in SwiftUI terms.
+    private var switchTransition: AnyTransition {
+        switch transition {
+        case "fade": return .opacity
+        case "rise": return .asymmetric(insertion: .offset(y: 10).combined(with: .opacity),
+                                        removal: .offset(y: -10).combined(with: .opacity))
+        case "slide": return .asymmetric(insertion: .offset(x: 18).combined(with: .opacity),
+                                         removal: .offset(x: -18).combined(with: .opacity))
+        case "pop": return .asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity),
+                                       removal: .scale(scale: 0.92).combined(with: .opacity))
+        default: return .identity
+        }
+    }
+
+    private var switchAnimation: Animation? {
+        switch transition {
+        case "instant": return nil
+        case "pop": return .spring(response: 0.3, dampingFraction: 0.7)
+        case "fade": return .easeOut(duration: 0.16)
+        default: return .easeOut(duration: 0.18)
+        }
+    }
 
     private var caption: String {
         if !enabled { return "The bar stays empty: no suggestions while you type." }
@@ -233,7 +265,17 @@ struct SuggestionBarPreview: View {
                     let barWidth = geometry.size.width - 34
                     VStack(spacing: 6) {
                         HStack(spacing: 0) {
-                            if enabled { slots(width: barWidth, look: look) } else { Spacer() }
+                            if enabled {
+                                ZStack {
+                                    slots(width: barWidth, look: look)
+                                        .id(step)
+                                        .transition(switchTransition)
+                                }
+                                .frame(width: barWidth)
+                                .clipped()
+                            } else {
+                                Spacer()
+                            }
                             Image(systemName: "keyboard.chevron.compact.down")
                                 .foregroundColor(look.accentColor)
                                 .frame(width: 34)
@@ -247,6 +289,13 @@ struct SuggestionBarPreview: View {
             .animation(.easeOut(duration: 0.25), value: fit)
             .animation(.easeOut(duration: 0.25), value: scroll)
             .animation(.easeOut(duration: 0.25), value: height)
+        }
+        .task {
+            // New words every so often, switched the chosen way.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_800_000_000)
+                withAnimation(switchAnimation) { step += 1 }
+            }
         }
     }
 
@@ -340,6 +389,7 @@ struct SuggestionBarPreview: View {
                 MiniKey(look: look, letter: String(letter))
             }
         }
+        .glassKeyGroup(look.theme.kind == .liquidGlass, spacing: 2)
         .frame(height: 34)
     }
 }
@@ -425,6 +475,7 @@ struct GesturePreview: View {
                 .padding(2)
                 .frame(width: keyWidth * 5, height: rowHeight)
         }
+        .glassKeyGroup(look.theme.kind == .liquidGlass, spacing: 2)
         .frame(width: size.width, height: size.height)
     }
 
@@ -515,6 +566,7 @@ struct HitboxPreview: View {
                 }
                 functionKey("delete.left", look: look)
             }
+            .glassKeyGroup(look.theme.kind == .liquidGlass, spacing: 2)
             .frame(maxWidth: .infinity)
             .frame(height: 70)
             }

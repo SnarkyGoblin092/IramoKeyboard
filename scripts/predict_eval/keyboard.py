@@ -26,6 +26,22 @@ LETTER_ROWS = {
     "sv": ["qwertyuiopå", "asdfghjklöä", "zxcvbnm"],
     "lt": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
     "ar": ["ضصثقفغعهخحجد", "شسيبلاتنمكط", "ذئءؤرىةوزظ"],
+    "da": ["qwertyuiopå", "asdfghjklæø", "zxcvbnm"],
+    "no": ["qwertyuiopå", "asdfghjkløæ", "zxcvbnm"],
+    "fi": ["qwertyuiopå", "asdfghjklöä", "zxcvbnm"],
+    "el": ["ςερτυθιοπ", "ασδφγηξκλ", "ζχψωβνμ"],
+    "he": ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"],
+    "fa": ["ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطژزرذدپو"],
+    "id": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
+    "ms": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
+    "vi": ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
+    "sk": ["qwertzuiop", "asdfghjkl", "yxcvbnm"],
+    "hr": ["qwertzuiopšđ", "asdfghjklčćž", "yxcvbnm"],
+    "bg": ["явертъуиопчш", "асдфгхйклщ", "зьцжбнмю"],
+    "ko": ["ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ", "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ", "ㅋㅌㅊㅍㅠㅜㅡ"],
+    "hi": ["ौैाीूबहगदजड", "ोे्िुपरकतचट", "ंमनवलसयश"],
+    "th": ["ภถุึคตจขช", "ๆไำพะัีรนยบล", "ฟหกดเ้่าสวง", "ผปแอิืทมใฝ"],
+    "ca": ["qwertyuiop", "asdfghjklç", "zxcvbnm"],
 }
 
 KEYBOARD_WIDTH = 390.0
@@ -65,7 +81,8 @@ class Layout:
         self.letters = set(self.centers)
         self._memo = {}
         # Keys next to each other (same as WordStore.neighborMap), on folded letters.
-        folded_rows = [[fold(ch)[0] for ch in row] for row in rows]
+        # (A key that is only a combining mark, like Hindi's ् or ं, folds to nothing and is left out, as in Swift.)
+        folded_rows = [[f[0] for f in (fold(ch) for ch in row) if f] for row in rows]
         self.neighbors = {}
         for r, row in enumerate(folded_rows):
             for c, letter in enumerate(row):

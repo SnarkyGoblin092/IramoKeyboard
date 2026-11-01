@@ -11,9 +11,16 @@ struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.suggestionDelay, store: SharedStore.defaults) private var delay = SettingDefault.suggestionDelay
+    @AppStorage(SettingKey.suggestionTransition, store: SharedStore.defaults) private var transition = SettingDefault.suggestionTransition
 
     private let separators = ["solid", "dashed", "dotted", "none"]
     private let delays: [Double] = [0, 0.06, 0.2]
+    private let transitions = ["instant", "fade", "rise", "slide", "pop"]
+    private let transitionNotes = ["New words simply replace the old ones, with nothing in between.",
+                                   "The old words fade out as the new ones fade in.",
+                                   "New words float up into place while the old ones drift away above.",
+                                   "New words glide in along the reading direction and push the old ones out.",
+                                   "New words spring in from slightly smaller, with a little bounce."]
 
     /// Three equal words, words sized to fit (more of them), or a strip that scrolls.
     private var countIndex: Int { return scroll ? 2 : (fit ? 1 : 0) }
@@ -60,6 +67,16 @@ struct SuggestionsView: View {
                                 range: Settings.suggestionHeightRange, step: 1) { "\(Int($0.rounded())) pt" }
                 } header: {
                     SectionHeader("Look", symbol: "paintbrush.pointed", color: .purple)
+                }
+                .glassRows()
+
+                Section {
+                    SegmentedChoice(names: ["Instant", "Fade", "Rise", "Slide", "Pop"],
+                                    selected: transitions.firstIndex(of: transition)) { transition = transitions[$0] }
+                } header: {
+                    SectionHeader("Switching", symbol: "arrow.left.arrow.right", color: .orange)
+                } footer: {
+                    Text(transitionNotes[transitions.firstIndex(of: transition) ?? 0])
                 }
                 .glassRows()
 
