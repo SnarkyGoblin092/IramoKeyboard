@@ -182,6 +182,9 @@ private struct KeyboardSection: View {
                 SettingsRow(title: "Text shortcuts", symbol: "bolt.fill", color: .orange,
                             value: shortcutCount > 0 ? "\(shortcutCount)" : nil)
             }
+            ScreenRow(.emoji) {
+                SettingsRow(title: "Emoji", symbol: "face.smiling.inverse", color: .yellow)
+            }
         } header: {
             SectionHeader("Keyboard", symbol: "keyboard", color: .blue)
         } footer: {
@@ -385,7 +388,7 @@ private struct AboutSection: View {
 
 /// The screens the main list opens.
 enum Screen: Hashable {
-    case languages, suggestions, gestures, hitboxes, shortcuts, themes, keys, haptics, learnedWords, licences
+    case languages, suggestions, gestures, hitboxes, shortcuts, emoji, themes, keys, haptics, learnedWords, licences
 
     @ViewBuilder var view: some View {
         switch self {
@@ -394,6 +397,7 @@ enum Screen: Hashable {
         case .gestures: GesturesView()
         case .hitboxes: HitboxesView()
         case .shortcuts: ShortcutsView()
+        case .emoji: EmojiView()
         case .themes: ThemesView()
         case .keys: KeysView()
         case .haptics: HapticsView()

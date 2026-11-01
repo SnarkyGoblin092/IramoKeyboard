@@ -1495,10 +1495,8 @@ final class KeyboardViewController: UIInputViewController {
     // MARK: Emoji
 
     private func pickEmoji(_ emoji: String) {
-        textDocumentProxy.insertText(emoji)
-        var recents = settings.recentEmoji.filter { $0 != emoji }
-        recents.insert(emoji, at: 0)
-        settings.recentEmoji = Array(recents.prefix(32))
+        textDocumentProxy.insertText(Prefs.emojiSpaceAfter ? emoji + " " : emoji)
+        settings.rememberEmoji(emoji)
         lastSpaceTime = Date.distantPast
         clearSwipeState()
     }
@@ -1506,6 +1504,7 @@ final class KeyboardViewController: UIInputViewController {
     private func showEmojiPanel() {
         guard emojiPanel == nil else { return }
         finishComposing()
+        Prefs.refresh()   // the Emoji screen's settings, which do not rebuild the keyboard
         let panel = EmojiPanel()
         panel.delegate = self
         panel.language = language
@@ -1592,7 +1591,7 @@ final class KeyboardViewController: UIInputViewController {
         let placeholder = language.strings.searchEmoji
         searchBar.setQuery(searchQuery, placeholder: placeholder)
         if searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-            searchBar.setResults(settings.recentEmoji)
+            searchBar.setResults(settings.orderedRecentEmoji())
         } else {
             searchBar.setResults(EmojiStore.shared.search(searchQuery, limit: 60))
         }
@@ -1868,9 +1867,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
         if language.usesPhoneticInput && suggestion.kind == .emoji {
             // The emoji goes after the picked word (the word is not replaced by its emoji).
             textDocumentProxy.insertText(suggestion.text)
-            var recents = settings.recentEmoji.filter { $0 != suggestion.text }
-            recents.insert(suggestion.text, at: 0)
-            settings.recentEmoji = Array(recents.prefix(32))
+            settings.rememberEmoji(suggestion.text)
             lastPickedWord = nil
             scheduleRefresh()
             return
@@ -1902,9 +1899,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
             for _ in 0..<replaced { textDocumentProxy.deleteBackward() }
             let needsSpace = replaced == 0 && (before.last?.isWhitespace == false)
             textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
-            var recents = settings.recentEmoji.filter { $0 != suggestion.text }
-            recents.insert(suggestion.text, at: 0)
-            settings.recentEmoji = Array(recents.prefix(32))
+            settings.rememberEmoji(suggestion.text)
             lastSpaceTime = Date.distantPast
             clearSwipeState()
             afterTyping()

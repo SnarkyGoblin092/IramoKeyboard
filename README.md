@@ -103,6 +103,15 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ### Emoji
 - An emoji picker like the iOS one: recently used emoji, categories with tabs, skin tones, and search in your
   language; the search bar takes the theme's key colours.
+- The app's Emoji screen sets up the picker, in five tabs:
+  - General: show or hide Recently Used, order it by most recent or most used, keep 8-64 of them (with a
+    preview and Clear), and add a space after each emoji.
+  - Layout: quick setups (Familiar, Roomy, Dense, Grid only), horizontal or vertical scrolling, swipe across
+    it to switch tabs, and the rows, emoji size and cell spacing.
+  - Panel: the search field and the category tabs at the top, the bottom or hidden; tabs as symbols or emoji;
+    the delete key on or off (ABC always stays).
+  - Categories: move each tab up or down, show or hide it.
+  - Skin tones: a default tone for every emoji that has one (hold for the others), and how long to hold.
 - Emoji suggestions in the bar for the word you typed; tapping one replaces the word.
 - Emoticons turn into emoji: type ":)", "<3", "xD", "(y)" and the bar offers 🙂, ❤️, 😆, 👍.
 
