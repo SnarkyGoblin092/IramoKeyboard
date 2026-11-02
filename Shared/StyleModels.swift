@@ -39,7 +39,7 @@ struct SystemStyle: Hashable, Codable {
 
     init() {}
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: Swift.Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         roundness = value(c, .roundness, roundness)
         surface = value(c, .surface, surface)
@@ -147,7 +147,7 @@ struct EffectsConfig: Hashable, Codable {
 
     init() {}
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: Swift.Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         colorMode = value(c, .colorMode, colorMode)
         customColor = value(c, .customColor, customColor)
