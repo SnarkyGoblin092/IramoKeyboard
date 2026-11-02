@@ -1,0 +1,153 @@
+import SwiftUI
+
+/// The editor of a system theme (Native, Transparent, Liquid Glass): its corners and key style, and colours,
+/// solidity, outline and glow. Every change is saved at once as that theme's own style (SystemEdits); Reset puts the
+/// theme back as it was. The keyboard (Theme.system) and the previews (ThemeLook.system) read the same style.
+struct SystemThemeSections: View {
+    let theme: ThemeDefinition
+    @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
+
+    private let corners: [Double] = [0, 0.12, 0.26, 1]
+    private let surfaces = ["auto", "flat", "sheen", "raised"]
+    private let borders = ["auto", "none", "thin", "bold", "accent"]
+    private let glows = ["off", "soft", "strong"]
+
+    private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
+
+    /// The style being edited: the theme's own, or (before the first change) what the old global settings give.
+    private var style: SystemStyle {
+        if let own = SystemEdits.decode(systemEdits)[theme.id] { return own }
+        let defaults = SharedStore.defaults
+        var start = SystemStyle()
+        start.roundness = defaults.object(forKey: SettingKey.keyRoundness) as? Double ?? SettingDefault.keyRoundness
+        start.surface = defaults.string(forKey: SettingKey.keySurface) ?? SettingDefault.keySurface
+        start.border = defaults.string(forKey: SettingKey.keyBorderStyle) ?? SettingDefault.keyBorderStyle
+        start.glow = defaults.string(forKey: SettingKey.keyGlow) ?? SettingDefault.keyGlow
+        return start
+    }
+
+    private func binding<Value>(_ keyPath: WritableKeyPath<SystemStyle, Value>) -> Binding<Value> {
+        return Binding(get: { style[keyPath: keyPath] }, set: { value in
+            var next = style
+            next[keyPath: keyPath] = value
+            systemEdits = SystemEdits.setting(next, for: theme.id, in: systemEdits)
+        })
+    }
+
+    /// Real Liquid Glass keys are glass: they have no surface, outline or fill colour of their own to change.
+    private var glassKeys: Bool {
+        guard theme.kind == .liquidGlass else { return false }
+        if #available(iOS 26, *) { return true }
+        return false
+    }
+
+    /// A colour that replaces the theme's own while it is on.
+    private func optionalColour(_ keyPath: WritableKeyPath<SystemStyle, ThemeRGBA?>, _ title: String,
+                                _ subtitle: String, start: ThemeRGBA) -> some View {
+        let chosen = style[keyPath: keyPath]
+        return VStack(alignment: .leading, spacing: 8) {
+            GlassToggle(title: title, subtitle: subtitle, isOn: Binding(get: { chosen != nil }, set: { on in
+                var next = style
+                next[keyPath: keyPath] = on ? start : nil
+                systemEdits = SystemEdits.setting(next, for: theme.id, in: systemEdits)
+            }))
+            if let current = chosen {
+                ColorPicker(tr("Colour"), selection: Binding(get: { Color(current) }, set: { color in
+                    var next = style
+                    next[keyPath: keyPath] = ThemeRGBA(pickerColor: color)
+                    systemEdits = SystemEdits.setting(next, for: theme.id, in: systemEdits)
+                }), supportsOpacity: true)
+            }
+        }
+    }
+
+    var body: some View {
+        Section {
+            SegmentedChoice(names: [tr("Square"), tr("Slight"), tr("Standard"), tr("Round")],
+                            selected: corners.firstIndex { same($0, style.roundness) }) { binding(\.roundness).wrappedValue = corners[$0] }
+            GlassSlider(title: tr("Roundness"), symbol: "app", value: binding(\.roundness), range: SystemStyle.roundnessRange,
+                        step: 0.02) { DeviceMetrics.points($0 * 22) }
+        } header: {
+            SectionHeader(tr("Corners"), symbol: "app", color: .indigo)
+        }
+        .glassRows()
+
+        Section {
+            Group {
+                SegmentedChoice(title: tr("Surface"), names: [tr("Auto"), tr("Flat"), tr("Sheen"), tr("Raised")],
+                                selected: surfaces.firstIndex(of: style.surface)) { binding(\.surface).wrappedValue = surfaces[$0] }
+                GlassSlider(title: tr("Sheen strength"), symbol: "sun.max", value: binding(\.sheen),
+                            range: SystemStyle.sheenRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
+                SegmentedChoice(title: tr("Border"), names: [tr("Auto"), tr("None"), tr("Thin"), tr("Bold"), tr("Accent")],
+                                selected: borders.firstIndex(of: style.border)) { binding(\.border).wrappedValue = borders[$0] }
+                GlassToggle(title: tr("Own outline width"),
+                            subtitle: tr("Set the outline's width in points instead of the border's."),
+                            isOn: Binding(get: { style.borderWidth != nil }, set: { on in
+                                binding(\.borderWidth).wrappedValue = on ? 1 : nil
+                            }))
+                if let width = style.borderWidth {
+                    GlassSlider(title: tr("Outline width"), symbol: "square.dashed",
+                                value: Binding(get: { width }, set: { binding(\.borderWidth).wrappedValue = $0 }),
+                                range: SystemStyle.borderWidthRange, step: 0.1) { String(format: "%.1f pt", $0) }
+                }
+                SegmentedChoice(title: tr("Glow"), names: [tr("Off"), tr("Soft"), tr("Strong")],
+                                selected: glows.firstIndex(of: style.glow)) { binding(\.glow).wrappedValue = glows[$0] }
+            }
+            .disabled(glassKeys)
+            .opacity(glassKeys ? 0.45 : 1)
+        } header: {
+            SectionHeader(tr("Key style"), symbol: "sparkles", color: .purple)
+        } footer: {
+            Text(glassKeys
+                 ? tr("Not used by the Liquid Glass theme: its keys are real glass, without a surface, outline or glow of their own.")
+                 : tr("Auto follows the theme: flat keys, with a thin outline on every theme but Native. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour."))
+        }
+        .glassRows()
+
+        Section {
+            GlassSlider(title: tr("Key solidity"), symbol: "circle.lefthalf.filled", value: binding(\.keyOpacity),
+                        range: SystemStyle.keyOpacityRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
+                .disabled(glassKeys)
+                .opacity(glassKeys ? 0.45 : 1)
+            GlassSlider(title: tr("Label glow"), symbol: "light.max", value: binding(\.labelGlow),
+                        range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+            Group {
+                optionalColour(\.letterColor, tr("Own letter key colour"), tr("Letters, numbers and the space bar."),
+                               start: ThemeRGBA(1, 1, 1, 1))
+                optionalColour(\.functionColor, tr("Own function key colour"), tr("Shift, delete, 123 and the emoji key."),
+                               start: ThemeRGBA(0.675, 0.702, 0.745, 1))
+            }
+            .disabled(glassKeys)
+            .opacity(glassKeys ? 0.45 : 1)
+            optionalColour(\.labelColor, tr("Own label colour"), tr("The keys' letters and symbols."),
+                           start: ThemeRGBA(0, 0, 0, 1))
+        } header: {
+            SectionHeader(tr("Colours and fills"), symbol: "paintpalette", color: .orange)
+        }
+        .glassRows()
+
+        Section {
+            Button(role: .destructive) {
+                Feedback.delete()
+                systemEdits = SystemEdits.setting(nil, for: theme.id, in: systemEdits)
+            } label: {
+                Label(tr("Reset %@", "\(theme.name)"), systemImage: "arrow.counterclockwise")
+            }
+            .buttonStyle(ActionButtonStyle())
+            .disabled(SystemEdits.decode(systemEdits)[theme.id] == nil)
+        } footer: {
+            Text(tr("Puts the theme back as it came, with the corners and key style set on the old Keys screen."))
+        }
+        .glassRows()
+    }
+}
+
+private extension ThemeRGBA {
+    /// A colour from the system colour picker, rounded to 8 bits so a colour picked again compares equal.
+    init(pickerColor color: Color) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        func byte(_ value: CGFloat) -> Double { return (Double(min(max(value, 0), 1)) * 255).rounded() / 255 }
+        self.init(byte(r), byte(g), byte(b), byte(a))
+    }
+}

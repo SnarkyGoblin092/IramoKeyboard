@@ -340,20 +340,33 @@ final class KeyView: UIView {
 
     // MARK: Press effects (the Effects screen)
 
-    /// A light behind the label that fades in when the key goes down and out when it comes up. Made on first use.
+    /// Where effects that leave the key (sparks, the echo) are drawn: a layer over all the keys, so a neighbouring
+    /// key never hides them.
+    private weak var effectsHost: CALayer?
+    /// Called when the key goes down with an effect colour, so the keyboard can light the keys around it (wave).
+    var onEffectPress: ((KeyView, UIColor) -> Void)?
+    /// The light under the key: fades in on press, out on release, and pulses for the wave. Made on first use.
     private var pressGlow: CALayer?
     /// The next rainbow hue (shared by every key, so each press is a new colour).
     private static var rainbowHue: CGFloat = 0
 
-    private func effectColor() -> UIColor {
-        switch Prefs.effectColor {
+    func attachEffects(overlay: CALayer) {
+        effectsHost = overlay
+    }
+
+    /// The colour of one press's effects, by the Effects screen's colour choice.
+    static func effectColor(traits: UITraitCollection) -> UIColor {
+        let effects = Prefs.effects
+        switch effects.colorMode {
         case "white":
             return .white
+        case "custom":
+            return effects.customColor.uiColor
         case "rainbow":
-            KeyView.rainbowHue = (KeyView.rainbowHue + 0.11).truncatingRemainder(dividingBy: 1)
-            return UIColor(hue: KeyView.rainbowHue, saturation: 0.75, brightness: 1, alpha: 1)
+            rainbowHue = (rainbowHue + 0.11).truncatingRemainder(dividingBy: 1)
+            return UIColor(hue: rainbowHue, saturation: 0.75, brightness: 1, alpha: 1)
         default:
-            return Theme.accent.resolvedColor(with: traitCollection)
+            return Theme.accent.resolvedColor(with: traits)
         }
     }
 
@@ -365,37 +378,52 @@ final class KeyView: UIView {
         guard let glow = pressGlow else { return }
         glow.frame = bounds
         glow.shadowPath = keyShapePath()
-        glow.shadowRadius = 9 * CGFloat(Prefs.effectSize)
+        glow.shadowRadius = 9 * CGFloat(Prefs.effects.glowSpread)
     }
 
     private func playPressEffects(pressed: Bool) {
-        if Prefs.effectGlow { fadeGlow(on: pressed) }
-        if pressed && Prefs.effectRipple { ripple() }
+        let effects = Prefs.effects
+        guard effects.playsOnPress else { return }
+        guard pressed else {
+            if effects.glow { fadeGlow(on: false, color: nil) }
+            return
+        }
+        let color = KeyView.effectColor(traits: traitCollection)
+        if effects.glow { fadeGlow(on: true, color: color) }
+        if effects.border { lightBorder(color) }
+        if effects.ripple { ripple(color) }
+        if effects.shine { shine(color) }
+        if effects.sparks { sparks(color) }
+        if effects.pop { pop() }
+        if effects.echo { echo() }
+        if effects.wave { onEffectPress?(self, color) }
     }
 
-    private func fadeGlow(on: Bool) {
-        let glow: CALayer
-        if let existing = pressGlow {
-            glow = existing
+    private func glowLayer() -> CALayer {
+        if let existing = pressGlow { return existing }
+        let glow = CALayer()
+        glow.shadowOffset = .zero
+        glow.shadowOpacity = 0
+        glow.frame = haloAttached ? halo.bounds : bounds
+        glow.shadowPath = keyShapePath()
+        glow.shadowRadius = 9 * CGFloat(Prefs.effects.glowSpread)
+        if haloAttached {
+            halo.addSublayer(glow)   // under every key, so it never lights a neighbour
+        } else if let glassView = glassView {
+            layer.insertSublayer(glow, above: glassView.layer)
         } else {
-            glow = CALayer()
-            glow.shadowOffset = .zero
-            glow.shadowOpacity = 0
-            glow.frame = haloAttached ? halo.bounds : bounds
-            glow.shadowPath = keyShapePath()
-            glow.shadowRadius = 9 * CGFloat(Prefs.effectSize)
-            if haloAttached {
-                halo.addSublayer(glow)   // under every key, so it never lights a neighbour
-            } else if let glassView = glassView {
-                layer.insertSublayer(glow, above: glassView.layer)
-            } else {
-                layer.insertSublayer(glow, at: 0)
-            }
-            pressGlow = glow
+            layer.insertSublayer(glow, at: 0)
         }
-        if on { glow.shadowColor = effectColor().cgColor }
-        let target = on ? Float(Prefs.effectStrength) : 0
-        let duration = on ? Prefs.effectFadeIn : Prefs.effectFadeOut
+        pressGlow = glow
+        return glow
+    }
+
+    private func fadeGlow(on: Bool, color: UIColor?) {
+        let effects = Prefs.effects
+        let glow = glowLayer()
+        if on, let color = color { glow.shadowColor = color.cgColor }
+        let target = on ? Float(effects.glowStrength) : 0
+        let duration = on ? effects.glowFadeIn : effects.glowFadeOut
         let from = glow.presentation()?.shadowOpacity ?? glow.shadowOpacity
         glow.shadowOpacity = target
         glow.removeAnimation(forKey: "glow")
@@ -408,30 +436,86 @@ final class KeyView: UIView {
         glow.add(fade, forKey: "glow")
     }
 
-    /// A disc of light that spreads from the middle of the key, inside its shape, while it fades away.
-    private func ripple() {
-        guard bounds.width > 0 else { return }
-        let diameter = hypot(bounds.width, bounds.height)
-        let disc = CALayer()
-        disc.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-        disc.position = CGPoint(x: bounds.midX, y: bounds.midY)
-        disc.cornerRadius = diameter / 2
-        disc.backgroundColor = effectColor().withAlphaComponent(0.55).cgColor
+    /// The key lights up as part of a wave that started at a neighbour: a pulse of its glow, `delay` seconds late.
+    func waveLight(color: UIColor, strength: Float, delay: TimeInterval) {
+        guard haloAttached else { return }
+        let glow = glowLayer()
+        glow.shadowColor = color.cgColor
+        let pulse = CAKeyframeAnimation(keyPath: "shadowOpacity")
+        pulse.values = [0, strength, 0]
+        pulse.keyTimes = [0, 0.3, 1]
+        pulse.duration = max(Prefs.effects.glowFadeOut, 0.3)
+        pulse.beginTime = CACurrentMediaTime() + delay
+        pulse.fillMode = .backwards
+        glow.add(pulse, forKey: "wave")
+    }
+
+    /// A line round the key in the effect colour that fades away.
+    private func lightBorder(_ color: UIColor) {
+        let effects = Prefs.effects
+        let width = CGFloat(effects.borderWidth)
+        let line = CAShapeLayer()
+        line.frame = bounds
+        line.path = UIBezierPath(roundedRect: bounds.insetBy(dx: width / 2, dy: width / 2),
+                                 cornerRadius: max(0, Theme.keyCornerRadius(for: bounds.size) - width / 2)).cgPath
+        line.fillColor = nil
+        line.strokeColor = color.cgColor
+        line.lineWidth = width
+        line.opacity = 0
+        layer.addSublayer(line)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { line.removeFromSuperlayer() }
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = effects.borderFade
+        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        line.add(fade, forKey: "fade")
+        CATransaction.commit()
+    }
+
+    /// A holder the size of the key, clipped to its shape, for effects that stay inside the key.
+    private func clippedHolder() -> CALayer {
         let mask = CAShapeLayer()
         mask.path = keyShapePath()
         let holder = CALayer()
         holder.frame = bounds
         holder.mask = mask
-        holder.addSublayer(disc)
-        disc.position = CGPoint(x: bounds.midX, y: bounds.midY)
         layer.addSublayer(holder)
-        let spread = CGFloat(Prefs.effectRippleSize) / 3   // the largest setting covers the whole key
-        let duration = max(Prefs.effectFadeOut, 0.25)
+        return holder
+    }
+
+    /// A disc (or a ring) of light spreading from the middle of the key, inside its shape, while it fades away.
+    private func ripple(_ color: UIColor) {
+        guard bounds.width > 0 else { return }
+        let effects = Prefs.effects
+        let diameter = hypot(bounds.width, bounds.height)
+        let holder = clippedHolder()
+        let wave: CALayer
+        if effects.rippleStyle == "ring" {
+            let ring = CAShapeLayer()
+            ring.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+            ring.path = UIBezierPath(ovalIn: ring.bounds.insetBy(dx: 2, dy: 2)).cgPath
+            ring.fillColor = nil
+            ring.strokeColor = color.withAlphaComponent(0.8).cgColor
+            ring.lineWidth = 3
+            wave = ring
+        } else {
+            let disc = CALayer()
+            disc.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+            disc.cornerRadius = diameter / 2
+            disc.backgroundColor = color.withAlphaComponent(0.55).cgColor
+            wave = disc
+        }
+        wave.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        wave.opacity = 0
+        holder.addSublayer(wave)
+        let duration = effects.rippleDuration
         CATransaction.begin()
         CATransaction.setCompletionBlock { holder.removeFromSuperlayer() }
         let grow = CABasicAnimation(keyPath: "transform.scale")
         grow.fromValue = 0.05
-        grow.toValue = spread
+        grow.toValue = CGFloat(effects.rippleReach) / 3   // the largest setting covers the whole key
         grow.duration = duration
         grow.timingFunction = CAMediaTimingFunction(name: .easeOut)
         let fade = CABasicAnimation(keyPath: "opacity")
@@ -439,9 +523,134 @@ final class KeyView: UIView {
         fade.toValue = 0
         fade.duration = duration
         fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
-        disc.opacity = 0
-        disc.add(grow, forKey: "grow")
-        disc.add(fade, forKey: "fade")
+        wave.add(grow, forKey: "grow")
+        wave.add(fade, forKey: "fade")
+        CATransaction.commit()
+    }
+
+    /// A band of light sweeping across the key from left to right.
+    private func shine(_ color: UIColor) {
+        guard bounds.width > 0 else { return }
+        let effects = Prefs.effects
+        let holder = clippedHolder()
+        let bandWidth = bounds.width * CGFloat(effects.shineWidth)
+        let band = CAGradientLayer()
+        band.bounds = CGRect(x: 0, y: 0, width: bandWidth, height: bounds.height * 1.6)
+        band.position = CGPoint(x: -bandWidth, y: bounds.midY)
+        band.colors = [color.withAlphaComponent(0).cgColor, color.withAlphaComponent(0.75).cgColor,
+                       color.withAlphaComponent(0).cgColor]
+        band.startPoint = CGPoint(x: 0, y: 0.5)
+        band.endPoint = CGPoint(x: 1, y: 0.5)
+        band.setAffineTransform(CGAffineTransform(rotationAngle: .pi / 10))   // a slanted band
+        holder.addSublayer(band)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { holder.removeFromSuperlayer() }
+        let sweep = CABasicAnimation(keyPath: "position.x")
+        sweep.fromValue = -bandWidth
+        sweep.toValue = bounds.width + bandWidth
+        sweep.duration = effects.shineDuration
+        sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        band.add(sweep, forKey: "sweep")
+        CATransaction.commit()
+        band.position = CGPoint(x: bounds.width + bandWidth, y: bounds.midY)
+    }
+
+    /// The layer and the middle of the key in it, for effects that leave the key.
+    private func overlayTarget() -> (host: CALayer, center: CGPoint) {
+        if let host = effectsHost { return (host, CGPoint(x: frame.midX, y: frame.midY)) }
+        return (layer, CGPoint(x: bounds.midX, y: bounds.midY))
+    }
+
+    /// Specks that fly out of the key in every direction and fade.
+    private func sparks(_ color: UIColor) {
+        guard bounds.width > 0 else { return }
+        let effects = Prefs.effects
+        let target = overlayTarget()
+        let count = max(1, Int(effects.sparkCount.rounded()))
+        let size = CGFloat(effects.sparkSize)
+        let reach = bounds.width * CGFloat(effects.sparkDistance)
+        let offset = CGFloat.random(in: 0..<(2 * .pi))
+        var specks: [CALayer] = []
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { specks.forEach { $0.removeFromSuperlayer() } }
+        for index in 0..<count {
+            let angle = offset + 2 * .pi * CGFloat(index) / CGFloat(count)
+            let distance = reach * CGFloat.random(in: 0.7...1.15)
+            let speck = CALayer()
+            speck.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            speck.cornerRadius = size / 2
+            speck.backgroundColor = (Prefs.effects.colorMode == "rainbow"
+                ? UIColor(hue: CGFloat(index) / CGFloat(count), saturation: 0.7, brightness: 1, alpha: 1) : color).cgColor
+            speck.position = target.center
+            speck.opacity = 0
+            target.host.addSublayer(speck)
+            specks.append(speck)
+            let fly = CABasicAnimation(keyPath: "position")
+            fly.fromValue = target.center
+            fly.toValue = CGPoint(x: target.center.x + cos(angle) * distance, y: target.center.y + sin(angle) * distance)
+            fly.duration = effects.sparkDuration
+            fly.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 1
+            fade.toValue = 0
+            fade.duration = effects.sparkDuration
+            fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            let shrink = CABasicAnimation(keyPath: "transform.scale")
+            shrink.fromValue = 1
+            shrink.toValue = 0.3
+            shrink.duration = effects.sparkDuration
+            speck.add(fly, forKey: "fly")
+            speck.add(fade, forKey: "fade")
+            speck.add(shrink, forKey: "shrink")
+        }
+        CATransaction.commit()
+    }
+
+    /// The label swells (or shrinks) and springs back.
+    private func pop() {
+        let effects = Prefs.effects
+        let scale = CGFloat(effects.popScale)
+        let duration = effects.popDuration
+        for view in [label, iconView] where !view.isHidden {
+            UIView.animate(withDuration: duration * 0.35, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+                view.transform = CGAffineTransform(scaleX: scale, y: scale)
+            } completion: { _ in
+                UIView.animate(withDuration: duration * 0.65, delay: 0, usingSpringWithDamping: 0.45,
+                               initialSpringVelocity: 0.6, options: [.allowUserInteraction]) {
+                    view.transform = .identity
+                }
+            }
+        }
+    }
+
+    /// A copy of the label floats up out of the key and fades.
+    private func echo() {
+        let effects = Prefs.effects
+        let source: UIView = label.isHidden ? iconView : label
+        guard source.bounds.width > 0, source.bounds.height > 0 else { return }
+        let image = UIGraphicsImageRenderer(bounds: source.bounds).image { source.layer.render(in: $0.cgContext) }
+        let target = overlayTarget()
+        let ghost = CALayer()
+        ghost.bounds = source.bounds
+        ghost.contents = image.cgImage
+        ghost.contentsScale = UIScreen.main.scale
+        ghost.position = target.center
+        ghost.opacity = 0
+        target.host.addSublayer(ghost)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { ghost.removeFromSuperlayer() }
+        let rise = CABasicAnimation(keyPath: "position.y")
+        rise.fromValue = target.center.y
+        rise.toValue = target.center.y - CGFloat(effects.echoRise)
+        rise.duration = effects.echoDuration
+        rise.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.85
+        fade.toValue = 0
+        fade.duration = effects.echoDuration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        ghost.add(rise, forKey: "rise")
+        ghost.add(fade, forKey: "fade")
         CATransaction.commit()
     }
 

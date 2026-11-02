@@ -13,6 +13,9 @@ protocol KeyboardViewDelegate: AnyObject {
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint])
     /// A swipe ended without a word (cancelled, or it was a sloppy tap).
     func keyboardViewDidCancelSwipe(_ view: KeyboardView)
+    /// Whether a swipe could be decoded right now; if not, every touch stays an ordinary tap (a swipe nobody can
+    /// decode would swallow the letters).
+    func keyboardViewCanSwipe(_ view: KeyboardView) -> Bool
 }
 
 /// Draws the keys and owns ALL touch handling, so that
@@ -108,6 +111,11 @@ final class KeyboardView: UIView {
 
     /// Every key's shadow and glow, drawn on one layer under all the keys so that light never falls over a key.
     private let haloLayer = CALayer()
+    /// Effects that may leave a key (sparks, an echo of the label) are drawn here, over all the keys.
+    private let effectsLayer = CALayer()
+    /// Cuts every key's shape out of the halo layer: shadows and glows show only around the keys, never over one
+    /// (a see-through key would otherwise show the light of its neighbours through itself).
+    private let haloMask = CAShapeLayer()
 
     /// A finished swipe kept for a moment with two-thumb swiping on: a touch on a letter right after continues it.
     private struct PendingSwipe {
@@ -128,6 +136,10 @@ final class KeyboardView: UIView {
         isMultipleTouchEnabled = true
         backgroundColor = UIColor.clear
         layer.insertSublayer(haloLayer, at: 0)   // under every key (KeyView.attachHalo)
+        haloMask.fillRule = .evenOdd
+        haloLayer.mask = haloMask                 // the light stays out of every key's shape
+        effectsLayer.zPosition = 90                // over the keys, under the swipe trail
+        layer.addSublayer(effectsLayer)
 
         if Theme.usesRealGlass {
             // Spacing just under the gap between keys: neighbouring keys share sampling but do not melt together.
@@ -195,6 +207,8 @@ final class KeyboardView: UIView {
                 if !spec.isSpacer {
                     (glassContainer?.contentView ?? self).addSubview(key)
                     key.attachHalo(to: haloLayer)
+                    key.attachEffects(overlay: effectsLayer)
+                    key.onEffectPress = { [weak self] key, color in self?.lightNeighbours(of: key, color: color) }
                 }
                 builtRow.append(key)
             }
@@ -304,6 +318,8 @@ final class KeyboardView: UIView {
         super.layoutSubviews()
         trailLayer.frame = bounds
         haloLayer.frame = bounds
+        effectsLayer.frame = bounds
+        haloMask.frame = bounds
         glassContainer?.frame = bounds
         guard !rows.isEmpty else { return }
 
@@ -344,6 +360,36 @@ final class KeyboardView: UIView {
                 x += width
             }
             hitRects.append(rects)
+        }
+        updateHaloMask()
+    }
+
+    /// Everything but the keys: the halo layer shows through the gaps and around the keys only.
+    private func updateHaloMask() {
+        let path = UIBezierPath(rect: bounds.insetBy(dx: -200, dy: -200))
+        for row in keyViews {
+            for key in row where key.superview != nil {
+                path.append(UIBezierPath(roundedRect: key.frame, cornerRadius: Theme.keyCornerRadius(for: key.frame.size)))
+            }
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        haloMask.path = path.cgPath
+        CATransaction.commit()
+    }
+
+    /// The wave effect: the keys around the pressed one pulse with its light, the farther ones a moment later.
+    private func lightNeighbours(of key: KeyView, color: UIColor) {
+        let effects = Prefs.effects
+        let width = max(letterKeySize().width, 1)
+        for row in keyViews {
+            for other in row where other !== key && other.superview != nil {
+                let distance = hypot(other.center.x - key.center.x, other.center.y - key.center.y) / width
+                guard distance <= CGFloat(effects.waveReach) else { continue }
+                let fade = 1 - distance / (CGFloat(effects.waveReach) + 0.5)
+                other.waveLight(color: color, strength: Float(effects.waveStrength) * Float(fade),
+                                delay: TimeInterval(distance) * effects.waveSpeed)
+            }
         }
     }
 
@@ -857,7 +903,9 @@ final class KeyboardView: UIView {
     // MARK: Swipe typing
 
     /// Swiping is on, and the language's words can be swiped (see `Language.supportsSwipe`).
-    private var swipeAllowed: Bool { return Prefs.swipe && typingLanguage.supportsSwipe }
+    private var swipeAllowed: Bool {
+        return Prefs.swipe && typingLanguage.supportsSwipe && (delegate?.keyboardViewCanSwipe(self) ?? true)
+    }
 
     private func shouldStartSwipe(_ state: TouchState, at point: CGPoint) -> Bool {
         guard swipeAllowed, page == .letters, state.startedOnLetter else { return false }
@@ -898,11 +946,27 @@ final class KeyboardView: UIView {
         state.holdTimer = nil
         state.key?.isPressed = false
         hidePreview()
-        trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
+        styleTrail()
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
+    }
+
+    /// The trail's colour, and with the Effects screen's trail glow, its colour and a halo.
+    private func styleTrail() {
+        let effects = Prefs.effects
+        if effects.trail {
+            let color = KeyView.effectColor(traits: traitCollection)
+            trailLayer.strokeColor = color.withAlphaComponent(0.7).cgColor
+            trailLayer.shadowColor = color.cgColor
+            trailLayer.shadowOpacity = Float(effects.trailGlow)
+            trailLayer.shadowRadius = 8
+            trailLayer.shadowOffset = .zero
+        } else {
+            trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
+            trailLayer.shadowOpacity = 0
+        }
     }
 
     /// The swiping finger moved. Gliding onto the space bar (with "space commits") ends the word there; the next

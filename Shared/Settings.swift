@@ -107,14 +107,10 @@ enum SettingKey {
     static let keyBorderStyle = "hunkeys.keyBorderStyle"
     static let keyGlow = "hunkeys.keyGlow"
     /// Press effects (the Effects screen): a glow that fades in and out, and a ripple.
-    static let effectGlow = "hunkeys.effectGlow"
-    static let effectColor = "hunkeys.effectColor"
-    static let effectStrength = "hunkeys.effectStrength"
-    static let effectSize = "hunkeys.effectSize"
-    static let effectFadeIn = "hunkeys.effectFadeIn"
-    static let effectFadeOut = "hunkeys.effectFadeOut"
-    static let effectRipple = "hunkeys.effectRipple"
-    static let effectRippleSize = "hunkeys.effectRippleSize"
+    /// All of them as JSON (EffectsConfig).
+    static let effects = "hunkeys.effects"
+    /// The system themes' own style (SystemStyle by theme id, as JSON).
+    static let systemEdits = "hunkeys.systemEdits"
     /// The keys' typeface (KeyFont).
     static let keyFont = "hunkeys.keyFont"
     /// The learned key-offset model (data written by the keyboard; not a preference).
@@ -154,7 +150,7 @@ enum SettingKey {
         splitKeyboard, oneHanded,
         hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
         hitMap, hitMapStrength,
-        effectGlow, effectColor, effectStrength, effectSize, effectFadeIn, effectFadeOut, effectRipple, effectRippleSize
+        effects, systemEdits
     ]
 }
 
@@ -203,15 +199,9 @@ enum SettingDefault {
     static let keyBorderStyle = "auto"
     /// Off, soft or strong accent glow around the keys.
     static let keyGlow = "off"
-    /// Press effects: off until chosen. The colour is "accent", "white" or "rainbow" (a new hue each press).
-    static let effectGlow = false
-    static let effectColor = "accent"
-    static let effectStrength = 0.6
-    static let effectSize = 1.0
-    static let effectFadeIn = 0.06
-    static let effectFadeOut = 0.4
-    static let effectRipple = false
-    static let effectRippleSize = 1.8
+    /// Effects and the system themes' styles: empty until something is changed.
+    static let effects = ""
+    static let systemEdits = ""
     static let keyFont = "system"
     static let keyHeight: Double = 45.0
     static let landscapeSeparate: Bool = false
@@ -427,14 +417,8 @@ final class Settings {
             SettingKey.keySurface: SettingDefault.keySurface,
             SettingKey.keyBorderStyle: SettingDefault.keyBorderStyle,
             SettingKey.keyGlow: SettingDefault.keyGlow,
-            SettingKey.effectGlow: SettingDefault.effectGlow,
-            SettingKey.effectColor: SettingDefault.effectColor,
-            SettingKey.effectStrength: SettingDefault.effectStrength,
-            SettingKey.effectSize: SettingDefault.effectSize,
-            SettingKey.effectFadeIn: SettingDefault.effectFadeIn,
-            SettingKey.effectFadeOut: SettingDefault.effectFadeOut,
-            SettingKey.effectRipple: SettingDefault.effectRipple,
-            SettingKey.effectRippleSize: SettingDefault.effectRippleSize,
+            SettingKey.effects: SettingDefault.effects,
+            SettingKey.systemEdits: SettingDefault.systemEdits,
             SettingKey.keyFont: SettingDefault.keyFont,
             SettingKey.keyHeight: SettingDefault.keyHeight,
             SettingKey.landscapeSeparate: SettingDefault.landscapeSeparate,
@@ -558,19 +542,8 @@ final class Settings {
     var keySurface: String { return readString(SettingKey.keySurface) ?? SettingDefault.keySurface }
     var keyBorderStyle: String { return readString(SettingKey.keyBorderStyle) ?? SettingDefault.keyBorderStyle }
     var keyGlow: String { return readString(SettingKey.keyGlow) ?? SettingDefault.keyGlow }
-    var effectGlow: Bool { return readBool(SettingKey.effectGlow) }
-    var effectColor: String { return readString(SettingKey.effectColor) ?? SettingDefault.effectColor }
-    var effectStrength: Double { return clamp(readDouble(SettingKey.effectStrength), Settings.effectStrengthRange) }
-    var effectSize: Double { return clamp(readDouble(SettingKey.effectSize), Settings.effectSizeRange) }
-    var effectFadeIn: Double { return clamp(readDouble(SettingKey.effectFadeIn), Settings.effectFadeInRange) }
-    var effectFadeOut: Double { return clamp(readDouble(SettingKey.effectFadeOut), Settings.effectFadeOutRange) }
-    var effectRipple: Bool { return readBool(SettingKey.effectRipple) }
-    var effectRippleSize: Double { return clamp(readDouble(SettingKey.effectRippleSize), Settings.effectRippleSizeRange) }
-    static let effectStrengthRange: ClosedRange<Double> = 0.1...1
-    static let effectSizeRange: ClosedRange<Double> = 0.5...2
-    static let effectFadeInRange: ClosedRange<Double> = 0...0.5
-    static let effectFadeOutRange: ClosedRange<Double> = 0.05...1.5
-    static let effectRippleSizeRange: ClosedRange<Double> = 1.2...3
+    var effectsJSON: String { return readString(SettingKey.effects) ?? SettingDefault.effects }
+    var systemEditsJSON: String { return readString(SettingKey.systemEdits) ?? SettingDefault.systemEdits }
     var keyFont: String { return readString(SettingKey.keyFont) ?? SettingDefault.keyFont }
 
     // MARK: Swipe and flick gestures

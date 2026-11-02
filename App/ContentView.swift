@@ -265,13 +265,13 @@ private struct LookSection: View {
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
-    @AppStorage(SettingKey.effectGlow, store: SharedStore.defaults) private var effectGlow = SettingDefault.effectGlow
-    @AppStorage(SettingKey.effectRipple, store: SharedStore.defaults) private var effectRipple = SettingDefault.effectRipple
+    @AppStorage(SettingKey.effects, store: SharedStore.defaults) private var effectsJSON = SettingDefault.effects
 
     private var effectsSummary: String {
-        if effectGlow && effectRipple { return tr("Glow, ripple") }
-        if effectGlow { return tr("Glow") }
-        return effectRipple ? tr("Ripple") : tr("Off")
+        let effects = EffectsConfig.decode(effectsJSON)
+        let on = [effects.glow, effects.border, effects.ripple, effects.shine, effects.sparks, effects.pop,
+                  effects.echo, effects.wave, effects.trail].filter { $0 }.count
+        return on == 0 ? tr("Off") : tr("%@ on", "\(on)")
     }
 
     private var hapticSummary: String {

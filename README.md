@@ -82,6 +82,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Thumb handoff: pass a word to the other thumb mid-glide (or right after lifting) and it goes on.
 - Glide onto the space bar to finish a word and carry on with the next one without lifting ("hello you"); the
   trips to and from the bar are left out of the words.
+- Swiping is off while a word list is still loading and in password fields, so no tap can be swallowed by a swipe nothing can decode.
 - The swipe line fades out behind the finger, over a Trail length you set (60 to 600 pt).
 - Optional phrase glides: one glide can read as two or three words ("do it", "in the morning").
 - Delete right after a swipe removes the whole word (can be turned off).
@@ -153,12 +154,12 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   ruled lines or scanlines) and its strength. Changes are saved at once for that theme (kept when you switch to
   another) and the keyboard draws them the next time it opens; Reset puts the theme back as designed. Edited
   themes are marked on the Themes screen.
-- Accent colour (a preset, or any colour from the colour picker in the last place) for the system themes, and on
-  the Themes screen, shown only while a system theme is chosen, their corners (square to round) and key style:
-  surface (flat, a soft sheen, or raised with a shadow under each key), border (none, thin, bold or in the accent
-  colour) and an accent glow (soft or strong); by default flat keys and every theme but Native a thin outline.
-  The key style is greyed out with Liquid Glass, whose keys are real glass; a designed theme has its own in the
-  theme editor.
+- Accent colour (a preset, or any colour from the colour picker in the last place) for the system themes. Native,
+  Transparent and Liquid Glass each have an editor of their own (Themes, Customize): corners (square to round),
+  key style (surface, sheen strength, border, an outline width of its own, an accent glow), how solid the keys are,
+  a glow on the labels, and colours for the letter keys, function keys and labels. The key style is greyed out with
+  Liquid Glass, whose keys are real glass. A theme not yet edited keeps the corners and key style the old Keys screen
+  set; Reset in its editor puts it back. A designed theme has its own editor too.
 - Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
   width, the gaps between keys and rows, a font for the keys and the bar (the system
   font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
@@ -175,8 +176,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   the arrow in the empty side moves it over. The split keyboard takes precedence on iPad.
 
 ### The Iramo app
-- Sliders show the name and a value pill over a slim accent track with a round thumb, drag sideways anywhere on
-  them to change them; action buttons (Test, Forget learned taps) are tinted capsules, red when destructive, with a light click per step
+- Sliders show the name and a value pill over a glass groove filled with the accent, with a glass bead (Liquid Glass on iOS 26, frosted material before), drag sideways anywhere on
+  them to change them; action buttons (Test, Forget learned taps) are tinted glass capsules, red when destructive, with a light click per step
   (no hard knock at the ends). They show real values for this phone: points (key width, corner radius, letter
   and emoji size, touch room), milliseconds or seconds; strengths with no unit read Faint ... Full.
 - A Liquid Glass design: on iOS 26 and later every section of every list (settings, languages, learned words,
@@ -206,10 +207,14 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   Emoji, Functions panel), Typing (Suggestion bar, then auto-correction, emoji suggestions, capitals and the
   period shortcut), Touch & gestures (Gestures, Hitboxes), Look & feel (Theme, Number row, Keys, Key pop-ups,
   Effects, Haptics, Accent colour), Privacy & data, then App language and, last, the credits.
-- Effects: a glow under pressed keys that fades in and out (accent, white or a new rainbow colour each press;
-  strength, spread, fade-in and fade-out times) and a ripple of light spreading from the middle of the key (its
-  reach); presets Off, Glow, Neon, Ripple and Rainbow. Every key's glow and shadow is drawn on one layer under
-  all the keys, so light never falls over a neighbouring key. The keys in the app's preview can be touched to try it.
+- Effects, each with its own switch and settings, one colour for them all (accent, white, a new rainbow hue per
+  press, or any colour): glow (strength, spread, fade in, fade out), outline light, ripple (disc or ring, reach,
+  duration), shine (a slanted band sweeping across the key), sparks (count, distance, size), pop (the label swells
+  or shrinks and springs back), echo (a copy of the label floats up), wave (the keys around light up in turn) and a
+  glowing swipe trail. Presets: Off, Glow, Neon, Ripple, Rainbow, Sparkle, Wave and Bounce. Every key's glow and
+  shadow is drawn on one layer under all the keys, with every key's shape cut out of it, so light never falls over
+  a key (sparks and the echo are the exception: they fly over the keys). The keys in the app's preview can be
+  touched to try it.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
 - Credits and licences for the word, emoji and icon data.

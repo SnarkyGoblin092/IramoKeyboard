@@ -226,6 +226,8 @@ struct ThemeDefinition: Hashable {
     var style: ThemeStyle? = nil
     /// True when the user changed this theme in the editor.
     var isEdited = false
+    /// A system theme's own style from its editor (nil: not edited, so the old global key settings apply).
+    var systemStyle: SystemStyle? = nil
 
     /// nil = follow the system light/dark setting. true/false forces the keyboard into dark/light.
     var isDark: Bool? { return style?.isDark }
@@ -290,6 +292,10 @@ enum ThemeCatalog {
         var theme = base(id: id)
         if theme.style != nil, let style = ThemeEdits.decode(edits)[theme.id] {
             theme.style = style
+            theme.isEdited = true
+        } else if theme.style == nil,
+                  let style = SystemEdits.decode(SharedStore.defaults.string(forKey: SettingKey.systemEdits) ?? "")[theme.id] {
+            theme.systemStyle = style
             theme.isEdited = true
         }
         return theme

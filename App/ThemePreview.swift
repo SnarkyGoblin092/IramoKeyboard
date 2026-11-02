@@ -545,16 +545,19 @@ struct ThemeLook {
     var keyGlow: String
     var accentHex: String
     var accentName: String
+    /// A system theme's own style from its editor (it replaces the global key settings passed in).
+    let system: SystemStyle?
 
     init(theme: ThemeDefinition, accent: Color, dark: Bool, roundness: Double, keySurface: String,
          keyBorderStyle: String, keyGlow: String, accentHex: String, accentName: String) {
         self.theme = theme
         self.accent = accent
         self.dark = theme.isDark ?? dark
-        self.roundness = roundness
-        self.keySurface = keySurface
-        self.keyBorderStyle = keyBorderStyle
-        self.keyGlow = keyGlow
+        self.system = theme.systemStyle
+        self.roundness = theme.systemStyle?.roundness ?? roundness
+        self.keySurface = theme.systemStyle?.surface ?? keySurface
+        self.keyBorderStyle = theme.systemStyle?.border ?? keyBorderStyle
+        self.keyGlow = theme.systemStyle?.glow ?? keyGlow
         self.accentHex = accentHex
         self.accentName = accentName
     }
@@ -568,11 +571,26 @@ struct ThemeLook {
     private func pick(_ light: [Color], _ darkColors: [Color]) -> [Color] { return dark ? darkColors : light }
 
     /// Labels on the keys: a designed theme's own, the system label colour on the others.
-    var textColor: Color { return style.map { Color($0.text) } ?? pick(.black, .white) }
+    var textColor: Color {
+        return style.map { Color($0.text) } ?? system?.labelColor.map { Color($0) } ?? pick(.black, .white)
+    }
     /// Text on the background (the suggestion bar), not on a key.
     var stripText: Color { return style.map { Color($0.text) } ?? pick(Color(white: 0.08), .white) }
 
+    /// The letter keys' fill with the system theme's own colour and solidity, if it has them.
     var keyFill: Color {
+        if style != nil { return baseKeyFill }
+        let fill = system?.letterColor.map { Color($0) } ?? baseKeyFill
+        return (system?.keyOpacity ?? 1) < 0.999 ? fill.opacity(system?.keyOpacity ?? 1) : fill
+    }
+
+    var functionFill: Color {
+        if style != nil { return baseFunctionFill }
+        let fill = system?.functionColor.map { Color($0) } ?? baseFunctionFill
+        return (system?.keyOpacity ?? 1) < 0.999 ? fill.opacity(system?.keyOpacity ?? 1) : fill
+    }
+
+    private var baseKeyFill: Color {
         if let style = style { return Color(style.keyFill) }
         switch theme.kind {
         case .native: return pick(.white, Color(white: 0.42))
@@ -581,7 +599,7 @@ struct ThemeLook {
         }
     }
 
-    var functionFill: Color {
+    private var baseFunctionFill: Color {
         if let style = style { return Color(style.functionFill) }
         switch theme.kind {
         case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
@@ -663,9 +681,10 @@ struct ThemeLook {
                 .fill(kind == .accent ? accentColor : (kind == .function ? functionFill : keyFill))
                 .overlay {
                     if surface != "flat" {
-                        shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity(dark ? 0.12 : 0.22), location: 0),
+                        let sheen = system?.sheen ?? 1
+                        shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity((dark ? 0.12 : 0.22) * sheen), location: 0),
                                                           .init(color: Color.white.opacity(0), location: 0.55),
-                                                          .init(color: Color.black.opacity(dark ? 0.16 : 0.08), location: 1)],
+                                                          .init(color: Color.black.opacity((dark ? 0.16 : 0.08) * sheen), location: 1)],
                                                   startPoint: .top, endPoint: .bottom))
                     }
                 }
@@ -718,7 +737,7 @@ struct ThemeLook {
         return keySurface == "auto" ? "flat" : keySurface
     }
 
-    private var borderStyle: String {
+    private var baseBorderStyle: String {
         if theme.kind == .liquidGlass {
             if #available(iOS 26, *) { return "none" }   // real glass keys have no outline
         }
@@ -726,7 +745,16 @@ struct ThemeLook {
         return theme.kind == .native ? "none" : "thin"
     }
 
+    /// The outline style; a width of its own (the theme's editor) draws one even where the style has none.
+    private var borderStyle: String {
+        let chosen = baseBorderStyle
+        guard let width = system?.borderWidth else { return chosen }
+        if theme.kind == .liquidGlass, chosen == "none" { return chosen }
+        return width > 0.01 ? (chosen == "none" ? "thin" : chosen) : "none"
+    }
+
     private var outlineWidth: CGFloat {
+        if let width = system?.borderWidth, borderStyle != "none" { return CGFloat(width) }
         switch borderStyle {
         case "thin": return 0.5
         case "bold": return 1.5
@@ -816,6 +844,8 @@ extension View {
     @ViewBuilder func keyLabelGlow(_ look: ThemeLook, color: Color, scale: CGFloat = 1) -> some View {
         if let glow = look.style?.labelGlow {
             self.shadow(color: color.opacity(glow.opacity), radius: CGFloat(glow.radius) * scale)
+        } else if let amount = look.system?.labelGlow, amount > 0.001 {
+            self.shadow(color: color.opacity(0.35 + 0.65 * amount), radius: CGFloat(2 + 6 * amount) * scale)
         } else {
             self
         }
@@ -828,6 +858,7 @@ struct CurrentThemeLook<Content: View>: View {
     @ViewBuilder let content: (ThemeLook) -> Content
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.themeEdits, store: SharedStore.defaults) private var themeEdits = SettingDefault.themeEdits
+    @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness

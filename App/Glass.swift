@@ -83,7 +83,34 @@ private struct GlassEdge<S: InsettableShape>: ViewModifier {
     }
 }
 
+#if compiler(>=6.2)
+@available(iOS 26.0, *)
+private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
+    var glass = Glass.regular
+    if let tint = tint { glass = glass.tint(tint) }
+    if interactive { glass = glass.interactive() }
+    return glass
+}
+#endif
+
 extension View {
+    /// A piece of Liquid Glass in the shape (a frosted material before iOS 26), optionally tinted, and answering
+    /// touches when `interactive`. The sliders and buttons use it.
+    @ViewBuilder
+    func glassShape<S: Shape>(_ shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            self.glassEffect(makeGlass(tint: tint, interactive: interactive), in: shape)
+        } else {
+            self.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
+                .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        }
+        #else
+        self.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
+            .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        #endif
+    }
+
     func glassEdge<S: InsettableShape>(_ shape: S) -> some View {
         return modifier(GlassEdge(shape: shape))
     }
@@ -178,10 +205,10 @@ struct ValueBar: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let fraction = CGFloat(min(max((value - range.lowerBound) / span, 0), 1))
-            let thumb: CGFloat = 22
+            let thumb: CGFloat = 30
             let travel = max(0, width - thumb)
             let edge = thumb / 2 + travel * fraction
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     if let symbol = symbol {
                         Image(systemName: symbol).foregroundStyle(.tint)
@@ -192,18 +219,26 @@ struct ValueBar: View {
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .padding(.horizontal, 9)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(.tint.opacity(0.14)))
+                        .glassShape(Capsule(), tint: Color.accentColor.opacity(0.25))
                 }
+                // A glass groove with the accent filling it, and a glass bead on the end of the fill.
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(.tertiarySystemFill)).frame(height: 6)
-                    Capsule().fill(.tint).frame(width: max(0, edge), height: 6)
+                    Capsule().fill(Color.clear).frame(height: 14)
+                        .glassShape(Capsule())
+                    Capsule()
+                        .fill(LinearGradient(colors: [Color.accentColor.opacity(0.55), Color.accentColor],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(0, edge), height: 8)
+                        .padding(.leading, 3)
+                        .opacity(isEnabled ? 1 : 0.5)
                     Circle()
-                        .fill(Color.white)
-                        .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .fill(Color.clear)
                         .frame(width: thumb, height: thumb)
+                        .glassShape(Circle(), tint: Color.white.opacity(0.35), interactive: true)
+                        .overlay(Circle().fill(Color.accentColor).frame(width: 8, height: 8))
+                        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
                         .offset(x: travel * fraction)
                 }
                 .frame(height: thumb)
@@ -234,7 +269,7 @@ struct ValueBar: View {
                     }
             )
         }
-        .frame(height: 62)
+        .frame(height: 72)
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)

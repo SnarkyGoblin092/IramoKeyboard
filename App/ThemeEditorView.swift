@@ -54,17 +54,12 @@ struct ThemeEditorView: View {
                     themeEdits = ThemeEdits.setting(nil, for: theme.id, in: themeEdits)
                 }
             } else {
-                Section {
-                    Text(tr("%@ follows the system's light and dark mode, so it has nothing to edit. Pick a designed theme on the Themes screen to customize it.", "\(theme.name)"))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .glassRows()
+                SystemThemeSections(theme: theme)
             }
         }
         .scrollContentBackground(.hidden)
         }
-        .navigationTitle(theme.style == nil ? tr("Theme") : tr("Customize %@", "\(theme.name)"))
+        .navigationTitle(tr("Customize %@", "\(theme.name)"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

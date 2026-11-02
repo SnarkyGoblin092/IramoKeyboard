@@ -305,8 +305,7 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)",
             "\(s.splitKeyboard)", s.oneHanded,
-            "\(s.effectGlow)", s.effectColor, "\(s.effectStrength)", "\(s.effectSize)", "\(s.effectFadeIn)",
-            "\(s.effectFadeOut)", "\(s.effectRipple)", "\(s.effectRippleSize)"
+            s.effectsJSON, s.systemEditsJSON
         ].joined(separator: "|")
     }
 
@@ -1753,6 +1752,11 @@ extension KeyboardViewController: KeyboardViewDelegate {
                 }
             }
         }
+    }
+
+    func keyboardViewCanSwipe(_ view: KeyboardView) -> Bool {
+        guard textDocumentProxy.isSecureTextEntry != true else { return false }
+        return stores[language]?.isLoaded == true
     }
 
     func keyboardViewDidCancelSwipe(_ view: KeyboardView) {

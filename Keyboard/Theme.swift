@@ -58,8 +58,47 @@ enum Theme {
     static func reload() {
         let theme = ThemeCatalog.theme(id: storedID(), edits: storedEdits())
         definition = theme
-        palette = makePalette(for: theme)
-        contrastPalette = makeContrastPalette(from: palette, kind: theme.kind)
+        palette = applying(theme.systemStyle, to: makePalette(for: theme))
+        contrastPalette = applying(theme.systemStyle, to: makeContrastPalette(from: palette, kind: theme.kind))
+    }
+
+    /// A system theme's editor colours and solidity laid over its palette (the palette as it is for no edits).
+    private static func applying(_ system: SystemStyle?, to base: Palette) -> Palette {
+        guard let system = system else { return base }
+        var p = base
+        func pressed(_ c: ThemeRGBA) -> UIColor {
+            return c.shaded(c.luminance > 0.5 ? -0.16 : 0.22).uiColor
+        }
+        if let color = system.letterColor {
+            p.letterKey = color.uiColor
+            p.functionKeyPressed = color.uiColor
+            p.letterKeyPressed = pressed(color)
+        }
+        if let color = system.functionColor {
+            p.functionKey = color.uiColor
+            p.letterKeyPressed = system.letterColor == nil ? color.uiColor : p.letterKeyPressed
+            p.functionKeyPressed = pressed(color)
+        }
+        if let color = system.labelColor {
+            p.keyText = color.uiColor
+            p.keySecondaryText = color.withAlpha(color.a * 0.6).uiColor
+        }
+        let k = CGFloat(system.keyOpacity)
+        if k < 0.999 {
+            func solid(_ c: UIColor) -> UIColor {
+                return UIColor { trait in
+                    let resolved = c.resolvedColor(with: trait)
+                    var alpha: CGFloat = 0
+                    resolved.getRed(nil, green: nil, blue: nil, alpha: &alpha)
+                    return resolved.withAlphaComponent(alpha * k)
+                }
+            }
+            p.letterKey = solid(p.letterKey)
+            p.functionKey = solid(p.functionKey)
+            p.letterKeyPressed = solid(p.letterKeyPressed)
+            p.functionKeyPressed = solid(p.functionKeyPressed)
+        }
+        return p
     }
 
     // MARK: Flags
@@ -73,6 +112,9 @@ enum Theme {
     /// A designed theme's look (nil for the system themes).
     static var style: ThemeStyle? { return definition.style }
 
+    /// A system theme's own style from its editor (nil: not edited, the old global key settings apply).
+    static var system: SystemStyle? { return definition.systemStyle }
+
     /// Dark/light forced by the theme (designed themes, by their backdrop), or `.unspecified` to follow the system.
     static var interfaceStyle: UIUserInterfaceStyle {
         guard let dark = definition.isDark else { return .unspecified }
@@ -85,7 +127,7 @@ enum Theme {
     static func keyCornerRadius(for size: CGSize) -> CGFloat {
         let half = min(size.width, size.height) / 2
         guard half > 0 else { return 0 }
-        let roundness = min(max(style?.roundness ?? Prefs.keyRoundness, 0), 1)
+        let roundness = min(max(style?.roundness ?? system?.roundness ?? Prefs.keyRoundness, 0), 1)
         return min(half, CGFloat(roundness) * half)
     }
 
@@ -103,7 +145,7 @@ enum Theme {
     static var keySurface: KeySurface {
         guard !usesRealGlass else { return .flat }
         if let style = style { return style.hasSheen ? .sheen : .flat }
-        switch Prefs.keySurface {
+        switch system?.surface ?? Prefs.keySurface {
         case "flat": return .flat
         case "sheen": return .sheen
         case "raised": return .raised
@@ -118,18 +160,24 @@ enum Theme {
             let alphas = style.sheenAlphas
             return [white(CGFloat(alphas.top)).cgColor, white(0).cgColor, black(CGFloat(alphas.bottom)).cgColor]
         }
-        return [white(dark ? 0.12 : 0.22).cgColor, white(0).cgColor, black(dark ? 0.16 : 0.08).cgColor]
+        let strength = CGFloat(system?.sheen ?? 1)
+        return [white(min(1, (dark ? 0.12 : 0.22) * strength)).cgColor, white(0).cgColor,
+                black(min(1, (dark ? 0.16 : 0.08) * strength)).cgColor]
     }
 
     static var keyBorderStyle: KeyBorderStyle {
         if let style = style { return style.borderWidth > 0.01 ? .thin : .none }
-        switch Prefs.keyBorderStyle {
-        case "none": return .none
-        case "thin": return .thin
-        case "bold": return .bold
-        case "accent": return .accent
-        default: return kind == .native ? .none : .thin
+        let chosen: KeyBorderStyle
+        switch system?.border ?? Prefs.keyBorderStyle {
+        case "none": chosen = .none
+        case "thin": chosen = .thin
+        case "bold": chosen = .bold
+        case "accent": chosen = .accent
+        default: chosen = kind == .native ? .none : .thin
         }
+        // An outline width of its own (the theme's editor) draws an outline even where the style has none.
+        if let width = system?.borderWidth { return width > 0.01 ? (chosen == .none ? .thin : chosen) : .none }
+        return chosen
     }
 
     static var drawsKeyBorder: Bool { return !usesRealGlass && keyBorderStyle != .none }
@@ -153,6 +201,9 @@ enum Theme {
 
     static var keyBorderWidth: CGFloat {
         if let style = style { return CGFloat(min(max(style.borderWidth, 0), ThemeStyle.borderWidthRange.upperBound)) }
+        if let width = system?.borderWidth, keyBorderStyle != .none {
+            return CGFloat(min(max(width, 0), SystemStyle.borderWidthRange.upperBound))
+        }
         switch keyBorderStyle {
         case .none: return 0
         case .thin: return 0.5
@@ -177,7 +228,7 @@ enum Theme {
     /// have their own (`designedShadow`).
     static var keyGlow: (radius: CGFloat, opacity: Float) {
         guard !usesRealGlass, style == nil else { return (0, 0) }
-        switch Prefs.keyGlow {
+        switch system?.glow ?? Prefs.keyGlow {
         case "soft": return (5, 0.55)
         case "strong": return (10, 0.95)
         default: return (0, 0)
@@ -193,8 +244,9 @@ enum Theme {
 
     /// A designed theme's glow around the key labels (radius, opacity), or nil.
     static var labelGlow: (radius: CGFloat, opacity: Float)? {
-        guard let glow = style?.labelGlow else { return nil }
-        return (CGFloat(glow.radius), Float(glow.opacity))
+        if let glow = style?.labelGlow { return (CGFloat(glow.radius), Float(glow.opacity)) }
+        if let amount = system?.labelGlow, amount > 0.001 { return (CGFloat(2 + 6 * amount), Float(0.35 + 0.65 * amount)) }
+        return nil
     }
 
     /// A designed theme's frosted keys: a blur of the backdrop under each key's fill.
