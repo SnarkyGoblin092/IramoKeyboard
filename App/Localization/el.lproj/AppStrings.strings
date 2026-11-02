@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Αντικατάσταση με τα τρέχοντα εφέ";
 "Save current effects" = "Αποθήκευση τρεχόντων εφέ";
 "My presets" = "Οι έτοιμοι συνδυασμοί μου";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Πατήστε έναν συνδυασμό για να τον φορτώσετε. Σύρετέ τον αριστερά για διαγραφή ή αντικαταστήστε τον από το μενού του.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Πατήστε έναν συνδυασμό για να τον φορτώσετε; αντικαταστήστε ή διαγράψτε τον από το μενού του.";
 "Save effects" = "Αποθήκευση εφέ";
 "Name" = "Όνομα";
 "Save" = "Αποθήκευση";

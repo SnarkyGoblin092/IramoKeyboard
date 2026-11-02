@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Sobreescriu amb els efectes actuals";
 "Save current effects" = "Desa els efectes actuals";
 "My presets" = "Les meves preconfiguracions";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Toca una preconfiguració per carregar-la. Llisca-la cap a l'esquerra per esborrar-la, o sobreescriu-la des del seu menú.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Toca una preconfiguració per carregar-la; sobreescriu-la o esborra-la des del seu menú.";
 "Save effects" = "Desa els efectes";
 "Name" = "Nom";
 "Save" = "Desa";

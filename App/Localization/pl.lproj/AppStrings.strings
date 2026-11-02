@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Nadpisz bieżącymi efektami";
 "Save current effects" = "Zapisz bieżące efekty";
 "My presets" = "Moje zestawy";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Dotknij zestawu, aby go wczytać. Przesuń go w lewo, aby go usunąć, lub nadpisz go z jego menu.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Dotknij zestawu, aby go wczytać; nadpisz go lub usuń z jego menu.";
 "Save effects" = "Zapisz efekty";
 "Name" = "Nazwa";
 "Save" = "Zapisz";

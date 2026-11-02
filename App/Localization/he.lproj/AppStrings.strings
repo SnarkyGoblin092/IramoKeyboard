@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "החלף באפקטים הנוכחיים";
 "Save current effects" = "שמור את האפקטים הנוכחיים";
 "My presets" = "ההגדרות המוכנות שלי";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "הקש על הגדרה מוכנה כדי לטעון אותה. החלק אותה שמאלה כדי למחוק אותה, או החלף אותה מהתפריט שלה.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "הקש על הגדרה מוכנה כדי לטעון אותה; החלף אותה או מחק אותה מהתפריט שלה.";
 "Save effects" = "שמור אפקטים";
 "Name" = "שם";
 "Save" = "שמור";

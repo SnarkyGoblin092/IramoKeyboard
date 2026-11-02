@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "เขียนทับด้วยเอฟเฟ็กต์ปัจจุบัน";
 "Save current effects" = "บันทึกเอฟเฟ็กต์ปัจจุบัน";
 "My presets" = "ชุดค่าที่ตั้งไว้ของฉัน";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "แตะชุดค่าที่ตั้งไว้เพื่อโหลด ปัดไปทางซ้ายเพื่อลบ หรือเขียนทับจากเมนู";
+"Tap a preset to load it; overwrite or delete it from its menu." = "แตะชุดค่าที่ตั้งไว้เพื่อโหลด; เขียนทับหรือลบจากเมนู";
 "Save effects" = "บันทึกเอฟเฟ็กต์";
 "Name" = "ชื่อ";
 "Save" = "บันทึก";

@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Overschrijven met huidige effecten";
 "Save current effects" = "Huidige effecten opslaan";
 "My presets" = "Mijn voorinstellingen";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Tik op een voorinstelling om hem te laden. Veeg hem naar links om hem te wissen, of overschrijf hem via het menu.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Tik op een voorinstelling om hem te laden; overschrijf of wis hem via het menu.";
 "Save effects" = "Effecten opslaan";
 "Name" = "Naam";
 "Save" = "Opslaan";

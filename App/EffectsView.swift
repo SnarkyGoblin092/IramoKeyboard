@@ -369,7 +369,7 @@ struct EffectsView: View {
         Feedback.delete()
     }
 
-    /// A saved preset: a tap loads it; its menu loads, overwrites or deletes it.
+    /// A saved preset: a tap loads it; its menu overwrites or deletes it.
     private func savedRow(_ preset: SavedEffectPreset) -> some View {
         HStack {
             Button { load(preset) } label: {
@@ -384,7 +384,6 @@ struct EffectsView: View {
             }
             .buttonStyle(.plain)
             Menu {
-                Button { load(preset) } label: { Label(tr("Load"), systemImage: "arrow.down.circle") }
                 Button { overwriting = preset } label: {
                     Label(tr("Overwrite with current effects"), systemImage: "square.and.arrow.down.on.square")
                 }
@@ -422,7 +421,6 @@ struct EffectsView: View {
             Section {
                 ForEach(saved, id: \.name) { preset in
                     savedRow(preset)
-                        .swipeToDelete { delete(preset) }
                 }
                 Button {
                     newName = ""
@@ -435,7 +433,7 @@ struct EffectsView: View {
             } header: {
                 SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
             } footer: {
-                Text(tr("Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu."))
+                Text(tr("Tap a preset to load it; overwrite or delete it from its menu."))
             }
             .glassRows()
 
@@ -720,13 +718,6 @@ struct EffectsView: View {
                 GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
                             range: EffectsConfig.trailGlowRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
             }
-
-            Section {
-                Text(tr("All of the light that falls around keys is drawn under them, so it never covers a key."))
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            }
-            .glassRows()
         }
         .scrollContentBackground(.hidden)
         }

@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "用当前效果覆盖";
 "Save current effects" = "保存当前效果";
 "My presets" = "我的预设";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "点按预设即可载入。向左滑动可删除，或从其菜单中覆盖。";
+"Tap a preset to load it; overwrite or delete it from its menu." = "点按预设即可载入；可从其菜单中覆盖或删除。";
 "Save effects" = "保存效果";
 "Name" = "名称";
 "Save" = "保存";

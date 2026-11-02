@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Презаписване с текущите ефекти";
 "Save current effects" = "Запазване на текущите ефекти";
 "My presets" = "Моите комбинации";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Докоснете комбинация, за да я заредите. Плъзнете я наляво, за да я изтриете, или презапишете от менюто ѝ.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Докоснете комбинация, за да я заредите; презапишете или изтрийте от менюто ѝ.";
 "Save effects" = "Запазване на ефектите";
 "Name" = "Име";
 "Save" = "Запази";

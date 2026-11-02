@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Skriv över med aktuella effekter";
 "Save current effects" = "Spara aktuella effekter";
 "My presets" = "Mina förinställningar";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Tryck på en förinställning för att läsa in den. Svep den åt vänster för att radera den, eller skriv över den från dess meny.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Tryck på en förinställning för att läsa in den; skriv över eller radera den från dess meny.";
 "Save effects" = "Spara effekter";
 "Name" = "Namn";
 "Save" = "Spara";

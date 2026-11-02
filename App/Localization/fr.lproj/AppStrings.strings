@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Remplacer par les effets actuels";
 "Save current effects" = "Enregistrer les effets actuels";
 "My presets" = "Mes préréglages";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Touchez un préréglage pour le charger. Glissez-le vers la gauche pour le supprimer, ou remplacez-le depuis son menu.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Touchez un préréglage pour le charger ; remplacez-le ou supprimez-le depuis son menu.";
 "Save effects" = "Enregistrer les effets";
 "Name" = "Nom";
 "Save" = "Enregistrer";

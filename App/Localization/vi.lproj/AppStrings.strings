@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Ghi đè bằng hiệu ứng hiện tại";
 "Save current effects" = "Lưu hiệu ứng hiện tại";
 "My presets" = "Cài sẵn của tôi";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Chạm vào một cài sẵn để tải. Vuốt sang trái để xóa, hoặc ghi đè từ menu của nó.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Chạm vào một cài sẵn để tải; ghi đè hoặc xóa từ menu của nó.";
 "Save effects" = "Lưu hiệu ứng";
 "Name" = "Tên";
 "Save" = "Lưu";

@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "現在のエフェクトで上書き";
 "Save current effects" = "現在のエフェクトを保存";
 "My presets" = "マイプリセット";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "プリセットをタップすると読み込みます。左にスワイプすると削除、メニューから上書きできます。";
+"Tap a preset to load it; overwrite or delete it from its menu." = "プリセットをタップすると読み込みます。メニューから上書きまたは削除できます。";
 "Save effects" = "エフェクトを保存";
 "Name" = "名前";
 "Save" = "保存";

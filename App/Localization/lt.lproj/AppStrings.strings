@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Perrašyti dabartiniais efektais";
 "Save current effects" = "Įrašyti dabartinius efektus";
 "My presets" = "Mano šablonai";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Palieskite šabloną, kad jį įkeltumėte. Perbraukite jį kairėn, kad ištrintumėte, arba perrašykite iš jo meniu.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Palieskite šabloną, kad jį įkeltumėte; perrašykite arba ištrinkite iš jo meniu.";
 "Save effects" = "Įrašyti efektus";
 "Name" = "Pavadinimas";
 "Save" = "Įrašyti";

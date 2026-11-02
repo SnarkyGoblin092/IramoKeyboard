@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Korvaa nykyisillä tehosteilla";
 "Save current effects" = "Tallenna nykyiset tehosteet";
 "My presets" = "Omat valmiit asetukset";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Lataa valmis asetus napauttamalla sitä. Poista pyyhkäisemällä vasemmalle tai korvaa valikosta.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Lataa valmis asetus napauttamalla sitä; korvaa tai poista se valikosta.";
 "Save effects" = "Tallenna tehosteet";
 "Name" = "Nimi";
 "Save" = "Tallenna";

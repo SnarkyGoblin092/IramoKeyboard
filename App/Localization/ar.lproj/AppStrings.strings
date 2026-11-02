@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "الكتابة فوق بالتأثيرات الحالية";
 "Save current effects" = "حفظ التأثيرات الحالية";
 "My presets" = "إعداداتي الجاهزة";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "اضغط على إعداد مسبق لتحميله. اسحبه إلى اليسار لحذفه، أو اكتب فوقه من قائمته.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "اضغط على إعداد مسبق لتحميله؛ اكتب فوقه أو احذفه من قائمته.";
 "Save effects" = "حفظ التأثيرات";
 "Name" = "الاسم";
 "Save" = "حفظ";

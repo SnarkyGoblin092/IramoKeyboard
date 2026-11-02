@@ -4,8 +4,8 @@ import UIKit
 /// The keyboard itself, pinned above the settings screens: Keyboard/SuggestionBar, Keyboard/KeyboardView and its
 /// KeyViews, built from the same settings and played by the same code as while typing, so the keys, the bar, the
 /// effects, the haptics and the gestures look and feel as they do there. The emoji key opens no picker and the keys
-/// write nothing into a field: what is typed shows in the bar, like a word being typed. Shift and the number and
-/// symbol pages work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
+/// write nothing: the bar always shows the same few words, so its look can be seen. Shift and the number and symbol
+/// pages work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
 struct LiveKeyboard: View {
     /// The Effects screen's settings as they are being edited (nil: the stored ones).
     var effects: EffectsConfig? = nil
@@ -53,8 +53,8 @@ private struct LiveKeyboardHost: UIViewRepresentable {
 
 /// Holds the suggestion bar and the KeyboardView at the keyboard's size in `stage`, shrunk to fit, and stands in for
 /// the keyboard's controller: it builds them (as KeyboardViewController.buildInterface and reloadKeyboardLayout),
-/// handles shift and the pages, shows what is typed in the bar, and builds everything again when a setting that
-/// changes their look is edited (as the controller's settingsSignature).
+/// handles shift and the pages, fills the bar with a few fixed words, and builds everything again when a setting
+/// that changes their look is edited (as the controller's settingsSignature).
 final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegate {
     /// The keyboard's points; scaled to the view. Popups are added here too, so they are drawn at the same scale.
     private let stage = UIView()
@@ -67,8 +67,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var builtSignature = ""
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
-    /// The word being typed, shown in the bar.
-    private var typed = ""
 
     /// The Effects screen's settings while they are edited; nil plays the stored ones.
     var effectsOverride: EffectsConfig? {
@@ -124,7 +122,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
-            "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionsEnabled)",
+            "\(s.suggestionFit)", "\(s.suggestionScroll)",
             s.systemEditsJSON
         ].joined(separator: "|")
     }
@@ -150,7 +148,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         stage.addSubview(keyboard)
         layoutStage()
         loadRows()
-        showTyped()
+        bar.update(starters.map { Suggestion(text: $0, kind: .word) })
     }
 
     private func applyEffects() {
@@ -197,33 +195,16 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 
     // MARK: The bar
 
-    /// A few words to fill the bar before anything is typed (the keyboard's next-word suggestions).
+    /// The words the bar always shows (as the keyboard's next-word suggestions before anything is typed), also with
+    /// suggestions turned off, so the bar's look can always be seen.
     private var starters: [String] {
         // l10n: keep (words of the typing language, not texts of the app)
         if language == .hungarian { return ["A", "Én", "Nem", "Szia", "Ez", "Az", "Hogy", "De", "Jó", "Igen"] }
         return ["I", "The", "It", "You", "We", "This", "Thanks", "Hello", "My", "So"]
     }
 
-    /// What is typed so far, then the starter words it begins, the first of them on the accent pill (the word
-    /// space would write); before anything is typed, the starter words.
-    private func showTyped() {
-        guard Prefs.suggestions else {
-            bar.update([])
-            return
-        }
-        guard !typed.isEmpty else {
-            bar.update(starters.map { Suggestion(text: $0, kind: .word) })
-            return
-        }
-        let matches = starters.filter { $0.lowercased().hasPrefix(typed.lowercased()) && $0.count > typed.count }
-        let words = matches.map { Suggestion(text: $0, kind: .word) }
-        bar.update([Suggestion(text: typed, kind: .literal)] + words, highlighted: words.isEmpty ? nil : 1)
-    }
-
     func suggestionBar(_ bar: SuggestionBar, didSelect suggestion: Suggestion) {
         Haptics.shared.keyPress()
-        typed = ""
-        showTyped()
     }
 
     func suggestionBarDidTapDismiss(_ bar: SuggestionBar) {
@@ -263,26 +244,11 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction) {
         switch action {
-        case .character(let text):
-            let letter = shift == .off && !Prefs.alwaysCapitals ? text : language.uppercase(text)
-            if text.count == 1, text.first?.isLetter == true {
-                typed += letter
-            } else {
-                typed = ""
-            }
-            showTyped()
+        case .character:
             if shift == .once {
                 shift = .off
                 keyboard.setShift(shift)
             }
-        case .backspace:
-            if !typed.isEmpty {
-                typed.removeLast()
-                showTyped()
-            }
-        case .space, .enter:
-            typed = ""
-            showTyped()
         case .shift:
             let now = Date()
             switch shift {
@@ -306,18 +272,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         }
     }
 
-    func keyboardView(_ view: KeyboardView, didSelectAlternate text: String) {
-        typed += text
-        showTyped()
-    }
-
+    func keyboardView(_ view: KeyboardView, didSelectAlternate text: String) {}
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {}
-
-    func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
-        typed = ""
-        showTyped()
-    }
-
+    func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {}
     func keyboardViewDidHoldEmoji(_ view: KeyboardView) {}
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {}
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {}

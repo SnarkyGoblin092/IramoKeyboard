@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "بازنویسی با جلوه‌های فعلی";
 "Save current effects" = "ذخیره جلوه‌های فعلی";
 "My presets" = "پیش‌تنظیم‌های من";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "برای بارگذاری، روی یک پیش‌تنظیم ضربه بزنید. برای حذف، آن را به چپ بکشید یا از منوی آن بازنویسی‌اش کنید.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "برای بارگذاری، روی یک پیش‌تنظیم ضربه بزنید؛ از منوی آن بازنویسی‌اش کنید یا حذفش کنید.";
 "Save effects" = "ذخیره جلوه‌ها";
 "Name" = "نام";
 "Save" = "ذخیره";

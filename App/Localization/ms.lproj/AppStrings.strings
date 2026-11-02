@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Timpa dengan kesan semasa";
 "Save current effects" = "Simpan kesan semasa";
 "My presets" = "Pratetap saya";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Ketik pratetap untuk memuatkannya. Leret ke kiri untuk memadamkannya, atau timpa daripada menunya.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Ketik pratetap untuk memuatkannya; timpa atau padam daripada menunya.";
 "Save effects" = "Simpan kesan";
 "Name" = "Nama";
 "Save" = "Simpan";

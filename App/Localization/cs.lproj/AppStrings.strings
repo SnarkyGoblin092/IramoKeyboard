@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Přepsat aktuálními efekty";
 "Save current effects" = "Uložit aktuální efekty";
 "My presets" = "Moje předvolby";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Klepnutím na předvolbu ji načtete. Přejetím doleva ji smažete, nebo ji přepište z jejího menu.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Klepnutím na předvolbu ji načtete; přepište ji nebo smažte z jejího menu.";
 "Save effects" = "Uložit efekty";
 "Name" = "Název";
 "Save" = "Uložit";

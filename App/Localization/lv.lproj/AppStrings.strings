@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Pārrakstīt ar pašreizējiem efektiem";
 "Save current effects" = "Saglabāt pašreizējos efektus";
 "My presets" = "Mani gatavie iestatījumi";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Pieskarieties iestatījumam, lai to ielādētu. Pavelciet to pa kreisi, lai dzēstu, vai pārrakstiet no tā izvēlnes.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Pieskarieties iestatījumam, lai to ielādētu; pārrakstiet vai dzēsiet no tā izvēlnes.";
 "Save effects" = "Saglabāt efektus";
 "Name" = "Nosaukums";
 "Save" = "Saglabāt";

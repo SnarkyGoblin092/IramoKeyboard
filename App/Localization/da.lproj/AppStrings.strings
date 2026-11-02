@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Overskriv med de aktuelle effekter";
 "Save current effects" = "Gem de aktuelle effekter";
 "My presets" = "Mine forudindstillinger";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Tryk på en forudindstilling for at indlæse den. Stryg den til venstre for at slette den, eller overskriv den fra dens menu.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Tryk på en forudindstilling for at indlæse den; overskriv den eller slet den fra dens menu.";
 "Save effects" = "Gem effekter";
 "Name" = "Navn";
 "Save" = "Gem";

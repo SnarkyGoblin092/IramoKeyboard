@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Mevcut efektlerle üzerine yaz";
 "Save current effects" = "Mevcut efektleri kaydet";
 "My presets" = "Hazır ayarlarım";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Yüklemek için bir hazır ayara dokunun. Silmek için sola kaydırın veya menüsünden üzerine yazın.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Yüklemek için bir hazır ayara dokunun; menüsünden üzerine yazın veya silin.";
 "Save effects" = "Efektleri kaydet";
 "Name" = "Ad";
 "Save" = "Kaydet";

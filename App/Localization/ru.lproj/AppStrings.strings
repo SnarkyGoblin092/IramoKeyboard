@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Перезаписать текущими эффектами";
 "Save current effects" = "Сохранить текущие эффекты";
 "My presets" = "Мои наборы";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Нажмите на набор, чтобы загрузить его. Смахните его влево, чтобы удалить, или перезапишите из его меню.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Нажмите на набор, чтобы загрузить его; перезапишите или удалите из его меню.";
 "Save effects" = "Сохранить эффекты";
 "Name" = "Название";
 "Save" = "Сохранить";

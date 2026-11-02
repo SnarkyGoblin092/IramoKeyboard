@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Prepiši trenutačnim efektima";
 "Save current effects" = "Spremi trenutačne efekte";
 "My presets" = "Moji predlošci";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Dodirni predložak da ga učitaš. Prijeđi prstom ulijevo da ga obrišeš ili ga prepiši iz njegova izbornika.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Dodirni predložak da ga učitaš; prepiši ga ili obriši iz njegova izbornika.";
 "Save effects" = "Spremi efekte";
 "Name" = "Naziv";
 "Save" = "Spremi";

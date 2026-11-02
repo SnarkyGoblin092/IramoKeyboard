@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Suprascrie cu efectele curente";
 "Save current effects" = "Salvează efectele curente";
 "My presets" = "Presetările mele";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Atinge o presetare pentru a o încărca. Glisează-o spre stânga pentru a o șterge sau suprascrie-o din meniul ei.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Atinge o presetare pentru a o încărca; suprascrie-o sau șterge-o din meniul ei.";
 "Save effects" = "Salvează efectele";
 "Name" = "Nume";
 "Save" = "Salvează";

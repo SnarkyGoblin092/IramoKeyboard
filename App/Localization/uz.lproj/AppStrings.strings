@@ -740,7 +740,7 @@
 "Overwrite with current effects" = "Joriy effektlar bilan almashtirish";
 "Save current effects" = "Joriy effektlarni saqlash";
 "My presets" = "Mening tayyor sozlamalarim";
-"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Yuklash uchun sozlamani bosing. O‘chirish uchun chapga suring yoki uning menyusi orqali ustidan yozing.";
+"Tap a preset to load it; overwrite or delete it from its menu." = "Yuklash uchun sozlamani bosing; uning menyusi orqali ustidan yozing yoki o‘chiring.";
 "Save effects" = "Effektlarni saqlash";
 "Name" = "Nomi";
 "Save" = "Saqlash";
