@@ -175,12 +175,14 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
     private func layoutStage() {
         let size = LiveKeyboardView.naturalSize(keyHeight: Prefs.keyHeight, rowGap: Prefs.rowGap,
                                                 numberRow: Prefs.numberRow, language: language)
+        // The keys are always laid out at the keyboard's size, also before this view has one (it is built in init):
+        // at 0×0 every key's frame would come out null and Core Animation would throw.
+        stage.bounds = CGRect(origin: .zero, size: size)
+        if keyboard.frame != stage.bounds { keyboard.frame = stage.bounds }
         let scale = min(bounds.width / size.width, bounds.height / size.height)
         guard scale.isFinite, scale > 0 else { return }
-        stage.bounds = CGRect(origin: .zero, size: size)
         stage.center = CGPoint(x: bounds.midX, y: bounds.midY)
         stage.transform = CGAffineTransform(scaleX: scale, y: scale)
-        if keyboard.frame != stage.bounds { keyboard.frame = stage.bounds }
     }
 
     // MARK: KeyboardViewDelegate

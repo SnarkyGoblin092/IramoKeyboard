@@ -321,7 +321,8 @@ final class KeyboardView: UIView {
         effectsLayer.frame = bounds
         haloMask.frame = bounds
         glassContainer?.frame = bounds
-        guard !rows.isEmpty else { return }
+        // Too small for the padding (not laid out yet): the keys' frames would come out null.
+        guard !rows.isEmpty, bounds.width > 2, bounds.height > 8 else { return }
 
         // A narrower keyboard (the Width setting) is centred; the one-handed keyboard sits against its side.
         let side = KeyboardLayoutMode.oneHandedSide
