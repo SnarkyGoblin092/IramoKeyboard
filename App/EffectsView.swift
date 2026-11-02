@@ -331,9 +331,74 @@ struct EffectsView: View {
         return index
     }
 
+    /// The presets for the menu: Off first, the others in alphabetical order of their names in the app's language.
+    private var presetOptions: [(value: Int, name: String)] {
+        let options = presets.indices.map { (value: $0, name: presets[$0].name) }
+        return [options[0]] + options.dropFirst().sorted { AppLanguage.precedes($0.name, $1.name) }
+    }
+
+    // MARK: Effects A–Z
+
+    /// The effects with their own settings here (builtInEffect), by id with their English names; the others are
+    /// EffectCatalog's. The swipe trail is not among them: it is not on the keys, so it stays last.
+    private static let builtInEffects: [(id: String, title: String)] = [
+        (id: "glow", title: "Glow"),
+        (id: "border", title: "Outline light"),
+        (id: "ripple", title: "Ripple"),
+        (id: "shine", title: "Shine"),
+        (id: "sparks", title: "Sparks"),
+        (id: "pop", title: "Pop"),
+        (id: "echo", title: "Echo"),
+        (id: "wave", title: "Wave"),
+        (id: "shockwave", title: "Shockwave"),
+        (id: "confetti", title: "Confetti"),
+        (id: "bubbles", title: "Bubbles"),
+        (id: "squish", title: "Squish"),
+        (id: "flash", title: "Flash"),
+        (id: "jelly", title: "Jelly"),
+        (id: "hearts", title: "Hearts"),
+        (id: "stars", title: "Stars"),
+        (id: "snow", title: "Snow"),
+        (id: "notes", title: "Notes"),
+        (id: "fireworks", title: "Fireworks"),
+        (id: "starburst", title: "Starburst"),
+        (id: "rain", title: "Rain"),
+        (id: "embers", title: "Embers"),
+        (id: "smoke", title: "Smoke"),
+        (id: "lightning", title: "Lightning"),
+        (id: "orbit", title: "Orbit"),
+        (id: "spiral", title: "Spiral"),
+        (id: "heartbeat", title: "Heartbeat"),
+        (id: "flip", title: "Flip"),
+        (id: "shake", title: "Shake"),
+        (id: "drop", title: "Drop"),
+        (id: "glitch", title: "Glitch"),
+        (id: "underline", title: "Underline"),
+        (id: "sweep", title: "Neon sweep")
+    ]
+
+    /// Every effect on the keys, these and the catalog's, in alphabetical order of their names in the app's
+    /// language, worked out once for each language.
+    private static var orderCache: (language: String, items: [(id: String, title: String)])?
+
+    private var effectsByName: [(id: String, title: String)] {
+        let language = AppLanguage.stored
+        if let cache = EffectsView.orderCache, cache.language == language { return cache.items }
+        let named: [(id: String, title: String)] = EffectsView.builtInEffects.map { (id: $0.id, title: tr($0.title)) }
+            + EffectCatalog.all.map { (id: $0.id, title: tr($0.title)) }
+        let items = named.sorted { AppLanguage.precedes($0.title, $1.title) }
+        EffectsView.orderCache = (language, items)
+        return items
+    }
+
     // MARK: Saved presets
 
     private var saved: [SavedEffectPreset] { return SavedEffectPreset.decode(savedJSON) }
+
+    /// The saved presets as they are listed: in alphabetical order of their names.
+    private var savedByName: [SavedEffectPreset] {
+        return saved.sorted { AppLanguage.precedes($0.name, $1.name) }
+    }
 
     private func store(_ list: [SavedEffectPreset]) {
         savedJSON = SavedEffectPreset.encode(list)
@@ -406,7 +471,7 @@ struct EffectsView: View {
         GlassList {
             Section {
                 GlassChoiceLink(title: tr("Preset"), symbol: "wand.and.stars",
-                                options: presets.indices.map { (value: $0, name: presets[$0].name) },
+                                options: presetOptions,
                                 selected: presetIndex, otherName: tr("Your own mix")) { index in
                     guard presets.indices.contains(index) else { return }
                     json = presets[index].make().encoded()
@@ -419,7 +484,7 @@ struct EffectsView: View {
             .glassRows()
 
             Section {
-                ForEach(saved, id: \.name) { preset in
+                ForEach(savedByName, id: \.name) { preset in
                     savedRow(preset)
                 }
                 Button {
@@ -477,241 +542,13 @@ struct EffectsView: View {
             }
             .glassRows()
 
-            effect(tr("Glow"), "light.max", .orange, id: "glow", on: bind(\.glow),
-                   note: tr("A light that fades in under your finger and fades out after it lifts.")) {
-                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.glowStrength),
-                            range: EffectsConfig.glowStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-                GlassSlider(title: tr("Spread"), symbol: "circle.dashed", value: bind(\.glowSpread),
-                            range: EffectsConfig.glowSpreadRange, step: 0.1, format: times)
-                GlassSlider(title: tr("Fade in"), symbol: "sunrise", value: bind(\.glowFadeIn),
-                            range: EffectsConfig.glowFadeInRange, step: 0.01, format: seconds)
-                GlassSlider(title: tr("Fade out"), symbol: "sunset", value: bind(\.glowFadeOut),
-                            range: EffectsConfig.glowFadeOutRange, step: 0.05, format: seconds)
+            ForEach(effectsByName, id: \.id) { item in
+                if let entry = EffectCatalog.entry(item.id) {
+                    moreEffect(entry)
+                } else {
+                    builtInEffect(item.id, item.title)
+                }
             }
-
-            effect(tr("Outline light"), "square.dashed", .blue, id: "border", on: bind(\.border),
-                   note: tr("A line round the key lights up and fades away.")) {
-                GlassSlider(title: tr("Width"), symbol: "lineweight", value: bind(\.borderWidth),
-                            range: EffectsConfig.borderWidthRange, step: 0.1) { String(format: "%.1f pt", $0) }
-                GlassSlider(title: tr("Fade out"), symbol: "sunset", value: bind(\.borderFade),
-                            range: EffectsConfig.borderFadeRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Ripple"), "circle.hexagongrid.fill", .teal, id: "ripple", on: bind(\.ripple),
-                   note: tr("Light spreads from the middle of the key, inside its shape, and fades away.")) {
-                SegmentedChoice(title: tr("Shape"), names: [tr("Disc"), tr("Ring")],
-                                selected: config.rippleStyle == "ring" ? 1 : 0) { bind(\.rippleStyle).wrappedValue = $0 == 1 ? "ring" : "disc" }
-                GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.rippleReach),
-                            range: EffectsConfig.rippleReachRange, step: 0.1, format: times)
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.rippleDuration),
-                            range: EffectsConfig.rippleDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Shine"), "sun.max.fill", .yellow, id: "shine", on: bind(\.shine),
-                   note: tr("A slanted band of light sweeps across the key.")) {
-                GlassSlider(title: tr("Band width"), symbol: "arrow.left.and.right", value: bind(\.shineWidth),
-                            range: EffectsConfig.shineWidthRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.shineDuration),
-                            range: EffectsConfig.shineDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Sparks"), "sparkles", .pink, id: "sparks", on: bind(\.sparks),
-                   note: tr("Specks fly out of the key in every direction and fade.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.sparkCount),
-                            range: EffectsConfig.sparkCountRange, step: 1) { "\(Int($0.rounded()))" }
-                GlassSlider(title: tr("Distance"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.sparkDistance),
-                            range: EffectsConfig.sparkDistanceRange, step: 0.1, format: times)
-                GlassSlider(title: tr("Size"), symbol: "circle.fill", value: bind(\.sparkSize),
-                            range: EffectsConfig.sparkSizeRange, step: 0.5) { String(format: "%.1f pt", $0) }
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.sparkDuration),
-                            range: EffectsConfig.sparkDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Pop"), "arrow.up.left.and.down.right.magnifyingglass", .green, id: "pop", on: bind(\.pop),
-                   note: tr("The label swells (or shrinks) and springs back.")) {
-                GlassSlider(title: tr("Size"), symbol: "textformat.size", value: bind(\.popScale),
-                            range: EffectsConfig.popScaleRange, step: 0.05, format: times)
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.popDuration),
-                            range: EffectsConfig.popDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Echo"), "text.append", .indigo, id: "echo", on: bind(\.echo),
-                   note: tr("A copy of the label floats up out of the key and fades.")) {
-                GlassSlider(title: tr("Rise"), symbol: "arrow.up", value: bind(\.echoRise),
-                            range: EffectsConfig.echoRiseRange, step: 1) { "\(Int($0.rounded())) pt" }
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.echoDuration),
-                            range: EffectsConfig.echoDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Wave"), "dot.radiowaves.left.and.right", .cyan, id: "wave", on: bind(\.wave),
-                   note: tr("The keys around the pressed one light up in turn, the farther ones a moment later.")) {
-                GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.waveReach),
-                            range: EffectsConfig.waveReachRange, step: 0.1) { String(format: "%.1f keys", $0) }
-                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.waveStrength),
-                            range: EffectsConfig.waveStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-                GlassSlider(title: tr("Speed"), symbol: "speedometer", value: bind(\.waveSpeed),
-                            range: EffectsConfig.waveSpeedRange, step: 0.01) { String(format: "%.0f ms/key", $0 * 1000) }
-            }
-
-            effect(tr("Shockwave"), "dot.radiowaves.right", .mint, id: "shockwave", on: bind(\.shockwave),
-                   note: tr("A ring of light spreads far out over the keys around the one you press.")) {
-                GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.shockReach),
-                            range: EffectsConfig.shockReachRange, step: 0.1) { String(format: "%.1f keys", $0) }
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.shockDuration),
-                            range: EffectsConfig.shockDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Confetti"), "gift.fill", .orange, id: "confetti", on: bind(\.confetti),
-                   note: tr("Little pieces of paper are thrown up out of the key and tumble down.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.confettiCount),
-                            range: EffectsConfig.confettiCountRange, step: 1) { "\(Int($0.rounded()))" }
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.confettiDuration),
-                            range: EffectsConfig.confettiDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Bubbles"), "circle.grid.2x2.fill", .cyan, id: "bubbles", on: bind(\.bubbles),
-                   note: tr("Bubbles float up from the key, swaying as they go.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.bubbleCount),
-                            range: EffectsConfig.bubbleCountRange, step: 1) { "\(Int($0.rounded()))" }
-                GlassSlider(title: tr("Rise"), symbol: "arrow.up", value: bind(\.bubbleRise),
-                            range: EffectsConfig.bubbleRiseRange, step: 5) { "\(Int($0.rounded())) pt" }
-            }
-
-            effect(tr("Squish"), "arrow.down.right.and.arrow.up.left", .green, id: "squish", on: bind(\.squish),
-                   note: tr("The key squashes under your finger and springs back.")) {
-                GlassSlider(title: tr("Depth"), symbol: "arrow.down.to.line", value: bind(\.squishDepth),
-                            range: EffectsConfig.squishDepthRange, step: 0.01) { String(format: "%.0f%%", (1 - $0) * 100) }
-            }
-
-            effect(tr("Flash"), "bolt.fill", .yellow, id: "flash", on: bind(\.flash),
-                   note: tr("The key lights up in the effect colour for a moment.")) {
-                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.flashStrength),
-                            range: EffectsConfig.flashStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.flashDuration),
-                            range: EffectsConfig.flashDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Jelly"), "waveform.path", .purple, id: "jelly", on: bind(\.jelly),
-                   note: tr("The key wobbles like jelly, the swings getting smaller.")) {
-                GlassSlider(title: tr("Swing"), symbol: "arrow.left.and.right", value: bind(\.jellyAngle),
-                            range: EffectsConfig.jellyAngleRange, step: 1) { "\(Int($0.rounded()))\u{00B0}" }
-            }
-
-            effect(tr("Hearts"), "heart.fill", .pink, id: "hearts", on: bind(\.hearts),
-                   note: tr("Little hearts float up from the key.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.heartCount),
-                            range: EffectsConfig.heartCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Stars"), "star.fill", .yellow, id: "stars", on: bind(\.stars),
-                   note: tr("Stars burst out of the key and fade.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.starCount),
-                            range: EffectsConfig.starCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Snow"), "snowflake", .cyan, id: "snow", on: bind(\.snow),
-                   note: tr("Snowflakes drift down past the key.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.snowCount),
-                            range: EffectsConfig.snowCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Notes"), "music.note", .purple, id: "notes", on: bind(\.notes),
-                   note: tr("Musical notes drift up and to the side.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.noteCount),
-                            range: EffectsConfig.noteCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Fireworks"), "sparkle", .orange, id: "fireworks", on: bind(\.fireworks),
-                   note: tr("Streaks burst out of the key and fall like fireworks.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.fireworkCount),
-                            range: EffectsConfig.fireworkCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Starburst"), "sun.max", .yellow, id: "starburst", on: bind(\.starburst),
-                   note: tr("Thin rays shoot out of the key in every direction.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.rayCount),
-                            range: EffectsConfig.rayCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Rain"), "cloud.rain.fill", .blue, id: "rain", on: bind(\.rain),
-                   note: tr("Drops of rain fall past the key.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.rainCount),
-                            range: EffectsConfig.rainCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Embers"), "flame.fill", .red, id: "embers", on: bind(\.embers),
-                   note: tr("Glowing embers rise and flicker out.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.emberCount),
-                            range: EffectsConfig.emberCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Smoke"), "smoke.fill", .gray, id: "smoke", on: bind(\.smoke),
-                   note: tr("Soft puffs of smoke rise from the key and grow.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.smokeCount),
-                            range: EffectsConfig.smokeCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Lightning"), "bolt.circle.fill", .indigo, id: "lightning", on: bind(\.lightning),
-                   note: tr("A bolt of lightning strikes up from the key.")) {
-                GlassSlider(title: tr("Length"), symbol: "arrow.up.and.down", value: bind(\.lightningLength),
-                            range: EffectsConfig.lightningLengthRange, step: 0.1) { String(format: "%.1f keys", $0) }
-            }
-
-            effect(tr("Orbit"), "atom", .teal, id: "orbit", on: bind(\.orbit),
-                   note: tr("Little lights circle around the key.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.orbitCount),
-                            range: EffectsConfig.orbitCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Spiral"), "tornado", .mint, id: "spiral", on: bind(\.spiral),
-                   note: tr("Specks spiral outwards from the key.")) {
-                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.spiralCount),
-                            range: EffectsConfig.spiralCountRange, step: 1) { "\(Int($0.rounded()))" }
-            }
-
-            effect(tr("Heartbeat"), "heart.circle.fill", .pink, id: "heartbeat", on: bind(\.heartbeat),
-                   note: tr("The key pulses twice like a heartbeat.")) {
-                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.heartbeatStrength),
-                            range: EffectsConfig.heartbeatStrengthRange, step: 0.01) { String(format: "+%.0f%%", ($0 - 1) * 100) }
-            }
-
-            effect(tr("Flip"), "rectangle.2.swap", .blue, id: "flip", on: bind(\.flip),
-                   note: tr("The key flips over like a card.")) {
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.flipDuration),
-                            range: EffectsConfig.flipDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Shake"), "iphone.radiowaves.left.and.right", .orange, id: "shake", on: bind(\.shake),
-                   note: tr("The key shakes from side to side.")) {
-                GlassSlider(title: tr("Distance"), symbol: "arrow.left.and.right", value: bind(\.shakeDistance),
-                            range: EffectsConfig.shakeDistanceRange, step: 1) { "\(Int($0.rounded())) pt" }
-            }
-
-            effect(tr("Drop"), "arrow.down.circle.fill", .green, id: "drop", on: bind(\.drop),
-                   note: tr("The key sinks and bounces back.")) {
-                GlassSlider(title: tr("Depth"), symbol: "arrow.down.to.line", value: bind(\.dropDepth),
-                            range: EffectsConfig.dropDepthRange, step: 1) { "\(Int($0.rounded())) pt" }
-            }
-
-            effect(tr("Glitch"), "waveform.path.ecg", .red, id: "glitch", on: bind(\.glitch),
-                   note: tr("The key glitches with flickering colours.")) {
-                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.glitchStrength),
-                            range: EffectsConfig.glitchStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-            }
-
-            effect(tr("Underline"), "underline", .cyan, id: "underline", on: bind(\.underline),
-                   note: tr("A line grows along the bottom of the key and fades.")) {
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.underlineDuration),
-                            range: EffectsConfig.underlineDurationRange, step: 0.05, format: seconds)
-            }
-
-            effect(tr("Neon sweep"), "arrow.triangle.2.circlepath", .teal, id: "sweep", on: bind(\.sweep),
-                   note: tr("A light runs round the key's outline.")) {
-                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.sweepDuration),
-                            range: EffectsConfig.sweepDurationRange, step: 0.05, format: seconds)
-            }
-
-            ForEach(EffectCatalog.all, id: \.id) { item in moreEffect(item) }
 
             effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
                    note: tr("The line you draw while swipe typing takes the colour and glows.")) {
@@ -737,6 +574,248 @@ struct EffectsView: View {
             Button(tr("Cancel"), role: .cancel) {}
         } message: {
             Text(tr("It will hold the effects as they are set now."))
+        }
+    }
+
+    /// A built-in effect (builtInEffects): its switch and all its settings, under `title`.
+    @ViewBuilder private func builtInEffect(_ id: String, _ title: String) -> some View {
+        switch id {
+        case "glow":
+            effect(title, "light.max", .orange, id: "glow", on: bind(\.glow),
+                   note: tr("A light that fades in under your finger and fades out after it lifts.")) {
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.glowStrength),
+                            range: EffectsConfig.glowStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+                GlassSlider(title: tr("Spread"), symbol: "circle.dashed", value: bind(\.glowSpread),
+                            range: EffectsConfig.glowSpreadRange, step: 0.1, format: times)
+                GlassSlider(title: tr("Fade in"), symbol: "sunrise", value: bind(\.glowFadeIn),
+                            range: EffectsConfig.glowFadeInRange, step: 0.01, format: seconds)
+                GlassSlider(title: tr("Fade out"), symbol: "sunset", value: bind(\.glowFadeOut),
+                            range: EffectsConfig.glowFadeOutRange, step: 0.05, format: seconds)
+            }
+        case "border":
+            effect(title, "square.dashed", .blue, id: "border", on: bind(\.border),
+                   note: tr("A line round the key lights up and fades away.")) {
+                GlassSlider(title: tr("Width"), symbol: "lineweight", value: bind(\.borderWidth),
+                            range: EffectsConfig.borderWidthRange, step: 0.1) { String(format: "%.1f pt", $0) }
+                GlassSlider(title: tr("Fade out"), symbol: "sunset", value: bind(\.borderFade),
+                            range: EffectsConfig.borderFadeRange, step: 0.05, format: seconds)
+            }
+        case "ripple":
+            effect(title, "circle.hexagongrid.fill", .teal, id: "ripple", on: bind(\.ripple),
+                   note: tr("Light spreads from the middle of the key, inside its shape, and fades away.")) {
+                SegmentedChoice(title: tr("Shape"), names: [tr("Disc"), tr("Ring")],
+                                selected: config.rippleStyle == "ring" ? 1 : 0) { bind(\.rippleStyle).wrappedValue = $0 == 1 ? "ring" : "disc" }
+                GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.rippleReach),
+                            range: EffectsConfig.rippleReachRange, step: 0.1, format: times)
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.rippleDuration),
+                            range: EffectsConfig.rippleDurationRange, step: 0.05, format: seconds)
+            }
+        case "shine":
+            effect(title, "sun.max.fill", .yellow, id: "shine", on: bind(\.shine),
+                   note: tr("A slanted band of light sweeps across the key.")) {
+                GlassSlider(title: tr("Band width"), symbol: "arrow.left.and.right", value: bind(\.shineWidth),
+                            range: EffectsConfig.shineWidthRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.shineDuration),
+                            range: EffectsConfig.shineDurationRange, step: 0.05, format: seconds)
+            }
+        case "sparks":
+            effect(title, "sparkles", .pink, id: "sparks", on: bind(\.sparks),
+                   note: tr("Specks fly out of the key in every direction and fade.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.sparkCount),
+                            range: EffectsConfig.sparkCountRange, step: 1) { "\(Int($0.rounded()))" }
+                GlassSlider(title: tr("Distance"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.sparkDistance),
+                            range: EffectsConfig.sparkDistanceRange, step: 0.1, format: times)
+                GlassSlider(title: tr("Size"), symbol: "circle.fill", value: bind(\.sparkSize),
+                            range: EffectsConfig.sparkSizeRange, step: 0.5) { String(format: "%.1f pt", $0) }
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.sparkDuration),
+                            range: EffectsConfig.sparkDurationRange, step: 0.05, format: seconds)
+            }
+        case "pop":
+            effect(title, "arrow.up.left.and.down.right.magnifyingglass", .green, id: "pop", on: bind(\.pop),
+                   note: tr("The label swells (or shrinks) and springs back.")) {
+                GlassSlider(title: tr("Size"), symbol: "textformat.size", value: bind(\.popScale),
+                            range: EffectsConfig.popScaleRange, step: 0.05, format: times)
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.popDuration),
+                            range: EffectsConfig.popDurationRange, step: 0.05, format: seconds)
+            }
+        case "echo":
+            effect(title, "text.append", .indigo, id: "echo", on: bind(\.echo),
+                   note: tr("A copy of the label floats up out of the key and fades.")) {
+                GlassSlider(title: tr("Rise"), symbol: "arrow.up", value: bind(\.echoRise),
+                            range: EffectsConfig.echoRiseRange, step: 1) { "\(Int($0.rounded())) pt" }
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.echoDuration),
+                            range: EffectsConfig.echoDurationRange, step: 0.05, format: seconds)
+            }
+        case "wave":
+            effect(title, "dot.radiowaves.left.and.right", .cyan, id: "wave", on: bind(\.wave),
+                   note: tr("The keys around the pressed one light up in turn, the farther ones a moment later.")) {
+                GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.waveReach),
+                            range: EffectsConfig.waveReachRange, step: 0.1) { String(format: "%.1f keys", $0) }
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.waveStrength),
+                            range: EffectsConfig.waveStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+                GlassSlider(title: tr("Speed"), symbol: "speedometer", value: bind(\.waveSpeed),
+                            range: EffectsConfig.waveSpeedRange, step: 0.01) { String(format: "%.0f ms/key", $0 * 1000) }
+            }
+        case "shockwave":
+            effect(title, "dot.radiowaves.right", .mint, id: "shockwave", on: bind(\.shockwave),
+                   note: tr("A ring of light spreads far out over the keys around the one you press.")) {
+                GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.shockReach),
+                            range: EffectsConfig.shockReachRange, step: 0.1) { String(format: "%.1f keys", $0) }
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.shockDuration),
+                            range: EffectsConfig.shockDurationRange, step: 0.05, format: seconds)
+            }
+        case "confetti":
+            effect(title, "gift.fill", .orange, id: "confetti", on: bind(\.confetti),
+                   note: tr("Little pieces of paper are thrown up out of the key and tumble down.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.confettiCount),
+                            range: EffectsConfig.confettiCountRange, step: 1) { "\(Int($0.rounded()))" }
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.confettiDuration),
+                            range: EffectsConfig.confettiDurationRange, step: 0.05, format: seconds)
+            }
+        case "bubbles":
+            effect(title, "circle.grid.2x2.fill", .cyan, id: "bubbles", on: bind(\.bubbles),
+                   note: tr("Bubbles float up from the key, swaying as they go.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.bubbleCount),
+                            range: EffectsConfig.bubbleCountRange, step: 1) { "\(Int($0.rounded()))" }
+                GlassSlider(title: tr("Rise"), symbol: "arrow.up", value: bind(\.bubbleRise),
+                            range: EffectsConfig.bubbleRiseRange, step: 5) { "\(Int($0.rounded())) pt" }
+            }
+        case "squish":
+            effect(title, "arrow.down.right.and.arrow.up.left", .green, id: "squish", on: bind(\.squish),
+                   note: tr("The key squashes under your finger and springs back.")) {
+                GlassSlider(title: tr("Depth"), symbol: "arrow.down.to.line", value: bind(\.squishDepth),
+                            range: EffectsConfig.squishDepthRange, step: 0.01) { String(format: "%.0f%%", (1 - $0) * 100) }
+            }
+        case "flash":
+            effect(title, "bolt.fill", .yellow, id: "flash", on: bind(\.flash),
+                   note: tr("The key lights up in the effect colour for a moment.")) {
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.flashStrength),
+                            range: EffectsConfig.flashStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.flashDuration),
+                            range: EffectsConfig.flashDurationRange, step: 0.05, format: seconds)
+            }
+        case "jelly":
+            effect(title, "waveform.path", .purple, id: "jelly", on: bind(\.jelly),
+                   note: tr("The key wobbles like jelly, the swings getting smaller.")) {
+                GlassSlider(title: tr("Swing"), symbol: "arrow.left.and.right", value: bind(\.jellyAngle),
+                            range: EffectsConfig.jellyAngleRange, step: 1) { "\(Int($0.rounded()))\u{00B0}" }
+            }
+        case "hearts":
+            effect(title, "heart.fill", .pink, id: "hearts", on: bind(\.hearts),
+                   note: tr("Little hearts float up from the key.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.heartCount),
+                            range: EffectsConfig.heartCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "stars":
+            effect(title, "star.fill", .yellow, id: "stars", on: bind(\.stars),
+                   note: tr("Stars burst out of the key and fade.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.starCount),
+                            range: EffectsConfig.starCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "snow":
+            effect(title, "snowflake", .cyan, id: "snow", on: bind(\.snow),
+                   note: tr("Snowflakes drift down past the key.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.snowCount),
+                            range: EffectsConfig.snowCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "notes":
+            effect(title, "music.note", .purple, id: "notes", on: bind(\.notes),
+                   note: tr("Musical notes drift up and to the side.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.noteCount),
+                            range: EffectsConfig.noteCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "fireworks":
+            effect(title, "sparkle", .orange, id: "fireworks", on: bind(\.fireworks),
+                   note: tr("Streaks burst out of the key and fall like fireworks.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.fireworkCount),
+                            range: EffectsConfig.fireworkCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "starburst":
+            effect(title, "sun.max", .yellow, id: "starburst", on: bind(\.starburst),
+                   note: tr("Thin rays shoot out of the key in every direction.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.rayCount),
+                            range: EffectsConfig.rayCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "rain":
+            effect(title, "cloud.rain.fill", .blue, id: "rain", on: bind(\.rain),
+                   note: tr("Drops of rain fall past the key.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.rainCount),
+                            range: EffectsConfig.rainCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "embers":
+            effect(title, "flame.fill", .red, id: "embers", on: bind(\.embers),
+                   note: tr("Glowing embers rise and flicker out.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.emberCount),
+                            range: EffectsConfig.emberCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "smoke":
+            effect(title, "smoke.fill", .gray, id: "smoke", on: bind(\.smoke),
+                   note: tr("Soft puffs of smoke rise from the key and grow.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.smokeCount),
+                            range: EffectsConfig.smokeCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "lightning":
+            effect(title, "bolt.circle.fill", .indigo, id: "lightning", on: bind(\.lightning),
+                   note: tr("A bolt of lightning strikes up from the key.")) {
+                GlassSlider(title: tr("Length"), symbol: "arrow.up.and.down", value: bind(\.lightningLength),
+                            range: EffectsConfig.lightningLengthRange, step: 0.1) { String(format: "%.1f keys", $0) }
+            }
+        case "orbit":
+            effect(title, "atom", .teal, id: "orbit", on: bind(\.orbit),
+                   note: tr("Little lights circle around the key.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.orbitCount),
+                            range: EffectsConfig.orbitCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "spiral":
+            effect(title, "tornado", .mint, id: "spiral", on: bind(\.spiral),
+                   note: tr("Specks spiral outwards from the key.")) {
+                GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.spiralCount),
+                            range: EffectsConfig.spiralCountRange, step: 1) { "\(Int($0.rounded()))" }
+            }
+        case "heartbeat":
+            effect(title, "heart.circle.fill", .pink, id: "heartbeat", on: bind(\.heartbeat),
+                   note: tr("The key pulses twice like a heartbeat.")) {
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.heartbeatStrength),
+                            range: EffectsConfig.heartbeatStrengthRange, step: 0.01) { String(format: "+%.0f%%", ($0 - 1) * 100) }
+            }
+        case "flip":
+            effect(title, "rectangle.2.swap", .blue, id: "flip", on: bind(\.flip),
+                   note: tr("The key flips over like a card.")) {
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.flipDuration),
+                            range: EffectsConfig.flipDurationRange, step: 0.05, format: seconds)
+            }
+        case "shake":
+            effect(title, "iphone.radiowaves.left.and.right", .orange, id: "shake", on: bind(\.shake),
+                   note: tr("The key shakes from side to side.")) {
+                GlassSlider(title: tr("Distance"), symbol: "arrow.left.and.right", value: bind(\.shakeDistance),
+                            range: EffectsConfig.shakeDistanceRange, step: 1) { "\(Int($0.rounded())) pt" }
+            }
+        case "drop":
+            effect(title, "arrow.down.circle.fill", .green, id: "drop", on: bind(\.drop),
+                   note: tr("The key sinks and bounces back.")) {
+                GlassSlider(title: tr("Depth"), symbol: "arrow.down.to.line", value: bind(\.dropDepth),
+                            range: EffectsConfig.dropDepthRange, step: 1) { "\(Int($0.rounded())) pt" }
+            }
+        case "glitch":
+            effect(title, "waveform.path.ecg", .red, id: "glitch", on: bind(\.glitch),
+                   note: tr("The key glitches with flickering colours.")) {
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.glitchStrength),
+                            range: EffectsConfig.glitchStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+            }
+        case "underline":
+            effect(title, "underline", .cyan, id: "underline", on: bind(\.underline),
+                   note: tr("A line grows along the bottom of the key and fades.")) {
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.underlineDuration),
+                            range: EffectsConfig.underlineDurationRange, step: 0.05, format: seconds)
+            }
+        case "sweep":
+            effect(title, "arrow.triangle.2.circlepath", .teal, id: "sweep", on: bind(\.sweep),
+                   note: tr("A light runs round the key's outline.")) {
+                GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.sweepDuration),
+                            range: EffectsConfig.sweepDurationRange, step: 0.05, format: seconds)
+            }
+        default:
+            EmptyView()
         }
     }
 
