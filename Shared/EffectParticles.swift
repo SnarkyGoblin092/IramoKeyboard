@@ -242,3 +242,28 @@ enum EffectParticles {
         return list
     }
 }
+
+extension EffectParticles {
+    /// Turns the particles `list[from...]` (one effect) so that the way they mainly go points at `target` (see
+    /// EffectDirection). Effects that spread evenly in every direction have no way of their own and stay as they are.
+    static func redirect(_ list: inout [EffectParticle], from start: Int, to target: CGFloat, scale: CGFloat) {
+        var sum = CGPoint.zero
+        var heads = 0
+        for index in start..<list.count {
+            if let head = EffectDirection.heading(list[index].path, scale: scale) {
+                sum.x += head.x
+                sum.y += head.y
+                heads += 1
+            }
+        }
+        guard heads > 0, hypot(sum.x, sum.y) > scale * 0.1 * CGFloat(heads) else { return }
+        let natural = atan2(sum.x, -sum.y)
+        let turn = target - natural
+        for index in start..<list.count {
+            let old = list[index].path
+            list[index].path = { t in EffectDirection.turn(old(t), by: turn) }
+            if list[index].isOriented { list[index].tilt += turn }
+            if case .streak(let angle) = list[index].shape { list[index].shape = .streak(angle: angle + turn) }
+        }
+    }
+}
