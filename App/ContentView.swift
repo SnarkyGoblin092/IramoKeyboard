@@ -53,6 +53,8 @@ struct ContentView: View {
         .onAppear {
             Feedback.prepare()
             Settings.shared.removeTouchModel()
+            // The enabled languages' data is unpacked now, so the keyboard finds it ready.
+            LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
         }
     }
 }
@@ -740,6 +742,7 @@ struct LanguagesView: View {
         if ordered.count > enabled.count { Feedback.success() } else { Feedback.delete() }
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
+        LanguageData.prepareInBackground(enabled: ordered)
     }
 }
 

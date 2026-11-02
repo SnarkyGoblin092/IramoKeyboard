@@ -18,7 +18,7 @@ struct ThemesView: View {
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
         PinnedPreview(id: "themes", height: 240, fills: true, resizable: true) {
-            PinnedKeyboard()
+            LiveKeyboard()
         } content: {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {

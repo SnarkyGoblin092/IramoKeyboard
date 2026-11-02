@@ -23,7 +23,7 @@ final class LanguageModel {
     private let contextOffset: Int, next3Offset: Int, p3Offset: Int
 
     init?(language: Language) {
-        guard let url = Bundle.main.url(forResource: "lm_\(language.rawValue)", withExtension: "bin"),
+        guard let url = LanguageData.url(forResource: "lm_\(language.rawValue)", withExtension: "bin"),
               let data = try? NSData(contentsOf: url, options: .alwaysMapped),
               data.length >= 36 else { return nil }
         storage = data

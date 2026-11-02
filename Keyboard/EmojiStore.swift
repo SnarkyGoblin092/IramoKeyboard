@@ -372,7 +372,7 @@ final class EmojiStore {
     // MARK: Background loading
 
     private static func loadCategories() -> (categories: [EmojiCategory], version: String, total: Int, shown: Int) {
-        guard let url = Bundle.main.url(forResource: "emoji", withExtension: "json"),
+        guard let url = LanguageData.url(forResource: "emoji", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let file = try? JSONDecoder().decode(EmojiFile.self, from: data) else {
             return ([], "", 0, 0)
@@ -428,7 +428,7 @@ final class EmojiStore {
     }
 
     private static func loadKeywords(_ language: Language) -> [String: [String]] {
-        guard let url = Bundle.main.url(forResource: "emoji_keywords_\(language.rawValue)", withExtension: "json"),
+        guard let url = LanguageData.url(forResource: "emoji_keywords_\(language.rawValue)", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let table = try? JSONDecoder().decode([String: [String]].self, from: data) else {
             return [:]
@@ -437,7 +437,7 @@ final class EmojiStore {
     }
 
     private static func loadSearchWords(_ language: Language) -> [String: [String]] {
-        guard let url = Bundle.main.url(forResource: "emoji_search_\(language.rawValue)", withExtension: "json"),
+        guard let url = LanguageData.url(forResource: "emoji_search_\(language.rawValue)", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let table = try? JSONDecoder().decode([String: [String]].self, from: data) else {
             return [:]

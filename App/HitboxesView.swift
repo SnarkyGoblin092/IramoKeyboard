@@ -44,8 +44,8 @@ struct HitboxesView: View {
 
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(id: "hitboxes", height: 150) {
-            HitboxPreview()
+        PinnedPreview(id: "hitboxes", height: 260, fills: true) {
+            LiveKeyboard()
         } content: {
         GlassList {
             Section {

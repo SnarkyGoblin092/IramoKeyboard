@@ -55,7 +55,7 @@ struct KeysView: View {
     var body: some View {
         // The keyboard stays pinned above the settings, at a fixed size.
         PinnedPreview(id: "keys", height: 240, fills: true) {
-            PinnedKeyboard()
+            LiveKeyboard()
         } content: {
         GlassList {
             Section {

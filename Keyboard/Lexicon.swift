@@ -20,7 +20,7 @@ final class Lexicon {
     private let recordSize = 20
 
     init?(language: Language) {
-        guard let url = Bundle.main.url(forResource: "dict_\(language.rawValue)", withExtension: "bin"),
+        guard let url = LanguageData.url(forResource: "dict_\(language.rawValue)", withExtension: "bin"),
               let data = try? NSData(contentsOf: url, options: .alwaysMapped),
               data.length >= 32 else { return nil }
         // Everything is read through locals first: a class may not read its own properties before all are set.

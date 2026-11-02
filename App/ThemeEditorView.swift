@@ -34,7 +34,7 @@ struct ThemeEditorView: View {
 
     var body: some View {
         PinnedPreview(id: "themeEditor", height: 240, fills: true) {
-            PinnedKeyboard()
+            LiveKeyboard()
         } content: {
         GlassList {
             if let style = theme.style {

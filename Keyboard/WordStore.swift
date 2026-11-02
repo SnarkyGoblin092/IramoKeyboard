@@ -148,7 +148,7 @@ final class WordStore {
                           pairs: parsePairs(language: language), model: LanguageModel(language: language),
                           accents: AccentModel(language: language))
         }
-        guard let url = Bundle.main.url(forResource: "words_\(language.rawValue)", withExtension: "tsv"),
+        guard let url = LanguageData.url(forResource: "words_\(language.rawValue)", withExtension: "tsv"),
               let text = try? String(contentsOf: url, encoding: .utf8) else {
             return Parsed(entries: .empty, isFull: limit == nil, limit: limit, pairs: parsePairs(language: language))
         }
@@ -217,7 +217,7 @@ final class WordStore {
 
     /// Reads `pairs_<lang>.tsv`: word <TAB> next words (space separated). Missing file = no built-in pairs.
     private static func parsePairs(language: Language) -> [String: String] {
-        guard let url = Bundle.main.url(forResource: "pairs_\(language.rawValue)", withExtension: "tsv"),
+        guard let url = LanguageData.url(forResource: "pairs_\(language.rawValue)", withExtension: "tsv"),
               let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
         var pairs: [String: String] = [:]
         text.enumerateLines { line, _ in

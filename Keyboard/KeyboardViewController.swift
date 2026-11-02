@@ -127,6 +127,8 @@ final class KeyboardViewController: UIInputViewController {
 
         buildInterface()
         ensureStores()
+        // Unpacked data of languages turned off in the app since (LanguageData) is removed.
+        LanguageData.removeUnpackedInBackground(keeping: Set(settings.enabledLanguages))
         loadSystemLexicon()
         EmojiStore.shared.loadIfNeeded()
         Haptics.shared.prepare()

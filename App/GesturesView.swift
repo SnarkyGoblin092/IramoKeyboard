@@ -16,8 +16,8 @@ struct GesturesView: View {
 
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(id: "gestures", height: 230) {
-            GesturePreview()
+        PinnedPreview(id: "gestures", height: 260, fills: true) {
+            LiveKeyboard()
         } content: {
         GlassList {
             Section {

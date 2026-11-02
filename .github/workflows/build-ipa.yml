@@ -94,6 +94,36 @@ jobs:
           enableCrossOsArchive: true
           fail-on-cache-miss: true
 
+      # words_<lang>.tsv is only read when dict_<lang>.bin is missing (WordStore.parse), so a language that has
+      # its dictionary ships without the word list. The sizes show what the language data takes up.
+      - name: Drop word lists the dictionaries replace
+        run: |
+          du -sh Keyboard/Resources
+          for f in Keyboard/Resources/words_*.tsv; do
+            dict="${f/words_/dict_}"
+            if [ -s "${dict%.tsv}.bin" ]; then rm "$f"; fi
+          done
+          for kind in dict lm words pairs accents phonetic emoji; do
+            echo "$kind: $(cat Keyboard/Resources/${kind}_* Keyboard/Resources/${kind}.* 2>/dev/null | wc -c | awk '{printf "%.1f MB", $1 / 1e6}')"
+          done
+          du -sh Keyboard/Resources
+
+      # Every language file ships compressed (raw DEFLATE, which Apple's Compression framework reads as .zlib);
+      # LanguageData unpacks a language's files only once that language is enabled. emoji.json, which every
+      # language uses, stays as it is.
+      - name: Compress language data
+        run: |
+          python3 - <<'PY'
+          import pathlib, zlib
+          for path in sorted(pathlib.Path("Keyboard/Resources").iterdir()):
+              if not path.is_file() or path.name in ("emoji.json", ".gitkeep") or path.suffix == ".zlib":
+                  continue
+              packer = zlib.compressobj(9, zlib.DEFLATED, -15)
+              path.with_name(path.name + ".zlib").write_bytes(packer.compress(path.read_bytes()) + packer.flush())
+              path.unlink()
+          PY
+          du -sh Keyboard/Resources
+
       - name: Select newest stable Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -143,6 +173,7 @@ jobs:
           grep -q "group.com.hunkeys.k9x4.shared" app-ent.txt
           zip -qry Iramo.ipa Payload
           ls -la Iramo.ipa
+          du -sh "$APP" "$APP/PlugIns/HunKeysKeyboard.appex"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v7

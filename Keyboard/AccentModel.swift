@@ -10,7 +10,7 @@ final class AccentModel {
     private static let radii = [3, 2, 1, 0]
 
     init?(language: Language) {
-        guard let url = Bundle.main.url(forResource: "accents_\(language.rawValue)", withExtension: "bin"),
+        guard let url = LanguageData.url(forResource: "accents_\(language.rawValue)", withExtension: "bin"),
               let data = try? NSData(contentsOf: url, options: .alwaysMapped),
               data.length >= 16 else { return nil }
         let pointer = data.bytes

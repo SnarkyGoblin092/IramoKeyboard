@@ -5,262 +5,113 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 ## Features
 
 ### Languages
-- 38 languages: English, Hungarian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Czech, Romanian,
-  Turkish, Russian, Ukrainian, Swedish, Lithuanian, Latvian, Uzbek, Arabic, Danish, Norwegian, Finnish, Greek, Hebrew, Persian,
-  Indonesian, Malay, Vietnamese, Slovak, Croatian, Bulgarian, Catalan, Korean, Hindi, Thai, Japanese, Cantonese
-  and Mandarin.
-- Each with its own layout: QWERTY, QWERTZ, AZERTY, Turkish, Nordic (å æ ø / å ä ö), Croatian (š đ č ć ž),
-  Cyrillic for Russian, Ukrainian and Bulgarian (phonetic), Greek, Hebrew, Persian and Arabic, plus the language's
-  extra letters on long-press (ñ, ç, ü ö ä, ğ ş ı, ą č ę ė į š ų ū ž, ā ē ģ ī ķ ļ ņ, oʻ gʻ (Uzbek, with its own ʻ key), ά έ ή ί ό ύ ώ, ľ ĺ ô ŕ, l·l...).
-- Vietnamese: type without the marks and pick the word from the bar (tieng → tiếng), or long-press a vowel for
-  its tones and ă â ê ô ơ ư, and d for đ.
-- Hebrew and Persian are written right to left like Arabic; Persian has its own letters (پ چ ژ ک گ ی), Persian
-  digits (۱۲۳) and the Arabic comma, question mark and semicolon.
-- Arabic: right to left (the cursor slides the right way), no shift key, its own comma, question mark and
-  semicolon (، ؟ ؛), Arabic-Indic digits (the Western ones on long-press), hamza forms on long-press, and words
-  matched with or without hamza and vowel marks.
-- Japanese (日本語), typed in romaji: the letters turn into hiragana as you type (konnichiha → こんにちは) and the
-  bar offers kanji words for them (gakusei → 学生, nihongo → 日本語), with the hiragana and katakana right after
-  the best word (ko-hi- → コーヒー; ー is on the comma's long-press). Space or a tap writes a word, letters left over
-  become the next one, and return keeps the kana. Japanese punctuation: 、。？！ and 「」.
-- Korean (한국어) on the 2-beolsik layout: jamo build syllables as you type (ㅎ ㅏ ㄴ → 한, 각 + ㅏ → 가가), backspace
-  takes back one jamo at a time, and ㄲ ㄸ ㅃ ㅆ ㅉ ㅒ ㅖ are on long-press. Suggestions work on the syllables
-  typed so far; auto-correction and swiping are off.
-- Hindi (हिन्दी) on a Devanagari layout with the vowel signs on keys: a vowel sign typed where it has no consonant
-  (at the start of a word) becomes the full vowel (ा → आ, े → ए, ् → अ); aspirated consonants (ख घ थ ध फ भ...),
-  ञ ण ष and conjuncts (क्ष ज्ञ त्र श्र) are on long-press, and the full stop is the danda (।).
-- Thai (ไทย) on the Kedmanee layout with its four rows of letters (the keyboard grows a row for it); the shifted
-  letters, tone marks and ฯ are on long-press. Auto-correction is off, as Thai has no spaces between words.
-- Mandarin (普通话, simplified characters), typed in Pinyin the same way as Cantonese below: nihao → 你好,
-  women → 我们, duibuqi → 对不起; type ü as v (lv → 绿).
-- Cantonese (粵語), typed in Jyutping: the letters show underlined in the field while the suggestion bar offers
-  traditional characters and words for them (neihou → 你好, hoenggong → 香港, even whole phrases); space or a tap
-  writes one, and letters left over turn into the next word. Return keeps the letters as typed. Tones are not
-  needed, words you pick rank higher next time, and the comma, full stop, question and exclamation marks are
-  full-width (，。？！), with 、「」『』 on long-press. Swiping and auto-correction are off for it.
-- Swipe the space bar left or right to switch; the space bar shows the language's name. The app lists the
-  languages (enabled ones, the ones to add and the app languages) in alphabetical order of their names.
-- Several languages at once: words from any enabled language are suggested and corrected, and the keyboard
-  learns which ones you write in most.
-- Features a language can't use are left out while typing in it: swipe typing, adaptive keys and the hit map
-  (Korean, Hindi, Thai, Chinese, Japanese), auto-correction (Korean, Thai, Chinese, Japanese), capitals and
-  auto-capitalization (scripts without capitals), and the double-space full stop (Thai, Chinese, Japanese; Hindi
-  gets the danda "। "). In the app those settings name the enabled languages they're off in, and are greyed out
-  when none of the enabled languages can use them.
-- The return key shows the return symbol (⏎) instead of a word, in every language.
+- 38 languages (English, Hungarian, Arabic, Hindi, Japanese and more), each with its own layout and long-press letters.
+- Vietnamese: type without the marks and pick the word from the bar (tieng → tiếng); long-press vowels for tones.
+- Arabic, Hebrew, Persian: right to left. Arabic has no shift key, and matching ignores hamza and vowel marks. Persian has its own letters and digits.
+- Japanese: romaji turns into hiragana as you type (konnichiha → こんにちは), with kanji and katakana words in the bar.
+- Korean (2-beolsik): jamo build syllables as you type. Hindi: Devanagari with vowel signs on keys. Thai: Kedmanee layout.
+- Mandarin (simplified): Pinyin (nihao → 你好). Cantonese: Jyutping (neihou → 你好), traditional characters in the bar.
+- Swipe the space bar to switch language; it shows the language's name.
+- Several enabled languages at once: suggestions and corrections from all of them.
+- Features a language can't use are left out there (such as swipe, auto-correction or capitals). The app greys out settings that no enabled language can use.
+- The return key shows ⏎ in every language.
 
 ### Prediction and correction
-- Word suggestions as you type, from a word trigram language model per language.
-- Next-word suggestions before you start the next word.
-- The layout's language leads until the text shows another one: after switching to French, "compli" offers French
-  words first, and when words of the other enabled languages score higher, the best French one still keeps the
-  last place in the bar.
-- Auto-correction when you press space: typos ("vsgyok" -> "vagyok"), missing accents ("koszonom" -> "köszönöm"),
-  missing spaces ("nemakarom" -> "nem akarom", "tothe" -> "to the", also when the word lists keep such a slip as a
-  rare word), apostrophes and capitals ("im" -> "I'm"); an unfinished word
-  is completed rather than swapped for a short one ("appl" -> "apple", not "all").
-- The word space will write sits on an accent-coloured pill in the middle of the bar.
-- The bar can size each suggestion to its word so more fit, or scroll sideways through up to ten; separators
-  (solid, dashed, dotted or none) or key-like segments, in the theme's colours or neutral ones, at any height.
-  With only one or two words they sit centred, with no empty places and separators only between them.
-- Update speed: Very slow, Slow, Normal, Fast or Very fast (500, 300, 150, 100 or 50 ms), or any wait from 50 to
-  500 ms: how long the bar waits for a pause in typing, or in a swipe, before showing new words.
-- Switching: how new words replace the old ones — Instant, Fade, Rise, Slide (along the reading direction, so
-  right to left in Arabic) or Pop, taking 0.10 to 0.50 s; the settings preview keeps changing its words to show
-  it, at the same speed as the keyboard.
+- Word suggestions from a trigram model per language, and next-word suggestions before you start a word. The layout's language leads until the text shows another.
+- Auto-correction on space: typos, missing accents and spaces, apostrophes and capitals ("im" → "I'm"). Unfinished words are completed, not shortened.
 - Backspace right after an auto-correction undoes it.
-- Learns new words: tap the word as you typed it in the bar to keep it, or type a new word twice; words you
-  retype after deleting a typo teach the keyboard that typo; words you use often, and the words you put after
-  each other, rank higher. Learned words are shared by every language: a name or slang word learned while typing
-  in one language is suggested, kept and swiped in all of them (one list in the app, searchable).
-- Knows your contacts' names (suggested, never corrected) and uses your iOS text replacements.
-- No correction in password, email and web address fields, or where the app asks for none.
+- Bar: each suggestion sized to its word, or scrolling through up to ten; separators (solid, dashed, dotted, none) or key-like segments.
+- Update speed: Very slow to Very fast (500 to 50 ms), or any wait from 50 to 500 ms.
+- Word change animation: Instant, Fade, Rise, Slide or Pop.
+- Learns words: tap the typed word in the bar to keep it, or type a new word twice. Learned words are shared by all languages and searchable in the app.
+- Contact names are suggested, never corrected. iOS text replacements are used.
+- No correction in password, email and web address fields.
 
 ### Typing
-- Swipe typing: slide across the letters to write a word; the bar offers the other readings. It starts even
-  while the last finger of fast typing is still lifting, and a two-letter word between neighbouring keys ("as",
-  "to") counts once the finger lands in the middle of the second letter.
-- Thumb handoff: pass a word to the other thumb mid-glide (or right after lifting) and it goes on.
-- Glide onto the space bar to finish a word and carry on with the next one without lifting ("hello you"); the
-  trips to and from the bar are left out of the words.
-- Swiping is off while a word list is still loading and in password fields, so no tap can be swallowed by a swipe nothing can decode.
-- The swipe line fades out behind the finger, over a Trail length you set (60 to 600 pt).
-- Optional phrase glides: one glide can read as two or three words ("do it", "in the morning").
-- Delete right after a swipe removes the whole word (can be turned off).
-- Optional flicks: up on a letter for a capital, down for its first accent. A flick that keeps going (over about 1.3 key heights) becomes a swiped word instead (one that dips onto the space bar commits nothing there until it reaches another letter).
-- Hold a key for its accents and variants; hold the comma or the full stop for more punctuation.
-- Auto-capitalization at the start of sentences, double-tap shift for caps lock.
-- Double-tap the space bar for a full stop.
-- Hold the space bar and slide to move the cursor.
-- Slide left from the delete key to delete whole words.
+- Swipe typing with alternative readings in the bar; thumb handoff passes a glide to the other thumb.
+- Glide onto the space bar to finish a word and carry on. Optional phrase glides ("do it").
+- Swipe is off while word lists load and in password fields.
+- Swipe trail fades over a length of 60 to 600 pt. Delete after a swipe removes the whole word (optional).
+- Optional flicks: up for a capital, down for the first accent.
+- Hold a key for accents; hold the comma or full stop for more punctuation.
+- Auto-capitalization; double-tap shift for caps lock; double-tap space for a full stop.
+- Hold space and slide to move the cursor. Slide left from delete to delete whole words.
 - Hold the emoji key to open the Iramo app.
 - Text shortcuts: type a trigger and press space to expand it.
-- Numbers and symbols pages, and an optional number row.
-- A hide-keyboard button at the right end of the suggestion bar (no background: the icon just dims while held).
-- A Functions button at the left end opens a panel of tools in place of the keys: one-handed (off, left hand,
-  right hand), emoji, copy, cut, paste, clipboard, number row, swipe typing, auto-correct, vibration, next language,
-  split keyboard (on the iPad's panel from the start), hide keyboard and the Iramo app. Tools that are on light up in the accent. The app's
-  Functions panel screen picks which ones it shows and in what order (move up or down, swipe left to remove,
-  add from the list).
-- Clipboard (Functions panel): the last 20 texts you copied, newest first; tap one to paste it, remove one
-  with its cross or Clear them all. It picks up the system clipboard when opened (never in password fields) and
-  what the panel's Copy and Cut take. Needs Full Access.
+- Number and symbol pages; optional number row; hide-keyboard button at the right end of the bar.
+- Functions button (left end of the bar): a tools panel in place of the keys, with one-handed mode, clipboard, copy, cut, paste, split keyboard, next language and more. Its order and contents are set in the app.
+- Clipboard (Functions panel): the last 20 copied texts; tap one to paste it. Needs Full Access.
 - Key pop-ups and key clicks.
-- Vibration with an adjustable strength and feel (Soft, Light, Medium, Firm or Crisp, or any sharpness),
-  and optional ticks when the cursor mode starts and for each character it moves.
+- Vibration with adjustable strength and feel, and optional ticks in cursor mode.
 
 ### Hitboxes
-- Letter room: Strict, Normal or Generous next to shift, delete and space, or any amount in between.
-- Adaptive keys: the letters likely to come next get more room, the unlikely ones less (Gentle, Normal or
-  Strong, with fine-tuning), also before the first letter.
-- Hit map: learns where you really tap each key and moves its touch area there; the app shows the map per
-  language, drawing each key's room where learning has moved it (at the current strength), and can reset it.
+- Letter room: Strict, Normal or Generous next to shift, delete and space.
+- Adaptive keys: likely next letters get more room (Gentle, Normal or Strong).
+- Hit map: learns where you tap each key and moves its touch area. Viewable and resettable per language in the app.
 
 ### Emoji
-- An emoji picker like the iOS one: recently used emoji, categories with tabs, skin tones, and search in your
-  language; the search bar takes the theme's key colours.
-- The app's Emoji screen sets up the picker, in five tabs, under a preview of the picker that follows every
-  change (layout, tabs, size, spacing, skin tone):
-  - General: show or hide Recently Used, order it by most recent or most used, keep 8-64 of them (with a
-    preview and Clear), and add a space after each emoji.
-  - Layout: quick setups (Familiar, Roomy, Dense, Grid only), horizontal or vertical scrolling, swipe across
-    it to switch tabs, and the rows, emoji size and cell spacing.
-  - Panel: the search field and the category tabs at the top, the bottom or hidden; tabs as symbols or emoji;
-    the delete key on or off (ABC always stays).
-  - Categories: move each tab up or down, show or hide it.
-  - Skin tones: a default tone for every emoji that has one (hold for the others), and how long to hold.
-- Emoji suggestions in the bar for the word you typed; tapping one replaces the word.
-- Emoticons turn into emoji: type ":)", "<3", "xD", "(y)" and the bar offers 🙂, ❤️, 😆, 👍.
+- iOS-style picker: recently used, category tabs, skin tones, search in your language.
+- Emoji suggestions in the bar for the word you typed.
+- Emoticons turn into emoji: ":)", "<3", "xD" and "(y)" offer 🙂, ❤️, 😆 and 👍.
+- Set up in the app's Emoji screen (General, Layout, Panel, Categories, Skin tones), with a live preview.
 
 ### Look
-- 13 themes, one of each look. Three system themes (Native, Transparent, Liquid Glass) follow light and dark
-  mode; with the phone in dark mode, their keys stay dark even in apps that stay light.
-- Ten designed themes, each with its own backdrop, key shape and effects:
-  - Synthwave: a purple gradient with a neon grid, see-through keys with pink outlines, a pink glow and glowing labels.
-  - Terminal: green phosphor on black, scanlines, square keys with green outlines and glowing letters.
-  - Keycap: chunky mechanical caps with a solid deep edge under each key, sheen and depth.
-  - Frost: frosted glass keys (the backdrop blurred behind each one) over a blue-to-lilac gradient.
-  - Candy: glossy pill-shaped keys on a dotted pink backdrop, with a soft shadow.
-  - Paper: ink outlines on ruled paper, half-clear keys, no shadow.
-  - Brutalist: thick black outlines and hard offset shadows on yellow.
-  - Gilded: midnight keys trimmed in gold, with depth and a soft shadow.
-  - Ember: dark rounded keys glowing orange like coals.
-  - Clay: soft, puffy keys of the backdrop's own colour, with sheen and a soft shadow.
-- A designed theme keeps its own light or dark (by its backdrop) and its own accent, corners and key style.
-- Theme editor (Themes, Customize): changes the chosen designed theme, with the keyboard pinned above it showing
-  every change as it is made. Colours: the backdrop's top and bottom (a gradient, or plain), letter keys,
-  function keys, labels, the accent and the line colour (outlines, texture, block shadow). Keys: corners (square
-  to pill), outline width, how solid the keys are, frosted glass, sheen and depth. Effects: a shadow (none, soft,
-  lift, block or glow) and its strength, a glow around the labels, and a texture on the backdrop (dots, grid,
-  ruled lines or scanlines) and its strength. Changes are saved at once for that theme (kept when you switch to
-  another) and the keyboard draws them the next time it opens; Reset puts the theme back as designed. Edited
-  themes are marked on the Themes screen.
-- Accent colour (a preset, or any colour from the colour picker in the last place) for the system themes. Native,
-  Transparent and Liquid Glass each have an editor of their own (Themes, Customize): corners (square to round),
-  key style (surface, sheen strength, border, an outline width of its own, an accent glow), how solid the keys are,
-  a glow on the labels, and colours for the letter keys, function keys and labels. The key style is greyed out with
-  Liquid Glass, whose keys are real glass. A theme not yet edited keeps the corners and key style the old Keys screen
-  set; Reset in its editor puts it back. A designed theme has its own editor too.
-- Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
-  width, the gaps between keys and rows, a font for the keys and the bar (the system
-  font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
-  always show, accent hints in any corner (or off) at any size, and the space bar's text (the language's name or
-  its code) and size.
-- Highlights follow the theme's accent: the auto-correction pill, pressed suggestions (a tapped word gets exactly
-  the auto-correction's pill, in every theme), the hide-keyboard icon
-  and the emoji category tabs; in the Liquid Glass theme the pill, a pressed word, the bar's tiles and the emoji
-  tab highlight are glass too.
-- Works on iPhone and iPad, in portrait and landscape.
-- Split keyboard on iPad: every row in two halves with a gap between them (the space bar cut in two), for every
-  language and page.
-- One-handed mode for left or right hand, on iPhone and iPad: a narrower keyboard (80% wide) against that side;
-  the arrow in the empty side moves it over. The split keyboard takes precedence on iPad.
+- 13 themes. Native, Transparent and Liquid Glass follow light and dark mode.
+- 10 designed themes, each with its own backdrop, key shape and effects:
+  - Synthwave: neon grid, pink glow
+  - Terminal: green phosphor, scanlines
+  - Keycap: mechanical caps
+  - Frost: frosted glass keys
+  - Candy: glossy pill keys
+  - Paper: ink outlines on ruled paper
+  - Brutalist: thick outlines, hard shadows
+  - Gilded: gold-trimmed keys
+  - Ember: dark keys glowing orange
+  - Clay: soft, puffy keys
+- Designed themes keep their own light or dark mode, accent, corners and key style.
+- Theme editor: backdrop, key, label, accent and line colours; corners, outline, solidity, frost, sheen and depth; shadow, label glow and texture. Changes save per theme; Reset restores the design.
+- System themes have their own editor. The accent colour is a preset or any colour. Liquid Glass keys are real glass, so their key style is fixed.
+- Keys: Small, Standard or Large, or fine-tune height, width, gaps, font, letter size, capitals, accent hints and the space bar's label.
+- The accent colour also highlights the auto-correction pill, pressed words, the hide-keyboard icon and the emoji tabs.
+- iPhone and iPad, portrait and landscape.
+- Split keyboard (iPad): every row in two halves, for every language and page.
+- One-handed mode (iPhone and iPad): an 80%-wide keyboard against the left or right side. The split keyboard takes precedence on iPad.
 
 ### The Iramo app
-- Sliders show the name and a value pill over a glass groove filled with the accent, with a glass bead (Liquid Glass on iOS 26, frosted material before), drag sideways anywhere on
-  them to change them; action buttons (Test, Forget learned taps) are tinted glass capsules, red when destructive, with a light click per step
-  (no hard knock at the ends). They show real values for this phone: points (key width, corner radius, letter
-  and emoji size, touch room), milliseconds or seconds; strengths with no unit read Faint ... Full.
-- A Liquid Glass design: on iOS 26 and later every section of every list (settings, languages, learned words,
-  shortcuts) is one rounded card of real Liquid Glass over an aurora backdrop built from your accent colour and
-  its neighbours on the colour wheel (frosted list rows before iOS 26). The app's own look: the system's rounded
-  typeface, glossy squircle icon tiles with a glow, section titles with a round glyph badge and wide tracking, a
-  wordmark over a glowing logo, and a light-catching hairline edge on every glass card. Languages, learned words and shortcuts swipe left to delete, the red Delete button growing
-  inside the row itself; a long swipe deletes at once.
-- Laid out like the system Settings app: coloured icons, and each row showing what it is set to.
-- Screens that change the keyboard keep a live preview pinned at the top while their settings scroll below it
-  (on Themes, drag the bar under it to make it smaller): the keyboard itself (Keys, Themes), the suggestion bar, a
-  swipe being drawn, the keys' touch areas, the vibration's feel (tap to play it) and a text shortcut, all drawn
-  in the chosen theme with its key style. The keyboard previews show it as it opens (number row, shift, sizes,
-  font) and follow sliders while they are dragged.
-- Shows what still needs setting up (adding the keyboard, Full Access) with a button to Settings, and a field
-  to try the keyboard.
-- Themes with previews that look like the real keyboard, in light and dark mode, the designed themes with their
-  backdrops, textures, frosted keys, shadows and glows (the Liquid Glass theme with real
-  glass keys over a colourful backdrop, sharing one glass container as on the keyboard so the accent keys' colour
-  reflects in the keys around them), down to the auto-correction pill in the bar.
-- Sliders are the system's Liquid Glass slider in the accent colour (iOS 26 and later; the knob turns into a lens of
-  glass while dragged), snapping to each setting's steps with a light click per step; before iOS 26 a drawn glass slider.
-- Switches are the system's own Liquid Glass switches in the accent colour (iOS 26 and later): the knob turns into a
-  drop of glass while it is held and slides; before iOS 26 a drawn glass switch whose bead stretches as it slides.
-- Haptics throughout, with a feel for each kind of action: a light click for switches and sliders, a soft tap
-  for opening screens, a fuller knock for choosing a theme or preset, a success pattern for adding, a sharp tap
-  for deleting, and for Reset all settings a half-second strong buzz before it asks and a warning buzz when it
-  is done.
-- Languages, text shortcuts and learned words, each swiped left to remove an entry.
-- The main screen, in the order a person goes through it: Keyboard (Languages, Learned words, Text shortcuts,
-  Emoji, Functions panel), Typing (Suggestion bar, then auto-correction, emoji suggestions, capitals and the
-  period shortcut), Touch & gestures (Gestures, Hitboxes), Look & feel (Theme, Keys, Effects, Haptics, Accent
-  colour), Privacy & data, then App language and, last, the credits. The number row and key pop-ups switches
-  are on the Keys screen, under Layout.
-- Effects, each with its own switch and settings, one colour for them all (accent, white, a new rainbow hue per
-  press, or any colour): glow (strength, spread, fade in, fade out), outline light, ripple (disc or ring, reach,
-  duration), shine (a slanted band sweeping across the key), sparks (count, distance, size), pop (the label swells
-  or shrinks and springs back), echo (a copy of the label floats up), wave (the keys around light up in turn), shockwave (a ring spreading far over the keys), confetti, bubbles, squish (the key shrinks under the finger and springs back), flash, jelly (the key wobbles), hearts, stars, snow, notes, fireworks, starburst, rain, embers, smoke, lightning, orbit, spiral, heartbeat, flip, shake, drop, glitch, underline, neon sweep, and 47 more from the catalog (space: comet, meteor shower, galaxy, nebula, twinkle, planets, black hole, supernova; nature: petals, leaves, cherry blossom, butterflies, fireflies, splash, dandelion, flames, sparkler, aurora; celebration: coins, gems, balloons, streamers, disco, glitter, pixels, rainbow burst; tech: matrix, sonar, circuit, hologram, static; playful: ghosts, rockets, ninja stars, boomerang, yo-yo, pinwheel, juggle, bouncing balls, snake, dizzy, zap; shapes: halo, crown, card suits, dice, lasers), each with its own count, size and speed settings and often one more of its own, and a
-  glowing swipe trail. Presets (the Preset row at the top; every preset is a toned-down mix, with fewer specks, softer light and smaller moves, so typing stays calm): Off, Glow, Neon, Ripple, Rainbow, Sparkle, Wave, Confetti, Bubbles, Jelly, Love, Winter, Storm, Party, Cyber, Space, Garden, Arcade, Magic and Bounce, then fifty more themed ones (Sunset, Ocean, Forest, Candy, Lava, Frost, Thunder, Nightclub, Retro, Hacker, Gold, Chrome and so on up to Showtime). Every picture in the effects (hearts, stars, snowflakes, notes, petals, leaves, butterflies, coins, gems, balloons, ghosts, rockets, dice and so on) is a drawn vector shape, never an emoji or a character, so the keyboard and the preview draw the same thing in the press's colour; rain falls as tapered streaks and lands with a small splash ring. A Direction setting (Auto, Up, Down, Left, Right or Random for a new way each press) turns the effects that have a way of their own, and several presets use it. Colour, direction and position can be set for all the effects and for each effect on its own, under its switch ("Same as all effects" follows the general setting); the colours are Accent, White, Rainbow, Warm, Cool, Pastel, Neon, Random and any custom colour from a colour picker. Below, the general Position setting (Middle, Top, Bottom, Left, Right or Random for a new spot each press) moves where the effects that leave the key (specks, sparks, confetti, bubbles, the echo, the shockwave, the bolt) and the ripple start; some presets use it. A tap anywhere on an effect's row switches it on or off. Effects are sized for a key no wider than about 1.3 times its height, so the space bar and other wide keys get letter-sized effects (they still start where the Position setting puts them along the whole key). The Effects screen's keyboard is the keyboard itself: the app runs the keyboard's own keys, layout and effect code at the keyboard's real size, shrunk to fit, so every effect looks and moves exactly as it does while typing. It shows only the keys: no suggestion bar, and the emoji key opens no picker. Shift and the number and symbol pages work, and the keys type nothing. The long settings list builds its cards as they scroll into view; on the keyboard the heavy effects are built just after the press and thinned out while many are still on screen, so fast typing stays smooth. Lightning is a forked bolt (a wide glow, the colour and a white core) that strikes down onto the key, which flashes. The Effects screen's texts are translated into every app language. Every key's glow and
-  shadow is drawn on one layer under all the keys, with every key's shape cut out of it, so light never falls over
-  a key (sparks and the echo are the exception: they fly over the keys). The Effects screen shows the whole themed keyboard (every key, several fingers at once) to try it on.
-  The glow is two lights (a wide soft one and a bright core) and the wave lights the keys around more strongly
-  and farther out. A pressed key keeps its colour: lighting it up is left to the Flash effect.
-  My presets, under the Preset row: Save current effects stores the whole mix under a name (a name already used
-  is overwritten); a tap on a saved preset loads it (a check mark shows the one in use), its menu loads,
-  overwrites it with the current effects (after asking) or deletes it, and it also swipes left to delete.
-- Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
-  adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
-- Credits and licences for the word, emoji and icon data.
-- The app in any of the keyboard's 38 languages: App language, last on the main screen, opens a page listing
-  System and every language in alphabetical order. It follows the phone (the phone's first language the app has,
-  else English) or is set to one of them, and the whole app switches at once, staying on that page at the chosen
-  language; back on the main screen the list is still at the App language row (right to left in Arabic, Hebrew and Persian, while the keyboard previews stay as the keyboard is laid
-  out). Language names everywhere in the app (the Languages screen, summaries, notes, the hit map) are written
-  in the app's language, each option of App language with its own name beside it. The keyboard's space bar keeps
-  each language's own name, and the keyboard itself stays in English. Translations are machine-made and not
-  yet checked by native speakers; licence texts and credits stay in English.
+- Liquid Glass design on iOS 26 and later: section cards over an aurora backdrop tinted with your accent. Frosted rows before iOS 26.
+- Sliders and switches are the system's Liquid Glass controls in the accent colour (drawn glass before iOS 26).
+- Sliders show values in real units for this phone; strengths read Faint ... Full.
+- The real keyboard, suggestion bar included, pinned at the top of the Keys, Themes, Theme editor, Suggestions, Gestures, Hitboxes, Haptics and Effects screens: the keyboard's own code at its real size, shrunk to fit. Typed letters show in the bar; nothing is written into a field and the emoji key opens no picker. The Emoji and Text shortcuts screens keep their own previews.
+- Setup status (keyboard added, Full Access) with a button to Settings, and a field to try the keyboard.
+- Haptics with a feel for each kind of action. Swipe left to delete a language, text shortcut or learned word.
+- Screens in order: Keyboard, Typing, Touch & gestures, Look & feel, Privacy & data, App language, Credits. The number row and key pop-up switches are on the Keys screen.
+- Effects: 80 effects, each with its own switch and settings, plus a glowing swipe trail. Examples: glow, ripple, sparks, wave, shockwave, confetti, hearts, snow, lightning, glitch. 47 come from a catalog of space, nature, celebration, tech, playful and shape effects.
+- Effect colours: accent, white, rainbow, warm, cool, pastel, neon, random or any colour. Direction (Auto, Up, Down, Left, Right, Random) and Position (Middle, Top, Bottom, Left, Right, Random) apply to all effects or per effect.
+- Effect presets: 70, from Off, Glow and Neon to Showtime, all toned down so typing stays calm. Save your own mix under a name.
+- Keys, Haptics, Suggestion bar, Gestures and Hitboxes each have presets and fine-tuning.
+- App language: System or any of the 38 languages, in alphabetical order; the whole app switches at once. Translations are machine-made and not yet checked by native speakers. Licence texts and credits stay in English.
+
+### Size
+- Language data ships compressed. A language's files are unpacked only when it is enabled (by the app, or by the keyboard on first use), into storage the app and keyboard share, and removed when it is turned off.
 
 ### Privacy
-- Everything the keyboard learns stays on the device; the keyboard makes no network connections.
-- Full Access is only needed for vibration and for saving recent emoji and learned words; the keyboard works
-  without it.
-- Search and remove single learned words, clear recent emoji, forget all learned words or reset all settings from the
-  app (each asks first; the removing ones are marked in orange, resetting in red).
+- Everything the keyboard learns stays on the device. The keyboard makes no network connections.
+- Full Access is only needed for vibration and for saving recent emoji and learned words.
+- Learned words, recent emoji and all settings can be cleared from the app. Each asks first.
 
 ## License
-Copyright (C) 2026 Orsós Emil. All rights reserved. The code and the app may not be used, copied, changed or
-distributed without written permission; see [LICENSE](LICENSE).
+Copyright (C) 2026 Orsós Emil. All rights reserved. The code and the app may not be used, copied, changed or distributed without written permission; see [LICENSE](LICENSE).
 
 The third-party material below keeps its own licences; the dictionaries the build produces are CC BY-SA 4.0.
 
 ## Credits
 The full notices are in the app under Licences (App/LicensesView.swift).
 
-- Dictionaries: adapted from [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave
-  (OpenSubtitles 2018 word counts), CC BY-SA 4.0; the built dictionaries are shared under the same licence.
+- Dictionaries: adapted from [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave (OpenSubtitles 2018 word counts), CC BY-SA 4.0; the built dictionaries are shared under the same licence.
 - Word pairs: [Tatoeba](https://tatoeba.org) example sentences, CC BY 2.0 FR.
 - Cantonese words and Jyutping: [rime-cantonese](https://github.com/rime/rime-cantonese) by CanCLID, CC BY 4.0.
 - Mandarin words and Pinyin: [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict), CC BY-SA 4.0.
 - Japanese words and readings: [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) by the EDRDG, CC BY-SA 4.0.
-- Next-word statistics: counted from the OPUS OpenSubtitles 2018 corpus (Lison & Tiedemann, 2016), compiled from
-  opensubtitles.org; no subtitle text ships with the app.
+- Next-word statistics: counted from the OPUS OpenSubtitles 2018 corpus (Lison & Tiedemann, 2016), compiled from opensubtitles.org; no subtitle text ships with the app.
 - Emoji list and names: Unicode emoji data and CLDR annotations, Unicode License V3.
-- Emoji tab icons via Iconify: Codicons (Microsoft, CC BY 4.0), Basil (Craftwork, CC BY 4.0), Font Awesome 4
-  (Dave Gandy, OFL 1.1), and Akar Icons, Famicons, Flowbite Icons, Fluent UI System Icons and Boxicons (MIT).
+- Emoji tab icons via Iconify: Codicons (Microsoft, CC BY 4.0), Basil (Craftwork, CC BY 4.0), Font Awesome 4 (Dave Gandy, OFL 1.1), and Akar Icons, Famicons, Flowbite Icons, Fluent UI System Icons and Boxicons (MIT).

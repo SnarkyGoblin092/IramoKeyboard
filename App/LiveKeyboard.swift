@@ -1,22 +1,26 @@
 import SwiftUI
 import UIKit
 
-/// The keyboard itself, on the Effects screen: Keyboard/KeyboardView and its KeyViews, built from the same settings
-/// and played by the same code as while typing, so every effect looks and moves as it does there. Only the keys: no
-/// suggestion bar, and the emoji key opens no picker. The keys type nothing; shift and the number and symbol pages
-/// work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
+/// The keyboard itself, pinned above the settings screens: Keyboard/SuggestionBar, Keyboard/KeyboardView and its
+/// KeyViews, built from the same settings and played by the same code as while typing, so the keys, the bar, the
+/// effects, the haptics and the gestures look and feel as they do there. The emoji key opens no picker and the keys
+/// write nothing into a field: what is typed shows in the bar, like a word being typed. Shift and the number and
+/// symbol pages work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
 struct LiveKeyboard: View {
-    let effects: EffectsConfig
+    /// The Effects screen's settings as they are being edited (nil: the stored ones).
+    var effects: EffectsConfig? = nil
 
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
 
     var body: some View {
         GeometryReader { geometry in
             let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
+                                                    barHeight: barHeight,
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode))
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
@@ -33,25 +37,28 @@ struct LiveKeyboard: View {
 }
 
 private struct LiveKeyboardHost: UIViewRepresentable {
-    let effects: EffectsConfig
+    let effects: EffectsConfig?
 
     func makeUIView(context: Context) -> LiveKeyboardView {
-        Prefs.effects = effects
-        return LiveKeyboardView()
+        let view = LiveKeyboardView()
+        view.effectsOverride = effects
+        return view
     }
 
     func updateUIView(_ view: LiveKeyboardView, context: Context) {
         // Read by the keys at every press (KeyView.syncEffects), so a change shows on the next one.
-        Prefs.effects = effects
+        view.effectsOverride = effects
     }
 }
 
-/// Holds the KeyboardView at the keyboard's size in `stage`, shrunk to fit, and stands in for the keyboard's
-/// controller: it builds the rows (as KeyboardViewController.reloadKeyboardLayout), handles shift and the pages, and
-/// rebuilds the keys when a setting that changes their look is edited (as the controller's settingsSignature).
-final class LiveKeyboardView: UIView, KeyboardViewDelegate {
+/// Holds the suggestion bar and the KeyboardView at the keyboard's size in `stage`, shrunk to fit, and stands in for
+/// the keyboard's controller: it builds them (as KeyboardViewController.buildInterface and reloadKeyboardLayout),
+/// handles shift and the pages, shows what is typed in the bar, and builds everything again when a setting that
+/// changes their look is edited (as the controller's settingsSignature).
+final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegate {
     /// The keyboard's points; scaled to the view. Popups are added here too, so they are drawn at the same scale.
     private let stage = UIView()
+    private var bar = SuggestionBar()
     private var keyboard = KeyboardView()
     private var language: Language = .english
     private var page: KeyboardPage = .letters
@@ -60,14 +67,23 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
     private var builtSignature = ""
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
+    /// The word being typed, shown in the bar.
+    private var typed = ""
 
-    /// The keyboard's size without the suggestion bar (KeyboardViewController.applyHeight, upright): the screen's
-    /// width, and its rows of keys with the gap between them.
-    static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, language: Language) -> CGSize {
+    /// The Effects screen's settings while they are edited; nil plays the stored ones.
+    var effectsOverride: EffectsConfig? {
+        didSet { applyEffects() }
+    }
+
+    /// The keyboard's size (KeyboardViewController.applyHeight, upright): the screen's width, and the bar above its
+    /// rows of keys with the gap between them.
+    static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
+                            language: Language) -> CGSize {
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
         let height = CGFloat(keyHeight) * (isPad ? 61 / 45 : 1)
         let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
-        return CGSize(width: CGFloat(DeviceMetrics.portraitWidth), height: 8 + rows * (height + CGFloat(rowGap)))
+        return CGSize(width: CGFloat(DeviceMetrics.portraitWidth),
+                      height: CGFloat(barHeight) + 8 + rows * (height + CGFloat(rowGap)))
     }
 
     /// The language the keyboard opens in: the stored one if it is enabled, else the first enabled one.
@@ -97,8 +113,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
 
     // MARK: Building
 
-    /// The settings that change how the keys are built (the controller's settingsSignature, less the suggestion
-    /// bar's and the effects', which the keys read as they play).
+    /// The settings that change how the bar and the keys are built (the controller's settingsSignature, less the
+    /// effects', which the keys read as they play).
     private func signature() -> String {
         let s = Settings.shared
         return [
@@ -107,25 +123,38 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", s.oneHanded,
+            s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
+            "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionsEnabled)",
             s.systemEditsJSON
         ].joined(separator: "|")
     }
 
-    /// A new KeyboardView, as the controller makes one in buildInterface (it reads the theme as it is made).
+    /// A new bar and KeyboardView, as the controller makes them in buildInterface (they read the theme as they are
+    /// made).
     private func rebuild() {
         Prefs.refresh()
+        applyEffects()
         Theme.reload()
         builtSignature = signature()
         builtStyle = traitCollection.userInterfaceStyle
         language = LiveKeyboardView.openingLanguage(code: Settings.shared.languageCode)
+        bar.removeFromSuperview()
         keyboard.removeFromSuperview()
+        bar = SuggestionBar()
+        bar.delegate = self
         keyboard = KeyboardView()
         keyboard.delegate = self
         keyboard.popupHost = stage
         stage.overrideUserInterfaceStyle = Theme.interfaceStyle
+        stage.addSubview(bar)
         stage.addSubview(keyboard)
         layoutStage()
         loadRows()
+        showTyped()
+    }
+
+    private func applyEffects() {
+        Prefs.effects = effectsOverride ?? EffectsConfig.decode(Settings.shared.effectsJSON)
     }
 
     /// The rows of the page shown (KeyboardViewController.reloadKeyboardLayout).
@@ -156,6 +185,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
             guard let self = self else { return }
             self.refreshQueued = false
             Prefs.refresh()
+            self.applyEffects()
             if self.signature() != self.builtSignature { self.rebuild() }
         }
     }
@@ -163,6 +193,45 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if traitCollection.userInterfaceStyle != builtStyle { rebuild() }
+    }
+
+    // MARK: The bar
+
+    /// A few words to fill the bar before anything is typed (the keyboard's next-word suggestions).
+    private var starters: [String] {
+        // l10n: keep (words of the typing language, not texts of the app)
+        if language == .hungarian { return ["A", "Én", "Nem", "Szia", "Ez", "Az", "Hogy", "De", "Jó", "Igen"] }
+        return ["I", "The", "It", "You", "We", "This", "Thanks", "Hello", "My", "So"]
+    }
+
+    /// What is typed so far, then the starter words it begins, the first of them on the accent pill (the word
+    /// space would write); before anything is typed, the starter words.
+    private func showTyped() {
+        guard Prefs.suggestions else {
+            bar.update([])
+            return
+        }
+        guard !typed.isEmpty else {
+            bar.update(starters.map { Suggestion(text: $0, kind: .word) })
+            return
+        }
+        let matches = starters.filter { $0.lowercased().hasPrefix(typed.lowercased()) && $0.count > typed.count }
+        let words = matches.map { Suggestion(text: $0, kind: .word) }
+        bar.update([Suggestion(text: typed, kind: .literal)] + words, highlighted: words.isEmpty ? nil : 1)
+    }
+
+    func suggestionBar(_ bar: SuggestionBar, didSelect suggestion: Suggestion) {
+        Haptics.shared.keyPress()
+        typed = ""
+        showTyped()
+    }
+
+    func suggestionBarDidTapDismiss(_ bar: SuggestionBar) {
+        Haptics.shared.keyPress()
+    }
+
+    func suggestionBarDidTapTools(_ bar: SuggestionBar) {
+        Haptics.shared.keyPress()
     }
 
     // MARK: Layout
@@ -174,11 +243,16 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
 
     private func layoutStage() {
         let size = LiveKeyboardView.naturalSize(keyHeight: Prefs.keyHeight, rowGap: Prefs.rowGap,
-                                                numberRow: Prefs.numberRow, language: language)
-        // The keys are always laid out at the keyboard's size, also before this view has one (it is built in init):
-        // at 0×0 every key's frame would come out null and Core Animation would throw.
+                                                numberRow: Prefs.numberRow, barHeight: Prefs.suggestionHeight,
+                                                language: language)
+        // The bar and the keys are always laid out at the keyboard's size, also before this view has one (it is
+        // built in init): at 0×0 every key's frame would come out null and Core Animation would throw.
         stage.bounds = CGRect(origin: .zero, size: size)
-        if keyboard.frame != stage.bounds { keyboard.frame = stage.bounds }
+        let barHeight = CGFloat(Prefs.suggestionHeight)
+        let barFrame = CGRect(x: 0, y: 0, width: size.width, height: barHeight)
+        let keysFrame = CGRect(x: 0, y: barHeight, width: size.width, height: size.height - barHeight)
+        if bar.frame != barFrame { bar.frame = barFrame }
+        if keyboard.frame != keysFrame { keyboard.frame = keysFrame }
         let scale = min(bounds.width / size.width, bounds.height / size.height)
         guard scale.isFinite, scale > 0 else { return }
         stage.center = CGPoint(x: bounds.midX, y: bounds.midY)
@@ -189,11 +263,26 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
 
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction) {
         switch action {
-        case .character:
+        case .character(let text):
+            let letter = shift == .off && !Prefs.alwaysCapitals ? text : language.uppercase(text)
+            if text.count == 1, text.first?.isLetter == true {
+                typed += letter
+            } else {
+                typed = ""
+            }
+            showTyped()
             if shift == .once {
                 shift = .off
                 keyboard.setShift(shift)
             }
+        case .backspace:
+            if !typed.isEmpty {
+                typed.removeLast()
+                showTyped()
+            }
+        case .space, .enter:
+            typed = ""
+            showTyped()
         case .shift:
             let now = Date()
             switch shift {
@@ -217,9 +306,18 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate {
         }
     }
 
-    func keyboardView(_ view: KeyboardView, didSelectAlternate text: String) {}
+    func keyboardView(_ view: KeyboardView, didSelectAlternate text: String) {
+        typed += text
+        showTyped()
+    }
+
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {}
-    func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {}
+
+    func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
+        typed = ""
+        showTyped()
+    }
+
     func keyboardViewDidHoldEmoji(_ view: KeyboardView) {}
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {}
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {}

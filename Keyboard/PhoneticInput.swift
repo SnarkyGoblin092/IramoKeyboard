@@ -49,7 +49,7 @@ final class PhoneticInput {
             var keys: [String] = []
             var words: [String] = []
             var counts: [Float] = []
-            if let url = Bundle.main.url(forResource: "phonetic_\(self.language.rawValue)", withExtension: "tsv"),
+            if let url = LanguageData.url(forResource: "phonetic_\(self.language.rawValue)", withExtension: "tsv"),
                let text = try? String(contentsOf: url, encoding: .utf8) {
                 keys.reserveCapacity(160_000)
                 words.reserveCapacity(160_000)

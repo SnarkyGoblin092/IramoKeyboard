@@ -29,8 +29,8 @@ struct HapticsView: View {
 
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(id: "haptics", height: 150) {
-            HapticPreview()
+        PinnedPreview(id: "haptics", height: 260, fills: true) {
+            LiveKeyboard()
         } content: {
         GlassList {
             Section {
