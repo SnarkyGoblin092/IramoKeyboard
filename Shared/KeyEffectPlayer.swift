@@ -12,6 +12,34 @@ struct KeyMove {
     var keyTimes: [Double]? = nil
     let duration: Double
     var eased = false
+
+    /// The offset `elapsed` seconds in, as Core Animation plays it (KeyEffectPlayer.move): straight lines between the
+    /// values, the whole run eased in and out when `eased`; 0 once it is over.
+    func value(after elapsed: Double) -> CGFloat {
+        guard duration > 0, elapsed < duration, values.count > 1 else { return 0 }
+        var t = min(max(elapsed / duration, 0), 1)
+        if eased { t = KeyMove.easeInOut(t) }
+        let times = keyTimes ?? values.indices.map { Double($0) / Double(values.count - 1) }
+        for index in 1..<min(values.count, times.count) where t <= times[index] {
+            let from = times[index - 1]
+            let share = times[index] > from ? (t - from) / (times[index] - from) : 1
+            return values[index - 1] + (values[index] - values[index - 1]) * CGFloat(share)
+        }
+        return values[values.count - 1]
+    }
+
+    /// Core Animation's ease in and out: the curve (0.42, 0) to (0.58, 1), solved for the time.
+    private static func easeInOut(_ x: Double) -> Double {
+        func bezier(_ s: Double, _ a: Double, _ b: Double) -> Double {
+            return 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s
+        }
+        var low = 0.0, high = 1.0
+        for _ in 0..<20 {
+            let mid = (low + high) / 2
+            if bezier(mid, 0.42, 0.58) < x { low = mid } else { high = mid }
+        }
+        return bezier((low + high) / 2, 0, 1)
+    }
 }
 
 /// The press effects (the Effects screen) of one key, drawn with Core Animation. The keyboard (KeyView) and the app's

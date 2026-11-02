@@ -731,9 +731,22 @@ final class KeyPoseModel: ObservableObject {
     @Published var pose = EffectPose()
 }
 
-/// The poses of the preview's keys, moved as the keyboard moves its keys (the moves KeyEffectPlayer plays).
-final class EffectMotions {
+/// The poses of the preview's keys, moved exactly as the keyboard moves its keys. On the keyboard every move is an
+/// additive Core Animation animation (KeyEffectPlayer.move), so moves of quick presses add up and each plays to its
+/// end. Here every move still playing is worked out frame by frame (KeyMove.value) and added up the same way, and
+/// the keys are set to the sum without SwiftUI animations (which would chase each new target instead of adding).
+final class EffectMotions: NSObject {
+    private struct Running {
+        let id: String
+        let move: KeyMove
+        let start: CFTimeInterval
+        /// The preview's size against the keyboard's, for the moves in points.
+        let scale: CGFloat
+    }
+
     private var models: [String: KeyPoseModel] = [:]
+    private var running: [Running] = []
+    private var link: CADisplayLink?
 
     func model(_ id: String) -> KeyPoseModel {
         if let model = models[id] { return model }
@@ -744,34 +757,38 @@ final class EffectMotions {
 
     /// Plays `move` on the key `id`, its points shrunk by `scale` (the preview's size against the keyboard's).
     func play(_ move: KeyMove, on id: String, scale: CGFloat) {
-        let model = self.model(id)
-        let values = move.values
-        guard values.count > 1 else { return }
-        let times = move.keyTimes ?? values.indices.map { Double($0) / Double(values.count - 1) }
-        func set(_ value: CGFloat) {
-            switch move.part {
-            case .scale: model.pose.scale = 1 + value
-            case .label: model.pose.labelScale = 1 + value
-            case .turn: model.pose.angle = Double(value) * 180 / .pi
-            case .x: model.pose.offsetX = value * scale
-            case .y: model.pose.offsetY = value * scale
-            case .flip: model.pose.flip = Double(value) * 180 / .pi
-            }
+        running.append(Running(id: id, move: move, start: CACurrentMediaTime(), scale: scale))
+        if link == nil {
+            let link = CADisplayLink(target: self, selector: #selector(step))
+            link.add(to: .main, forMode: .common)
+            self.link = link
         }
-        for index in 1..<values.count {
-            let start = times[index - 1] * move.duration
-            let length = max((times[index] - times[index - 1]) * move.duration, 0.001)
-            DispatchQueue.main.asyncAfter(deadline: .now() + start) {
-                withAnimation(move.eased ? .easeInOut(duration: length) : .linear(duration: length)) { set(values[index]) }
+    }
+
+    @objc private func step() {
+        let now = CACurrentMediaTime()
+        // Every key that moved this frame, from rest plus each of its moves.
+        var poses: [String: EffectPose] = [:]
+        for item in running { poses[item.id] = EffectPose() }
+        for item in running {
+            let value = item.move.value(after: now - item.start)
+            var pose = poses[item.id] ?? EffectPose()
+            switch item.move.part {
+            case .scale: pose.scale += value
+            case .label: pose.labelScale += value
+            case .turn: pose.angle += Double(value) * 180 / .pi
+            case .x: pose.offsetX += value * item.scale
+            case .y: pose.offsetY += value * item.scale
+            case .flip: pose.flip += Double(value) * 180 / .pi
             }
+            poses[item.id] = pose
         }
-        if move.part == .flip {
-            // All the way round is where it started: back to no turn, unseen.
-            DispatchQueue.main.asyncAfter(deadline: .now() + move.duration + 0.02) {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { set(0) }
-            }
+        for (id, pose) in poses where model(id).pose != pose { model(id).pose = pose }
+        // Finished moves have been set back to rest above; drop them.
+        running.removeAll { now - $0.start >= $0.move.duration }
+        if running.isEmpty {
+            link?.invalidate()
+            link = nil
         }
     }
 }

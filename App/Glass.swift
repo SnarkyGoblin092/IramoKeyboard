@@ -174,9 +174,10 @@ struct GlassSlider: View {
     }
 }
 
-/// The app's slider: a capsule that fills with the accent up to the value, its name and value written on it.
-/// Drawn by hand rather than the system Slider, whose own haptics (a hard knock at either end) came on top of the
-/// app's light click per step. Drag sideways anywhere on it; vertical drags still scroll the screen.
+/// The app's slider, its name and value written over it. On iOS 26 and later the system's Liquid Glass slider; before
+/// that drawn by hand (a glass groove filling with the accent and a glass bead), as the older system Slider's own
+/// haptics (a hard knock at either end) came on top of the app's light click per step. Drag sideways anywhere on the
+/// drawn one; vertical drags still scroll the screen.
 struct ValueBar: View {
     let title: String
     var symbol: String? = nil
@@ -202,6 +203,53 @@ struct ValueBar: View {
     }
 
     var body: some View {
+        if #available(iOS 26.0, *) {
+            systemBar
+        } else {
+            drawnBar
+        }
+    }
+
+    /// The name, and the value on a glass capsule.
+    private var header: some View {
+        HStack(spacing: 8) {
+            if let symbol = symbol {
+                Image(systemName: symbol).foregroundStyle(.tint)
+            }
+            Text(title).font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
+            Text(format(value))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .glassShape(Capsule(), tint: Color.accentColor.opacity(0.25))
+        }
+    }
+
+    /// iOS 26 and later: the system's Liquid Glass slider, whose knob turns into a lens of glass while it is dragged.
+    /// It snaps to the steps itself (the system's step marks would crowd the track) with the app's click per step.
+    @available(iOS 26.0, *)
+    private var systemBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            Slider(value: Binding(get: { value }, set: { raw in
+                let next = snapped(raw)
+                if abs(next - value) > step * 0.01 {
+                    value = next
+                    Feedback.tick()
+                }
+            }), in: range, onEditingChanged: onEditingChanged)
+            .tint(Color.accentColor)
+            .accessibilityLabel(title)
+            .accessibilityValue(format(value))
+        }
+        .frame(height: 72)
+        .padding(.vertical, 2)
+    }
+
+    private var drawnBar: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let fraction = CGFloat(min(max((value - range.lowerBound) / span, 0), 1))
@@ -209,20 +257,7 @@ struct ValueBar: View {
             let travel = max(0, width - thumb)
             let edge = thumb / 2 + travel * fraction
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    if let symbol = symbol {
-                        Image(systemName: symbol).foregroundStyle(.tint)
-                    }
-                    Text(title).font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 8)
-                    Text(format(value))
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .glassShape(Capsule(), tint: Color.accentColor.opacity(0.25))
-                }
+                header
                 // A glass groove with the accent filling it, and a glass bead on the end of the fill.
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.clear).frame(height: 14)
@@ -797,7 +832,9 @@ struct DisclosureChevron: View {
     }
 }
 
+#if compiler(>=6.2)
 /// A row that slides left to show a red Delete button inside the row itself; a long swipe deletes at once.
+@available(iOS 26.0, *)
 private struct SwipeToDeleteRow<Content: View>: View {
     let canDelete: Bool
     let onDelete: () -> Void
@@ -805,8 +842,6 @@ private struct SwipeToDeleteRow<Content: View>: View {
 
     @State private var offset: CGFloat = 0
     @State private var settled: CGFloat = 0
-    /// Whether the current drag is a sideways swipe (decided once, at its start); nil until it is known.
-    @State private var horizontal: Bool?
     private let buttonWidth: CGFloat = 84
     /// How far the Delete button may grow: a long swipe that reaches it deletes at once.
     private let maxReveal: CGFloat = 200
@@ -832,37 +867,30 @@ private struct SwipeToDeleteRow<Content: View>: View {
                 .buttonStyle(.plain)
                 .allowsHitTesting(offset < 0)
             }
-            // Alongside the scroll view's own pan, so the row follows the finger from the first point instead
-            // of waiting for the scroll view to give up (the stall partway into a slow swipe).
-            .simultaneousGesture(drag, including: canDelete ? .all : .subviews)
+            // A UIKit pan that only begins on a sideways swipe: a SwiftUI drag here takes the vertical drags from
+            // the scroll view too (iOS 18 and later), and the list would not scroll.
+            .gesture(SidewaysPan(enabled: canDelete, changed: changed, ended: ended))
     }
 
-    private var drag: some Gesture {
-        DragGesture(minimumDistance: 6)
-            .onChanged { value in
-                let dx = value.translation.width, dy = value.translation.height
-                if horizontal == nil { horizontal = abs(dx) > abs(dy) }
-                guard horizontal == true else { return }
-                let target = min(0, settled + dx)
-                // Past the full-delete point the button resists instead of stopping dead.
-                let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
-                if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.threshold() }   // crossing it
-                offset = resisted
-            }
-            .onEnded { value in
-                defer { horizontal = nil }
-                guard horizontal == true else { return }
-                let end = min(0, settled + value.translation.width)
-                if end <= -maxReveal {
-                    delete()
-                    return
-                }
-                // A quick flick counts as far as it was heading.
-                let heading = min(0, settled + value.predictedEndTranslation.width)
-                let open = min(end, heading) < -buttonWidth / 2
-                withAnimation(settle) { offset = open ? -buttonWidth : 0 }
-                settled = open ? -buttonWidth : 0
-            }
+    private func changed(_ dx: CGFloat) {
+        let target = min(0, settled + dx)
+        // Past the full-delete point the button resists instead of stopping dead.
+        let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
+        if (offset > -maxReveal) != (resisted > -maxReveal) { Feedback.threshold() }   // crossing it
+        offset = resisted
+    }
+
+    private func ended(_ dx: CGFloat, _ velocity: CGFloat) {
+        let end = min(0, settled + dx)
+        if end <= -maxReveal {
+            delete()
+            return
+        }
+        // A quick flick counts as far as it was heading.
+        let heading = min(0, settled + dx + velocity * 0.2)
+        let open = min(end, heading) < -buttonWidth / 2
+        withAnimation(settle) { offset = open ? -buttonWidth : 0 }
+        settled = open ? -buttonWidth : 0
     }
 
     private func close() {
@@ -877,3 +905,52 @@ private struct SwipeToDeleteRow<Content: View>: View {
         onDelete()
     }
 }
+
+/// A pan for SwipeToDeleteRow that begins only when the drag starts out sideways, leaving vertical drags to the
+/// scroll view. It runs alongside the scroll view's own pan, so the row follows the finger from the first point.
+@available(iOS 26.0, *)
+private struct SidewaysPan: UIGestureRecognizerRepresentable {
+    let enabled: Bool
+    /// The sideways distance moved so far.
+    let changed: (CGFloat) -> Void
+    /// The distance moved and the speed at the end.
+    let ended: (CGFloat, CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        return Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        pan.isEnabled = enabled
+        return pan
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        recognizer.isEnabled = enabled
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let dx = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .began, .changed: changed(dx)
+        case .ended, .cancelled, .failed: ended(dx, recognizer.velocity(in: recognizer.view).x)
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y)
+        }
+
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            return true
+        }
+    }
+}
+#endif
