@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 /// The keyboard itself, pinned above the settings screens: Keyboard/SuggestionBar, Keyboard/KeyboardView and its
 /// KeyViews, built from the same settings and played by the same code as while typing, so the keys, the bar, the
@@ -98,6 +99,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         stage.backgroundColor = .clear
         stage.isMultipleTouchEnabled = true
         addSubview(stage)
+        addGestureRecognizer(BackSwipeBlocker(target: nil, action: nil))
         Haptics.shared.hasFullAccess = true   // the app may always play the key-tap sound
         Haptics.shared.prepare()
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged),
@@ -284,5 +286,80 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// Swiping draws its trail (the Swipe trail effect) whenever swipe typing is on.
     func keyboardViewCanSwipe(_ view: KeyboardView) -> Bool {
         return Prefs.swipe
+    }
+}
+
+/// Keeps the screen's swipe back (from the edge, and on iOS 26 from anywhere on the screen) from starting on the
+/// keyboard, so a swipe there stays with the keys (swipe typing, the effects) instead of leaving the screen. It
+/// recognizes as soon as a finger lands on the keyboard, which fails the navigation's swipe back for that touch,
+/// and only that: every touch still reaches the keys and the bar, and no other gesture is held up. A swipe from
+/// the edge beside the keyboard and the back button go back as before.
+private final class BackSwipeBlocker: UIGestureRecognizer {
+    private var fingers = 0
+
+    override init(target: Any?, action: Selector?) {
+        super.init(target: target, action: action)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        fingers += touches.count
+        if state == .possible {
+            state = .began
+        } else if state == .began || state == .changed {
+            state = .changed
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+        if state == .began || state == .changed { state = .changed }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        lift(touches, as: .ended)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        lift(touches, as: .cancelled)
+    }
+
+    private func lift(_ touches: Set<UITouch>, as last: UIGestureRecognizer.State) {
+        fingers = max(0, fingers - touches.count)
+        if fingers == 0 && (state == .began || state == .changed) { state = last }
+    }
+
+    override func reset() {
+        super.reset()
+        fingers = 0
+    }
+
+    /// It stops only the swipe back; the keys' and the screen's other gestures go on alongside it.
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return isBackSwipe(preventedGestureRecognizer)
+    }
+
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return false
+    }
+
+    /// The swipe back of a navigation the keyboard is shown in.
+    private func isBackSwipe(_ recognizer: UIGestureRecognizer) -> Bool {
+        var responder: UIResponder? = view
+        while let current = responder {
+            if let navigation = current as? UINavigationController {
+                if recognizer === navigation.interactivePopGestureRecognizer { return true }
+                #if compiler(>=6.2)
+                if #available(iOS 26.0, *), recognizer === navigation.interactiveContentPopGestureRecognizer { return true }
+                #endif
+            }
+            responder = current.next
+        }
+        return false
     }
 }

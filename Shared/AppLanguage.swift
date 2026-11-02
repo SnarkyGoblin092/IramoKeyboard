@@ -44,6 +44,11 @@ enum AppLanguage {
     /// Its locale, for language names, lists and the environment.
     static var locale: Locale { return Locale(identifier: current.localeIdentifier) }
 
+    /// Whether `a` comes before `b` in alphabetical order in the app's language, as the app sorts its lists.
+    static func precedes(_ a: String, _ b: String) -> Bool {
+        return a.compare(b, options: [.caseInsensitive, .numeric], range: nil, locale: locale) == .orderedAscending
+    }
+
     /// Arabic, Hebrew and Persian read right to left.
     static var isRightToLeft: Bool { return [.arabic, .hebrew, .persian].contains(current) }
 
@@ -120,9 +125,8 @@ extension Language {
 
     /// Languages in alphabetical order of their names in the app's language, as the app lists them.
     static func byName(_ languages: [Language]) -> [Language] {
-        let locale = AppLanguage.locale
         return languages.map { (language: $0, name: $0.localizedName) }
-            .sorted { $0.name.compare($1.name, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending }
+            .sorted { AppLanguage.precedes($0.name, $1.name) }
             .map { $0.language }
     }
 }
