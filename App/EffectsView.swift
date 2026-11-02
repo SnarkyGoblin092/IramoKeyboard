@@ -44,6 +44,24 @@ struct EffectsView: View {
     private static let placed: Set<String> = ["ripple", "sparks", "echo", "shockwave", "confetti", "bubbles", "lightning", "beam", "hearts",
                                               "stars", "snow", "notes", "fireworks", "starburst", "rain", "embers", "smoke", "orbit", "spiral"]
 
+    private func colorOptions(inherit: Bool) -> [(value: String, name: String)] {
+        var list: [(value: String, name: String)] = inherit ? [(value: "inherit", name: colorName("inherit"))] : []
+        for mode in colorModes { list.append((value: mode, name: colorName(mode))) }
+        return list
+    }
+
+    private func directionOptions(inherit: Bool) -> [(value: String, name: String)] {
+        var list: [(value: String, name: String)] = inherit ? [(value: "inherit", name: tr("Same as all effects"))] : []
+        for item in directionNames { list.append((value: item.mode, name: item.name)) }
+        return list
+    }
+
+    private func positionOptions(inherit: Bool) -> [(value: String, name: String)] {
+        var list: [(value: String, name: String)] = inherit ? [(value: "inherit", name: tr("Same as all effects"))] : []
+        for item in positionNames { list.append((value: item.mode, name: item.name)) }
+        return list
+    }
+
     private func editStyle(_ id: String, _ edit: @escaping (inout EffectStyle) -> Void) {
         var next = config
         next.editStyle(id, edit)
@@ -56,7 +74,7 @@ struct EffectsView: View {
         let style = config.style(id)
         if isCatalog || !EffectsView.plain.contains(id) {
             GlassChoiceLink(title: tr("Colour"), symbol: "paintpalette",
-                            options: ["inherit"].map { (value: $0, name: colorName($0)) } + colorModes.map { (value: $0, name: colorName($0)) },
+                            options: colorOptions(inherit: true),
                             selected: style.colorMode) { mode in editStyle(id) { $0.colorMode = mode } }
             if style.colorMode == "custom" {
                 ColorPicker(tr("Custom colour"), selection: Binding(get: { Color(style.customColor) }, set: { color in
@@ -66,12 +84,12 @@ struct EffectsView: View {
         }
         if isCatalog || EffectsView.going.contains(id) {
             GlassChoiceLink(title: tr("Direction"), symbol: "arrow.up.and.down.and.arrow.left.and.right",
-                            options: [(value: "inherit", name: tr("Same as all effects"))] + directionNames.map { (value: $0.mode, name: $0.name) },
+                            options: directionOptions(inherit: true),
                             selected: style.direction) { value in editStyle(id) { $0.direction = value } }
         }
         if isCatalog || EffectsView.placed.contains(id) {
             GlassChoiceLink(title: tr("Position"), symbol: "scope",
-                            options: [(value: "inherit", name: tr("Same as all effects"))] + positionNames.map { (value: $0.mode, name: $0.name) },
+                            options: positionOptions(inherit: true),
                             selected: style.position) { value in editStyle(id) { $0.position = value } }
         }
     }
@@ -317,7 +335,7 @@ struct EffectsView: View {
 
             Section {
                 GlassChoiceLink(title: tr("Colour"), symbol: "paintpalette",
-                                options: colorModes.map { (value: $0, name: colorName($0)) },
+                                options: colorOptions(inherit: false),
                                 selected: config.colorMode) { bind(\.colorMode).wrappedValue = $0 }
                 if config.colorMode == "custom" {
                     ColorPicker(tr("Custom colour"), selection: Binding(get: { Color(config.customColor) }, set: { color in
@@ -335,7 +353,7 @@ struct EffectsView: View {
 
             Section {
                 GlassChoiceLink(title: tr("Direction"), symbol: "arrow.up.and.down.and.arrow.left.and.right",
-                                options: directionNames.map { (value: $0.mode, name: $0.name) },
+                                options: directionOptions(inherit: false),
                                 selected: config.direction) { bind(\.direction).wrappedValue = $0 }
             } header: {
                 SectionHeader(tr("Direction"), symbol: "location.north.line", color: .mint)
@@ -346,7 +364,7 @@ struct EffectsView: View {
 
             Section {
                 GlassChoiceLink(title: tr("Position"), symbol: "scope",
-                                options: positionNames.map { (value: $0.mode, name: $0.name) },
+                                options: positionOptions(inherit: false),
                                 selected: config.position) { bind(\.position).wrappedValue = $0 }
             } header: {
                 SectionHeader(tr("Position"), symbol: "scope", color: .cyan)
@@ -1450,7 +1468,7 @@ private struct EffectsKeyFX: View {
 
     private func ripple(width: CGFloat) -> some View {
         let tint = color("ripple")
-        Burst(duration: config.rippleDuration) { done in
+        return Burst(duration: config.rippleDuration) { done in
             ZStack {
                 if config.rippleStyle == "ring" {
                     Circle().strokeBorder(tint.opacity(0.8), lineWidth: 3)
