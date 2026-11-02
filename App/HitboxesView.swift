@@ -143,7 +143,8 @@ private struct HitMapSection: View {
                 .labelsHidden()
             }
             VStack(alignment: .leading, spacing: 10) {
-                HitMapDrawing(rows: ThemePreview.letterRows(for: language), data: data)
+                HitMapDrawing(rows: ThemePreview.letterRows(for: language), data: data,
+                               strength: isOn ? strength : 0)
                 Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
                     .font(.footnote)
                     .foregroundColor(.secondary)
@@ -160,6 +161,7 @@ private struct HitMapSection: View {
             } label: {
                 Label(tr("Forget learned taps"), systemImage: "trash")
             }
+            .buttonStyle(ActionButtonStyle())
             .disabled(data.isEmpty)
             .confirmationDialog(tr("Forget learned taps?"), isPresented: $confirmReset, titleVisibility: .visible) {
                 Button(tr("Forget"), role: .destructive) {
@@ -176,7 +178,7 @@ private struct HitMapSection: View {
         } footer: {
             Text(data.isEmpty
                  ? tr("Nothing learned yet. Type on the keyboard and come back.")
-                 : tr("Each dot is where you tap that key on average; a key moves once it has 8 taps."))
+                 : tr("Each highlighted key shows where its room has moved to; a key moves once it has 8 taps."))
         }
         .glassRows()
         .onAppear { reload() }
@@ -190,10 +192,11 @@ private struct HitMapSection: View {
     }
 }
 
-/// The letter rows with a dot per learned key, offset from the key's centre the way the user's taps are.
+/// The letter rows with each moved key's room drawn where learning has shifted it (at the current strength).
 private struct HitMapDrawing: View {
     let rows: [[String]]
     let data: [String: [Double]]
+    let strength: Double
 
     private var columns: Int { return max(rows.map { $0.count }.max() ?? 10, 1) }
 
@@ -217,10 +220,13 @@ private struct HitMapDrawing: View {
     }
 
     private func key(_ letter: String, width: CGFloat, height: CGFloat) -> some View {
+        // The same shift the keyboard applies (HitMap.offsets): none before 8 taps, trusted more up to 40.
         let entry = data[letter] ?? []
         let taps = entry.first ?? 0
-        let x = entry.count == 3 ? CGFloat(entry[1]) : 0
-        let y = entry.count == 3 ? CGFloat(entry[2]) : 0
+        let moved = entry.count == 3 && taps >= 8
+        let scale = strength * min(1, taps / 40)
+        let x = moved ? CGFloat(min(max(entry[1] * scale, -0.35), 0.35)) : 0
+        let y = moved ? CGFloat(min(max(entry[2] * scale, -0.35), 0.35)) : 0
         return ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(0.10))
@@ -228,13 +234,13 @@ private struct HitMapDrawing: View {
             Text(letter.uppercased())
                 .font(.system(size: min(width, height) * 0.42, weight: .medium))
                 .foregroundColor(.secondary)
-            if taps > 0 {
-                Circle()
-                    .fill(.tint)
-                    .frame(width: 9, height: 9)
-                    .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 1.5))
-                    .opacity(min(1, 0.35 + taps / 12))
-                    .offset(x: x * (width - 5), y: y * (height - 5))
+            if moved {
+                // Where the key's room has moved to.
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(.tint.opacity(0.28))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(.tint, lineWidth: 1.5))
+                    .padding(2.5)
+                    .offset(x: x * width, y: y * height)
             }
         }
         .frame(width: width, height: height)

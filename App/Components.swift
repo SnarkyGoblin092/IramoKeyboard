@@ -290,8 +290,7 @@ struct SettingSlider: View {
                     Spacer()
                     if showsTest {
                         Button(tr("Test")) { Feedback.test(strength: local) }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonStyle(ActionButtonStyle(compact: true))
                     }
                 }
             }
@@ -315,6 +314,30 @@ struct PressableStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// The app's action button: a full-width tinted capsule (or small, for a button beside a title), red when destructive.
+struct ActionButtonStyle: ButtonStyle {
+    var compact = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+
+    func makeBody(configuration: Configuration) -> some View {
+        let destructive = configuration.role == .destructive
+        let color: Color = destructive ? .red : .accentColor
+        let small = compact || controlSize == .small
+        return configuration.label
+            .font((small ? Font.footnote : Font.body).weight(.semibold))
+            .foregroundColor(color)
+            .frame(maxWidth: small ? nil : .infinity)
+            .padding(.horizontal, small ? 14 : 16)
+            .padding(.vertical, small ? 6 : 11)
+            .background(Capsule().fill(color.opacity(configuration.isPressed ? 0.26 : 0.14)))
+            .overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(isEnabled ? 1 : 0.4)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

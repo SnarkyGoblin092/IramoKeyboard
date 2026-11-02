@@ -138,26 +138,38 @@ struct ValueBar: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let fraction = CGFloat(min(max((value - range.lowerBound) / span, 0), 1))
-            let edge = width * fraction
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(.tertiarySystemFill))
-                Rectangle().fill(.tint.opacity(0.28)).frame(width: max(0, edge))
-                Rectangle().fill(.tint).frame(width: 3).offset(x: min(max(0, edge - 1.5), max(0, width - 3)))
+            let thumb: CGFloat = 22
+            let travel = max(0, width - thumb)
+            let edge = thumb / 2 + travel * fraction
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     if let symbol = symbol {
                         Image(systemName: symbol).foregroundStyle(.tint)
                     }
-                    Text(title).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(title).font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 8)
                     Text(format(value))
-                        .fontWeight(.semibold)
+                        .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                         .lineLimit(1)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.tint.opacity(0.14)))
                 }
-                .padding(.horizontal, 16)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color(.tertiarySystemFill)).frame(height: 6)
+                    Capsule().fill(.tint).frame(width: max(0, edge), height: 6)
+                    Circle()
+                        .fill(Color.white)
+                        .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .frame(width: thumb, height: thumb)
+                        .offset(x: travel * fraction)
+                }
+                .frame(height: thumb)
             }
-            .clipShape(Capsule())
-            .contentShape(Capsule())
+            .frame(maxHeight: .infinity, alignment: .center)
+            .contentShape(Rectangle())
             .simultaneousGesture(
                 DragGesture(minimumDistance: 4)
                     .onChanged { drag in
@@ -170,7 +182,7 @@ struct ValueBar: View {
                             }
                         }
                         guard horizontal == true, width > 0 else { return }
-                        let next = snapped(startValue + Double(drag.translation.width / width) * span)
+                        let next = snapped(startValue + Double(drag.translation.width / max(width - thumb, 1)) * span)
                         if abs(next - value) > step * 0.01 {
                             value = next
                             Feedback.tick()   // once per step; nothing more at either end
@@ -182,7 +194,7 @@ struct ValueBar: View {
                     }
             )
         }
-        .frame(height: 46)
+        .frame(height: 62)
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)

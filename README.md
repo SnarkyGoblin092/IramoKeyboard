@@ -110,7 +110,7 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Adaptive keys: the letters likely to come next get more room, the unlikely ones less (Gentle, Normal or
   Strong, with fine-tuning), also before the first letter.
 - Hit map: learns where you really tap each key and moves its touch area there; the app shows the map per
-  language and can reset it.
+  language, drawing each key's room where learning has moved it (at the current strength), and can reset it.
 
 ### Emoji
 - An emoji picker like the iOS one: recently used emoji, categories with tabs, skin tones, and search in your
@@ -172,7 +172,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   the arrow in the empty side moves it over. The split keyboard takes precedence on iPad.
 
 ### The Iramo app
-- Sliders are capsules that fill with the accent, drag sideways to change them, with a light click per step
+- Sliders show the name and a value pill over a slim accent track with a round thumb, drag sideways anywhere on
+  them to change them; action buttons (Test, Forget learned taps) are tinted capsules, red when destructive, with a light click per step
   (no hard knock at the ends). They show real values for this phone: points (key width, corner radius, letter
   and emoji size, touch room), milliseconds or seconds; strengths with no unit read Faint ... Full.
 - A Liquid Glass design: on iOS 26 and later every section of every list (settings, languages, learned words,
