@@ -736,3 +736,15 @@
 "Cool" = "Soğuk";
 "Pastel" = "Pastel";
 "Same as all effects" = "Tüm efektlerle aynı";
+"Load" = "Yükle";
+"Overwrite with current effects" = "Mevcut efektlerle üzerine yaz";
+"Save current effects" = "Mevcut efektleri kaydet";
+"My presets" = "Hazır ayarlarım";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Yüklemek için bir hazır ayara dokunun. Silmek için sola kaydırın veya menüsünden üzerine yazın.";
+"Save effects" = "Efektleri kaydet";
+"Name" = "Ad";
+"Save" = "Kaydet";
+"A preset with the same name is overwritten." = "Aynı adlı hazır ayarın üzerine yazılır.";
+"Overwrite %@?" = "%@ üzerine yazılsın mı?";
+"Overwrite" = "Üzerine yaz";
+"It will hold the effects as they are set now." = "Efektleri şu anda ayarlandığı haliyle saklar.";

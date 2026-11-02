@@ -736,3 +736,15 @@
 "Cool" = "Viileä";
 "Pastel" = "Pastelli";
 "Same as all effects" = "Sama kuin kaikissa tehosteissa";
+"Load" = "Lataa";
+"Overwrite with current effects" = "Korvaa nykyisillä tehosteilla";
+"Save current effects" = "Tallenna nykyiset tehosteet";
+"My presets" = "Omat valmiit asetukset";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Lataa valmis asetus napauttamalla sitä. Poista pyyhkäisemällä vasemmalle tai korvaa valikosta.";
+"Save effects" = "Tallenna tehosteet";
+"Name" = "Nimi";
+"Save" = "Tallenna";
+"A preset with the same name is overwritten." = "Saman niminen valmis asetus korvataan.";
+"Overwrite %@?" = "Korvataanko %@?";
+"Overwrite" = "Korvaa";
+"It will hold the effects as they are set now." = "Se tallentaa tehosteet juuri nyt asetettuina.";

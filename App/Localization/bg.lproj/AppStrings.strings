@@ -736,3 +736,15 @@
 "Cool" = "Студено";
 "Pastel" = "Пастелно";
 "Same as all effects" = "Като всички ефекти";
+"Load" = "Зареждане";
+"Overwrite with current effects" = "Презаписване с текущите ефекти";
+"Save current effects" = "Запазване на текущите ефекти";
+"My presets" = "Моите комбинации";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Докоснете комбинация, за да я заредите. Плъзнете я наляво, за да я изтриете, или презапишете от менюто ѝ.";
+"Save effects" = "Запазване на ефектите";
+"Name" = "Име";
+"Save" = "Запази";
+"A preset with the same name is overwritten." = "Комбинация със същото име ще бъде презаписана.";
+"Overwrite %@?" = "Презапис на %@?";
+"Overwrite" = "Презаписване";
+"It will hold the effects as they are set now." = "Ще съдържа ефектите така, както са зададени сега.";

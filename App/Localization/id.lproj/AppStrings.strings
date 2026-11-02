@@ -736,3 +736,15 @@
 "Cool" = "Sejuk";
 "Pastel" = "Pastel";
 "Same as all effects" = "Sama seperti semua efek";
+"Load" = "Muat";
+"Overwrite with current effects" = "Timpa dengan efek saat ini";
+"Save current effects" = "Simpan efek saat ini";
+"My presets" = "Preset saya";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Ketuk preset untuk memuatnya. Geser ke kiri untuk menghapusnya, atau timpa dari menunya.";
+"Save effects" = "Simpan efek";
+"Name" = "Nama";
+"Save" = "Simpan";
+"A preset with the same name is overwritten." = "Preset dengan nama yang sama akan ditimpa.";
+"Overwrite %@?" = "Timpa %@?";
+"Overwrite" = "Timpa";
+"It will hold the effects as they are set now." = "Preset ini akan menyimpan efek seperti pengaturan saat ini.";

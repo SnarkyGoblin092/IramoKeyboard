@@ -736,3 +736,15 @@
 "Cool" = "Šalta";
 "Pastel" = "Pastelinė";
 "Same as all effects" = "Kaip visiems efektams";
+"Load" = "Įkelti";
+"Overwrite with current effects" = "Perrašyti dabartiniais efektais";
+"Save current effects" = "Įrašyti dabartinius efektus";
+"My presets" = "Mano šablonai";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Palieskite šabloną, kad jį įkeltumėte. Perbraukite jį kairėn, kad ištrintumėte, arba perrašykite iš jo meniu.";
+"Save effects" = "Įrašyti efektus";
+"Name" = "Pavadinimas";
+"Save" = "Įrašyti";
+"A preset with the same name is overwritten." = "Šablonas su tuo pačiu pavadinimu bus perrašytas.";
+"Overwrite %@?" = "Perrašyti %@?";
+"Overwrite" = "Perrašyti";
+"It will hold the effects as they are set now." = "Jame bus efektai, nustatyti dabar.";

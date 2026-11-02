@@ -736,3 +736,15 @@
 "Cool" = "Chladné";
 "Pastel" = "Pastelové";
 "Same as all effects" = "Stejné jako všechny efekty";
+"Load" = "Načíst";
+"Overwrite with current effects" = "Přepsat aktuálními efekty";
+"Save current effects" = "Uložit aktuální efekty";
+"My presets" = "Moje předvolby";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Klepnutím na předvolbu ji načtete. Přejetím doleva ji smažete, nebo ji přepište z jejího menu.";
+"Save effects" = "Uložit efekty";
+"Name" = "Název";
+"Save" = "Uložit";
+"A preset with the same name is overwritten." = "Předvolba se stejným názvem bude přepsána.";
+"Overwrite %@?" = "Přepsat %@?";
+"Overwrite" = "Přepsat";
+"It will hold the effects as they are set now." = "Uloží efekty tak, jak jsou nastaveny právě teď.";

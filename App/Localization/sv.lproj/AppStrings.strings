@@ -736,3 +736,15 @@
 "Cool" = "Sval";
 "Pastel" = "Pastell";
 "Same as all effects" = "Samma som alla effekter";
+"Load" = "Läs in";
+"Overwrite with current effects" = "Skriv över med aktuella effekter";
+"Save current effects" = "Spara aktuella effekter";
+"My presets" = "Mina förinställningar";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Tryck på en förinställning för att läsa in den. Svep den åt vänster för att radera den, eller skriv över den från dess meny.";
+"Save effects" = "Spara effekter";
+"Name" = "Namn";
+"Save" = "Spara";
+"A preset with the same name is overwritten." = "En förinställning med samma namn skrivs över.";
+"Overwrite %@?" = "Skriv över %@?";
+"Overwrite" = "Skriv över";
+"It will hold the effects as they are set now." = "Den sparar effekterna så som de är inställda just nu.";

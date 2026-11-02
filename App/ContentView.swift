@@ -8,9 +8,12 @@ struct ContentView: View {
     /// The screens opened from the main list (ScreenRow pushes onto it).
     @State private var path: [Screen] = []
     @AppStorage(SettingKey.appLanguage, store: SharedStore.defaults) private var appLanguage = SettingDefault.appLanguage
+    /// The app language was just changed: the main list, built again from the top, goes back to its row.
+    @State private var returnToLanguageRow = false
 
     var body: some View {
         NavigationStack(path: $path) {
+            ScrollViewReader { proxy in
             // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
             GlassList {
                 HeaderSection()
@@ -29,13 +32,22 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .navigationDestination(for: Screen.self) { $0.view }
+            .onAppear {
+                guard returnToLanguageRow else { return }
+                DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
+            }
+            }
         }
         .toggleStyle(GlassSwitchStyle())   // every switch in the app is a piece of Liquid Glass
         // Everything is built again in the new language when it changes (tr reads it as the views are drawn).
         .id(appLanguage)
         .environment(\.locale, AppLanguage.locale)
         .environment(\.layoutDirection, AppLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
-        .environment(\.openScreen, { path.append($0) })
+        .environment(\.openScreen, { screen in
+            returnToLanguageRow = false
+            path.append(screen)
+        })
+        .onChange(of: appLanguage) { _ in returnToLanguageRow = true }
         .modifier(AccentTint())
         .roundedType()
         .onAppear {
@@ -254,7 +266,8 @@ private struct TypingSection: View {
     }
 }
 
-/// The theme (its preview is on the Themes screen), the number row, the keys, haptics and the accent colour.
+/// The theme (its preview is on the Themes screen), the keys (with the number row and key pop-ups), effects,
+/// haptics and the accent colour.
 private struct LookSection: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
@@ -285,14 +298,9 @@ private struct LookSection: View {
             ScreenRow(.themes) {
                 SettingsRow(title: tr("Theme"), symbol: "paintbrush.fill", color: .purple, value: theme.name)
             }
-            SettingToggle(tr("Number row"), key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
-                          subtitle: tr("Numbers above the letters"), symbol: "number", color: .orange)
             ScreenRow(.keys) {
                 SettingsRow(title: tr("Keys"), symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
             }
-            SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
-                          subtitle: tr("The letter shows above your finger"),
-                          symbol: "rectangle.and.hand.point.up.left.fill", color: .purple)
             ScreenRow(.effects) {
                 SettingsRow(title: tr("Effects"), symbol: "sparkles", color: .indigo, value: effectsSummary)
             }
@@ -423,62 +431,26 @@ private struct AboutSection: View {
     }
 }
 
-/// The app's own language, last on the main screen: the phone's or any of the keyboard's languages, each named
-/// in the app's current language (with its own name beside it, to find one's way back).
+/// The app's own language, last on the main screen: a row showing the chosen one, opening the list to pick it from.
 private struct AppLanguageSection: View {
     @AppStorage(SettingKey.appLanguage, store: SharedStore.defaults) private var appLanguage = SettingDefault.appLanguage
 
-    /// The languages by their names in the app's language.
-    private var languages: [Language] {
-        let locale = AppLanguage.locale
-        return Language.allCases.sorted {
-            $0.localizedName.compare($1.localizedName, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
-        }
-    }
+    /// The row's place in the main list, scrolled back to after the app is built again in a new language.
+    static let rowID = "appLanguageRow"
 
-    private func name(_ language: Language) -> String {
-        let name = language.localizedName
-        return name == language.displayName ? name : "\(name) (\(language.displayName))"
-    }
-
-    private var systemName: String { return tr("System (%@)", "\(AppLanguage.systemLanguage.localizedName)") }
-
-    /// What the row shows: the chosen language's name.
     private var chosenName: String {
-        guard appLanguage != AppLanguage.system, let language = Language(rawValue: appLanguage) else { return systemName }
-        return name(language)
+        guard appLanguage != AppLanguage.system, let language = Language(rawValue: appLanguage) else {
+            return tr("System")
+        }
+        return language.localizedName
     }
 
     var body: some View {
         Section {
-            // A menu with the whole row as its button (a menu-style Picker only takes taps on its text), the chosen
-            // language on the left and the arrows at the right edge.
-            Menu {
-                Picker(selection: Binding(get: { appLanguage }, set: { value in
-                    guard value != appLanguage else { return }
-                    Feedback.choose()
-                    appLanguage = value
-                })) {
-                    Text(systemName).tag(AppLanguage.system)
-                    ForEach(languages, id: \.self) { language in
-                        Text(name(language)).tag(language.rawValue)
-                    }
-                } label: {
-                    Text(tr("App language"))
-                }
-                .pickerStyle(.inline)
-            } label: {
-                HStack(spacing: 12) {
-                    Text(chosenName)
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(.accentColor)
-                }
-                .contentShape(Rectangle())
+            ScreenRow(.appLanguage) {
+                SettingsRow(title: tr("App language"), symbol: "globe", color: .blue, value: chosenName)
             }
+            .id(AppLanguageSection.rowID)   // on the row itself, so a List finds it too
         } header: {
             SectionHeader(tr("Language"), symbol: "character.bubble.fill", color: .blue)
         } footer: {
@@ -487,15 +459,69 @@ private struct AppLanguageSection: View {
     }
 }
 
+/// Picks the app's language: the phone's or any of the keyboard's languages, each named in the app's current
+/// language (with its own name beside it, to find one's way back). Choosing one builds the app again in it; the
+/// list then opens again where it was, at the chosen language.
+struct AppLanguageView: View {
+    @AppStorage(SettingKey.appLanguage, store: SharedStore.defaults) private var appLanguage = SettingDefault.appLanguage
+
+    private func name(_ language: Language) -> String {
+        let name = language.localizedName
+        return name == language.displayName ? name : "\(name) (\(language.displayName))"
+    }
+
+    private func row(_ code: String, _ title: String) -> some View {
+        Button {
+            guard code != appLanguage else { return }
+            Feedback.choose()
+            appLanguage = code
+        } label: {
+            HStack {
+                Text(title).foregroundColor(.primary)
+                Spacer()
+                if code == appLanguage {
+                    Image(systemName: "checkmark").font(.body.weight(.semibold))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .id(code)
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            GlassList {
+                Section {
+                    row(AppLanguage.system, tr("System (%@)", "\(AppLanguage.systemLanguage.localizedName)"))
+                    ForEach(Language.byName(Language.allCases), id: \.rawValue) { language in
+                        row(language.rawValue, name(language))
+                    }
+                } footer: {
+                    Text(tr("The language of this app. The keyboard's typing languages are set under Languages."))
+                }
+                .glassRows()
+            }
+            .glassScreen()
+            .onAppear {
+                // At the chosen language (also when the screen is built again after a change).
+                DispatchQueue.main.async { proxy.scrollTo(appLanguage, anchor: .center) }
+            }
+        }
+        .navigationTitle(tr("App language"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - Screens
 
 /// The screens the main list opens.
 enum Screen: Hashable {
-    case languages, suggestions, gestures, hitboxes, shortcuts, emoji, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
+    case languages, appLanguage, suggestions, gestures, hitboxes, shortcuts, emoji, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
 
     @ViewBuilder var view: some View {
         switch self {
         case .languages: LanguagesView()
+        case .appLanguage: AppLanguageView()
         case .suggestions: SuggestionsView()
         case .gestures: GesturesView()
         case .hitboxes: HitboxesView()
@@ -662,7 +688,8 @@ struct ShortcutsView: View {
 struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
 
-    private var languages: [Language] { return enabled.compactMap { Language(rawValue: $0) } }
+    /// In alphabetical order (a list saved here is stored in that order too).
+    private var languages: [Language] { return Language.byName(enabled.compactMap { Language(rawValue: $0) }) }
 
     var body: some View {
         GlassList {
@@ -708,7 +735,7 @@ struct LanguagesView: View {
     }
 
     private func save(_ list: [String]) {
-        let ordered = Language.allCases.map { $0.rawValue }.filter { list.contains($0) }
+        let ordered = Language.byName(Language.allCases.filter { list.contains($0.rawValue) }).map { $0.rawValue }
         guard !ordered.isEmpty, ordered != enabled else { return }
         if ordered.count > enabled.count { Feedback.success() } else { Feedback.delete() }
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
@@ -724,7 +751,7 @@ private struct AddLanguageView: View {
 
     var body: some View {
         GlassList {
-            ForEach(Language.allCases.filter { !enabled.contains($0.rawValue) }, id: \.rawValue) { language in
+            ForEach(Language.byName(Language.allCases.filter { !enabled.contains($0.rawValue) }), id: \.rawValue) { language in
                 Button {
                     add(language)
                     dismiss()

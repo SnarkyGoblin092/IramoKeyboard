@@ -736,3 +736,15 @@
 "Cool" = "سرد";
 "Pastel" = "پاستلی";
 "Same as all effects" = "مانند همه جلوه‌ها";
+"Load" = "بارگذاری";
+"Overwrite with current effects" = "بازنویسی با جلوه‌های فعلی";
+"Save current effects" = "ذخیره جلوه‌های فعلی";
+"My presets" = "پیش‌تنظیم‌های من";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "برای بارگذاری، روی یک پیش‌تنظیم ضربه بزنید. برای حذف، آن را به چپ بکشید یا از منوی آن بازنویسی‌اش کنید.";
+"Save effects" = "ذخیره جلوه‌ها";
+"Name" = "نام";
+"Save" = "ذخیره";
+"A preset with the same name is overwritten." = "پیش‌تنظیمی با همین نام بازنویسی می‌شود.";
+"Overwrite %@?" = "%@ بازنویسی شود؟";
+"Overwrite" = "بازنویسی";
+"It will hold the effects as they are set now." = "جلوه‌ها را همان‌طور که اکنون تنظیم شده‌اند نگه می‌دارد.";

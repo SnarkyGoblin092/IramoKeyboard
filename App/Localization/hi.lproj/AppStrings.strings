@@ -736,3 +736,15 @@
 "Cool" = "ठंडा";
 "Pastel" = "पेस्टल";
 "Same as all effects" = "सभी प्रभावों जैसा";
+"Load" = "लोड करें";
+"Overwrite with current effects" = "मौजूदा इफ़ेक्ट से ओवरराइट करें";
+"Save current effects" = "मौजूदा इफ़ेक्ट सेव करें";
+"My presets" = "मेरे प्रीसेट";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "प्रीसेट लोड करने के लिए उस पर टैप करें। उसे डिलीट करने के लिए बाईं ओर स्वाइप करें, या उसके मेन्यू से ओवरराइट करें।";
+"Save effects" = "इफ़ेक्ट सेव करें";
+"Name" = "नाम";
+"Save" = "सेव करें";
+"A preset with the same name is overwritten." = "एक ही नाम वाला प्रीसेट ओवरराइट हो जाएगा।";
+"Overwrite %@?" = "%@ को ओवरराइट करें?";
+"Overwrite" = "ओवरराइट करें";
+"It will hold the effects as they are set now." = "इसमें इफ़ेक्ट वैसे ही सेव होंगे जैसे अभी सेट हैं।";

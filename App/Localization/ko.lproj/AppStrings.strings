@@ -736,3 +736,15 @@
 "Cool" = "차가움";
 "Pastel" = "파스텔";
 "Same as all effects" = "모든 효과와 같음";
+"Load" = "불러오기";
+"Overwrite with current effects" = "현재 효과로 덮어쓰기";
+"Save current effects" = "현재 효과 저장";
+"My presets" = "내 프리셋";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "프리셋을 탭하면 불러옵니다. 왼쪽으로 밀면 삭제하고, 메뉴에서 덮어쓸 수도 있습니다.";
+"Save effects" = "효과 저장";
+"Name" = "이름";
+"Save" = "저장";
+"A preset with the same name is overwritten." = "같은 이름의 프리셋은 덮어쓰게 됩니다.";
+"Overwrite %@?" = "%@ 덮어쓸까요?";
+"Overwrite" = "덮어쓰기";
+"It will hold the effects as they are set now." = "지금 설정된 효과를 그대로 담습니다.";

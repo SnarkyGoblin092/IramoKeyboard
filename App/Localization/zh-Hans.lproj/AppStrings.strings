@@ -736,3 +736,15 @@
 "Cool" = "冷色";
 "Pastel" = "柔和色";
 "Same as all effects" = "与所有效果相同";
+"Load" = "载入";
+"Overwrite with current effects" = "用当前效果覆盖";
+"Save current effects" = "保存当前效果";
+"My presets" = "我的预设";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "点按预设即可载入。向左滑动可删除，或从其菜单中覆盖。";
+"Save effects" = "保存效果";
+"Name" = "名称";
+"Save" = "保存";
+"A preset with the same name is overwritten." = "同名预设将被覆盖。";
+"Overwrite %@?" = "覆盖 %@？";
+"Overwrite" = "覆盖";
+"It will hold the effects as they are set now." = "它将保存当前设置的效果。";

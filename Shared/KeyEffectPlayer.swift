@@ -190,17 +190,33 @@ final class KeyEffectPlayer {
 
     /// Fits the glow to the key after it is laid out.
     func layoutGlow() {
-        guard let glow = pressGlow else { return }
-        glow.frame = bounds
-        glow.shadowPath = keyShapePath()
-        glow.shadowRadius = 9 * CGFloat(config.glowSpread)
+        shapeGlow(frame: bounds, path: keyShapePath())
     }
 
+    /// Fits the glow's lights to `path` (in the glow's own coordinates) and to the Spread setting: a wide soft light
+    /// and a tight bright core.
+    func shapeGlow(frame: CGRect, path: CGPath) {
+        guard let glow = pressGlow else { return }
+        glow.frame = frame
+        let spread = 12 * CGFloat(config.glowSpread)
+        for (index, light) in (glow.sublayers ?? []).enumerated() {
+            light.frame = glow.bounds
+            light.shadowPath = path
+            light.shadowRadius = index == 0 ? spread : spread * 0.35
+        }
+    }
+
+    /// The glow: two lights at full strength in a holder whose opacity fades in and out (so both fade together).
     private func glowLayer() -> CALayer {
         if let existing = pressGlow { return existing }
         let glow = CALayer()
-        glow.shadowOffset = .zero
-        glow.shadowOpacity = 0
+        glow.opacity = 0
+        for _ in 0..<2 {
+            let light = CALayer()
+            light.shadowOffset = .zero
+            light.shadowOpacity = 1
+            glow.addSublayer(light)
+        }
         pressGlow = glow
         layoutGlow()
         if let install = installGlow {
@@ -214,15 +230,15 @@ final class KeyEffectPlayer {
     private func fadeGlow(on: Bool, color: UIColor?) {
         let effects = config
         let glow = glowLayer()
-        glow.shadowRadius = 9 * CGFloat(effects.glowSpread)
-        if on, let color = color { glow.shadowColor = color.cgColor }
+        layoutGlow()
+        if on, let color = color { tintGlow(glow, color) }
         let target = on ? Float(effects.glowStrength) : 0
         let duration = on ? effects.glowFadeIn : effects.glowFadeOut
-        let from = glow.presentation()?.shadowOpacity ?? glow.shadowOpacity
-        glow.shadowOpacity = target
+        let from = glow.presentation()?.opacity ?? glow.opacity
+        glow.opacity = target
         glow.removeAnimation(forKey: "glow")
         guard duration > 0.001 else { return }
-        let fade = CABasicAnimation(keyPath: "shadowOpacity")
+        let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = from
         fade.toValue = target
         fade.duration = duration
@@ -230,14 +246,18 @@ final class KeyEffectPlayer {
         glow.add(fade, forKey: "glow")
     }
 
+    private func tintGlow(_ glow: CALayer, _ color: UIColor) {
+        for light in glow.sublayers ?? [] { light.shadowColor = color.cgColor }
+    }
+
     /// The key lights up as part of a wave that started at a neighbour: a pulse of its glow, `delay` seconds late.
     func waveLight(color: UIColor, strength: Float, delay: TimeInterval) {
         let glow = glowLayer()
-        glow.shadowColor = color.cgColor
-        let pulse = CAKeyframeAnimation(keyPath: "shadowOpacity")
-        pulse.values = [0, strength, 0]
+        tintGlow(glow, color)
+        let pulse = CAKeyframeAnimation(keyPath: "opacity")
+        pulse.values = [0, min(1, strength * 1.6), 0]
         pulse.keyTimes = [0, 0.3, 1]
-        pulse.duration = max(config.glowFadeOut, 0.3)
+        pulse.duration = max(config.glowFadeOut, 0.45)
         pulse.beginTime = CACurrentMediaTime() + delay
         pulse.fillMode = .backwards
         glow.add(pulse, forKey: "wave" + String(CACurrentMediaTime()))

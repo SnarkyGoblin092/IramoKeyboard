@@ -736,3 +736,15 @@
 "Cool" = "Koel";
 "Pastel" = "Pastel";
 "Same as all effects" = "Zelfde als alle effecten";
+"Load" = "Laden";
+"Overwrite with current effects" = "Overschrijven met huidige effecten";
+"Save current effects" = "Huidige effecten opslaan";
+"My presets" = "Mijn voorinstellingen";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Tik op een voorinstelling om hem te laden. Veeg hem naar links om hem te wissen, of overschrijf hem via het menu.";
+"Save effects" = "Effecten opslaan";
+"Name" = "Naam";
+"Save" = "Opslaan";
+"A preset with the same name is overwritten." = "Een voorinstelling met dezelfde naam wordt overschreven.";
+"Overwrite %@?" = "%@ overschrijven?";
+"Overwrite" = "Overschrijven";
+"It will hold the effects as they are set now." = "Hij bewaart de effecten zoals ze nu zijn ingesteld.";

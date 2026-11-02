@@ -736,3 +736,15 @@
 "Cool" = "寒色";
 "Pastel" = "パステル";
 "Same as all effects" = "すべてのエフェクトと同じ";
+"Load" = "読み込む";
+"Overwrite with current effects" = "現在のエフェクトで上書き";
+"Save current effects" = "現在のエフェクトを保存";
+"My presets" = "マイプリセット";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "プリセットをタップすると読み込みます。左にスワイプすると削除、メニューから上書きできます。";
+"Save effects" = "エフェクトを保存";
+"Name" = "名前";
+"Save" = "保存";
+"A preset with the same name is overwritten." = "同じ名前のプリセットは上書きされます。";
+"Overwrite %@?" = "%@を上書きしますか？";
+"Overwrite" = "上書き";
+"It will hold the effects as they are set now." = "現在設定されているエフェクトを保存します。";

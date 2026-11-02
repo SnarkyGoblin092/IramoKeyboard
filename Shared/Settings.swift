@@ -109,6 +109,8 @@ enum SettingKey {
     /// Press effects (the Effects screen): a glow that fades in and out, and a ripple.
     /// All of them as JSON (EffectsConfig).
     static let effects = "hunkeys.effects"
+    /// The Effects screen's saved presets (SavedEffectPreset list, as JSON).
+    static let effectPresets = "hunkeys.effectPresets"
     /// The system themes' own style (SystemStyle by theme id, as JSON).
     static let systemEdits = "hunkeys.systemEdits"
     /// The keys' typeface (KeyFont).
@@ -201,6 +203,7 @@ enum SettingDefault {
     static let keyGlow = "off"
     /// Effects and the system themes' styles: empty until something is changed.
     static let effects = ""
+    static let effectPresets = ""
     static let systemEdits = ""
     static let keyFont = "system"
     static let keyHeight: Double = 45.0
@@ -418,6 +421,7 @@ final class Settings {
             SettingKey.keyBorderStyle: SettingDefault.keyBorderStyle,
             SettingKey.keyGlow: SettingDefault.keyGlow,
             SettingKey.effects: SettingDefault.effects,
+            SettingKey.effectPresets: SettingDefault.effectPresets,
             SettingKey.systemEdits: SettingDefault.systemEdits,
             SettingKey.keyFont: SettingDefault.keyFont,
             SettingKey.keyHeight: SettingDefault.keyHeight,

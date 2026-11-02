@@ -387,7 +387,7 @@ final class KeyboardView: UIView {
             for other in row where other !== key && other.superview != nil {
                 let distance = hypot(other.center.x - key.center.x, other.center.y - key.center.y) / width
                 guard distance <= CGFloat(effects.waveReach) else { continue }
-                let fade = 1 - distance / (CGFloat(effects.waveReach) + 0.5)
+                let fade = 1 - 0.6 * distance / (CGFloat(effects.waveReach) + 0.5)
                 other.waveLight(color: color, strength: Float(effects.waveStrength) * Float(fade),
                                 delay: TimeInterval(distance) * effects.waveSpeed)
             }

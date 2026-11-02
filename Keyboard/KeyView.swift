@@ -183,10 +183,9 @@ final class KeyView: UIView {
         }
 
         let fill: UIColor
+        // A press does not change the key's colour: lighting it up is the Flash effect's job.
         if usesAccent {
-            fill = isPressed ? Theme.accent.withAlphaComponent(0.7) : Theme.accent
-        } else if isPressed {
-            fill = spec.isFunction ? Theme.functionKeyPressed : Theme.letterKeyPressed
+            fill = Theme.accent
         } else {
             fill = spec.isFunction ? Theme.functionKey : Theme.letterKey
         }
@@ -267,8 +266,7 @@ final class KeyView: UIView {
         CATransaction.setDisableActions(true)
         halo.frame = frame
         halo.shadowPath = keyShapePath()
-        pressGlow?.frame = halo.bounds
-        pressGlow?.shadowPath = halo.shadowPath
+        if let path = halo.shadowPath { effects.shapeGlow(frame: halo.bounds, path: path) }
         CATransaction.commit()
     }
 
@@ -282,9 +280,7 @@ final class KeyView: UIView {
     private func applyGlass(_ glassView: UIVisualEffectView, fill: UIColor) {
         let tint: UIColor?
         if usesAccent {
-            tint = Theme.accent.withAlphaComponent(isPressed ? 0.55 : 0.85)
-        } else if isPressed {
-            tint = Theme.letterKeyPressed
+            tint = Theme.accent.withAlphaComponent(0.85)
         } else if spec.isFunction {
             tint = Theme.functionKey
         } else if Theme.contrastKeys {
@@ -292,7 +288,7 @@ final class KeyView: UIView {
         } else {
             tint = nil
         }
-        let state = "\(usesAccent)|\(isPressed)|\(spec.isFunction)"
+        let state = "\(usesAccent)|\(spec.isFunction)"
         if state != lastGlassState {
             lastGlassState = state
             GlassSupport.setTint(glassView, clear: false, tint: tint)

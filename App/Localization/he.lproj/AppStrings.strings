@@ -736,3 +736,15 @@
 "Cool" = "קר";
 "Pastel" = "פסטל";
 "Same as all effects" = "כמו בכל האפקטים";
+"Load" = "טען";
+"Overwrite with current effects" = "החלף באפקטים הנוכחיים";
+"Save current effects" = "שמור את האפקטים הנוכחיים";
+"My presets" = "ההגדרות המוכנות שלי";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "הקש על הגדרה מוכנה כדי לטעון אותה. החלק אותה שמאלה כדי למחוק אותה, או החלף אותה מהתפריט שלה.";
+"Save effects" = "שמור אפקטים";
+"Name" = "שם";
+"Save" = "שמור";
+"A preset with the same name is overwritten." = "הגדרה מוכנה עם אותו שם תוחלף.";
+"Overwrite %@?" = "להחליף את %@?";
+"Overwrite" = "החלף";
+"It will hold the effects as they are set now." = "היא תשמור את האפקטים כפי שהם מוגדרים עכשיו.";

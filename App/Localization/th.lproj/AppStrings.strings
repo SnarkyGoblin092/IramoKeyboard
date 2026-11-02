@@ -736,3 +736,15 @@
 "Cool" = "เย็น";
 "Pastel" = "พาสเทล";
 "Same as all effects" = "เหมือนเอฟเฟกต์ทั้งหมด";
+"Load" = "โหลด";
+"Overwrite with current effects" = "เขียนทับด้วยเอฟเฟ็กต์ปัจจุบัน";
+"Save current effects" = "บันทึกเอฟเฟ็กต์ปัจจุบัน";
+"My presets" = "ชุดค่าที่ตั้งไว้ของฉัน";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "แตะชุดค่าที่ตั้งไว้เพื่อโหลด ปัดไปทางซ้ายเพื่อลบ หรือเขียนทับจากเมนู";
+"Save effects" = "บันทึกเอฟเฟ็กต์";
+"Name" = "ชื่อ";
+"Save" = "บันทึก";
+"A preset with the same name is overwritten." = "ชุดค่าที่ตั้งไว้ที่มีชื่อเดียวกันจะถูกเขียนทับ";
+"Overwrite %@?" = "เขียนทับ %@ ใช่ไหม";
+"Overwrite" = "เขียนทับ";
+"It will hold the effects as they are set now." = "จะเก็บเอฟเฟ็กต์ตามที่ตั้งค่าไว้ตอนนี้";

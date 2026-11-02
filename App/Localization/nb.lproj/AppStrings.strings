@@ -736,3 +736,15 @@
 "Cool" = "Kjølig";
 "Pastel" = "Pastell";
 "Same as all effects" = "Samme som alle effekter";
+"Load" = "Last inn";
+"Overwrite with current effects" = "Overskriv med gjeldende effekter";
+"Save current effects" = "Lagre gjeldende effekter";
+"My presets" = "Mine forhåndsvalg";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Trykk på et forhåndsvalg for å laste det inn. Sveip det til venstre for å slette det, eller overskriv det fra menyen.";
+"Save effects" = "Lagre effekter";
+"Name" = "Navn";
+"Save" = "Lagre";
+"A preset with the same name is overwritten." = "Et forhåndsvalg med samme navn blir overskrevet.";
+"Overwrite %@?" = "Overskrive %@?";
+"Overwrite" = "Overskriv";
+"It will hold the effects as they are set now." = "Det lagrer effektene slik de er innstilt nå.";

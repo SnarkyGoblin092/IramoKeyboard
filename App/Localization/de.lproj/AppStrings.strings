@@ -736,3 +736,15 @@
 "Cool" = "Kühl";
 "Pastel" = "Pastell";
 "Same as all effects" = "Wie alle Effekte";
+"Load" = "Laden";
+"Overwrite with current effects" = "Mit aktuellen Effekten überschreiben";
+"Save current effects" = "Aktuelle Effekte speichern";
+"My presets" = "Meine Voreinstellungen";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Tippe auf eine Voreinstellung, um sie zu laden. Wische sie nach links, um sie zu löschen, oder überschreibe sie über ihr Menü.";
+"Save effects" = "Effekte speichern";
+"Name" = "Name";
+"Save" = "Speichern";
+"A preset with the same name is overwritten." = "Eine Voreinstellung mit demselben Namen wird überschrieben.";
+"Overwrite %@?" = "%@ überschreiben?";
+"Overwrite" = "Überschreiben";
+"It will hold the effects as they are set now." = "Sie speichert die Effekte so, wie sie jetzt eingestellt sind.";

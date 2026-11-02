@@ -736,3 +736,15 @@
 "Cool" = "بارد";
 "Pastel" = "باستيل";
 "Same as all effects" = "مثل كل التأثيرات";
+"Load" = "تحميل";
+"Overwrite with current effects" = "الكتابة فوق بالتأثيرات الحالية";
+"Save current effects" = "حفظ التأثيرات الحالية";
+"My presets" = "إعداداتي الجاهزة";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "اضغط على إعداد مسبق لتحميله. اسحبه إلى اليسار لحذفه، أو اكتب فوقه من قائمته.";
+"Save effects" = "حفظ التأثيرات";
+"Name" = "الاسم";
+"Save" = "حفظ";
+"A preset with the same name is overwritten." = "سيتم الكتابة فوق الإعداد الذي له الاسم نفسه.";
+"Overwrite %@?" = "الكتابة فوق %@؟";
+"Overwrite" = "الكتابة فوق";
+"It will hold the effects as they are set now." = "سيحفظ التأثيرات كما هي مضبوطة الآن.";

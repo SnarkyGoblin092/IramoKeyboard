@@ -117,4 +117,12 @@ extension Language {
         // Some languages write language names in lower case ("magyar"); a list item starts with a capital.
         return text.prefix(1).uppercased(with: locale) + text.dropFirst()
     }
+
+    /// Languages in alphabetical order of their names in the app's language, as the app lists them.
+    static func byName(_ languages: [Language]) -> [Language] {
+        let locale = AppLanguage.locale
+        return languages.map { (language: $0, name: $0.localizedName) }
+            .sorted { $0.name.compare($1.name, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending }
+            .map { $0.language }
+    }
 }

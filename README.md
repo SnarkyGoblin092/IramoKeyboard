@@ -38,7 +38,8 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   writes one, and letters left over turn into the next word. Return keeps the letters as typed. Tones are not
   needed, words you pick rank higher next time, and the comma, full stop, question and exclamation marks are
   full-width (，。？！), with 、「」『』 on long-press. Swiping and auto-correction are off for it.
-- Swipe the space bar left or right to switch; the space bar shows the language's name.
+- Swipe the space bar left or right to switch; the space bar shows the language's name. The app lists the
+  languages (enabled ones, the ones to add and the app languages) in alphabetical order of their names.
 - Several languages at once: words from any enabled language are suggested and corrected, and the keyboard
   learns which ones you write in most.
 - Features a language can't use are left out while typing in it: swipe typing, adaptive keys and the hit map
@@ -209,8 +210,9 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Languages, text shortcuts and learned words, each swiped left to remove an entry.
 - The main screen, in the order a person goes through it: Keyboard (Languages, Learned words, Text shortcuts,
   Emoji, Functions panel), Typing (Suggestion bar, then auto-correction, emoji suggestions, capitals and the
-  period shortcut), Touch & gestures (Gestures, Hitboxes), Look & feel (Theme, Number row, Keys, Key pop-ups,
-  Effects, Haptics, Accent colour), Privacy & data, then App language and, last, the credits.
+  period shortcut), Touch & gestures (Gestures, Hitboxes), Look & feel (Theme, Keys, Effects, Haptics, Accent
+  colour), Privacy & data, then App language and, last, the credits. The number row and key pop-ups switches
+  are on the Keys screen, under Layout.
 - Effects, each with its own switch and settings, one colour for them all (accent, white, a new rainbow hue per
   press, or any colour): glow (strength, spread, fade in, fade out), outline light, ripple (disc or ring, reach,
   duration), shine (a slanted band sweeping across the key), sparks (count, distance, size), pop (the label swells
@@ -218,12 +220,18 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   glowing swipe trail. Presets (the Preset row at the top; every preset is a toned-down mix, with fewer specks, softer light and smaller moves, so typing stays calm): Off, Glow, Neon, Ripple, Rainbow, Sparkle, Wave, Confetti, Bubbles, Jelly, Love, Winter, Storm, Party, Cyber, Space, Garden, Arcade, Magic and Bounce, then fifty more themed ones (Sunset, Ocean, Forest, Candy, Lava, Frost, Thunder, Nightclub, Retro, Hacker, Gold, Chrome and so on up to Showtime). Every picture in the effects (hearts, stars, snowflakes, notes, petals, leaves, butterflies, coins, gems, balloons, ghosts, rockets, dice and so on) is a drawn vector shape, never an emoji or a character, so the keyboard and the preview draw the same thing in the press's colour; rain falls as tapered streaks and lands with a small splash ring. A Direction setting (Auto, Up, Down, Left, Right or Random for a new way each press) turns the effects that have a way of their own, and several presets use it. Colour, direction and position can be set for all the effects and for each effect on its own, under its switch ("Same as all effects" follows the general setting); the colours are Accent, White, Rainbow, Warm, Cool, Pastel, Neon, Random and any custom colour from a colour picker. Below, the general Position setting (Middle, Top, Bottom, Left, Right or Random for a new spot each press) moves where the effects that leave the key (specks, sparks, confetti, bubbles, the echo, the shockwave, the bolt) and the ripple start; some presets use it. A tap anywhere on an effect's row switches it on or off. Effects are sized for a key no wider than about 1.3 times its height, so the space bar and other wide keys get letter-sized effects (they still start where the Position setting puts them along the whole key). The Effects screen's keyboard is the keyboard itself: the app runs the keyboard's own keys, layout and effect code at the keyboard's real size, shrunk to fit, so every effect looks and moves exactly as it does while typing. It shows only the keys: no suggestion bar, and the emoji key opens no picker. Shift and the number and symbol pages work, and the keys type nothing. The long settings list builds its cards as they scroll into view; on the keyboard the heavy effects are built just after the press and thinned out while many are still on screen, so fast typing stays smooth. Lightning is a forked bolt (a wide glow, the colour and a white core) that strikes down onto the key, which flashes. The Effects screen's texts are translated into every app language. Every key's glow and
   shadow is drawn on one layer under all the keys, with every key's shape cut out of it, so light never falls over
   a key (sparks and the echo are the exception: they fly over the keys). The Effects screen shows the whole themed keyboard (every key, several fingers at once) to try it on.
+  The glow is two lights (a wide soft one and a bright core) and the wave lights the keys around more strongly
+  and farther out. A pressed key keeps its colour: lighting it up is left to the Flash effect.
+  My presets, under the Preset row: Save current effects stores the whole mix under a name (a name already used
+  is overwritten); a tap on a saved preset loads it (a check mark shows the one in use), its menu loads,
+  overwrites it with the current effects (after asking) or deletes it, and it also swipes left to delete.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
 - Credits and licences for the word, emoji and icon data.
-- The app in any of the keyboard's 38 languages: App language, last on the main screen, follows the phone
-  (the phone's first language the app has, else English) or is set to one of them, and the whole app switches
-  at once (right to left in Arabic, Hebrew and Persian, while the keyboard previews stay as the keyboard is laid
+- The app in any of the keyboard's 38 languages: App language, last on the main screen, opens a page listing
+  System and every language in alphabetical order. It follows the phone (the phone's first language the app has,
+  else English) or is set to one of them, and the whole app switches at once, staying on that page at the chosen
+  language; back on the main screen the list is still at the App language row (right to left in Arabic, Hebrew and Persian, while the keyboard previews stay as the keyboard is laid
   out). Language names everywhere in the app (the Languages screen, summaries, notes, the hit map) are written
   in the app's language, each option of App language with its own name beside it. The keyboard's space bar keeps
   each language's own name, and the keyboard itself stays in English. Translations are machine-made and not

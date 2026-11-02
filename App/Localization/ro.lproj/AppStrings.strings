@@ -736,3 +736,15 @@
 "Cool" = "Reci";
 "Pastel" = "Pastel";
 "Same as all effects" = "Ca la toate efectele";
+"Load" = "Încarcă";
+"Overwrite with current effects" = "Suprascrie cu efectele curente";
+"Save current effects" = "Salvează efectele curente";
+"My presets" = "Presetările mele";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Atinge o presetare pentru a o încărca. Glisează-o spre stânga pentru a o șterge sau suprascrie-o din meniul ei.";
+"Save effects" = "Salvează efectele";
+"Name" = "Nume";
+"Save" = "Salvează";
+"A preset with the same name is overwritten." = "O presetare cu același nume va fi suprascrisă.";
+"Overwrite %@?" = "Suprascrie %@?";
+"Overwrite" = "Suprascrie";
+"It will hold the effects as they are set now." = "Va reține efectele așa cum sunt setate acum.";

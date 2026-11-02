@@ -736,3 +736,15 @@
 "Cool" = "Lạnh";
 "Pastel" = "Pastel";
 "Same as all effects" = "Giống tất cả hiệu ứng";
+"Load" = "Tải";
+"Overwrite with current effects" = "Ghi đè bằng hiệu ứng hiện tại";
+"Save current effects" = "Lưu hiệu ứng hiện tại";
+"My presets" = "Cài sẵn của tôi";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Chạm vào một cài sẵn để tải. Vuốt sang trái để xóa, hoặc ghi đè từ menu của nó.";
+"Save effects" = "Lưu hiệu ứng";
+"Name" = "Tên";
+"Save" = "Lưu";
+"A preset with the same name is overwritten." = "Cài sẵn trùng tên sẽ bị ghi đè.";
+"Overwrite %@?" = "Ghi đè %@?";
+"Overwrite" = "Ghi đè";
+"It will hold the effects as they are set now." = "Cài sẵn sẽ lưu các hiệu ứng như đang được đặt hiện tại.";

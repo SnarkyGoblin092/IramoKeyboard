@@ -96,6 +96,10 @@ struct KeysView: View {
             .glassRows()
 
             Section {
+                SettingToggle(tr("Number row"), key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
+                              subtitle: tr("Numbers above the letters"))
+                SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
+                              subtitle: tr("The letter shows above your finger"))
                 if isPad {
                     GlassToggle(title: tr("Split keyboard"),
                                 subtitle: tr("The keys in two halves, one under each thumb, in every language."),

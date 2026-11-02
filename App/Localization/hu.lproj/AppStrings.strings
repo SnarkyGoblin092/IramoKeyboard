@@ -736,3 +736,15 @@
 "Cool" = "Hideg";
 "Pastel" = "Pasztell";
 "Same as all effects" = "Mint minden effekt";
+"Load" = "Betöltés";
+"Overwrite with current effects" = "Felülírás a jelenlegi effektekkel";
+"Save current effects" = "A jelenlegi effektek mentése";
+"My presets" = "Saját előbeállításaim";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Érints meg egy előbeállítást a betöltéséhez. Húzd balra a törléséhez, vagy írd felül a menüjéből.";
+"Save effects" = "Effektek mentése";
+"Name" = "Név";
+"Save" = "Mentés";
+"A preset with the same name is overwritten." = "Az azonos nevű előbeállítás felülíródik.";
+"Overwrite %@?" = "Felülírod ezt: %@?";
+"Overwrite" = "Felülírás";
+"It will hold the effects as they are set now." = "A jelenleg beállított effekteket fogja tartalmazni.";

@@ -736,3 +736,15 @@
 "Cool" = "Холодні";
 "Pastel" = "Пастельні";
 "Same as all effects" = "Як у всіх ефектах";
+"Load" = "Завантажити";
+"Overwrite with current effects" = "Перезаписати поточними ефектами";
+"Save current effects" = "Зберегти поточні ефекти";
+"My presets" = "Мої набори";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Торкніться набору, щоб завантажити його. Змахніть ліворуч, щоб видалити, або перезапишіть із його меню.";
+"Save effects" = "Зберегти ефекти";
+"Name" = "Назва";
+"Save" = "Зберегти";
+"A preset with the same name is overwritten." = "Набір із такою самою назвою буде перезаписано.";
+"Overwrite %@?" = "Перезаписати «%@»?";
+"Overwrite" = "Перезаписати";
+"It will hold the effects as they are set now." = "Він зберігатиме ефекти в тому вигляді, в якому вони налаштовані зараз.";

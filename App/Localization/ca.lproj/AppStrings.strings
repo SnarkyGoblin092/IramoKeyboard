@@ -736,3 +736,15 @@
 "Cool" = "Fred";
 "Pastel" = "Pastel";
 "Same as all effects" = "Igual que tots els efectes";
+"Load" = "Carrega";
+"Overwrite with current effects" = "Sobreescriu amb els efectes actuals";
+"Save current effects" = "Desa els efectes actuals";
+"My presets" = "Les meves preconfiguracions";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Toca una preconfiguració per carregar-la. Llisca-la cap a l'esquerra per esborrar-la, o sobreescriu-la des del seu menú.";
+"Save effects" = "Desa els efectes";
+"Name" = "Nom";
+"Save" = "Desa";
+"A preset with the same name is overwritten." = "Una preconfiguració amb el mateix nom se sobreescriurà.";
+"Overwrite %@?" = "Sobreescriure %@?";
+"Overwrite" = "Sobreescriu";
+"It will hold the effects as they are set now." = "Contindrà els efectes tal com estan configurats ara.";

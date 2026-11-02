@@ -736,3 +736,15 @@
 "Cool" = "Sovuq";
 "Pastel" = "Pastel";
 "Same as all effects" = "Barcha effektlar bilan bir xil";
+"Load" = "Yuklash";
+"Overwrite with current effects" = "Joriy effektlar bilan almashtirish";
+"Save current effects" = "Joriy effektlarni saqlash";
+"My presets" = "Mening tayyor sozlamalarim";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Yuklash uchun sozlamani bosing. O‘chirish uchun chapga suring yoki uning menyusi orqali ustidan yozing.";
+"Save effects" = "Effektlarni saqlash";
+"Name" = "Nomi";
+"Save" = "Saqlash";
+"A preset with the same name is overwritten." = "Bir xil nomli sozlama ustidan yoziladi.";
+"Overwrite %@?" = "%@ ustidan yozilsinmi?";
+"Overwrite" = "Ustidan yozish";
+"It will hold the effects as they are set now." = "Unda effektlar hozir sozlangani kabi saqlanadi.";

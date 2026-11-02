@@ -5,6 +5,12 @@ import SwiftUI
 /// The keyboard above is the keyboard itself (LiveKeyboard), so every effect plays there exactly as it does while typing.
 struct EffectsView: View {
     @AppStorage(SettingKey.effects, store: SharedStore.defaults) private var json = SettingDefault.effects
+    @AppStorage(SettingKey.effectPresets, store: SharedStore.defaults) private var savedJSON = SettingDefault.effectPresets
+    /// Asking for a name to save the current effects under.
+    @State private var naming = false
+    @State private var newName = ""
+    /// The saved preset waiting for the go-ahead to be overwritten.
+    @State private var overwriting: SavedEffectPreset?
 
     private let colorModes = EffectPalette.modes
 
@@ -325,6 +331,73 @@ struct EffectsView: View {
         return index
     }
 
+    // MARK: Saved presets
+
+    private var saved: [SavedEffectPreset] { return SavedEffectPreset.decode(savedJSON) }
+
+    private func store(_ list: [SavedEffectPreset]) {
+        savedJSON = SavedEffectPreset.encode(list)
+    }
+
+    /// Saves the current effects under `name`; one already saved under that name is overwritten.
+    private func saveCurrent(as name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var list = saved
+        let preset = SavedEffectPreset(name: trimmed, effects: json)
+        if let index = list.firstIndex(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            list[index] = preset
+        } else {
+            list.append(preset)
+        }
+        store(list)
+        Feedback.success()
+    }
+
+    private func overwrite(_ preset: SavedEffectPreset) {
+        store(saved.map { $0.name == preset.name ? SavedEffectPreset(name: preset.name, effects: json) : $0 })
+        Feedback.success()
+    }
+
+    private func load(_ preset: SavedEffectPreset) {
+        json = preset.effects
+        Feedback.choose()
+    }
+
+    private func delete(_ preset: SavedEffectPreset) {
+        store(saved.filter { $0.name != preset.name })
+        Feedback.delete()
+    }
+
+    /// A saved preset: a tap loads it; its menu loads, overwrites or deletes it.
+    private func savedRow(_ preset: SavedEffectPreset) -> some View {
+        HStack {
+            Button { load(preset) } label: {
+                HStack {
+                    Text(preset.name).foregroundColor(.primary)
+                    Spacer()
+                    if preset.effects == json {
+                        Image(systemName: "checkmark").foregroundColor(.accentColor)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Menu {
+                Button { load(preset) } label: { Label(tr("Load"), systemImage: "arrow.down.circle") }
+                Button { overwriting = preset } label: {
+                    Label(tr("Overwrite with current effects"), systemImage: "square.and.arrow.down.on.square")
+                }
+                Button(role: .destructive) { delete(preset) } label: { Label(tr("Delete"), systemImage: "trash") }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .contentShape(Rectangle())
+            }
+        }
+    }
+
     // MARK: Body
 
     var body: some View {
@@ -343,6 +416,26 @@ struct EffectsView: View {
                 SectionHeader(tr("Presets"), symbol: "wand.and.stars", color: .purple)
             } footer: {
                 Text(tr("Touch the keyboard above to try it. A preset sets everything; change any of it below to make your own."))
+            }
+            .glassRows()
+
+            Section {
+                ForEach(saved, id: \.name) { preset in
+                    savedRow(preset)
+                        .swipeToDelete { delete(preset) }
+                }
+                Button {
+                    newName = ""
+                    naming = true
+                } label: {
+                    Label(tr("Save current effects"), systemImage: "square.and.arrow.down")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+            } header: {
+                SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
+            } footer: {
+                Text(tr("Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu."))
             }
             .glassRows()
 
@@ -639,6 +732,21 @@ struct EffectsView: View {
         }
         .navigationTitle(tr("Effects"))
         .navigationBarTitleDisplayMode(.inline)
+        .alert(tr("Save effects"), isPresented: $naming) {
+            TextField(tr("Name"), text: $newName)
+            Button(tr("Save")) { saveCurrent(as: newName) }
+            Button(tr("Cancel"), role: .cancel) {}
+        } message: {
+            Text(tr("A preset with the same name is overwritten."))
+        }
+        .confirmationDialog(tr("Overwrite %@?", overwriting?.name ?? ""),
+                            isPresented: Binding(get: { overwriting != nil }, set: { if !$0 { overwriting = nil } }),
+                            titleVisibility: .visible) {
+            Button(tr("Overwrite")) { if let preset = overwriting { overwrite(preset) } }
+            Button(tr("Cancel"), role: .cancel) {}
+        } message: {
+            Text(tr("It will hold the effects as they are set now."))
+        }
     }
 
     /// An effect of the catalog (EffectCatalog): its switch and all its settings.
@@ -771,5 +879,22 @@ private extension ThemeRGBA {
         UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
         func byte(_ value: CGFloat) -> Double { return (Double(min(max(value, 0), 1)) * 255).rounded() / 255 }
         self.init(byte(r), byte(g), byte(b), 1)
+    }
+}
+
+/// A mix of effects saved under a name (the Effects screen's My presets), kept as JSON under SettingKey.effectPresets.
+struct SavedEffectPreset: Codable, Hashable {
+    var name: String
+    /// The effects as EffectsConfig stores them (empty: all off).
+    var effects: String
+
+    static func decode(_ text: String) -> [SavedEffectPreset] {
+        guard !text.isEmpty, let data = text.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([SavedEffectPreset].self, from: data)) ?? []
+    }
+
+    static func encode(_ list: [SavedEffectPreset]) -> String {
+        guard !list.isEmpty, let data = try? JSONEncoder().encode(list) else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
     }
 }

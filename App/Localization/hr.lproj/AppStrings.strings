@@ -736,3 +736,15 @@
 "Cool" = "Hladno";
 "Pastel" = "Pastelno";
 "Same as all effects" = "Kao svi efekti";
+"Load" = "Učitaj";
+"Overwrite with current effects" = "Prepiši trenutačnim efektima";
+"Save current effects" = "Spremi trenutačne efekte";
+"My presets" = "Moji predlošci";
+"Tap a preset to load it. Swipe it left to delete it, or overwrite it from its menu." = "Dodirni predložak da ga učitaš. Prijeđi prstom ulijevo da ga obrišeš ili ga prepiši iz njegova izbornika.";
+"Save effects" = "Spremi efekte";
+"Name" = "Naziv";
+"Save" = "Spremi";
+"A preset with the same name is overwritten." = "Predložak istog naziva bit će prepisan.";
+"Overwrite %@?" = "Prepisati %@?";
+"Overwrite" = "Prepiši";
+"It will hold the effects as they are set now." = "Spremat će efekte onakvima kakvi su sada postavljeni.";
