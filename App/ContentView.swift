@@ -377,7 +377,9 @@ private struct DataSection: View {
                 Text(title)
                     .font(.body.weight(.medium))
                     .foregroundColor(role == .destructive ? .red : color)
+                Spacer(minLength: 0)
             }
+            .contentShape(Rectangle())   // the whole row takes the tap, not only the text
         }
             .confirmationDialog(action.title,
                                 isPresented: Binding(get: { pending == action }, set: { if !$0 { pending = nil } }),
@@ -439,24 +441,44 @@ private struct AppLanguageSection: View {
         return name == language.displayName ? name : "\(name) (\(language.displayName))"
     }
 
+    private var systemName: String { return tr("System (%@)", "\(AppLanguage.systemLanguage.localizedName)") }
+
+    /// What the row shows: the chosen language's name.
+    private var chosenName: String {
+        guard appLanguage != AppLanguage.system, let language = Language(rawValue: appLanguage) else { return systemName }
+        return name(language)
+    }
+
     var body: some View {
         Section {
-            Picker(selection: Binding(get: { appLanguage }, set: { value in
-                guard value != appLanguage else { return }
-                Feedback.choose()
-                appLanguage = value
-            })) {
-                Text(tr("System (%@)", "\(AppLanguage.systemLanguage.localizedName)")).tag(AppLanguage.system)
-                ForEach(languages, id: \.self) { language in
-                    Text(name(language)).tag(language.rawValue)
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    IconTile(symbol: "globe", color: .blue)
+            // A menu with the whole row as its button (a menu-style Picker only takes taps on its text), the chosen
+            // language on the left and the arrows at the right edge.
+            Menu {
+                Picker(selection: Binding(get: { appLanguage }, set: { value in
+                    guard value != appLanguage else { return }
+                    Feedback.choose()
+                    appLanguage = value
+                })) {
+                    Text(systemName).tag(AppLanguage.system)
+                    ForEach(languages, id: \.self) { language in
+                        Text(name(language)).tag(language.rawValue)
+                    }
+                } label: {
                     Text(tr("App language"))
                 }
+                .pickerStyle(.inline)
+            } label: {
+                HStack(spacing: 12) {
+                    Text(chosenName)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(.accentColor)
+                }
+                .contentShape(Rectangle())
             }
-            .pickerStyle(.menu)
         } header: {
             SectionHeader(tr("Language"), symbol: "character.bubble.fill", color: .blue)
         } footer: {

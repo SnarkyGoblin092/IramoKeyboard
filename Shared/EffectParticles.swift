@@ -55,9 +55,11 @@ struct EffectParticle {
 }
 
 enum EffectParticles {
-    /// Everything the particle effects that are on play for one press, on a key of `keySize`. `random(index, salt)`
+    /// Everything the particle effects that are on play for one press, sized for a key of `keySize`, placed (the
+    /// position setting) on a key of `area` (the key's own size, when it is wider than `keySize`). `random(index, salt)`
     /// is a number in 0..<1 (really random on the keyboard, steady in the preview so it can be redrawn).
-    static func make(_ config: EffectsConfig, keySize: CGSize, random: @escaping (Int, Int) -> CGFloat) -> [EffectParticle] {
+    static func make(_ config: EffectsConfig, keySize: CGSize, area: CGSize? = nil,
+                     random: @escaping (Int, Int) -> CGFloat) -> [EffectParticle] {
         let w = max(keySize.width, 1)
         let h = max(keySize.height, 1)
         let rainbow = true   // every speck has a hue; the effect's colour setting decides whether it is used
@@ -69,7 +71,7 @@ enum EffectParticles {
         func flush() {
             defer { groupStart = list.count; groupIndex += 1 }
             guard groupStart < list.count else { return }
-            finish(&list, from: groupStart, id: groupID, config: config, size: keySize) { random(9100 + groupIndex, $0) }
+            finish(&list, from: groupStart, id: groupID, config: config, size: keySize, area: area) { random(9100 + groupIndex, $0) }
         }
 
         func count(_ value: Double) -> Int { return max(1, Int(value.rounded())) }
@@ -251,16 +253,17 @@ enum EffectParticles {
             }
         }
         flush()
-        list += EffectCatalog.particles(config, keySize: keySize, random: random)
+        list += EffectCatalog.particles(config, keySize: keySize, area: area, random: random)
         return list
     }
 }
 
 extension EffectParticles {
     /// Everything that makes one effect's particles its own for this press: the way it goes (the effect's direction
-    /// setting), a place and a way of its own so it does not repeat, where on the key it starts and its colour.
+    /// setting), a place and a way of its own so it does not repeat, where on the key (of `area`, else `size`) it
+    /// starts and its colour.
     static func finish(_ list: inout [EffectParticle], from start: Int, id: String, config: EffectsConfig, size: CGSize,
-                       random: (Int) -> CGFloat) {
+                       area: CGSize? = nil, random: (Int) -> CGFloat) {
         guard start < list.count else { return }
         let w = max(size.width, 1)
         let h = max(size.height, 1)
@@ -270,7 +273,7 @@ extension EffectParticles {
         }
         scatter(&list, from: start, width: w, height: h) { random(10 + $0) }
         var draws = 0
-        let place = EffectPosition.offset(config.position(for: id), size: size, random: { draws += 1; return random(20 + draws) })
+        let place = EffectPosition.offset(config.position(for: id), size: area ?? size, random: { draws += 1; return random(20 + draws) })
         if place != .zero {
             for index in start..<list.count {
                 let old = list[index].path

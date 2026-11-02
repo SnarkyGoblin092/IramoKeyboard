@@ -323,7 +323,7 @@ struct EffectTint: Hashable {
 }
 
 /// Where on the key the effects start: the Effects screen's position setting moves the effects that leave the key
-/// (specks, sparks, confetti, bubbles, the echo, the shockwave, the bolt, the beam) and the ripple.
+/// (specks, sparks, confetti, bubbles, the echo, the shockwave, the bolt) and the ripple.
 enum EffectPosition {
     static let choices = ["auto", "top", "bottom", "left", "right", "random"]
 

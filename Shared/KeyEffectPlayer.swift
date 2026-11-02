@@ -12,6 +12,34 @@ struct KeyMove {
     var keyTimes: [Double]? = nil
     let duration: Double
     var eased = false
+
+    /// The offset `elapsed` seconds in, as Core Animation plays it (KeyEffectPlayer.move): straight lines between the
+    /// values, the whole run eased in and out when `eased`; 0 once it is over.
+    func value(after elapsed: Double) -> CGFloat {
+        guard duration > 0, elapsed >= 0, elapsed < duration, values.count > 1 else { return 0 }
+        var t = min(max(elapsed / duration, 0), 1)
+        if eased { t = KeyMove.easeInOut(t) }
+        let times = keyTimes ?? values.indices.map { Double($0) / Double(values.count - 1) }
+        for index in 1..<min(values.count, times.count) where t <= times[index] {
+            let from = times[index - 1]
+            let share = times[index] > from ? (t - from) / (times[index] - from) : 1
+            return values[index - 1] + (values[index] - values[index - 1]) * CGFloat(share)
+        }
+        return values[values.count - 1]
+    }
+
+    /// Core Animation's ease in and out: the curve (0.42, 0) to (0.58, 1), solved for the time.
+    private static func easeInOut(_ x: Double) -> Double {
+        func bezier(_ s: Double, _ a: Double, _ b: Double) -> Double {
+            return 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s
+        }
+        var low = 0.0, high = 1.0
+        for _ in 0..<20 {
+            let mid = (low + high) / 2
+            if bezier(mid, 0.42, 0.58) < x { low = mid } else { high = mid }
+        }
+        return bezier((low + high) / 2, 0, 1)
+    }
 }
 
 /// The press effects (the Effects screen) of one key, drawn with Core Animation. The keyboard (KeyView) and the app's
@@ -36,6 +64,11 @@ final class KeyEffectPlayer {
     var echoImage: () -> CGImage? = { nil }
     /// Puts the glow (made on first use) under the keys; without it the glow goes under the key's own content.
     var installGlow: ((CALayer) -> Void)?
+    /// Layers outside the key that move with it (the light and shadow under it), so they follow the squish and the rest.
+    var followers: () -> [CALayer] = { [] }
+    /// Whether the moves are played on the key's layers. The app's preview turns it off and plays them itself from
+    /// `onMove`, on its drawing of the key and on everything drawn on it at once.
+    var playsMoves = true
     /// Told of every move, after it has been played on the key's layer.
     var onMove: ((KeyMove) -> Void)?
     /// Told when the key goes down with the wave's colour, so the keys around it can light up.
@@ -120,7 +153,6 @@ final class KeyEffectPlayer {
             if effects.confetti { self.confetti(self.color("confetti")) }
             if effects.bubbles { self.bubbles(self.color("bubbles")) }
             if effects.lightning { self.lightning(self.color("lightning")) }
-            if effects.beam { self.beam(self.color("beam")) }
             self.playParticles(self.accent)
         }
     }
@@ -140,6 +172,15 @@ final class KeyEffectPlayer {
     private static func release(_ count: Int) {
         liveLayers = max(0, liveLayers - count)
     }
+
+    /// The size the effects are made for: the key's, but not much wider than it is tall, so a wide key (space,
+    /// return) gets effects about the size of a letter key's instead of ones stretched across it.
+    private var effectSize: CGSize {
+        return CGSize(width: min(bounds.width, bounds.height * 1.3), height: bounds.height)
+    }
+
+    /// The width the effects are measured in (effectSize).
+    private var unit: CGFloat { return effectSize.width }
 
     private func keyShapePath() -> CGPath {
         return UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
@@ -243,7 +284,7 @@ final class KeyEffectPlayer {
     private func ripple(_ color: UIColor) {
         guard bounds.width > 0 else { return }
         let effects = config
-        let diameter = hypot(bounds.width, bounds.height)
+        let diameter = hypot(unit, bounds.height)
         let holder = clippedHolder()
         let wave: CALayer
         if effects.rippleStyle == "ring" {
@@ -288,7 +329,7 @@ final class KeyEffectPlayer {
         guard bounds.width > 0 else { return }
         let effects = config
         let holder = clippedHolder()
-        let bandWidth = bounds.width * CGFloat(effects.shineWidth)
+        let bandWidth = unit * CGFloat(effects.shineWidth)
         let band = CAGradientLayer()
         band.bounds = CGRect(x: 0, y: 0, width: bandWidth, height: bounds.height * 1.6)
         band.position = CGPoint(x: -bandWidth, y: bounds.midY)
@@ -421,10 +462,13 @@ final class KeyEffectPlayer {
         if move.eased { animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut) }
         animation.isAdditive = true
         let name = "move" + String(CACurrentMediaTime())
-        if move.part == .label {
+        if !playsMoves {
+            // The owner plays it.
+        } else if move.part == .label {
             for layer in labelLayers() { layer.add(animation, forKey: name) }
         } else {
             keyLayer?.add(animation, forKey: name)
+            for layer in followers() { layer.add(animation, forKey: name) }
         }
         onMove?(move)
     }
@@ -436,10 +480,11 @@ final class KeyEffectPlayer {
                      duration: config.popDuration))
     }
 
-    /// The key squashes under the finger and springs back.
+    /// The key squashes under the finger and springs back, with only a hint of overshoot so the shrink is what shows.
     private func squish() {
-        let depth = CGFloat(config.squishDepth)
-        move(KeyMove(part: .scale, values: [0, depth - 1, 0.05, -0.01, 0], keyTimes: [0, 0.25, 0.55, 0.8, 1], duration: 0.4))
+        let depth = CGFloat(config.squishDepth) - 1
+        move(KeyMove(part: .scale, values: [0, depth, depth * 0.6, -depth * 0.1, 0], keyTimes: [0, 0.2, 0.5, 0.8, 1],
+                     duration: 0.4))
     }
 
     /// The key wobbles like jelly, the swings getting smaller.
@@ -526,7 +571,7 @@ final class KeyEffectPlayer {
         let count = KeyEffectPlayer.reserve(max(1, Int(effects.sparkCount.rounded())))
         guard count > 0 else { return }
         let size = CGFloat(effects.sparkSize)
-        let reach = bounds.width * CGFloat(effects.sparkDistance)
+        let reach = unit * CGFloat(effects.sparkDistance)
         let offset = CGFloat.random(in: 0..<(2 * .pi))
         var specks: [CALayer] = []
         CATransaction.begin()
@@ -597,7 +642,7 @@ final class KeyEffectPlayer {
     private func shockwave(_ color: UIColor) {
         guard bounds.width > 0, let target = overlayTarget("shockwave") else { return }
         let effects = config
-        let radius = bounds.width * CGFloat(effects.shockReach)
+        let radius = unit * CGFloat(effects.shockReach)
         let ring = CAShapeLayer()
         ring.bounds = CGRect(x: 0, y: 0, width: radius * 2, height: radius * 2)
         ring.path = UIBezierPath(ovalIn: ring.bounds.insetBy(dx: 1.5, dy: 1.5)).cgPath
@@ -631,7 +676,7 @@ final class KeyEffectPlayer {
         let count = KeyEffectPlayer.reserve(max(1, Int(effects.confettiCount.rounded())))
         guard count > 0 else { return }
         let duration = effects.confettiDuration
-        let width = bounds.width
+        let width = unit
         let turn = effectTurn("confetti")
         var pieces: [CALayer] = []
         CATransaction.begin()
@@ -693,7 +738,7 @@ final class KeyEffectPlayer {
             bubble.strokeColor = color.withAlphaComponent(0.9).cgColor
             bubble.lineWidth = 1.5
             bubble.opacity = 0
-            let startX = target.center.x + CGFloat.random(in: -0.35...0.35) * bounds.width
+            let startX = target.center.x + CGFloat.random(in: -0.35...0.35) * unit
             let lift = EffectDirection.turn(CGPoint(x: startX - target.center.x, y: 0), by: turn)
             bubble.position = CGPoint(x: target.center.x + lift.x, y: target.center.y + lift.y)
             target.host.addSublayer(bubble)
@@ -810,7 +855,7 @@ final class KeyEffectPlayer {
     /// the particle effects that are on, flying out of the key over the keys around it.
     private func playParticles(_ color: UIColor) {
         guard bounds.width > 0, let target = overlayTarget() else { return }
-        var specs = EffectParticles.make(config, keySize: bounds.size) { _, _ in CGFloat.random(in: 0..<1) }
+        var specs = EffectParticles.make(config, keySize: effectSize, area: bounds.size) { _, _ in CGFloat.random(in: 0..<1) }
         guard !specs.isEmpty else { return }
         let allowed = KeyEffectPlayer.reserve(specs.count)
         guard allowed > 0 else { return }
@@ -866,8 +911,8 @@ final class KeyEffectPlayer {
     /// the key itself flashes.
     private func lightning(_ color: UIColor) {
         guard bounds.width > 0, let target = overlayTarget("lightning") else { return }
-        let length = bounds.width * CGFloat(config.lightningLength)
-        let bolt = EffectBolt.make(length: length, width: bounds.width) { _, _ in CGFloat.random(in: 0..<1) }
+        let length = unit * CGFloat(config.lightningLength)
+        let bolt = EffectBolt.make(length: length, width: unit) { _, _ in CGFloat.random(in: 0..<1) }
 
         func line(_ points: [CGPoint]) -> UIBezierPath {
             let path = UIBezierPath()
@@ -922,41 +967,6 @@ final class KeyEffectPlayer {
         blink.duration = 0.3
         blink.timingFunction = CAMediaTimingFunction(name: .easeIn)
         flash.add(blink, forKey: "blink")
-        CATransaction.commit()
-    }
-
-    /// A beam of light rises from the middle of the key and fades.
-    private func beam(_ color: UIColor) {
-        guard bounds.width > 0, let target = overlayTarget("beam") else { return }
-        let height = bounds.width * CGFloat(config.beamHeight)
-        let column = CAGradientLayer()
-        column.bounds = CGRect(x: 0, y: 0, width: bounds.width * 0.5, height: height)
-        column.anchorPoint = CGPoint(x: 0.5, y: 1)
-        // Held in a layer on the key's middle, which turns the beam to the chosen direction.
-        let turner = CALayer()
-        turner.position = target.center
-        turner.transform = CATransform3DMakeRotation(effectTurn("beam"), 0, 0, 1)
-        column.position = .zero
-        column.colors = [color.withAlphaComponent(0.8).cgColor, color.withAlphaComponent(0).cgColor]
-        column.startPoint = CGPoint(x: 0.5, y: 1)
-        column.endPoint = CGPoint(x: 0.5, y: 0)
-        column.opacity = 0
-        turner.addSublayer(column)
-        target.host.addSublayer(turner)
-        CATransaction.begin()
-        CATransaction.setCompletionBlock { turner.removeFromSuperlayer() }
-        let grow = CABasicAnimation(keyPath: "transform.scale.y")
-        grow.fromValue = 0.15
-        grow.toValue = 1
-        grow.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.toValue = 0
-        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
-        for animation in [grow, fade] as [CAAnimation] {
-            animation.duration = 0.5
-            column.add(animation, forKey: String(animation.hash))
-        }
         CATransaction.commit()
     }
 }

@@ -262,10 +262,6 @@ struct EffectsConfig: Hashable, Codable {
     var sweep = false
     var sweepDuration = 0.5
 
-    /// A beam of light rises from the key.
-    var beam = false
-    var beamHeight = 2.5
-
     /// The effects of the catalog (EffectCatalog) that are on, and the settings the user changed (by "id.setting").
     var moreOn: [String] = []
     var moreValues: [String: Double] = [:]
@@ -367,9 +363,7 @@ struct EffectsConfig: Hashable, Codable {
         underlineDuration = value(c, .underlineDuration, underlineDuration)
         sweep = value(c, .sweep, sweep)
         sweepDuration = value(c, .sweepDuration, sweepDuration)
-        beam = value(c, .beam, beam)
-        beamHeight = value(c, .beamHeight, beamHeight)
-        moreOn = value(c, .moreOn, moreOn)
+        moreOn = value(c, .moreOn, moreOn).filter { EffectCatalog.entry($0) != nil }   // drops effects since removed
         moreValues = value(c, .moreValues, moreValues)
         trail = value(c, .trail, trail)
         trailGlow = value(c, .trailGlow, trailGlow)
@@ -385,7 +379,7 @@ struct EffectsConfig: Hashable, Codable {
             || flash || jelly || hearts || stars || snow || notes
             || fireworks || starburst || rain || embers || smoke || lightning
             || orbit || spiral || heartbeat || flip || shake || drop
-            || glitch || underline || sweep || beam
+            || glitch || underline || sweep
     }
 
     static let glowStrengthRange: ClosedRange<Double> = 0.1...1
@@ -438,7 +432,6 @@ struct EffectsConfig: Hashable, Codable {
     static let glitchStrengthRange: ClosedRange<Double> = 0.2...1.0
     static let underlineDurationRange: ClosedRange<Double> = 0.15...1.0
     static let sweepDurationRange: ClosedRange<Double> = 0.2...1.2
-    static let beamHeightRange: ClosedRange<Double> = 1.0...5.0
     static let trailGlowRange: ClosedRange<Double> = 0.2...1
 
     // MARK: Each effect's own look

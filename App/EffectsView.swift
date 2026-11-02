@@ -40,8 +40,8 @@ struct EffectsView: View {
 
     // What each effect can have of its own. The others have no colour, or no way or place that would show.
     private static let plain: Set<String> = ["pop", "squish", "jelly", "heartbeat", "flip", "shake", "drop", "glitch", "echo", "trail"]
-    private static let going: Set<String> = ["confetti", "bubbles", "echo", "beam", "hearts", "snow", "notes", "rain", "embers", "smoke"]
-    private static let placed: Set<String> = ["ripple", "sparks", "echo", "shockwave", "confetti", "bubbles", "lightning", "beam", "hearts",
+    private static let going: Set<String> = ["confetti", "bubbles", "echo", "hearts", "snow", "notes", "rain", "embers", "smoke"]
+    private static let placed: Set<String> = ["ripple", "sparks", "echo", "shockwave", "confetti", "bubbles", "lightning", "hearts",
                                               "stars", "snow", "notes", "fireworks", "starburst", "rain", "embers", "smoke", "orbit", "spiral"]
 
     private func colorOptions(inherit: Bool) -> [(value: String, name: String)] {
@@ -269,7 +269,7 @@ struct EffectsView: View {
         Preset(name: tr("Lava")) { var c = EffectsConfig.tinted(0xFF4A1C); c.position = "bottom"; c.direction = "up"; c.glow = true; c.glowStrength = 0.9; c.glowSpread = 2; c.embers = true; c.smoke = true; c.shake = true; c.editStyle("embers") { $0.colorMode = "warm" }; c.editStyle("smoke") { $0.colorMode = "white" }; return c },
         Preset(name: tr("Frost")) { var c = EffectsConfig.tinted(0xBDE9FF); c.snow = true; c.snowCount = 10; c.shine = true; c.border = true; return c },
         Preset(name: tr("Thunder")) { var c = EffectsConfig.tinted(0xFFE15A); c.lightning = true; c.flash = true; c.setOn("zap", true); c.shake = true; return c },
-        Preset(name: tr("Nightclub")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.beam = true; c.setOn("disco", true); c.setOn("lasers", true); c.glow = true; c.editStyle("lasers") { $0.colorMode = "neon" }; c.editStyle("disco") { $0.colorMode = "neon" }; return c },
+        Preset(name: tr("Nightclub")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.setOn("disco", true); c.setOn("lasers", true); c.glow = true; c.editStyle("lasers") { $0.colorMode = "neon" }; c.editStyle("disco") { $0.colorMode = "neon" }; return c },
         Preset(name: tr("Retro")) { var c = EffectsConfig.tinted(0xFF5FA2); c.setOn("pixels", true); c.setOn("coins", true); c.glitch = true; c.underline = true; return c },
         Preset(name: tr("Hacker")) { var c = EffectsConfig.tinted(0x2BFF6A); c.setOn("matrix", true); c.setOn("circuit", true); c.glitch = true; c.sweep = true; return c },
         Preset(name: tr("Gold")) { var c = EffectsConfig.tinted(0xFFC83D); c.glow = true; c.shine = true; c.setOn("coins", true); c.setOn("gems", true); return c },
@@ -278,7 +278,7 @@ struct EffectsView: View {
         Preset(name: tr("Mint")) { var c = EffectsConfig.tinted(0x5CF2C2); c.ripple = true; c.bubbles = true; c.bubbleCount = 4; c.shine = true; return c },
         Preset(name: tr("Lavender")) { var c = EffectsConfig.tinted(0xB79CFF); c.glow = true; c.glowSpread = 1.5; c.setOn("butterflies", true); c.setOn("dandelion", true); return c },
         Preset(name: tr("Twilight")) { var c = EffectsConfig.tinted(0x7F6BFF); c.glow = true; c.stars = true; c.starCount = 6; c.setOn("twinkle", true); c.setOn("aurora", true); return c },
-        Preset(name: tr("Dawn")) { var c = EffectsConfig.tinted(0xFFB38A); c.direction = "up"; c.beam = true; c.glow = true; c.glowStrength = 0.5; c.setOn("halo", true); return c },
+        Preset(name: tr("Dawn")) { var c = EffectsConfig.tinted(0xFFB38A); c.direction = "up"; c.glow = true; c.glowStrength = 0.5; c.setOn("halo", true); c.setOn("aurora", true); return c },
         Preset(name: tr("Midnight")) { var c = EffectsConfig.tinted(0x4C6FFF); c.glow = true; c.glowStrength = 0.35; c.setOn("twinkle", true); c.setOn("comet", true); return c },
         Preset(name: tr("Dream")) { var c = EffectsConfig.tinted(0xE6B8FF); c.direction = "up"; c.smoke = true; c.setOn("nebula", true); c.setOn("sparkler", true); c.jelly = true; return c },
         Preset(name: tr("Pulse")) { var c = EffectsConfig(); c.heartbeat = true; c.shockwave = true; c.glow = true; c.glowFadeOut = 0.5; return c },
@@ -290,7 +290,7 @@ struct EffectsView: View {
         Preset(name: tr("Halloween")) { var c = EffectsConfig.tinted(0xFF8A1F); c.setOn("ghosts", true); c.smoke = true; c.lightning = true; c.shake = true; return c },
         Preset(name: tr("Christmas")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.snow = true; c.stars = true; c.setOn("sparkler", true); c.glow = true; c.editStyle("snow") { $0.colorMode = "white" }; c.editStyle("stars") { $0.colorMode = "warm" }; return c },
         Preset(name: tr("Spring")) { var c = EffectsConfig(); c.direction = "right"; c.colorMode = "rainbow"; c.setOn("petals", true); c.setOn("butterflies", true); c.setOn("dandelion", true); c.editStyle("petals") { $0.colorMode = "pastel" }; c.editStyle("butterflies") { $0.colorMode = "neon" }; return c },
-        Preset(name: tr("Summer")) { var c = EffectsConfig.tinted(0xFFD23D); c.beam = true; c.shine = true; c.setOn("splash", true); c.setOn("smileys", true); return c },
+        Preset(name: tr("Summer")) { var c = EffectsConfig.tinted(0xFFD23D); c.shine = true; c.setOn("splash", true); c.setOn("butterflies", true); return c },
         Preset(name: tr("Autumn")) { var c = EffectsConfig.tinted(0xE5822B); c.position = "top"; c.direction = "down"; c.setOn("leaves", true); c.embers = true; c.glow = true; c.glowStrength = 0.4; c.editStyle("leaves") { $0.colorMode = "warm" }; return c },
         Preset(name: tr("Monsoon")) { var c = EffectsConfig.tinted(0x6FB6FF); c.position = "top"; c.direction = "down"; c.rain = true; c.rainCount = 16; c.ripple = true; c.setOn("splash", true); c.editStyle("rain") { $0.colorMode = "cool" }; c.editStyle("splash") { $0.colorMode = "cool" }; return c },
         Preset(name: tr("Blizzard")) { var c = EffectsConfig(); c.position = "top"; c.direction = "down"; c.colorMode = "white"; c.snow = true; c.snowCount = 20; c.starburst = true; c.shake = true; return c },
@@ -307,11 +307,11 @@ struct EffectsView: View {
         Preset(name: tr("Calm")) { var c = EffectsConfig.tinted(0x8FD3FF); c.ripple = true; c.rippleDuration = 1.1; c.glow = true; c.glowStrength = 0.3; c.glowFadeOut = 1.2; return c },
         Preset(name: tr("Energy")) { var c = EffectsConfig.tinted(0xFFE600); c.setOn("zap", true); c.sparks = true; c.sparkCount = 12; c.shockwave = true; c.squish = true; return c },
         Preset(name: tr("Focus")) { var c = EffectsConfig(); c.colorMode = "white"; c.underline = true; c.border = true; c.borderFade = 0.5; return c },
-        Preset(name: tr("Playful")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.setOn("smileys", true); c.setOn("yoyo", true); c.setOn("juggle", true); c.squish = true; return c },
+        Preset(name: tr("Playful")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.setOn("bounce", true); c.setOn("yoyo", true); c.setOn("juggle", true); c.squish = true; return c },
         Preset(name: tr("Soft")) { var c = EffectsConfig.tinted(0xFFD6E8); c.glow = true; c.glowStrength = 0.4; c.glowSpread = 1.8; c.glowFadeOut = 1; c.setOn("halo", true); return c },
         Preset(name: tr("Wild")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("dizzy", true); c.setOn("pinwheel", true); c.shake = true; c.glitch = true; c.flip = true; return c },
         Preset(name: tr("Minimal")) { var c = EffectsConfig(); c.colorMode = "white"; c.glow = true; c.glowStrength = 0.25; c.glowSpread = 0.8; return c },
-        Preset(name: tr("Showtime")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("lasers", true); c.setOn("disco", true); c.setOn("rainbowburst", true); c.fireworks = true; c.beam = true; return c },
+        Preset(name: tr("Showtime")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("lasers", true); c.setOn("disco", true); c.setOn("rainbowburst", true); c.fireworks = true; return c },
     ]
 
     /// The preset the settings match, worked out once for each change (it builds every preset to compare).
@@ -620,12 +620,6 @@ struct EffectsView: View {
                             range: EffectsConfig.sweepDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Beam"), "rays", .yellow, id: "beam", on: bind(\.beam),
-                   note: tr("A beam of light rises from the key.")) {
-                GlassSlider(title: tr("Height"), symbol: "arrow.up.to.line", value: bind(\.beamHeight),
-                            range: EffectsConfig.beamHeightRange, step: 0.1) { String(format: "%.1f keys", $0) }
-            }
-
             ForEach(EffectCatalog.all, id: \.id) { item in moreEffect(item) }
 
             effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
@@ -755,7 +749,6 @@ private extension EffectsConfig {
         if c.shake { c.shakeDistance = less(c.shakeDistance, 0.6, EffectsConfig.shakeDistanceRange, whole: true) }
         if c.drop { c.dropDepth = less(c.dropDepth, 0.6, EffectsConfig.dropDepthRange, whole: true) }
         if c.glitch { c.glitchStrength = less(c.glitchStrength, 0.7, EffectsConfig.glitchStrengthRange) }
-        if c.beam { c.beamHeight = less(c.beamHeight, 0.7, EffectsConfig.beamHeightRange) }
         for item in EffectCatalog.all where c.isOn(item.id) {
             guard let count = item.params.first(where: { $0.id == "count" }) else { continue }
             c.set(item, "count", less(c.setting(item, "count"), counts, count.range, whole: true))
@@ -978,10 +971,8 @@ private final class EffectsStageView: UIView {
         let player = KeyEffectPlayer()
         /// Stands in for the key: the effects drawn on the key are added to it, and it moves as the key does.
         let proxy = CALayer()
-        /// Holds the key's glow, under the mask.
+        /// Holds the key's glow, under the mask; it moves with the key.
         let glowHolder = CALayer()
-        /// Takes the label's moves (the pop), read back for the preview's label.
-        let labelProbe = CALayer()
         var frame = EffectKeyFrame(rect: .zero, radius: 0, glyph: EffectKeyGlyph())
     }
 
@@ -999,8 +990,15 @@ private final class EffectsStageView: UIView {
     private var scale: CGFloat = 1
     private var accent: UIColor = .systemBlue
     private var letterSize: CGFloat = 1
-    /// The keys whose moves are playing, and the frame clock that copies them onto the preview's keys.
-    private var moving: Set<String> = []
+    /// A move playing on a key, from when it started.
+    private struct RunningMove {
+        let id: String
+        let move: KeyMove
+        let start: CFTimeInterval
+    }
+
+    /// The moves playing, and the frame clock that puts the keys in their poses.
+    private var running: [RunningMove] = []
     private var link: CADisplayLink?
 
     override init(frame: CGRect) {
@@ -1048,8 +1046,11 @@ private final class EffectsStageView: UIView {
             let rect = CGRect(x: frame.rect.minX / scale, y: frame.rect.minY / scale,
                               width: frame.rect.width / scale, height: frame.rect.height / scale)
             let radius = frame.radius / scale
-            key.proxy.frame = rect
-            key.glowHolder.frame = rect
+            // By bounds and position, which stay right while a move transforms them (a frame would not).
+            for part in [key.proxy, key.glowHolder] {
+                part.bounds = CGRect(origin: .zero, size: rect.size)
+                part.position = CGPoint(x: rect.midX, y: rect.midY)
+            }
             key.player.bounds = CGRect(origin: .zero, size: rect.size)
             key.player.radius = radius
             key.player.frameInOverlay = rect
@@ -1059,7 +1060,6 @@ private final class EffectsStageView: UIView {
         for (id, key) in keys where frames[id] == nil {
             key.proxy.removeFromSuperlayer()
             key.glowHolder.removeFromSuperlayer()
-            key.labelProbe.removeFromSuperlayer()
             keys[id] = nil
         }
         glowMask.path = outside.cgPath
@@ -1070,11 +1070,9 @@ private final class EffectsStageView: UIView {
         let key = StageKey()
         keysLayer.addSublayer(key.proxy)
         glows.addSublayer(key.glowHolder)
-        keysLayer.addSublayer(key.labelProbe)
         let player = key.player
         player.keyLayer = key.proxy
-        let probe = key.labelProbe
-        player.labelLayers = { [probe] }
+        player.playsMoves = false   // played here (copyMoves), on the key, its glow and what is drawn on it at once
         player.overlay = fxLayer
         let holder = key.glowHolder
         player.installGlow = { glow in holder.addSublayer(glow) }
@@ -1082,17 +1080,18 @@ private final class EffectsStageView: UIView {
             guard let self = self, let key = key else { return nil }
             return self.labelImage(key.frame.glyph, size: key.player.bounds.size)
         }
-        player.onMove = { [weak self] _ in self?.startMoving(id) }
+        player.onMove = { [weak self] move in self?.startMoving(id, move) }
         player.onWave = { [weak self] color in self?.wave(from: id, color: color) }
         keys[id] = key
         return key
     }
 
-    /// The key's moves (squish, jelly, flip, the pop) play as Core Animation animations on its stand-in layers, exactly
-    /// as on the keyboard's key, overlapping presses combined by Core Animation itself. Every frame while they play,
-    /// what they make of the stand-ins is copied onto the preview's drawing of the key.
-    private func startMoving(_ id: String) {
-        moving.insert(id)
+    /// The key's moves (squish, jelly, flip, the pop) are played here, frame by frame, as the keyboard's key plays them
+    /// (each move an offset from rest, the moves of quick presses adding up). One pose, worked out once a frame, goes
+    /// on the preview's drawing of the key and on its stand-in and glow, so the borders, ripples and light drawn on
+    /// the key shrink, turn and move with it.
+    private func startMoving(_ id: String, _ move: KeyMove) {
+        running.append(RunningMove(id: id, move: move, start: CACurrentMediaTime()))
         guard link == nil else { return }
         let link = CADisplayLink(target: self, selector: #selector(copyMoves))
         link.add(to: .main, forMode: .common)
@@ -1100,26 +1099,57 @@ private final class EffectsStageView: UIView {
     }
 
     @objc private func copyMoves() {
-        guard let motions = motions else { return }
+        let now = CACurrentMediaTime()
+        // Every key with a move this frame, from rest plus each of its moves.
+        var scales: [String: CGFloat] = [:], labels: [String: CGFloat] = [:], turns: [String: CGFloat] = [:]
+        var flips: [String: CGFloat] = [:], shifts: [String: CGPoint] = [:]
+        for item in running {
+            let value = item.move.value(after: now - item.start)
+            let id = item.id
+            switch item.move.part {
+            case .scale: scales[id, default: 1] += value
+            case .label: labels[id, default: 1] += value
+            case .turn: turns[id, default: 0] += value
+            case .flip: flips[id, default: 0] += value
+            case .x: shifts[id, default: .zero].x += value
+            case .y: shifts[id, default: .zero].y += value
+            }
+        }
         // From the keyboard's points to the preview's: shrink, move, grow back.
         let toReal = CATransform3DMakeScale(1 / scale, 1 / scale, 1)
         let toPreview = CATransform3DMakeScale(scale, scale, 1)
-        for id in moving {
-            guard let key = keys[id] else { moving.remove(id); continue }
-            let playing = !(key.proxy.animationKeys() ?? []).isEmpty || !(key.labelProbe.animationKeys() ?? []).isEmpty
-            var pose = EffectPose()
-            if playing {
-                let real = key.proxy.presentation()?.transform ?? CATransform3DIdentity
-                pose.transform = CATransform3DConcat(CATransform3DConcat(toReal, real), toPreview)
-                let label = key.labelProbe.presentation()?.transform ?? CATransform3DIdentity
-                pose.labelScale = hypot(label.m11, label.m12)
-            } else {
-                moving.remove(id)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for id in Set(running.map { $0.id }) {
+            guard let key = keys[id] else { continue }
+            // About the key's middle, in the keyboard's points: squash, turn, turn over, then move.
+            let squash = max(scales[id] ?? 1, 0.01)
+            var real = CATransform3DMakeScale(squash, squash, 1)
+            real = CATransform3DConcat(real, CATransform3DMakeRotation(turns[id] ?? 0, 0, 0, 1))
+            if let flip = flips[id], flip != 0 {
+                var perspective = CATransform3DIdentity
+                perspective.m34 = -1 / 500
+                real = CATransform3DConcat(real, CATransform3DRotate(perspective, flip, 1, 0, 0))
             }
-            let model = motions.model(id)
-            if model.pose != pose { model.pose = pose }
+            let shift = shifts[id] ?? .zero
+            real = CATransform3DConcat(real, CATransform3DMakeTranslation(shift.x, shift.y, 0))
+            key.proxy.transform = real
+            key.glowHolder.transform = real
+
+            var pose = EffectPose()
+            if !CATransform3DIsIdentity(real) {
+                pose.transform = CATransform3DConcat(CATransform3DConcat(toReal, real), toPreview)
+            }
+            pose.labelScale = labels[id] ?? 1
+            if let motions = motions {
+                let model = motions.model(id)
+                if model.pose != pose { model.pose = pose }
+            }
         }
-        if moving.isEmpty {
+        CATransaction.commit()
+        // Finished moves have been put back to rest above; drop them.
+        running.removeAll { now - $0.start >= $0.move.duration }
+        if running.isEmpty {
             link?.invalidate()
             link = nil
         }

@@ -239,8 +239,6 @@ enum EffectCatalog {
               count: 16, 6...40, extra: times("spread", "Spread", "arrow.up.left.and.arrow.down.right"), build: staticNoise),
 
         // Playful
-        entry("smileys", "Smileys", "Happy faces float up from the key.", "face.smiling.fill", "yellow",
-              count: 4, 1...9, extra: times("rise", "Rise", "arrow.up"), build: smileys),
         entry("ghosts", "Ghosts", "Ghosts drift up and wobble away.", "moon.zzz.fill", "gray",
               count: 3, 1...7, extra: times("wobble", "Wobble", "waveform"), build: ghosts),
         entry("rockets", "Rockets", "Rockets shoot up out of the key.", "airplane", "red",
@@ -271,10 +269,6 @@ enum EffectCatalog {
               count: 1, 1...3, build: halo),
         entry("crown", "Crown", "A crown appears above the key and floats away.", "trophy.fill", "yellow",
               count: 1, 1...3, extra: times("rise", "Rise", "arrow.up"), build: crown),
-        entry("arrows", "Arrows", "Arrows shoot up from the key.", "arrow.up.circle.fill", "green",
-              count: 5, 2...12, extra: times("rise", "Rise", "arrow.up"), build: arrows),
-        entry("checkmarks", "Checkmarks", "Checkmarks pop up and float away.", "checkmark.circle.fill", "green",
-              count: 4, 1...10, extra: times("rise", "Rise", "arrow.up"), build: checkmarks),
         entry("suits", "Card suits", "Spades, hearts, diamonds and clubs are thrown out.", "suit.spade.fill", "red",
               count: 8, 3...18, extra: times("gravity", "Gravity", "arrow.down.to.line"), build: suits),
         entry("dice", "Dice", "Dice tumble out of the key.", "dice.fill", "indigo",
@@ -289,7 +283,7 @@ enum EffectCatalog {
     }
 
     /// The particles of one press for every catalog effect that is on.
-    static func particles(_ config: EffectsConfig, keySize: CGSize, random: @escaping (Int, Int) -> CGFloat) -> [EffectParticle] {
+    static func particles(_ config: EffectsConfig, keySize: CGSize, area: CGSize? = nil, random: @escaping (Int, Int) -> CGFloat) -> [EffectParticle] {
         var list: [EffectParticle] = []
         for (index, item) in all.enumerated() where config.isOn(item.id) {
             let n = max(1, Int(config.setting(item, "count").rounded()))
@@ -298,7 +292,7 @@ enum EffectCatalog {
                                         extra: CGFloat(item.params.count > 3 ? config.setting(item, item.params[3].id) : 1),
                                         seed: 2000 + index * 100, rainbow: true, random: random)
             var group = item.build(context)
-            EffectParticles.finish(&group, from: 0, id: item.id, config: config, size: keySize) { random(9600 + index, $0) }
+            EffectParticles.finish(&group, from: 0, id: item.id, config: config, size: keySize, area: area) { random(9600 + index, $0) }
             list += group
         }
         return list
@@ -700,16 +694,6 @@ enum EffectCatalog {
 
     // MARK: Playful
 
-    private static func smileys(_ c: EffectContext) -> [EffectParticle] {
-        var list: [EffectParticle] = []
-        for i in 0..<c.n {
-            let x0 = (c.r(i, 1) - 0.5) * c.w * 0.8
-            list.append(c.speck(.art(.smiley), 18, 1.3, delay: Double(c.r(i, 2)) * 0.4, from: 0.6, to: 1.2,
-                                path: EffectPath.rise(x: x0, height: c.w * 1.5 * c.extra, sway: 8, phase: c.r(i, 3) * 6.28)))
-        }
-        return list
-    }
-
     private static func ghosts(_ c: EffectContext) -> [EffectParticle] {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
@@ -870,26 +854,6 @@ enum EffectCatalog {
             let x = (CGFloat(i) - CGFloat(c.n - 1) / 2) * c.w * 0.5
             list.append(c.speck(.art(.crown), 20, 1.0, delay: Double(i) * 0.1, from: 0.5, to: 1.1, hue: c.hue(i),
                                 path: { t in CGPoint(x: x, y: -c.h * 0.8 - c.w * 0.6 * c.extra * t) }))
-        }
-        return list
-    }
-
-    private static func arrows(_ c: EffectContext) -> [EffectParticle] {
-        var list: [EffectParticle] = []
-        for i in 0..<c.n {
-            let x = (c.r(i, 1) - 0.5) * c.w * 0.9
-            list.append(c.speck(.art(.arrow), c.between(12, 18, i, 2), 0.9, delay: Double(c.r(i, 3)) * 0.3, hue: c.hue(i),
-                                path: { t in CGPoint(x: x, y: -c.w * 1.6 * c.extra * EffectPath.easeOut(t)) }))
-        }
-        return list
-    }
-
-    private static func checkmarks(_ c: EffectContext) -> [EffectParticle] {
-        var list: [EffectParticle] = []
-        for i in 0..<c.n {
-            let x = (c.r(i, 1) - 0.5) * c.w * 0.9
-            list.append(c.speck(.art(.check), c.between(13, 19, i, 2), 1.0, delay: Double(c.r(i, 3)) * 0.3, from: 0.3, to: 1.1,
-                                hue: c.hue(i), path: { t in CGPoint(x: x, y: -c.w * 1.3 * c.extra * EffectPath.easeOut(t)) }))
         }
         return list
     }

@@ -369,6 +369,11 @@ final class KeyView: UIView {
             return ([self.label, self.iconView] as [UIView]).filter { !$0.isHidden }.map { $0.layer }
         }
         player.echoImage = { [weak self] in self?.renderEcho() }
+        // The light and shadow under the key live outside it (the halo), so they are moved with it.
+        player.followers = { [weak self] in
+            guard let self = self, self.haloAttached else { return [] }
+            return [self.halo]
+        }
         player.installGlow = { [weak self] glow in
             guard let self = self else { return }
             if self.haloAttached {
