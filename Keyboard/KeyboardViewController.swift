@@ -304,7 +304,9 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)",
-            "\(s.splitKeyboard)", s.oneHanded
+            "\(s.splitKeyboard)", s.oneHanded,
+            "\(s.effectGlow)", s.effectColor, "\(s.effectStrength)", "\(s.effectSize)", "\(s.effectFadeIn)",
+            "\(s.effectFadeOut)", "\(s.effectRipple)", "\(s.effectRippleSize)"
         ].joined(separator: "|")
     }
 

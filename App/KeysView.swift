@@ -4,7 +4,6 @@ import SwiftUI
 /// The preview at the top follows every change; the keyboard reads the same settings (Prefs, KeyboardView,
 /// KeyView).
 struct KeysView: View {
-    @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
@@ -16,9 +15,6 @@ struct KeysView: View {
     @AppStorage(SettingKey.landscapeSeparate, store: SharedStore.defaults) private var landscapeSeparate = SettingDefault.landscapeSeparate
     @AppStorage(SettingKey.landscapeKeyHeight, store: SharedStore.defaults) private var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
-    @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var surface = SettingDefault.keySurface
-    @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var borderStyle = SettingDefault.keyBorderStyle
-    @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var glow = SettingDefault.keyGlow
     @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFont = SettingDefault.keyFont
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
@@ -46,28 +42,9 @@ struct KeysView: View {
                           Style(name: tr("Standard"), height: 45, roundness: 0.26, keyGap: 6, rowGap: 11),
                           Style(name: tr("Large"), height: 52, roundness: 0.6, keyGap: 8, rowGap: 14)]
     private let heights: [Double] = [38, 40, 45, 48, 52, 56]
-    private let corners: [Double] = [0, 0.12, 0.26, 1]
     private let gaps: [(key: Double, row: Double)] = [(4, 8), (6, 11), (8, 14), (10, 17)]
 
-    private let surfaces = ["auto", "flat", "sheen", "raised"]
-    private let borders = ["auto", "none", "thin", "bold", "accent"]
-    private let glows = ["off", "soft", "strong"]
-
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
-
-    /// The Liquid Glass theme on iOS 26: its keys are real glass, so the key style (surface, border, glow) has
-    /// nothing to change (Theme.keySurface / drawsKeyBorder / keyGlow skip them); before iOS 26 they are drawn keys.
-    private var glassKeys: Bool {
-        guard ThemeCatalog.theme(id: themeID).kind == .liquidGlass else { return false }
-        if #available(iOS 26, *) { return true }
-        return false
-    }
-
-    /// A designed theme: its corners and key style are its own (the theme editor's), so these have nothing to change.
-    private var designedTheme: ThemeDefinition? {
-        let theme = ThemeCatalog.base(id: themeID)
-        return theme.kind == .designed ? theme : nil
-    }
 
     private var styleIndex: Int? {
         return styles.firstIndex {
@@ -135,46 +112,6 @@ struct KeysView: View {
                      ? tr("The split keyboard is used instead of the one-handed one.")
                      : tr("One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over."))
             }
-            .glassRows()
-
-            Section {
-                SegmentedChoice(names: [tr("Square"), tr("Slight"), tr("Standard"), tr("Round")],
-                                selected: corners.firstIndex { same($0, roundness) }) { roundness = corners[$0] }
-                GlassSlider(title: tr("Roundness"), symbol: "app", value: $roundness, range: 0...1, step: 0.02) {
-                    // The corner radius of a letter key (a share of half its shorter side, Theme.keyCornerRadius).
-                    DeviceMetrics.points($0 * min(DeviceMetrics.letterKeyWidth(keyGap: keyGap), keyHeight) / 2)
-                }
-            } header: {
-                SectionHeader(tr("Corners"), symbol: "app", color: .indigo)
-            } footer: {
-                if let theme = designedTheme {
-                    Text(tr("%@ has corners of its own: change them in its theme editor (Themes, Customize). These apply again with a system theme.", "\(theme.name)"))
-                }
-            }
-            .disabled(designedTheme != nil)
-            .opacity(designedTheme != nil ? 0.45 : 1)
-            .glassRows()
-
-            Section {
-                SegmentedChoice(title: tr("Surface"), names: [tr("Auto"), tr("Flat"), tr("Sheen"), tr("Raised")],
-                                selected: surfaces.firstIndex(of: surface)) { surface = surfaces[$0] }
-                SegmentedChoice(title: tr("Border"), names: [tr("Auto"), tr("None"), tr("Thin"), tr("Bold"), tr("Accent")],
-                                selected: borders.firstIndex(of: borderStyle)) { borderStyle = borders[$0] }
-                SegmentedChoice(title: tr("Glow"), names: [tr("Off"), tr("Soft"), tr("Strong")],
-                                selected: glows.firstIndex(of: glow)) { glow = glows[$0] }
-            } header: {
-                SectionHeader(tr("Key style"), symbol: "sparkles", color: .purple)
-            } footer: {
-                if let theme = designedTheme {
-                    Text(tr("%@ has a key style of its own: change its surface, outline, shadow and glow in its theme editor (Themes, Customize). These apply again with a system theme.", "\(theme.name)"))
-                } else {
-                    Text(glassKeys
-                         ? tr("Not used by the Liquid Glass theme: its keys are real glass, without a surface, outline or glow of their own. These apply again with any other theme.")
-                         : tr("Auto follows the theme: flat keys, with a thin outline on every theme but Native. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour."))
-                }
-            }
-            .disabled(glassKeys || designedTheme != nil)
-            .opacity(glassKeys || designedTheme != nil ? 0.45 : 1)
             .glassRows()
 
             Section {

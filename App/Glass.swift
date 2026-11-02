@@ -14,6 +14,8 @@ struct GlassBackdrop: View {
     var body: some View {
         let accent = Color.currentAccent(name: accentName, hex: accentHex)
         let strength = scheme == .dark ? 0.45 : 0.30
+        // An aurora built from the accent itself: the same colour turned a little each way round the colour wheel,
+        // so the whole app takes its character from the accent chosen.
         return ZStack {
             Color(.systemGroupedBackground)
             Circle()
@@ -22,12 +24,12 @@ struct GlassBackdrop: View {
                 .blur(radius: 110)
                 .offset(x: -150, y: -300)
             Circle()
-                .fill(Color.purple.opacity(strength * 0.6))
+                .fill(accent.hueShifted(by: 0.09).opacity(strength * 0.65))
                 .frame(width: 400, height: 400)
                 .blur(radius: 120)
                 .offset(x: 170, y: 80)
             Circle()
-                .fill(Color.teal.opacity(strength * 0.5))
+                .fill(accent.hueShifted(by: -0.10).opacity(strength * 0.55))
                 .frame(width: 420, height: 420)
                 .blur(radius: 130)
                 .offset(x: -110, y: 460)
@@ -53,7 +55,45 @@ struct GlassRowFill: View {
     }
 }
 
+extension Color {
+    /// The same colour turned round the colour wheel (a share of a full turn).
+    func hueShifted(by turn: Double) -> Color {
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(self).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else { return self }
+        var shifted = (hue + CGFloat(turn)).truncatingRemainder(dividingBy: 1)
+        if shifted < 0 { shifted += 1 }
+        return Color(hue: Double(shifted), saturation: Double(saturation), brightness: Double(brightness), opacity: Double(alpha))
+    }
+}
+
+/// The app's signature edge: a hairline that catches the light at the top left and fades out towards the bottom
+/// right, on every glass card.
+private struct GlassEdge<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let light = scheme == .dark ? 0.32 : 0.85
+        content.overlay(
+            shape.strokeBorder(
+                LinearGradient(colors: [Color.white.opacity(light), Color.white.opacity(0.05), .accentColor.opacity(0.25)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: 0.8)
+                .allowsHitTesting(false))
+    }
+}
+
 extension View {
+    func glassEdge<S: InsettableShape>(_ shape: S) -> some View {
+        return modifier(GlassEdge(shape: shape))
+    }
+
+    /// The app's typeface: the system's rounded design where the system has it (iOS 16.1 and later).
+    @ViewBuilder
+    func roundedType() -> some View {
+        if #available(iOS 16.1, *) { self.fontDesign(.rounded) } else { self }
+    }
+
     /// A screen of the app: its list or scroll view on the glass backdrop.
     func glassScreen() -> some View {
         return self
@@ -72,12 +112,12 @@ extension View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            self.glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)) } ?? .regular, in: shape)
+            self.glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)) } ?? .regular, in: shape).glassEdge(shape)
         } else {
-            self.background(shape.fill(.thinMaterial)).background(shape.fill(tint?.opacity(0.18) ?? .clear))
+            self.background(shape.fill(.thinMaterial)).background(shape.fill(tint?.opacity(0.18) ?? .clear)).glassEdge(shape)
         }
         #else
-        self.background(shape.fill(.thinMaterial)).background(shape.fill(tint?.opacity(0.18) ?? .clear))
+        self.background(shape.fill(.thinMaterial)).background(shape.fill(tint?.opacity(0.18) ?? .clear)).glassEdge(shape)
         #endif
     }
 }
@@ -404,6 +444,7 @@ private struct GlassCardSection: View {
         }
         .clipShape(shape)   // a row's Delete button keeps the card's corners
         .glassEffect(.regular, in: shape)
+        .glassEdge(shape)
     }
 
     private struct Run {

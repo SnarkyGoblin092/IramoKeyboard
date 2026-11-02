@@ -211,13 +211,21 @@ struct IconTile: View {
     let color: Color
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
-            .frame(width: 29, height: 29)
+        // A glossy squircle: the colour deepening towards the bottom, a light edge at the top and a glow of its own.
+        RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(LinearGradient(colors: [color.opacity(0.75), color.hueShifted(by: 0.03)],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 32, height: 32)
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.55), Color.white.opacity(0)],
+                                                 startPoint: .top, endPoint: .center), lineWidth: 1))
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.18), radius: 1, y: 1))
+            .shadow(color: color.opacity(0.35), radius: 5, y: 2)
             .accessibilityHidden(true)
     }
 }
@@ -356,13 +364,16 @@ struct SectionHeader: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(color)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(color.opacity(0.16)))
                 .accessibilityHidden(true)
             Text(title)
-                .font(.footnote.weight(.semibold))
+                .font(.footnote.weight(.bold))
+                .tracking(0.8)
                 .foregroundColor(.secondary)
         }
         .textCase(.uppercase)

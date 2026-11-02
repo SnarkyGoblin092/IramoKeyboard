@@ -106,6 +106,9 @@ final class KeyboardView: UIView {
 
     private var states: [UITouch: TouchState] = [:]
 
+    /// Every key's shadow and glow, drawn on one layer under all the keys so that light never falls over a key.
+    private let haloLayer = CALayer()
+
     /// A finished swipe kept for a moment with two-thumb swiping on: a touch on a letter right after continues it.
     private struct PendingSwipe {
         let path: [CGPoint]
@@ -124,6 +127,7 @@ final class KeyboardView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         backgroundColor = UIColor.clear
+        layer.insertSublayer(haloLayer, at: 0)   // under every key (KeyView.attachHalo)
 
         if Theme.usesRealGlass {
             // Spacing just under the gap between keys: neighbouring keys share sampling but do not melt together.
@@ -174,7 +178,10 @@ final class KeyboardView: UIView {
     func configure(rows newRows: [[KeySpec]], page newPage: KeyboardPage, shift newShift: ShiftState) {
         endGesturesForRebuild()
         for row in keyViews {
-            for key in row { key.removeFromSuperview() }
+            for key in row {
+                key.detachHalo()
+                key.removeFromSuperview()
+            }
         }
         rows = newRows
         page = newPage
@@ -185,7 +192,10 @@ final class KeyboardView: UIView {
             var builtRow: [KeyView] = []
             for spec in row {
                 let key = KeyView(spec: spec)
-                if !spec.isSpacer { (glassContainer?.contentView ?? self).addSubview(key) }
+                if !spec.isSpacer {
+                    (glassContainer?.contentView ?? self).addSubview(key)
+                    key.attachHalo(to: haloLayer)
+                }
                 builtRow.append(key)
             }
             built.append(builtRow)
@@ -293,6 +303,7 @@ final class KeyboardView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         trailLayer.frame = bounds
+        haloLayer.frame = bounds
         glassContainer?.frame = bounds
         guard !rows.isEmpty else { return }
 
@@ -329,6 +340,7 @@ final class KeyboardView: UIView {
                 if key.transform == .identity {
                     key.frame = hit.insetBy(dx: keyInset, dy: rowInset)   // drawn size; the touch area is the whole cell
                 }
+                key.syncHalo()
                 x += width
             }
             hitRects.append(rects)
@@ -848,20 +860,36 @@ final class KeyboardView: UIView {
     private var swipeAllowed: Bool { return Prefs.swipe && typingLanguage.supportsSwipe }
 
     private func shouldStartSwipe(_ state: TouchState, at point: CGPoint) -> Bool {
-        guard swipeAllowed, page == .letters, state.startedOnLetter, states.count == 1 else {
-            return false
-        }
+        guard swipeAllowed, page == .letters, state.startedOnLetter else { return false }
+        // Fingers that already lifted (their touch-up not yet delivered or handled) do not count: in fast typing
+        // the last finger often still lingers here, and a swipe never started while it did.
+        let down = states.keys.filter { $0.phase != .ended && $0.phase != .cancelled }
+        guard down.count <= 1 else { return false }
+        let keyWidth = max(letterKeySize().width, 1)
+        let dx = point.x - state.startPoint.x
+        let dy = point.y - state.startPoint.y
+        let distance = hypot(dx, dy)
+        // A two-letter word ("as", "to" next to each other) crosses no key between its letters: it counts once the
+        // finger is well away from where it went down and right on the middle of another letter.
+        if reachesOtherLetter(point, from: state.startKey), distance >= keyWidth * 0.8 { return true }
         // A real swipe crosses at least two other keys; a sloppy tap or a quick drift never does.
         guard state.visited.count >= 3 else { return false }
         // A swipe needs a clear, deliberate slide: well over one key width away from where the finger
         // went down, and onto a different key. Anything smaller stays a tap (fast typists drift a lot).
-        let keyWidth = max(letterKeySize().width, 1)
-        let dx = point.x - state.startPoint.x
-        let dy = point.y - state.startPoint.y
         let threshold = max(40, keyWidth * 1.4)
-        guard dx * dx + dy * dy > threshold * threshold else { return false }
+        guard distance > threshold else { return false }
         if let index = keyIndex(at: point), keyViews[index.row][index.col] === state.startKey { return false }
         return true
+    }
+
+    /// Whether `point` is on the middle of a letter key other than `start`: a finger drifting off the key it meant
+    /// ends near an edge, one that goes to the next letter on purpose lands in its centre.
+    private func reachesOtherLetter(_ point: CGPoint, from start: KeyView?) -> Bool {
+        guard let index = keyIndex(at: point) else { return false }
+        let key = keyViews[index.row][index.col]
+        guard key !== start, letter(of: key.spec) != nil, let rect = hitRect(of: key) else { return false }
+        let size = letterKeySize()
+        return hypot(point.x - rect.midX, point.y - rect.midY) <= max(size.width, 1) * 0.35
     }
 
     private func beginSwipe(_ state: TouchState) {
@@ -976,6 +1004,8 @@ final class KeyboardView: UIView {
         let keyWidth = max(letterKeySize().width, 1)
         let end = swipe.path.last ?? swipe.startPoint
         let displacement = hypot(end.x - swipe.startPoint.x, end.y - swipe.startPoint.y)
+        // Ended on the middle of another letter, well away from the start: the short swipe of a word like "as".
+        if displacement >= keyWidth * 0.8, reachesOtherLetter(end, from: swipe.startKey) { return false }
         return travel(swipe.path) < keyWidth * 2.2 && displacement < keyWidth * 1.4
     }
 

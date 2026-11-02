@@ -76,7 +76,9 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - No correction in password, email and web address fields, or where the app asks for none.
 
 ### Typing
-- Swipe typing: slide across the letters to write a word; the bar offers the other readings.
+- Swipe typing: slide across the letters to write a word; the bar offers the other readings. It starts even
+  while the last finger of fast typing is still lifting, and a two-letter word between neighbouring keys ("as",
+  "to") counts once the finger lands in the middle of the second letter.
 - Thumb handoff: pass a word to the other thumb mid-glide (or right after lifting) and it goes on.
 - Glide onto the space bar to finish a word and carry on with the next one without lifting ("hello you"); the
   trips to and from the bar are left out of the words.
@@ -151,13 +153,14 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   ruled lines or scanlines) and its strength. Changes are saved at once for that theme (kept when you switch to
   another) and the keyboard draws them the next time it opens; Reset puts the theme back as designed. Edited
   themes are marked on the Themes screen.
-- Accent colour (a preset, or any colour from the colour picker in the last place) for the system themes, and a
-  key style for them: surface (flat, a soft sheen, or raised with a shadow under each key), border (none, thin,
-  bold or in the accent colour) and an accent glow (soft or strong); by default flat keys and every theme but
-  Native a thin outline. Settings a theme has no use for are greyed out (the key style with Liquid Glass, whose
-  keys are real glass; corners and key style with a designed theme, which has its own).
+- Accent colour (a preset, or any colour from the colour picker in the last place) for the system themes, and on
+  the Themes screen, shown only while a system theme is chosen, their corners (square to round) and key style:
+  surface (flat, a soft sheen, or raised with a shadow under each key), border (none, thin, bold or in the accent
+  colour) and an accent glow (soft or strong); by default flat keys and every theme but Native a thin outline.
+  The key style is greyed out with Liquid Glass, whose keys are real glass; a designed theme has its own in the
+  theme editor.
 - Keys: Small, Standard or Large, or set one by one: key height (with its own landscape size), keyboard
-  width, corners (square to round), the gaps between keys and rows, a font for the keys and the bar (the system
+  width, the gaps between keys and rows, a font for the keys and the bar (the system
   font, its rounded, serif and monospaced designs, or one of 11 built-in fonts), letter size, capitals that follow shift or
   always show, accent hints in any corner (or off) at any size, and the space bar's text (the language's name or
   its code) and size.
@@ -177,8 +180,10 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   (no hard knock at the ends). They show real values for this phone: points (key width, corner radius, letter
   and emoji size, touch room), milliseconds or seconds; strengths with no unit read Faint ... Full.
 - A Liquid Glass design: on iOS 26 and later every section of every list (settings, languages, learned words,
-  shortcuts) is one rounded card of real Liquid Glass over a backdrop tinted with your accent colour (frosted list
-  rows before iOS 26). Languages, learned words and shortcuts swipe left to delete, the red Delete button growing
+  shortcuts) is one rounded card of real Liquid Glass over an aurora backdrop built from your accent colour and
+  its neighbours on the colour wheel (frosted list rows before iOS 26). The app's own look: the system's rounded
+  typeface, glossy squircle icon tiles with a glow, section titles with a round glyph badge and wide tracking, a
+  wordmark over a glowing logo, and a light-catching hairline edge on every glass card. Languages, learned words and shortcuts swipe left to delete, the red Delete button growing
   inside the row itself; a long swipe deletes at once.
 - Laid out like the system Settings app: coloured icons, and each row showing what it is set to.
 - Screens that change the keyboard keep a live preview pinned at the top while their settings scroll below it
@@ -197,8 +202,14 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
   for deleting, and for Reset all settings a half-second strong buzz before it asks and a warning buzz when it
   is done.
 - Languages, text shortcuts and learned words, each swiped left to remove an entry.
-- On the main screen: the theme's name (its preview is on the Themes screen), the number row right under it,
-  then Keys and Haptics.
+- The main screen, in the order a person goes through it: Keyboard (Languages, Learned words, Text shortcuts,
+  Emoji, Functions panel), Typing (Suggestion bar, then auto-correction, emoji suggestions, capitals and the
+  period shortcut), Touch & gestures (Gestures, Hitboxes), Look & feel (Theme, Number row, Keys, Key pop-ups,
+  Effects, Haptics, Accent colour), Privacy & data, then App language and, last, the credits.
+- Effects: a glow under pressed keys that fades in and out (accent, white or a new rainbow colour each press;
+  strength, spread, fade-in and fade-out times) and a ripple of light spreading from the middle of the key (its
+  reach); presets Off, Glow, Neon, Ripple and Rainbow. Every key's glow and shadow is drawn on one layer under
+  all the keys, so light never falls over a neighbouring key. The keys in the app's preview can be touched to try it.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
 - Credits and licences for the word, emoji and icon data.

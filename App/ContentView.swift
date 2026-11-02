@@ -15,12 +15,14 @@ struct ContentView: View {
             GlassList {
                 HeaderSection()
                 TestFieldSection().glassRows()
+                // From what the keyboard offers, through how it types and feels, to the data and the app itself.
                 KeyboardSection().glassRows()
                 TypingSection().glassRows()
+                TouchSection().glassRows()
                 LookSection().glassRows()
                 DataSection().glassRows()
-                AboutSection().glassRows()
                 AppLanguageSection().glassRows()
+                AboutSection().glassRows()
             }
             .glassScreen()
             .navigationTitle(tr("Iramo"))
@@ -34,6 +36,7 @@ struct ContentView: View {
         .environment(\.layoutDirection, AppLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
         .environment(\.openScreen, { path.append($0) })
         .modifier(AccentTint())
+        .roundedType()
         .onAppear {
             Feedback.prepare()
             Settings.shared.removeTouchModel()
@@ -59,10 +62,12 @@ private struct HeaderSection: View {
                     .frame(width: 78, height: 78)
                     .clipShape(RoundedRectangle(cornerRadius: 17.5, style: .continuous))
                     .shadow(color: Color.black.opacity(0.18), radius: 10, x: 0, y: 5)
+                    .background(
+                        Circle().fill(.tint.opacity(0.45)).frame(width: 96, height: 96).blur(radius: 26))
                     .accessibilityHidden(true)
-                Text(tr("Iramo")).font(.largeTitle.weight(.bold))
+                Text(tr("Iramo")).font(.system(size: 36, weight: .heavy)).tracking(1.5)
                 Text(tr("Your words, your keyboard"))
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
@@ -140,17 +145,12 @@ private struct TestFieldSection: View {
     }
 }
 
-/// Screens for what the keyboard does: languages, the suggestion bar, gestures, touch and shortcuts.
+/// What the keyboard offers: its languages, and the words, shortcuts, emoji and tools that come with them.
 private struct KeyboardSection: View {
     // (A list can't be an @AppStorage value: read on appear, like the shortcuts.)
     @State private var languages = Settings.shared.enabledLanguages
-    @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var suggestions = SettingDefault.suggestions
-    @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
-    @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
-    @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
-    @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var hitboxSize = SettingDefault.hitboxSize
-    @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes
     @State private var shortcutCount = Settings.shared.shortcuts.count
+    @State private var learnedCount = 0
 
     private var languageSummary: String {
         let names = Language.list(from: languages).map { $0.localizedName }
@@ -158,31 +158,14 @@ private struct KeyboardSection: View {
         return "\(names[0]) +\(names.count - 1)"
     }
 
-    private var barSummary: String {
-        if !suggestions { return tr("Off") }
-        return scroll ? tr("Scrolling") : (fit ? tr("Fit to words") : tr("Three words"))
-    }
-
-    private var touchSummary: String {
-        let room = abs(hitboxSize - 0.85) < 0.001 ? tr("Strict") : (abs(hitboxSize - 1.2) < 0.001 ? tr("Generous") : tr("Normal"))
-        return adaptive ? tr("%@, adaptive", "\(room)") : room
-    }
-
     var body: some View {
         Section {
             ScreenRow(.languages) {
                 SettingsRow(title: tr("Languages"), symbol: "globe", color: .blue, value: languageSummary)
             }
-            ScreenRow(.suggestions) {
-                SettingsRow(title: tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo,
-                            value: barSummary)
-            }
-            ScreenRow(.gestures) {
-                SettingsRow(title: tr("Gestures"), symbol: "hand.draw.fill", color: .teal,
-                            value: swipe && !Language.lacking(.swipe, among: Language.list(from: languages)).all ? tr("Swipe on") : tr("Swipe off"))
-            }
-            ScreenRow(.hitboxes) {
-                SettingsRow(title: tr("Hitboxes"), symbol: "scope", color: .cyan, value: touchSummary)
+            ScreenRow(.learnedWords) {
+                SettingsRow(title: tr("Learned words"), symbol: "character.book.closed", color: .brown,
+                            value: learnedCount > 0 ? "\(learnedCount)" : nil)
             }
             ScreenRow(.shortcuts) {
                 SettingsRow(title: tr("Text shortcuts"), symbol: "bolt.fill", color: .orange,
@@ -202,13 +185,56 @@ private struct KeyboardSection: View {
         .onAppear {
             languages = Settings.shared.enabledLanguages
             shortcutCount = Settings.shared.shortcuts.count
+            learnedCount = Settings.shared.learnedWordList().count
         }
     }
 }
 
-private struct TypingSection: View {
+/// Where a tap counts as which key, and the gestures on the keys.
+private struct TouchSection: View {
+    @State private var languages = Settings.shared.enabledLanguages
+    @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
+    @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var hitboxSize = SettingDefault.hitboxSize
+    @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes
+
+    private var touchSummary: String {
+        let room = abs(hitboxSize - 0.85) < 0.001 ? tr("Strict") : (abs(hitboxSize - 1.2) < 0.001 ? tr("Generous") : tr("Normal"))
+        return adaptive ? tr("%@, adaptive", "\(room)") : room
+    }
+
     var body: some View {
         Section {
+            ScreenRow(.gestures) {
+                SettingsRow(title: tr("Gestures"), symbol: "hand.draw.fill", color: .teal,
+                            value: swipe && !Language.lacking(.swipe, among: Language.list(from: languages)).all ? tr("Swipe on") : tr("Swipe off"))
+            }
+            ScreenRow(.hitboxes) {
+                SettingsRow(title: tr("Hitboxes"), symbol: "scope", color: .cyan, value: touchSummary)
+            }
+        } header: {
+            SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill", color: .teal)
+        }
+        .onAppear { languages = Settings.shared.enabledLanguages }
+    }
+}
+
+/// How typing behaves: the corrections and capitals, and the suggestion bar.
+private struct TypingSection: View {
+    @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var suggestions = SettingDefault.suggestions
+    @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
+    @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
+
+    private var barSummary: String {
+        if !suggestions { return tr("Off") }
+        return scroll ? tr("Scrolling") : (fit ? tr("Fit to words") : tr("Three words"))
+    }
+
+    var body: some View {
+        Section {
+            ScreenRow(.suggestions) {
+                SettingsRow(title: tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo,
+                            value: barSummary)
+            }
             SettingToggle(tr("Auto-correction"), key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: tr("Fixes typos, accents and missing spaces on space"),
                           symbol: "checkmark.seal.fill", color: .green, feature: .autoCorrect)
@@ -221,9 +247,6 @@ private struct TypingSection: View {
             SettingToggle(tr("\u{201C}.\u{201D} shortcut"), key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
                           subtitle: tr("Tap the space bar twice to end a sentence"),
                           symbol: "circle.fill", color: .gray, feature: .sentencePeriod)
-            SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
-                          subtitle: tr("The letter shows above your finger"),
-                          symbol: "rectangle.and.hand.point.up.left.fill", color: .purple)
         } header: {
             SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }
@@ -242,6 +265,15 @@ private struct LookSection: View {
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
+    @AppStorage(SettingKey.effectGlow, store: SharedStore.defaults) private var effectGlow = SettingDefault.effectGlow
+    @AppStorage(SettingKey.effectRipple, store: SharedStore.defaults) private var effectRipple = SettingDefault.effectRipple
+
+    private var effectsSummary: String {
+        if effectGlow && effectRipple { return tr("Glow, ripple") }
+        if effectGlow { return tr("Glow") }
+        return effectRipple ? tr("Ripple") : tr("Off")
+    }
+
     private var hapticSummary: String {
         if vibration < 0.01 { return tr("Off") }
         return [tr("Soft"), tr("Light"), tr("Medium"), tr("Firm"), tr("Crisp")][min(4, max(0, Int(sharpness * 5)))]
@@ -256,6 +288,12 @@ private struct LookSection: View {
                           subtitle: tr("Numbers above the letters"), symbol: "number", color: .orange)
             ScreenRow(.keys) {
                 SettingsRow(title: tr("Keys"), symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
+            }
+            SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
+                          subtitle: tr("The letter shows above your finger"),
+                          symbol: "rectangle.and.hand.point.up.left.fill", color: .purple)
+            ScreenRow(.effects) {
+                SettingsRow(title: tr("Effects"), symbol: "sparkles", color: .indigo, value: effectsSummary)
             }
             ScreenRow(.haptics) {
                 SettingsRow(title: tr("Haptics"), symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
@@ -309,14 +347,9 @@ private struct DataSection: View {
 
     @State private var pending: Action?
     @State private var note: String?
-    @State private var learnedCount = 0
 
     var body: some View {
         Section {
-            ScreenRow(.learnedWords) {
-                SettingsRow(title: tr("Learned words"), symbol: "character.book.closed", color: .brown,
-                            value: learnedCount > 0 ? "\(learnedCount)" : nil)
-            }
             // Orange: they remove things (each asks first), short of red Reset, which undoes every setting.
             row(.learned, tr("Forget learned words"), symbol: "text.book.closed", color: .orange)
             row(.recents, tr("Clear recent emoji"), symbol: "clock.arrow.circlepath", color: .orange)
@@ -329,11 +362,6 @@ private struct DataSection: View {
         } footer: {
             Text(tr("Everything the keyboard learns stays on this device."))
         }
-        .onAppear { learnedCount = DataSection.countLearned() }
-    }
-
-    private static func countLearned() -> Int {
-        return Settings.shared.learnedWordList().count
     }
 
     /// One option with its own confirmation, so the dialog's arrow points at the option that was tapped.
@@ -367,7 +395,6 @@ private struct DataSection: View {
             note = tr("Recent emoji cleared.")
         case .learned:
             Settings.shared.clearLearnedWords()
-            learnedCount = 0
             note = tr("Learned words forgotten.")
         case .reset:
             Settings.shared.resetPreferences()
@@ -441,7 +468,7 @@ private struct AppLanguageSection: View {
 
 /// The screens the main list opens.
 enum Screen: Hashable {
-    case languages, suggestions, gestures, hitboxes, shortcuts, emoji, functions, themes, themeEditor, keys, haptics, learnedWords, licences
+    case languages, suggestions, gestures, hitboxes, shortcuts, emoji, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
 
     @ViewBuilder var view: some View {
         switch self {
@@ -455,6 +482,7 @@ enum Screen: Hashable {
         case .themes: ThemesView()
         case .themeEditor: ThemeEditorView()
         case .keys: KeysView()
+        case .effects: EffectsView()
         case .haptics: HapticsView()
         case .learnedWords: LearnedWordsView()
         case .licences: LicensesView()

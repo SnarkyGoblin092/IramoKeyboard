@@ -38,6 +38,7 @@ final class KeyView: UIView {
         didSet {
             guard oldValue != isPressed else { return }
             refreshAppearance()
+            playPressEffects(pressed: isPressed)
         }
     }
     var isActive = false { didSet { refreshAppearance() } }
@@ -205,30 +206,70 @@ final class KeyView: UIView {
     /// pressed, as if pushed in), the accent glow, the raised key's drop shadow (flattened while pressed), or the
     /// native key's 1pt line.
     private func applyShadow() {
+        let target = shadowTarget
         if let shadow = isPressed ? designedPressedShadow : designedShadow {
-            layer.shadowColor = shadow.color.resolvedColor(with: traitCollection).cgColor
-            layer.shadowOpacity = shadow.opacity
-            layer.shadowRadius = shadow.radius
-            layer.shadowOffset = shadow.offset
+            target.shadowColor = shadow.color.resolvedColor(with: traitCollection).cgColor
+            target.shadowOpacity = shadow.opacity
+            target.shadowRadius = shadow.radius
+            target.shadowOffset = shadow.offset
         } else if glow.radius > 0 {
-            layer.shadowColor = Theme.accent.resolvedColor(with: traitCollection).cgColor
-            layer.shadowOpacity = isPressed ? glow.opacity * 0.6 : glow.opacity
-            layer.shadowRadius = glow.radius
-            layer.shadowOffset = .zero
+            target.shadowColor = Theme.accent.resolvedColor(with: traitCollection).cgColor
+            target.shadowOpacity = isPressed ? glow.opacity * 0.6 : glow.opacity
+            target.shadowRadius = glow.radius
+            target.shadowOffset = .zero
         } else if surface == .raised {
             let dark = traitCollection.userInterfaceStyle == .dark
-            layer.shadowColor = UIColor.black.cgColor
-            layer.shadowOpacity = isPressed ? 0.08 : (dark ? 0.45 : 0.25)
-            layer.shadowRadius = isPressed ? 0.5 : 1.5
-            layer.shadowOffset = CGSize(width: 0, height: isPressed ? 0.5 : 1.5)
+            target.shadowColor = UIColor.black.cgColor
+            target.shadowOpacity = isPressed ? 0.08 : (dark ? 0.45 : 0.25)
+            target.shadowRadius = isPressed ? 0.5 : 1.5
+            target.shadowOffset = CGSize(width: 0, height: isPressed ? 0.5 : 1.5)
         } else if drawsShadow {
-            layer.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
-            layer.shadowOpacity = 1
-            layer.shadowRadius = 0
-            layer.shadowOffset = CGSize(width: 0, height: 1)
+            target.shadowColor = Theme.keyShadow.resolvedColor(with: traitCollection).cgColor
+            target.shadowOpacity = 1
+            target.shadowRadius = 0
+            target.shadowOffset = CGSize(width: 0, height: 1)
         } else {
-            layer.shadowOpacity = 0
+            target.shadowOpacity = 0
         }
+    }
+
+    // MARK: One layer for every key's light
+
+    /// The key's shadows and glows are drawn by this layer, which lives in a layer under all the keys
+    /// (KeyboardView.haloLayer) and not in the key itself: a key's light then never lands on top of another key,
+    /// whichever side of it that key is on.
+    private let halo = CALayer()
+    private var haloAttached = false
+
+    private var shadowTarget: CALayer { return haloAttached ? halo : layer }
+
+    func attachHalo(to host: CALayer) {
+        haloAttached = true
+        layer.shadowOpacity = 0
+        host.addSublayer(halo)
+        if let glow = pressGlow {
+            glow.removeFromSuperlayer()
+            halo.addSublayer(glow)
+        }
+        refreshAppearance()
+        syncHalo()
+    }
+
+    func detachHalo() {
+        halo.removeFromSuperlayer()
+        haloAttached = false
+    }
+
+    /// Puts the halo where the key is (the key's frame and the host layer share the keyboard's coordinates).
+    func syncHalo() {
+        guard haloAttached else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        halo.frame = frame
+        halo.shadowPath = keyShapePath()
+        pressGlow?.frame = halo.bounds
+        pressGlow?.shadowPath = halo.shadowPath
+        CATransaction.commit()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -276,8 +317,9 @@ final class KeyView: UIView {
             if drawsBorder {
                 layer.borderColor = Theme.keyBorderColor.resolvedColor(with: traitCollection).cgColor
             }
-            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
+            shadowTarget.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
             applyShadow()
+            syncHalo()
             if let frostView = frostView {
                 frostView.frame = bounds
                 frostView.layer.cornerRadius = radius
@@ -289,10 +331,118 @@ final class KeyView: UIView {
                 sheen.colors = Theme.sheenColors(dark: dark)
             }
         }
+        layoutEffects(radius: radius)
         label.frame = bounds.insetBy(dx: 2, dy: 0)
         layoutHint(radius: radius)
         let side: CGFloat = 26
         iconView.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+    }
+
+    // MARK: Press effects (the Effects screen)
+
+    /// A light behind the label that fades in when the key goes down and out when it comes up. Made on first use.
+    private var pressGlow: CALayer?
+    /// The next rainbow hue (shared by every key, so each press is a new colour).
+    private static var rainbowHue: CGFloat = 0
+
+    private func effectColor() -> UIColor {
+        switch Prefs.effectColor {
+        case "white":
+            return .white
+        case "rainbow":
+            KeyView.rainbowHue = (KeyView.rainbowHue + 0.11).truncatingRemainder(dividingBy: 1)
+            return UIColor(hue: KeyView.rainbowHue, saturation: 0.75, brightness: 1, alpha: 1)
+        default:
+            return Theme.accent.resolvedColor(with: traitCollection)
+        }
+    }
+
+    private func keyShapePath() -> CGPath {
+        return UIBezierPath(roundedRect: bounds, cornerRadius: Theme.keyCornerRadius(for: bounds.size)).cgPath
+    }
+
+    private func layoutEffects(radius: CGFloat) {
+        guard let glow = pressGlow else { return }
+        glow.frame = bounds
+        glow.shadowPath = keyShapePath()
+        glow.shadowRadius = 9 * CGFloat(Prefs.effectSize)
+    }
+
+    private func playPressEffects(pressed: Bool) {
+        if Prefs.effectGlow { fadeGlow(on: pressed) }
+        if pressed && Prefs.effectRipple { ripple() }
+    }
+
+    private func fadeGlow(on: Bool) {
+        let glow: CALayer
+        if let existing = pressGlow {
+            glow = existing
+        } else {
+            glow = CALayer()
+            glow.shadowOffset = .zero
+            glow.shadowOpacity = 0
+            glow.frame = haloAttached ? halo.bounds : bounds
+            glow.shadowPath = keyShapePath()
+            glow.shadowRadius = 9 * CGFloat(Prefs.effectSize)
+            if haloAttached {
+                halo.addSublayer(glow)   // under every key, so it never lights a neighbour
+            } else if let glassView = glassView {
+                layer.insertSublayer(glow, above: glassView.layer)
+            } else {
+                layer.insertSublayer(glow, at: 0)
+            }
+            pressGlow = glow
+        }
+        if on { glow.shadowColor = effectColor().cgColor }
+        let target = on ? Float(Prefs.effectStrength) : 0
+        let duration = on ? Prefs.effectFadeIn : Prefs.effectFadeOut
+        let from = glow.presentation()?.shadowOpacity ?? glow.shadowOpacity
+        glow.shadowOpacity = target
+        glow.removeAnimation(forKey: "glow")
+        guard duration > 0.001 else { return }
+        let fade = CABasicAnimation(keyPath: "shadowOpacity")
+        fade.fromValue = from
+        fade.toValue = target
+        fade.duration = duration
+        fade.timingFunction = CAMediaTimingFunction(name: on ? .easeOut : .easeIn)
+        glow.add(fade, forKey: "glow")
+    }
+
+    /// A disc of light that spreads from the middle of the key, inside its shape, while it fades away.
+    private func ripple() {
+        guard bounds.width > 0 else { return }
+        let diameter = hypot(bounds.width, bounds.height)
+        let disc = CALayer()
+        disc.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+        disc.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        disc.cornerRadius = diameter / 2
+        disc.backgroundColor = effectColor().withAlphaComponent(0.55).cgColor
+        let mask = CAShapeLayer()
+        mask.path = keyShapePath()
+        let holder = CALayer()
+        holder.frame = bounds
+        holder.mask = mask
+        holder.addSublayer(disc)
+        disc.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        layer.addSublayer(holder)
+        let spread = CGFloat(Prefs.effectRippleSize) / 3   // the largest setting covers the whole key
+        let duration = max(Prefs.effectFadeOut, 0.25)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { holder.removeFromSuperlayer() }
+        let grow = CABasicAnimation(keyPath: "transform.scale")
+        grow.fromValue = 0.05
+        grow.toValue = spread
+        grow.duration = duration
+        grow.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = duration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        disc.opacity = 0
+        disc.add(grow, forKey: "grow")
+        disc.add(fade, forKey: "fade")
+        CATransaction.commit()
     }
 
     /// The accent hint, in the corner (or edge) the user picked. It sits inside the rounded corner: pulled in from
