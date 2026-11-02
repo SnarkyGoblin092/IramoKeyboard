@@ -138,6 +138,59 @@ final class WordStore {
         return WordStore.keyLetter(for: character, in: keyLetters)
     }
 
+    /// A head ("l'", "j'") or ending ("'s", "'ll") counts as a clitic when this many dictionary words have it.
+    private static let cliticWords = 3
+    private var cliticParts: (heads: Set<String>, endings: Set<String>)?
+
+    /// The elided heads and clitic endings of this language: the parts before / after an apostrophe that join enough
+    /// dictionary words to others ("l" from "l'amour", "s" from "it's"). Found on first use. Same as `clitic_parts`
+    /// in scripts/predict_eval/decoder.py.
+    var clitics: (heads: Set<String>, endings: Set<String>) {
+        if let parts = cliticParts { return parts }
+        var heads: [String: Int] = [:]
+        var endings: [String: Int] = [:]
+        for word in Set(entries.wordsWithApostrophe()) {
+            let parts = word.split(separator: "'", omittingEmptySubsequences: false)
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { continue }
+            let left = String(parts[0]), right = String(parts[1])
+            if dictionaryHas(word: right) { heads[left, default: 0] += 1 }
+            if dictionaryHas(word: left) { endings[right, default: 0] += 1 }
+        }
+        let parts = (heads: Set(heads.filter { $0.value >= WordStore.cliticWords }.keys),
+                     endings: Set(endings.filter { $0.value >= WordStore.cliticWords }.keys))
+        if isLoaded { cliticParts = parts }
+        return parts
+    }
+
+    /// `word` as typed on this layout's keys: accents the layout has no key for left off, without apostrophes
+    /// ("közötti" -> "kozotti" in Hungarian, "we'll" -> "well"; German keeps its "ü"). Same as Layout.typed_form in
+    /// scripts/predict_eval/keyboard.py.
+    func typedForm(_ word: String) -> String {
+        var result = ""
+        for character in word where !TextFolding.isApostrophe(character) {
+            if keyLetters.contains(character) {
+                result.append(character)
+            } else {
+                result += TextFolding.fold(String(character))
+            }
+        }
+        return result
+    }
+
+    /// How many letters of `typed` were typed on another key than `word`'s letter although only an accent tells them
+    /// apart ("o" for "ö" on a German layout, which has both keys); 0 unless the two are as long. Same as
+    /// Layout.other_keys in scripts/predict_eval/keyboard.py.
+    func otherKeys(typed: String, word: String) -> Int {
+        let a = Array(typed.filter { $0 != "'" }), b = Array(word.filter { $0 != "'" })
+        guard a.count == b.count else { return 0 }
+        var count = 0
+        for (t, w) in zip(a, b) where t != w && keyLetters.contains(t) && keyLetters.contains(w)
+            && TextFolding.fold(String(t)) == TextFolding.fold(String(w)) {
+            count += 1
+        }
+        return count
+    }
+
     /// Opens `dict_<lang>.bin` (memory-mapped, always the whole list), or else parses `words_<lang>.tsv` (sorted by
     /// frequency, most common first).
     /// - Parameter limit: for the text list only: keep the most frequent `limit` words (nil = all). Used for the
@@ -236,6 +289,7 @@ final class WordStore {
         accentModel = nil
         prefixCache = [:]
         frequencyOrder = nil
+        cliticParts = nil
         loadedLimit = nil
         isFull = false
         isLoaded = false
@@ -251,6 +305,7 @@ final class WordStore {
         prefixCache = [:]
         frequencyOrder = nil
         commonWords = nil
+        cliticParts = nil
         isLoaded = true
     }
 

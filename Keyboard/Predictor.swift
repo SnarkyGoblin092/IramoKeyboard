@@ -214,8 +214,9 @@ enum Predictor {
         guard !key.isEmpty, limit > 0 else { return [] }
         let endsWithApostrophe = lower.hasSuffix("'")
 
-        // The language-model decoder; typed apostrophes ("we'", "l'ami") keep the dictionary rules below.
-        if Decoder.isAvailable(stores) && !lower.contains("'") {
+        // The language-model decoder; a word ending in an apostrophe ("we'", "j'") keeps the dictionary's contractions
+        // and elisions below.
+        if Decoder.isAvailable(stores) && !endsWithApostrophe {
             return Decoder.suggest(typed: typed, before: before, active: active, enabled: enabled,
                                    stores: stores, limit: limit, field: field, taps: taps)
         }
@@ -360,7 +361,7 @@ enum Predictor {
                               limit: Int,
                               field: FieldContext?,
                               taps: Decoder.Taps? = nil) -> (words: [String], fix: String?) {
-        if Decoder.isAvailable(stores) && !TextFolding.normalizeApostrophes(typed).contains("'") {
+        if Decoder.isAvailable(stores) && !TextFolding.normalizeApostrophes(typed).hasSuffix("'") {
             return Decoder.suggestAndCorrect(typed: typed, before: before, active: active, enabled: enabled,
                                              stores: stores, limit: limit, field: field, taps: taps)
         }

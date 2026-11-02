@@ -166,6 +166,17 @@ final class Lexicon {
         return (start..<stop).map { u32(edgeEntriesOffset + 4 * $0) }
     }
 
+    /// The words with an apostrophe ("l'amour", "it's"), found by scanning the words' bytes.
+    func wordsWithApostrophe() -> [String] {
+        var result: [String] = []
+        for index in 0..<count {
+            let r = record(index)
+            let bytes = UnsafeRawBufferPointer(start: base + textOffset + u32(r), count: u8(r + 16))
+            if bytes.contains(UInt8(ascii: "'")) { result.append(word(index)) }
+        }
+        return result
+    }
+
     /// The number of entries in the swipe index (stored after them).
     private var totalEdgeEntries: Int {
         return u32(textOffset - 4)
@@ -248,6 +259,12 @@ struct Entries {
     func edgeEntries(first: Character, last: Character) -> [Int] {
         if let lexicon = lexicon { return lexicon.edgeEntries(first: first, last: last) }
         return edges[String([first, last])] ?? []
+    }
+
+    /// The words with an apostrophe ("l'amour", "it's").
+    func wordsWithApostrophe() -> [String] {
+        if let lexicon = lexicon { return lexicon.wordsWithApostrophe() }
+        return list.filter { $0.word.contains("'") }.map { $0.word }
     }
 
     /// Index of the word on line `rank` of words_<lang>.tsv (language model id - 3), if loaded.

@@ -33,6 +33,9 @@ enum Decoder {
     /// Typing cost of each of the last one or two letters of a word left off ("appl" -> "apple"): stopping early
     /// is far more common than a wrong key, so "appl" means "apple", not "all".
     static let unfinishedLetter = 0.35
+    /// Typing cost of a letter typed on another key than the word's, when only an accent tells them apart and the
+    /// layout has both keys ("o" for "ö" in German): a deliberate key, so it counts like a neighbouring one.
+    static let otherKey = 0.5
     private static let candidateLimit = 30
     private static let maxCost = 2.0
     private static let weightFloor = 0.02
@@ -330,6 +333,11 @@ enum Decoder {
         let prefixCost: Double
         let wholeCost: Double
         let firstWrong: Bool
+        /// The typed text with only the accents (or apostrophe) the layout has no key for left off ("kozotti" for
+        /// "közötti" in Hungarian, "were" for "we're"; never "wurde" for German "würde", which has its "ü" key).
+        var isTwin = false
+        /// A twin only another language has, while the typed spelling is a word (English "he", Hungarian "hé").
+        var isTwinAcross = false
     }
 
     private static func variants(of key: [Character], near: [Character: Set<Character>]) -> [String] {
@@ -406,6 +414,7 @@ enum Decoder {
         }
 
         let costs = substitutionCosts(lower: lower, key: key, taps: taps, near: near)
+        let typedIn = stores.values.filter { $0.isLoaded && $0.dictionaryHas(word: lower) }
         var result: [Row] = []
         for word in words {
             let wordKey = Array(TextFolding.key(word))
@@ -424,11 +433,17 @@ enum Decoder {
             if cost.prefix < 0.001 && (1...2).contains(missing) {
                 whole = min(whole, unfinishedLetter * Double(missing))
             }
+            let other = otherKey * Double(stores[active]?.otherKeys(typed: lower, word: word) ?? 0)
+            whole += other
+            let isTwin = wordKey == key && word != lower && stores[active]?.typedForm(word) == lower
             result.append(Row(word: word,
                               logProb: logProb(word, context: context, stores: stores, field: field),
-                              prefixCost: cost.prefix,
+                              prefixCost: cost.prefix + other,
                               wholeCost: whole,
-                              firstWrong: wordKey[0] != first))
+                              firstWrong: wordKey[0] != first,
+                              isTwin: isTwin,
+                              isTwinAcross: isTwin && !typedIn.isEmpty
+                                  && !typedIn.contains(where: { $0.dictionaryHas(word: word) })))
         }
         // A word no dictionary has, typed without accents: its accents restored (AccentModel), in the languages of
         // the text ("unokadbol" -> "unokádból").
@@ -444,7 +459,54 @@ enum Decoder {
         }
         result.append(contentsOf: splitRows(key: keyString, lower: lower, head: head, active: active, ordered: ordered,
                                             stores: stores, context: context, field: field))
+        result.append(contentsOf: cliticRows(lower: lower, head: head, active: active, ordered: ordered,
+                                             stores: stores, field: field, taps: taps))
         return (result, lower, context)
+    }
+
+    /// A word with an elided head or a clitic ending that the dictionary lacks as a whole ("l'oceab" -> "l'océan",
+    /// "j'ecris" -> "j'écris", "tom's"): the part that is a word of its own is decoded like any word, and the clitic
+    /// is kept as typed. The text as typed is a row too when that part is a word. Same as `_clitic_rows` in
+    /// decoder.py.
+    private static func cliticRows(lower: String,
+                                   head: String,
+                                   active: Language,
+                                   ordered: [Language],
+                                   stores: [Language: WordStore],
+                                   field: Predictor.FieldContext?,
+                                   taps: Taps?) -> [Row] {
+        let characters = Array(lower)
+        guard let apostrophe = characters.firstIndex(of: "'"),
+              characters.lastIndex(of: "'") == apostrophe,
+              apostrophe > 0, apostrophe < characters.count - 1,
+              !stores.values.contains(where: { $0.isLoaded && $0.dictionaryHas(word: lower) }) else { return [] }
+        let left = String(characters[..<apostrophe])
+        let right = String(characters[(apostrophe + 1)...])
+        var result: [Row] = []
+        for (part, start, isHead) in [(right, apostrophe + 1, true), (left, 0, false)] {
+            let clitic = isHead ? left : right
+            guard ordered.contains(where: { language in
+                guard let parts = stores[language]?.clitics else { return false }
+                return isHead ? parts.heads.contains(clitic) : parts.endings.contains(clitic)
+            }) else { continue }
+            var partTaps: Taps? = nil
+            if let taps = taps, taps.points.count == characters.count {
+                partTaps = Taps(points: Array(taps.points[start..<(start + part.count)]), centers: taps.centers,
+                                keySize: taps.keySize)
+            }
+            let found = rows(typed: part, before: head + part, active: active, ordered: ordered, stores: stores,
+                             field: field, taps: partTaps)
+            for row in found.rows where !row.word.contains(" ") && !row.word.contains("'") {
+                result.append(Row(word: isHead ? left + "'" + row.word : row.word + "'" + right,
+                                  logProb: row.logProb, prefixCost: row.prefixCost, wholeCost: row.wholeCost,
+                                  firstWrong: row.firstWrong, isTwin: row.isTwin, isTwinAcross: row.isTwinAcross))
+            }
+            let partLogProb = logProb(part, context: found.context, stores: stores, field: field)
+            if partLogProb > -98 {
+                result.append(Row(word: lower, logProb: partLogProb, prefixCost: 0, wholeCost: 0, firstWrong: false))
+            }
+        }
+        return result
     }
 
     /// Two words typed without the space between them ("nemakarom" -> "nem akarom", "inthe" -> "in the"): every
@@ -620,15 +682,30 @@ enum Decoder {
         return !stores.values.contains(where: { $0.isLearned(lower) })
     }
 
+    /// The text as typed is kept unless a word beats it by the margin. A dictionary word the typed letters spell but
+    /// for accents (or an apostrophe) the layout has no key for ("kozotti" -> "közötti", "que" -> "qué", "were" ->
+    /// "we're") is what the writer typed whenever it is likelier (by the margin when only another language has it); any
+    /// other word must then beat it by the margin ("közötti" stays, not the likelier "között"). Same as `correction`
+    /// in decoder.py.
     private static func correction(typed: String,
                                    found: (rows: [Row], lower: String, context: Context),
                                    stores: [Language: WordStore],
                                    field: Predictor.FieldContext?) -> String? {
         let lower = found.lower
         var choice = lower
-        if let best = ranked(found.rows, whole: true).first, best.word != lower {
-            let typedScore = max(logProb(lower, context: found.context, stores: stores, field: field), unknownWord)
-            if best.score >= typedScore + correctMargin { choice = best.word }
+        let scored = ranked(found.rows, whole: true)
+        if let best = scored.first {
+            var base = (word: lower,
+                        score: max(logProb(lower, context: found.context, stores: stores, field: field), unknownWord))
+            // A clitic on a known word ("tom's").
+            if let own = scored.first(where: { $0.word == lower }), own.score > base.score { base.score = own.score }
+            var twins: [String: Bool] = [:]     // twin -> needs the margin
+            for row in found.rows where row.isTwin { twins[row.word] = row.isTwinAcross }
+            if let twin = scored.first(where: { twins[$0.word] != nil }),
+               twin.score > base.score + (twins[twin.word] == true ? correctMargin : 0) {
+                base = twin
+            }
+            choice = best.word != base.word && best.score >= base.score + correctMargin ? best.word : base.word
         }
         // Someone writing everything in lower case keeps it that way.
         let text = field?.style == .lower ? choice : written(choice, context: found.context, stores: stores)

@@ -42,6 +42,28 @@ CANDIDATES = 30
 
 
 UNFINISHED_LETTER = 0.35   # Decoder.unfinishedLetter
+OTHER_KEY = 0.5            # Decoder.otherKey: "o" typed for "ö" where the layout has both keys
+TWIN, TWIN_ACROSS = 2, 1   # a row's last field (see Engine.features)
+
+
+CLITIC_WORDS = 3        # a head ("l'", "j'") or ending ("'s", "'ll") counts when this many dictionary words have it
+
+
+def clitic_parts(store):
+    """(elided heads, clitic endings) of a dictionary: the parts before / after an apostrophe that join this many
+    dictionary words to others ("l" from "l'amour", "s" from "it's"). WordStore.clitics in Swift."""
+    words = {entry.word for entry in store.entries}
+    heads, endings = {}, {}
+    for word in words:
+        if word.count("'") != 1:
+            continue
+        left, right = word.split("'")
+        if left and right:
+            if right in words:
+                heads[left] = heads.get(left, 0) + 1
+            if left in words:
+                endings[right] = endings.get(right, 0) + 1
+    return ({h for h, n in heads.items() if n >= CLITIC_WORDS}, {e for e, n in endings.items() if n >= CLITIC_WORDS})
 
 
 def typing_cost(typed, word, costs):
@@ -118,6 +140,7 @@ class Engine(baseline.Engine):
             self.params["restored"] = float(os.environ["HUNKEYS_RESTORED"])
         if os.environ.get("HUNKEYS_SPATIAL"):
             self.params["spatial"] = float(os.environ["HUNKEYS_SPATIAL"])
+        self.clitics = {lang: clitic_parts(store) for lang, store in self.stores.items()}
         # Key centres by folded letter ("o" is the o key, not German's "ö" key).
         self.folded_centers = {}
         layout_centers = self.stores[active].layout.centers
@@ -252,13 +275,15 @@ class Engine(baseline.Engine):
         return costs
 
     def features(self, before, typed, taps=None):
-        """(word, log10 P(word | context), prefix cost, whole cost, wrong first letter) for every candidate, plus the
-        typed text's own probability. Everything the settings act on, so tune.py can try settings quickly."""
+        """(word, log10 P(word | context), prefix cost, whole cost, wrong first letter, typed but for accents the
+        layout has no key for) for every candidate, plus the typed text's own probability. Everything the settings act on, so tune.py can try settings quickly."""
         lower = normalize_apostrophes(typed).lower()
         key = match_key(lower)
         head = before[:-len(typed)] if typed and before.endswith(typed) else before
         context = self._context(head)
         near = self.substitution_costs(lower, key, taps)
+        layout = self.stores[self.active].layout
+        typed_in = [store for store in self.stores.values() if store.entry_exact(lower)]
         rows = []
         for word in self._candidates(key, lower, context):
             word_key = match_key(word)
@@ -272,16 +297,51 @@ class Engine(baseline.Engine):
             missing = len(word_key) - len(key)
             if prefix_cost < 0.001 and 1 <= missing <= 2:
                 whole_cost = min(whole_cost, UNFINISHED_LETTER * missing)
-            rows.append((word, self._lm(word, context), prefix_cost, whole_cost, word_key[0] != key[0]))
+            other = layout.other_keys(lower, word)
+            if other:
+                prefix_cost += OTHER_KEY * other
+                whole_cost += OTHER_KEY * other
+            # The typed text with only the accents (or apostrophe) the layout has no key for left off: TWIN when a
+            # language has both spellings (or the typed one is no word), TWIN_ACROSS when only another language has it
+            # (English "he", Hungarian "hé").
+            twin = 0
+            if word_key == key and word != lower and layout.typed_form(word) == lower:
+                twin = TWIN if not typed_in or any(store.entry_exact(word) for store in typed_in) else TWIN_ACROSS
+            rows.append((word, self._lm(word, context), prefix_cost, whole_cost, word_key[0] != key[0], twin))
         # A word no dictionary has, typed without accents: its accents restored, in the languages of the text.
         if key and key == lower and not any(store.contains(key) for store in self.stores.values()):
             for lang, model in self.accent_models.items():
                 weight = context[lang][0]
                 restored = model.restore(key) if weight >= 0.1 else key
                 if restored != key:
-                    rows.append((restored, self.params["restored"] + math.log10(weight), 0.0, 0.0, False))
+                    rows.append((restored, self.params["restored"] + math.log10(weight), 0.0, 0.0, False, 0))
         rows.extend(self._splits(key, lower, head, context))
+        rows.extend(self._clitic_rows(lower, head, taps))
         return rows, lower, self._lm(lower, context)
+
+    def _clitic_rows(self, lower, head, taps):
+        """A word with an elided head or a clitic ending that the dictionary lacks as a whole ("l'oceab" ->
+        "l'océan", "j'ecris" -> "j'écris", "tom's"): the part that is a word of its own is decoded like any word,
+        and the clitic is kept as typed. The text as typed is a row too when that part is a word."""
+        if lower.count("'") != 1 or any(store.entry_exact(lower) for store in self.stores.values()):
+            return []
+        i = lower.index("'")
+        left, right = lower[:i], lower[i + 1:]
+        if not left or not right:
+            return []
+        rows = []
+        for part, start, clitic, kind in ((right, i + 1, left, 0), (left, 0, right, 1)):
+            if not any(clitic in self.clitics[lang][kind] for lang in self.ordered):
+                continue
+            part_taps = taps[start:start + len(part)] if taps is not None and len(taps) == len(lower) else None
+            found, _, part_lm = self.features(head + part, part, part_taps)
+            for word, lm, prefix_cost, whole_cost, first_wrong, twin in found:
+                if " " not in word and "'" not in word:
+                    whole = left + "'" + word if kind == 0 else word + "'" + right
+                    rows.append((whole, lm, prefix_cost, whole_cost, first_wrong, twin))
+            if part_lm > -98:
+                rows.append((lower, part_lm, 0.0, 0.0, False, 0))
+        return rows
 
     def _exact(self, part):
         """Dictionary words whose key is exactly `part`."""
@@ -322,7 +382,7 @@ class Engine(baseline.Engine):
                     lm = p1 + self._lm(second, after) - self.params["split"]
                     if lm <= floor:
                         continue
-                    rows.append((first + " " + second, lm, 0.0, 0.0 if exact else 9.0, False))
+                    rows.append((first + " " + second, lm, 0.0, 0.0 if exact else 9.0, False, 0))
         return rows
 
     # -- the keyboard's questions ---------------------------------------------------------------------------------
@@ -349,6 +409,9 @@ class Engine(baseline.Engine):
         return swipe_ranking(self.swipe_features(before, path), self.params)[:limit]
 
     def suggest(self, before, typed, limit=4, taps=None):
+        if normalize_apostrophes(typed).endswith("'"):
+            # "j'", "we'": the dictionary's elisions and contractions (Predictor.suggest).
+            return baseline.Engine.suggest(self, before, typed, limit)
         rows, lower, _ = self.features(before, typed, taps)
         active = self.stores.get(self.active)
         return suggestions(rows, lower, self.params, limit,
@@ -384,7 +447,7 @@ class Engine(baseline.Engine):
 def rank(rows, lower, params, whole):
     """Candidates best first: log10 P(word | context) minus the cost of the typing slips."""
     scored = []
-    for word, lm, prefix_cost, whole_cost, first_wrong in rows:
+    for word, lm, prefix_cost, whole_cost, first_wrong, _ in rows:
         cost = whole_cost if whole else prefix_cost
         if cost > 2.0:
             continue
@@ -408,16 +471,25 @@ def suggestions(rows, lower, params, limit=4, is_active=None):
 
 
 def correction(rows, lower, typed_lm, params):
-    """What space leaves in the text: the best word, if it beats the text as typed by the margin."""
+    """What space leaves in the text: the best word, if it beats the text as typed by the margin. A dictionary word
+    the typed letters spell but for accents (or an apostrophe) the layout has no key for ("kozotti" -> "közötti",
+    "que" -> "qué", "were" -> "we're") is what the writer typed whenever it is likelier (by the margin when only
+    another language has it); any other word must then beat it by the margin ("közötti" stays, not "között")."""
     scored = rank(rows, lower, params, whole=True)
     if not scored:
         return lower
-    typed_score = max(typed_lm, params["unknown"])
+    base_score, base = max(typed_lm, params["unknown"]), lower
+    own = next((s for s, w in scored if w == lower), None)
+    if own is not None and own > base_score:
+        base_score = own     # a clitic on a known word ("tom's")
+    twins = {row[0]: row[5] for row in rows if row[5]}
+    twin = next(((s, w) for s, w in scored if w in twins), None)
+    if twin is not None and twin[0] > base_score + (0.0 if twins[twin[1]] == TWIN else params["margin"]):
+        base_score, base = twin
     best_score, best = scored[0]
-    if best != lower and best_score >= typed_score + params["margin"]:
+    if best != base and best_score >= base_score + params["margin"]:
         return best
-    return lower
-
+    return base
 
 
 def swipe_ranking(rows, params):

@@ -114,6 +114,21 @@ class Layout:
         self._memo[ch] = result
         return result
 
+    def typed_form(self, word: str) -> str:
+        """`word` as typed on this layout's keys: accents the layout has no key for left off, without apostrophes
+        ("közötti" -> "kozotti" in Hungarian, "we'll" -> "well"; German keeps "ü"). Same as WordStore.typedForm."""
+        return "".join(c if c in self.letters else fold(c) for c in word if c not in APOSTROPHES)
+
+    def other_keys(self, typed: str, word: str) -> int:
+        """How many letters of `typed` were typed on another key than `word`'s letter although only an accent tells
+        them apart ("o" for "ö" on a German layout, which has both keys); 0 unless the two are as long. Same as
+        WordStore.otherKeys."""
+        typed, word = typed.replace("'", ""), word.replace("'", "")
+        if len(typed) != len(word):
+            return 0
+        return sum(1 for t, w in zip(typed, word)
+                   if t != w and t in self.letters and w in self.letters and fold(t) == fold(w))
+
     def nearest(self, x: float, y: float) -> str:
         best, best_d = None, float("inf")
         for letter, (cx, cy) in self.centers.items():
