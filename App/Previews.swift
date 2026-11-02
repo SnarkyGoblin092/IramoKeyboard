@@ -144,13 +144,16 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                 .padding(.bottom, PinnedPreview.bottomPadding)
                 .frame(height: height)
                 .clipped()
+                .zIndex(1)
                 if resizable {
                     handle(height: height, maximum: maximum)
                 } else {
                     Divider().opacity(0.6)
                 }
+                // The list scrolls under the preview, never over it (also while a menu is still closing).
                 content()
                     .frame(maxHeight: .infinity)
+                    .clipped()
             }
         }
         .background(GlassBackdrop())

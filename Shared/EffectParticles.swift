@@ -15,6 +15,12 @@ struct EffectParticle {
         case soft
         /// A dot that glows.
         case ember
+        /// A circle drawn as a line, `size` across.
+        case ring
+        /// A square, `size` on each side.
+        case square
+        /// A small bar, `size` long.
+        case bar
     }
 
     var shape: Shape
@@ -192,6 +198,7 @@ enum EffectParticles {
                                            }))
             }
         }
+        list += EffectCatalog.particles(config, keySize: keySize, random: random)
         return list
     }
 }

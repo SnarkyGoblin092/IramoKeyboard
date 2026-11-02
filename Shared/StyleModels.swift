@@ -249,6 +249,10 @@ struct EffectsConfig: Hashable, Codable {
     var beam = false
     var beamHeight = 2.5
 
+    /// The effects of the catalog (EffectCatalog) that are on, and the settings the user changed (by "id.setting").
+    var moreOn: [String] = []
+    var moreValues: [String: Double] = [:]
+
     /// The swipe trail glows in the effect colour.
     var trail = false
     var trailGlow = 0.8
@@ -345,6 +349,8 @@ struct EffectsConfig: Hashable, Codable {
         sweepDuration = value(c, .sweepDuration, sweepDuration)
         beam = value(c, .beam, beam)
         beamHeight = value(c, .beamHeight, beamHeight)
+        moreOn = value(c, .moreOn, moreOn)
+        moreValues = value(c, .moreValues, moreValues)
         trail = value(c, .trail, trail)
         trailGlow = value(c, .trailGlow, trailGlow)
     }
@@ -354,7 +360,7 @@ struct EffectsConfig: Hashable, Codable {
 
     /// Whether any effect plays when a key goes down (the trail is for swipes).
     var playsOnPress: Bool {
-        return glow || border || ripple || shine || sparks || pop
+        return !moreOn.isEmpty || glow || border || ripple || shine || sparks || pop
             || echo || wave || shockwave || confetti || bubbles || squish
             || flash || jelly || hearts || stars || snow || notes
             || fireworks || starburst || rain || embers || smoke || lightning
@@ -414,6 +420,31 @@ struct EffectsConfig: Hashable, Codable {
     static let sweepDurationRange: ClosedRange<Double> = 0.2...1.2
     static let beamHeightRange: ClosedRange<Double> = 1.0...5.0
     static let trailGlowRange: ClosedRange<Double> = 0.2...1
+
+    // MARK: The catalog's effects
+
+    func isOn(_ id: String) -> Bool { return moreOn.contains(id) }
+
+    mutating func setOn(_ id: String, _ on: Bool) {
+        moreOn.removeAll { $0 == id }
+        if on { moreOn.append(id) }
+        moreOn.sort()
+    }
+
+    /// A setting of a catalog effect: what the user set, else its default.
+    func setting(_ entry: EffectEntry, _ name: String) -> Double {
+        if let stored = moreValues[entry.id + "." + name] { return stored }
+        return entry.params.first { $0.id == name }?.value ?? 1
+    }
+
+    mutating func set(_ entry: EffectEntry, _ name: String, _ number: Double) {
+        let key = entry.id + "." + name
+        if let param = entry.params.first(where: { $0.id == name }), abs(param.value - number) < 0.0001 {
+            moreValues.removeValue(forKey: key)
+        } else {
+            moreValues[key] = number
+        }
+    }
 
     // MARK: Storage
 

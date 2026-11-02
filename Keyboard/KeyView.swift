@@ -463,7 +463,7 @@ final class KeyView: UIView {
         pulse.duration = max(Prefs.effects.glowFadeOut, 0.3)
         pulse.beginTime = CACurrentMediaTime() + delay
         pulse.fillMode = .backwards
-        glow.add(pulse, forKey: "wave")
+        glow.add(pulse, forKey: "wave" + String(CACurrentMediaTime()))
     }
 
     /// A line round the key in the effect colour that fades away.
@@ -622,20 +622,17 @@ final class KeyView: UIView {
         CATransaction.commit()
     }
 
-    /// The label swells (or shrinks) and springs back.
+    /// The label swells (or shrinks) and springs back. Taps in quick succession add up instead of cutting each other off.
     private func pop() {
         let effects = Prefs.effects
-        let scale = CGFloat(effects.popScale)
-        let duration = effects.popDuration
+        let swell = CGFloat(effects.popScale) - 1
         for view in [label, iconView] where !view.isHidden {
-            UIView.animate(withDuration: duration * 0.35, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
-                view.transform = CGAffineTransform(scaleX: scale, y: scale)
-            } completion: { _ in
-                UIView.animate(withDuration: duration * 0.65, delay: 0, usingSpringWithDamping: 0.45,
-                               initialSpringVelocity: 0.6, options: [.allowUserInteraction]) {
-                    view.transform = .identity
-                }
-            }
+            let spring = CAKeyframeAnimation(keyPath: "transform.scale")
+            spring.values = [0, swell, -swell * 0.25, swell * 0.08, 0]
+            spring.keyTimes = [0, 0.35, 0.6, 0.82, 1]
+            spring.duration = effects.popDuration
+            spring.isAdditive = true
+            view.layer.add(spring, forKey: "pop" + String(CACurrentMediaTime()))
         }
     }
 
@@ -805,10 +802,10 @@ final class KeyView: UIView {
     private func squish() {
         let depth = Prefs.effects.squishDepth
         let squash = CAKeyframeAnimation(keyPath: "transform.scale")
-        squash.values = [1, depth, 1.05, 0.99, 1]
+        squash.values = [0, depth - 1, 0.05, -0.01, 0]
         squash.keyTimes = [0, 0.25, 0.55, 0.8, 1]
         squash.duration = 0.4
-        layer.add(squash, forKey: "squish")
+        addOverlapping(squash, "squish")
     }
 
     /// The key flashes in the effect colour, inside its shape.
@@ -839,10 +836,17 @@ final class KeyView: UIView {
         wobble.values = [0, angle, -angle * 0.8, angle * 0.5, -angle * 0.25, 0]
         wobble.keyTimes = [0, 0.18, 0.4, 0.62, 0.82, 1]
         wobble.duration = 0.5
-        layer.add(wobble, forKey: "jelly")
+        addOverlapping(wobble, "jelly")
     }
 
     // MARK: More press effects
+
+    /// Plays an animation on the key without stopping one that is still playing: taps in quick succession add up
+    /// (the animation moves the key relative to where it is, and each one has a key of its own).
+    private func addOverlapping(_ animation: CAAnimation, _ name: String) {
+        if let property = animation as? CAPropertyAnimation { property.isAdditive = true }
+        layer.add(animation, forKey: name + String(CACurrentMediaTime()))
+    }
 
     /// The layer of one speck (see EffectParticles): its shape in the press's colour, with its middle at the layer's position.
     private func particleLayer(_ spec: EffectParticle, color: UIColor) -> CALayer {
@@ -891,6 +895,25 @@ final class KeyView: UIView {
             puff.shadowOpacity = 0.8
             puff.shadowOffset = .zero
             return puff
+        case .ring:
+            let ring = CAShapeLayer()
+            ring.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            ring.path = UIBezierPath(ovalIn: ring.bounds.insetBy(dx: 1, dy: 1)).cgPath
+            ring.fillColor = nil
+            ring.strokeColor = color.cgColor
+            ring.lineWidth = 2
+            return ring
+        case .square:
+            let square = CALayer()
+            square.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            square.backgroundColor = color.cgColor
+            return square
+        case .bar:
+            let bar = CALayer()
+            bar.bounds = CGRect(x: 0, y: 0, width: size, height: size * 0.4)
+            bar.cornerRadius = 1
+            bar.backgroundColor = color.cgColor
+            return bar
         case .ember:
             let ember = CALayer()
             ember.bounds = CGRect(x: 0, y: 0, width: size, height: size)
@@ -954,38 +977,73 @@ final class KeyView: UIView {
         CATransaction.commit()
     }
 
-    /// A jagged bolt of lightning that strikes up from the key and flickers out.
+    /// A forked bolt of lightning strikes down onto the key: a wide glow, the colour and a white core, flickering, while
+    /// the key itself flashes.
     private func lightning(_ color: UIColor) {
         guard bounds.width > 0 else { return }
         let target = overlayTarget()
         let length = bounds.width * CGFloat(Prefs.effects.lightningLength)
-        let segments = 7
-        let path = UIBezierPath()
-        path.move(to: .zero)
-        for step in 1...segments {
-            let x: CGFloat = step == segments ? 0 : CGFloat.random(in: -0.28...0.28) * bounds.width
-            path.addLine(to: CGPoint(x: x, y: -length * CGFloat(step) / CGFloat(segments)))
+        let bolt = EffectBolt.make(length: length, width: bounds.width) { _, _ in CGFloat.random(in: 0..<1) }
+
+        func line(_ points: [CGPoint]) -> UIBezierPath {
+            let path = UIBezierPath()
+            guard let first = points.first else { return path }
+            path.move(to: first)
+            for point in points.dropFirst() { path.addLine(to: point) }
+            return path
         }
-        let bolt = CAShapeLayer()
-        bolt.path = path.cgPath
-        bolt.position = target.center
-        bolt.fillColor = nil
-        bolt.strokeColor = color.cgColor
-        bolt.lineWidth = 2.5
-        bolt.lineJoin = .round
-        bolt.lineCap = .round
-        bolt.shadowColor = color.cgColor
-        bolt.shadowRadius = 5
-        bolt.shadowOpacity = 1
-        bolt.shadowOffset = .zero
-        bolt.opacity = 0
-        target.host.addSublayer(bolt)
+        let main = line(bolt.main)
+        let forks = UIBezierPath()
+        for fork in bolt.forks { forks.append(line(fork)) }
+
+        // Wide glow, colour, white core: each stroke of the main bolt, then the thinner ones of the forks.
+        let strokes: [(path: UIBezierPath, color: UIColor, width: CGFloat, glow: Bool)] = [
+            (main, color.withAlphaComponent(0.5), 9, true), (main, color, 3.5, false), (main, .white, 1.5, false),
+            (forks, color.withAlphaComponent(0.5), 4, true), (forks, color, 1.8, false), (forks, .white, 0.8, false),
+        ]
+        var layers: [CAShapeLayer] = []
+        for stroke in strokes {
+            let layer = CAShapeLayer()
+            layer.path = stroke.path.cgPath
+            layer.position = target.center
+            layer.fillColor = nil
+            layer.strokeColor = stroke.color.cgColor
+            layer.lineWidth = stroke.width
+            layer.lineJoin = .round
+            layer.lineCap = .round
+            if stroke.glow {
+                layer.shadowColor = color.cgColor
+                layer.shadowRadius = 10
+                layer.shadowOpacity = 1
+                layer.shadowOffset = .zero
+            }
+            layer.opacity = 0
+            target.host.addSublayer(layer)
+            layers.append(layer)
+        }
+        let holder = clippedHolder()
+        let flash = CALayer()
+        flash.frame = bounds
+        flash.backgroundColor = UIColor.white.withAlphaComponent(0.55).cgColor
+        flash.opacity = 0
+        holder.addSublayer(flash)
+
         CATransaction.begin()
-        CATransaction.setCompletionBlock { bolt.removeFromSuperlayer() }
+        CATransaction.setCompletionBlock {
+            layers.forEach { $0.removeFromSuperlayer() }
+            holder.removeFromSuperlayer()
+        }
         let flicker = CAKeyframeAnimation(keyPath: "opacity")
-        flicker.values = [1, 0.15, 1, 0.3, 0]
-        flicker.duration = 0.32
-        bolt.add(flicker, forKey: "flicker")
+        flicker.values = [0, 1, 0.3, 1, 0.5, 0]
+        flicker.keyTimes = [0, 0.05, 0.2, 0.35, 0.6, 1]
+        flicker.duration = 0.45
+        layers.forEach { $0.add(flicker, forKey: "flicker") }
+        let blink = CABasicAnimation(keyPath: "opacity")
+        blink.fromValue = 1
+        blink.toValue = 0
+        blink.duration = 0.3
+        blink.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        flash.add(blink, forKey: "blink")
         CATransaction.commit()
     }
 
@@ -993,10 +1051,10 @@ final class KeyView: UIView {
     private func heartbeat() {
         let strength = Prefs.effects.heartbeatStrength
         let beat = CAKeyframeAnimation(keyPath: "transform.scale")
-        beat.values = [1, strength, 1, strength, 1]
+        beat.values = [0, strength - 1, 0, strength - 1, 0]
         beat.keyTimes = [0, 0.2, 0.4, 0.62, 1]
         beat.duration = 0.55
-        layer.add(beat, forKey: "heartbeat")
+        addOverlapping(beat, "heartbeat")
     }
 
     /// The key turns over like a card.
@@ -1012,7 +1070,7 @@ final class KeyView: UIView {
         turn.values = values
         turn.duration = Prefs.effects.flipDuration
         turn.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        layer.add(turn, forKey: "flip")
+        addOverlapping(turn, "flip")
     }
 
     /// The key shakes from side to side.
@@ -1021,7 +1079,7 @@ final class KeyView: UIView {
         let sway = CAKeyframeAnimation(keyPath: "transform.translation.x")
         sway.values = [0, -distance, distance, -distance * 0.7, distance * 0.5, -distance * 0.2, 0]
         sway.duration = 0.3
-        layer.add(sway, forKey: "shake")
+        addOverlapping(sway, "shake")
     }
 
     /// The key sinks and bounces back.
@@ -1031,7 +1089,7 @@ final class KeyView: UIView {
         sink.values = [0, depth, -depth * 0.35, depth * 0.12, 0]
         sink.keyTimes = [0, 0.3, 0.6, 0.8, 1]
         sink.duration = 0.4
-        layer.add(sink, forKey: "drop")
+        addOverlapping(sink, "drop")
     }
 
     /// The key jumps sideways while pink and cyan copies flicker over it.
@@ -1041,7 +1099,7 @@ final class KeyView: UIView {
         let jump = CAKeyframeAnimation(keyPath: "transform.translation.x")
         jump.values = [0, -strength * 6, strength * 5, -strength * 3, strength * 4, 0]
         jump.duration = 0.24
-        layer.add(jump, forKey: "glitch")
+        addOverlapping(jump, "glitch")
         let holder = clippedHolder()
         CATransaction.begin()
         CATransaction.setCompletionBlock { holder.removeFromSuperlayer() }

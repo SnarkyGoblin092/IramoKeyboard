@@ -123,9 +123,37 @@ struct EffectsView: View {
         },
         Preset(name: tr("Space")) {
             var c = EffectsConfig()
-            c.orbit = true
-            c.spiral = true
-            c.beam = true
+            c.colorMode = "custom"; c.customColor = ThemeRGBA(hex: 0x8F7BFF)
+            c.glow = true; c.glowStrength = 0.45; c.glowSpread = 1.5
+            c.setOn("twinkle", true)
+            c.setOn("comet", true)
+            c.setOn("galaxy", true)
+            return c
+        },
+        Preset(name: tr("Garden")) {
+            var c = EffectsConfig()
+            c.colorMode = "rainbow"
+            c.setOn("petals", true)
+            c.setOn("butterflies", true)
+            c.setOn("sakura", true)
+            return c
+        },
+        Preset(name: tr("Arcade")) {
+            var c = EffectsConfig()
+            c.colorMode = "rainbow"
+            c.setOn("coins", true)
+            c.setOn("pixels", true)
+            c.setOn("disco", true)
+            c.squish = true
+            return c
+        },
+        Preset(name: tr("Magic")) {
+            var c = EffectsConfig()
+            c.colorMode = "custom"; c.customColor = ThemeRGBA(hex: 0xFF8AE2)
+            c.glow = true
+            c.setOn("sparkler", true)
+            c.setOn("twinkle", true)
+            c.setOn("halo", true)
             return c
         },
         Preset(name: tr("Bounce")) {
@@ -424,6 +452,8 @@ struct EffectsView: View {
                             range: EffectsConfig.beamHeightRange, step: 0.1) { String(format: "%.1f keys", $0) }
             }
 
+            ForEach(EffectCatalog.all, id: \.id) { item in moreEffect(item) }
+
             effect(tr("Swipe trail"), "scribble", .red, on: bind(\.trail),
                    note: tr("The line you draw while swipe typing takes the colour and glows.")) {
                 GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
@@ -441,6 +471,43 @@ struct EffectsView: View {
         }
         .navigationTitle(tr("Effects"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// An effect of the catalog (EffectCatalog): its switch and all its settings.
+    private func moreEffect(_ item: EffectEntry) -> some View {
+        let on = Binding<Bool>(get: { config.isOn(item.id) }, set: { value in
+            var next = config
+            next.setOn(item.id, value)
+            json = next.encoded()
+        })
+        return effect(tr(item.title), item.symbol, catalogColor(item.color), on: on, note: tr(item.note)) {
+            ForEach(item.params, id: \.id) { param in
+                GlassSlider(title: tr(param.title), symbol: param.symbol,
+                            value: Binding(get: { config.setting(item, param.id) }, set: { value in
+                                var next = config
+                                next.set(item, param.id, value)
+                                json = next.encoded()
+                            }),
+                            range: param.range, step: param.step, format: { param.format.text($0) })
+            }
+        }
+    }
+
+    private func catalogColor(_ name: String) -> Color {
+        switch name {
+        case "red": return .red
+        case "orange": return .orange
+        case "yellow": return .yellow
+        case "green": return .green
+        case "mint": return .mint
+        case "teal": return .teal
+        case "cyan": return .cyan
+        case "blue": return .blue
+        case "indigo": return .indigo
+        case "purple": return .purple
+        case "pink": return .pink
+        default: return .gray
+        }
     }
 
     /// One effect: a switch with a line of explanation, and its settings underneath while it is on.
@@ -673,9 +740,16 @@ struct EffectsPlayground<Content: View>: View {
     @State private var touchKeys: [Int: String] = [:]
     @State private var down: [String: Color] = [:]
     @State private var tints: [String: Color] = [:]
-    @State private var ticks: [String: Int] = [:]
+    /// The presses of each key whose effects are still playing, each with its own colour: a new press never cuts
+    /// the effects of an earlier one short.
+    @State private var plays: [String: [Play]] = [:]
     @State private var waves: [String: PulseRequest] = [:]
     @State private var poses: [String: EffectPose] = [:]
+
+    struct Play: Equatable {
+        let tick: Int
+        let tint: Color
+    }
 
     struct PulseRequest {
         let tick: Int
@@ -704,8 +778,10 @@ struct EffectsPlayground<Content: View>: View {
     private var keyEffects: some View {
         ZStack {
             ForEach(ids, id: \.self) { id in
-                if let frame = frames[id], (ticks[id] ?? 0) > 0 {
-                    EffectsKeyFX(config: config, frame: frame, tint: tints[id] ?? .clear, tick: ticks[id] ?? 0)
+                if let frame = frames[id] {
+                    ForEach(plays[id] ?? [], id: \.tick) { play in
+                        EffectsKeyFX(config: config, frame: frame, tint: play.tint, tick: play.tick)
+                    }
                 }
             }
         }
@@ -787,7 +863,10 @@ struct EffectsPlayground<Content: View>: View {
         }
         tints[id] = tint
         counter += 1
-        ticks[id] = counter
+        let tick = counter
+        plays[id, default: []].append(Play(tick: tick, tint: tint))
+        // Long enough for the slowest effect to finish.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { plays[id]?.removeAll { $0.tick == tick } }
         withAnimation(.easeOut(duration: max(config.glowFadeIn, 0.001))) { down[id] = tint }
         if config.squish { squish(id) }
         if config.jelly { jelly(id) }
@@ -882,6 +961,7 @@ private struct EffectsKeyFX: View {
                 if config.ripple { ripple(width: width) }
                 if config.shine { shine(width: width, height: height) }
                 if config.flash { flash() }
+                if config.lightning { lightningFlash() }
                 if config.underline { underline(width: width, height: height) }
                 if config.glitch { glitchSlabs() }
             }
@@ -953,20 +1033,34 @@ private struct EffectsKeyFX: View {
         .id(tick)
     }
 
+    /// A forked bolt strikes down onto the key (EffectBolt): glow, colour and a white core, fading.
     private func lightning(width: CGFloat, height: CGFloat) -> some View {
-        let length = width * CGFloat(config.lightningLength)
-        let segments = 7
         let salt = tick * 7
-        return Burst(duration: 0.32, curve: { .easeIn(duration: $0) }) { done in
-            Path { path in
-                path.move(to: CGPoint(x: width / 2, y: height / 2))
-                for step in 1...segments {
-                    let sideways: CGFloat = step == segments ? 0 : (CGFloat(unit(step + salt, 21)) - 0.5) * width * 0.56
-                    path.addLine(to: CGPoint(x: width / 2 + sideways, y: height / 2 - length * CGFloat(step) / CGFloat(segments)))
-                }
+        let bolt = EffectBolt.make(length: width * CGFloat(config.lightningLength), width: width) { index, _ in
+            CGFloat(unit(index + salt, 21))
+        }
+        let centre = CGPoint(x: width / 2, y: height / 2)
+        func line(_ points: [[CGPoint]]) -> Path {
+            var path = Path()
+            for run in points {
+                guard let first = run.first else { continue }
+                path.move(to: CGPoint(x: centre.x + first.x, y: centre.y + first.y))
+                for point in run.dropFirst() { path.addLine(to: CGPoint(x: centre.x + point.x, y: centre.y + point.y)) }
             }
-            .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-            .shadow(color: tint, radius: 5)
+            return path
+        }
+        let main = line([bolt.main])
+        let forks = line(bolt.forks)
+        let round = { (width: CGFloat) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
+        return Burst(duration: 0.45, curve: { .easeIn(duration: $0) }) { done in
+            ZStack {
+                main.stroke(tint.opacity(0.5), style: round(9)).shadow(color: tint, radius: 10)
+                main.stroke(tint, style: round(3.5))
+                main.stroke(Color.white, style: round(1.5))
+                forks.stroke(tint.opacity(0.5), style: round(4)).shadow(color: tint, radius: 10)
+                forks.stroke(tint, style: round(1.8))
+                forks.stroke(Color.white, style: round(0.8))
+            }
             .opacity(done ? 0 : 1)
         }
         .id(tick)
@@ -1022,7 +1116,21 @@ private struct EffectsKeyFX: View {
             Circle().fill(color.opacity(0.35)).frame(width: spec.size, height: spec.size).blur(radius: 3)
         case .ember:
             Circle().fill(color).frame(width: spec.size, height: spec.size).shadow(color: color, radius: 3)
+        case .ring:
+            Circle().strokeBorder(color, lineWidth: 2).frame(width: spec.size, height: spec.size)
+        case .square:
+            Rectangle().fill(color).frame(width: spec.size, height: spec.size)
+        case .bar:
+            Rectangle().fill(color).frame(width: spec.size, height: spec.size * 0.4)
         }
+    }
+
+    /// The key flashes white as the bolt strikes it.
+    private func lightningFlash() -> some View {
+        return Burst(duration: 0.3, curve: { .easeIn(duration: $0) }) { done in
+            Color.white.opacity(done ? 0 : 0.55)
+        }
+        .id(tick)
     }
 
     private func flash() -> some View {
