@@ -38,8 +38,8 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFontID = SettingDefault.keyFont
 
     @Environment(\.colorScheme) private var systemScheme
-    /// The Effects screen's squish and jelly move the keys.
-    @Environment(\.effectPoses) private var poses
+    /// The Effects screen's squish and jelly move the keys (each key watches only its own pose).
+    @Environment(\.effectMotions) private var motions
 
     /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
     var language: Language? = nil
@@ -337,9 +337,10 @@ struct ThemePreview: View {
                     if k.spacer {
                         Color.clear
                     } else {
-                        tracked(key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s),
-                                id: "\(rowIndex).\(i)", label: k.space ? "" : k.title,
-                                radius: look.radius(width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight))
+                        tracked(id: "\(rowIndex).\(i)", label: k.space ? "" : k.title,
+                                radius: look.radius(width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight)) { labelScale in
+                            key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s, labelScale: labelScale)
+                        }
                     }
                 }
                 .frame(width: cell, height: rowHeight)
@@ -348,15 +349,14 @@ struct ThemePreview: View {
         .frame(width: rowWidth)
     }
 
-    @ViewBuilder private func tracked<V: View>(_ view: V, id: String, label: String, radius: CGFloat) -> some View {
-        if reportsKeys {
-            let pose = poses[id] ?? EffectPose()
-            view.scaleEffect(pose.scale).rotationEffect(.degrees(pose.angle))
-                .rotation3DEffect(.degrees(pose.flip), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
-                .offset(x: pose.offsetX, y: pose.offsetY)
+    /// A key, in its pose on the Effects screen (`view` draws it with its label at the given scale).
+    @ViewBuilder private func tracked<V: View>(id: String, label: String, radius: CGFloat,
+                                               @ViewBuilder _ view: @escaping (CGFloat) -> V) -> some View {
+        if reportsKeys, let motions = motions {
+            PosedKey(model: motions.model(id), content: view)
                 .background(EffectKeyReporter(id: id, label: label, radius: radius))
         } else {
-            view
+            view(1)
         }
     }
 
@@ -447,7 +447,7 @@ struct ThemePreview: View {
         }
     }
 
-    private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
+    private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, scale s: CGFloat, labelScale: CGFloat = 1) -> some View {
         // Theme.keyCornerRadius: the roundness share of half the key's shorter side.
         let radius = look.radius(width: width, height: height)
         let tint: Color = k.accent ? onAccent : textColor
@@ -457,6 +457,7 @@ struct ThemePreview: View {
             look.keyShape(k.accent ? .accent : (k.function ? .function : .letter), radius: radius, scale: s)
             glyph(k, tint: tint, scale: s)
                 .keyLabelGlow(look, color: tint, scale: s)
+                .scaleEffect(labelScale)
             if let hint = hint {
                 // Where KeyView.layoutHint puts it.
                 Text(hint)

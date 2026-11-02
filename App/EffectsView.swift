@@ -307,9 +307,15 @@ struct EffectsView: View {
         Preset(name: tr("Showtime")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("lasers", true); c.setOn("disco", true); c.setOn("rainbowburst", true); c.fireworks = true; c.beam = true; return c },
     ]
 
+    /// The preset the settings match, worked out once for each change (it builds every preset to compare).
+    private static var presetCache: (json: String, index: Int?)?
+
     private var presetIndex: Int? {
+        if let cache = EffectsView.presetCache, cache.json == json { return cache.index }
         let current = config
-        return presets.firstIndex { $0.make() == current }
+        let index = presets.firstIndex { $0.make() == current }
+        EffectsView.presetCache = (json, index)
+        return index
     }
 
     // MARK: Body
@@ -706,141 +712,95 @@ private extension ThemeRGBA {
     }
 }
 
-// MARK: - Preview
-
-/// A transient view: it appears at its start state and animates to its end state once (a new `.id` replays it).
-struct Burst<Content: View>: View {
-    let duration: Double
-    var delay = 0.0
-    /// The animation for a given duration.
-    var curve: (Double) -> Animation = { .easeOut(duration: $0) }
-    @ViewBuilder let content: (Bool) -> Content
-    @State private var done = false
-
-    var body: some View {
-        content(done)
-            .onAppear { withAnimation(curve(max(duration, 0.05)).delay(delay)) { done = true } }
-    }
-}
-
-/// A pulse of light: rises quickly, then fades over `fade`, after `delay`.
-struct Pulse: View {
-    let strength: Double
-    let fade: Double
-    let delay: Double
-    let tint: Color
-    var radius: CGFloat = 9
-    @State private var up = false
-    @State private var down = false
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(tint.opacity(up && !down ? strength : 0))
-            .shadow(color: tint.opacity(up && !down ? strength : 0), radius: radius)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.12).delay(delay)) { up = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.12) {
-                    withAnimation(.easeIn(duration: fade)) { down = true }
-                }
-            }
-    }
-}
-
 // MARK: - Playground
 
-/// How a key is moved while an effect plays (squish, jelly); ThemePreview applies it to the key it draws.
+/// How a key is moved while an effect plays (squish, jelly, the pop of its label); ThemePreview applies it to the
+/// key it draws. Angles in degrees.
 struct EffectPose: Equatable {
     var scale: CGFloat = 1
     var angle: Double = 0
-    /// A turn about the horizontal axis, in degrees (the flip).
+    /// A turn about the horizontal axis (the flip).
     var flip: Double = 0
     var offsetX: CGFloat = 0
     var offsetY: CGFloat = 0
+    var labelScale: CGFloat = 1
 }
 
-private struct EffectPosesKey: EnvironmentKey {
-    static let defaultValue: [String: EffectPose] = [:]
+/// One key's pose. Each key watches only its own, so a moving key never redraws the rest of the keyboard.
+final class KeyPoseModel: ObservableObject {
+    @Published var pose = EffectPose()
+}
+
+/// The poses of the preview's keys, moved as the keyboard moves its keys (the moves KeyEffectPlayer plays).
+final class EffectMotions {
+    private var models: [String: KeyPoseModel] = [:]
+
+    func model(_ id: String) -> KeyPoseModel {
+        if let model = models[id] { return model }
+        let model = KeyPoseModel()
+        models[id] = model
+        return model
+    }
+
+    /// Plays `move` on the key `id`, its points shrunk by `scale` (the preview's size against the keyboard's).
+    func play(_ move: KeyMove, on id: String, scale: CGFloat) {
+        let model = self.model(id)
+        let values = move.values
+        guard values.count > 1 else { return }
+        let times = move.keyTimes ?? values.indices.map { Double($0) / Double(values.count - 1) }
+        func set(_ value: CGFloat) {
+            switch move.part {
+            case .scale: model.pose.scale = 1 + value
+            case .label: model.pose.labelScale = 1 + value
+            case .turn: model.pose.angle = Double(value) * 180 / .pi
+            case .x: model.pose.offsetX = value * scale
+            case .y: model.pose.offsetY = value * scale
+            case .flip: model.pose.flip = Double(value) * 180 / .pi
+            }
+        }
+        for index in 1..<values.count {
+            let start = times[index - 1] * move.duration
+            let length = max((times[index] - times[index - 1]) * move.duration, 0.001)
+            DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                withAnimation(move.eased ? .easeInOut(duration: length) : .linear(duration: length)) { set(values[index]) }
+            }
+        }
+        if move.part == .flip {
+            // All the way round is where it started: back to no turn, unseen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + move.duration + 0.02) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { set(0) }
+            }
+        }
+    }
+}
+
+private struct EffectMotionsKey: EnvironmentKey {
+    static let defaultValue: EffectMotions? = nil
 }
 
 extension EnvironmentValues {
-    var effectPoses: [String: EffectPose] {
-        get { return self[EffectPosesKey.self] }
-        set { self[EffectPosesKey.self] = newValue }
+    /// The Effects screen's moving keys (nil elsewhere).
+    var effectMotions: EffectMotions? {
+        get { return self[EffectMotionsKey.self] }
+        set { self[EffectMotionsKey.self] = newValue }
     }
 }
 
-/// A move along a throw: sideways `dx`, up or down `dy`, and gravity pulling down, as `progress` goes from 0 to 1.
-private struct Ballistic: GeometryEffect {
-    var progress: CGFloat
-    let dx: CGFloat
-    let dy: CGFloat
-    let gravity: CGFloat
-    var turn: CGFloat = 0
-
-    var animatableData: CGFloat {
-        get { return progress }
-        set { progress = newValue }
-    }
-
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        let t = progress
-        let offset = EffectDirection.turn(CGPoint(x: dx * t, y: dy * t + gravity * t * t / 2), by: turn)
-        return ProjectionTransform(CGAffineTransform(translationX: offset.x, y: offset.y))
-    }
-}
-
-/// A move along any path, `path(progress)` being the offset from where the view sits.
-private struct Along: GeometryEffect {
-    var progress: CGFloat
-    let path: (CGFloat) -> CGPoint
-
-    var animatableData: CGFloat {
-        get { return progress }
-        set { progress = newValue }
-    }
-
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        let point = path(progress)
-        return ProjectionTransform(CGAffineTransform(translationX: point.x, y: point.y))
-    }
-}
-
-/// Shows its content only once `delay` seconds have passed.
-private struct Later<Content: View>: View {
-    let delay: Double
-    @ViewBuilder let content: () -> Content
-    @State private var shown: Bool
-
-    init(delay: Double, @ViewBuilder content: @escaping () -> Content) {
-        self.delay = delay
-        self.content = content
-        _shown = State(initialValue: delay <= 0)
-    }
+/// A key of the preview in its pose; `content` draws the key with its label at the given scale.
+struct PosedKey<Content: View>: View {
+    @ObservedObject var model: KeyPoseModel
+    let content: (CGFloat) -> Content
 
     var body: some View {
-        Group {
-            if shown { content() } else { Color.clear }
-        }
-        .onAppear {
-            guard !shown else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { shown = true }
-        }
+        let pose = model.pose
+        content(pose.labelScale)
+            .scaleEffect(pose.scale)
+            .rotationEffect(.degrees(pose.angle))
+            .rotation3DEffect(.degrees(pose.flip), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
+            .offset(x: pose.offsetX, y: pose.offsetY)
     }
-}
-
-/// A drawn picture of the particle effects (EffectArt) as a SwiftUI shape.
-private struct EffectArtShape: Shape {
-    let art: EffectArt
-
-    func path(in rect: CGRect) -> Path {
-        return Path(art.path(side: rect.width)).offsetBy(dx: rect.minX, dy: rect.minY)
-    }
-}
-
-/// A steady number in 0..<1 for (index, salt), so a redrawn view keeps its pieces where they were.
-private func unit(_ index: Int, _ salt: Double) -> Double {
-    let x = sin(Double(index) * 12.9898 + salt * 78.233) * 43758.5453
-    return x - floor(x)
 }
 
 /// Where a key was drawn (in the playground's space), for the touch and the effects to find it.
@@ -880,64 +840,19 @@ struct EffectKeyReporter: View {
     }
 }
 
-/// Every finger on the keyboard, several at once (SwiftUI's drag follows only one).
-private struct EffectsTouchCatcher: UIViewRepresentable {
-    let began: (Int, CGPoint) -> Void
-    let ended: (Int) -> Void
-
-    final class CatcherView: UIView {
-        var began: ((Int, CGPoint) -> Void)?
-        var ended: ((Int) -> Void)?
-
-        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-            for touch in touches { began?(ObjectIdentifier(touch).hashValue, touch.location(in: self)) }
-        }
-        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-            for touch in touches { ended?(ObjectIdentifier(touch).hashValue) }
-        }
-        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-            for touch in touches { ended?(ObjectIdentifier(touch).hashValue) }
-        }
-    }
-
-    func makeUIView(context: Context) -> CatcherView {
-        let view = CatcherView()
-        view.isMultipleTouchEnabled = true
-        view.backgroundColor = .clear
-        view.began = began
-        view.ended = ended
-        return view
-    }
-
-    func updateUIView(_ view: CatcherView, context: Context) {
-        view.began = began
-        view.ended = ended
-    }
-}
-
-/// The keyboard preview with the effects played on whatever key is touched, as the keyboard does: the light is
-/// drawn around the keys only (never over one), the rest on the key itself.
+/// The keyboard preview with the effects played on whatever key is touched. They are drawn by the keyboard's own
+/// code (KeyEffectPlayer, see EffectsStage), so they look as they do on the keyboard.
 struct EffectsPlayground<Content: View>: View {
     let config: EffectsConfig
     @ViewBuilder let content: () -> Content
 
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize
     @State private var frames: [String: EffectKeyFrame] = [:]
-    @State private var hue = 0.0
-    @State private var counter = 0
-    /// The key each finger is on, the keys being held with the colour of their press, and what restarts each
-    /// key's one-shot effects.
-    @State private var touchKeys: [Int: String] = [:]
-    @State private var down: [String: Color] = [:]
-    @State private var tints: [String: Color] = [:]
-    /// The presses of each key whose effects are still playing, each with its own colour: a new press never cuts
-    /// the effects of an earlier one short.
-    @State private var plays: [String: [Play]] = [:]
-    @State private var waves: [String: PulseRequest] = [:]
-    @State private var poses: [String: EffectPose] = [:]
+    @State private var motions = EffectMotions()
     /// The preview's width. The effects are drawn at the keyboard's real size and shrunk by `scale`, so the sizes in
-    /// points (specks, lines, glow, labels) come out as they do on the keyboard instead of exaggerated.
+    /// points (specks, lines, glow, labels) come out as they do on the keyboard.
     @State private var boardWidth: CGFloat = 0
 
     private var scale: CGFloat {
@@ -945,98 +860,187 @@ struct EffectsPlayground<Content: View>: View {
         return boardWidth > 0 && real > 0 ? boardWidth / real : 1
     }
 
-    struct Play: Equatable {
-        let tick: Int
-        let tint: Color
-    }
-
-    struct PulseRequest {
-        let tick: Int
-        let delay: Double
-        let strength: Double
-        let tint: Color
-    }
-
     var body: some View {
         content()
             .background(GeometryReader { proxy in Color.clear.preference(key: BoardWidthKey.self, value: proxy.size.width) })
             .onPreferenceChange(BoardWidthKey.self) { if abs($0 - boardWidth) > 0.5 { boardWidth = $0 } }
-            .onPreferenceChange(EffectKeyFrames.self) { frames = $0 }
-            .overlay(
-                ZStack {
-                    glowLayer
-                    keyEffects
-                    EffectsTouchCatcher(began: { touch, point in press(touch, at: point) }, ended: { release($0) })
-                }
-            )
+            .onPreferenceChange(EffectKeyFrames.self) { if $0 != frames { frames = $0 } }
+            .overlay(EffectsStage(config: config, frames: frames, scale: scale,
+                                  accent: UIColor(Color.currentAccent(name: accentName, hex: accentHex)),
+                                  letterSize: CGFloat(letterSize), motions: motions))
             .coordinateSpace(name: effectsKeyboardSpace)
-            .environment(\.effectPoses, poses)
+            .environment(\.effectMotions, motions)
             .environment(\.layoutDirection, .leftToRight)
     }
+}
 
-    private var ids: [String] { return frames.keys.sorted() }
+/// The view that takes the touches on the preview and plays the effects (EffectsStageView).
+private struct EffectsStage: UIViewRepresentable {
+    let config: EffectsConfig
+    let frames: [String: EffectKeyFrame]
+    let scale: CGFloat
+    let accent: UIColor
+    let letterSize: CGFloat
+    let motions: EffectMotions
 
-    private var keyEffects: some View {
-        ZStack {
-            ForEach(ids, id: \.self) { id in
-                if let frame = frames[id] {
-                    ForEach(plays[id] ?? [], id: \.tick) { play in
-                        EffectsKeyFX(config: config, frame: frame, accent: Color.currentAccent(name: accentName, hex: accentHex),
-                                     tick: play.tick, scale: scale)
-                    }
-                }
-            }
+    func makeUIView(context: Context) -> EffectsStageView {
+        return EffectsStageView()
+    }
+
+    func updateUIView(_ view: EffectsStageView, context: Context) {
+        view.motions = motions
+        view.update(config: config, frames: frames, scale: scale, accent: accent, letterSize: letterSize)
+    }
+}
+
+/// Every finger on the preview (several at once), and the effects of the keys they touch, drawn by KeyEffectPlayer at
+/// the keyboard's size and shrunk to the preview. As on the keyboard, the light round the keys is drawn under a mask
+/// that leaves every key out (so it never lands on a key), and the rest over the keys.
+private final class EffectsStageView: UIView {
+    private final class StageKey {
+        let player = KeyEffectPlayer()
+        /// Stands in for the key: the effects drawn on the key are added to it, and it moves as the key does.
+        let proxy = CALayer()
+        /// Holds the key's glow, under the mask.
+        let glowHolder = CALayer()
+        var frame = EffectKeyFrame(rect: .zero, radius: 0, label: "")
+    }
+
+    var motions: EffectMotions?
+    /// Everything in the keyboard's points, shrunk to the preview by its transform.
+    private let world = CALayer()
+    private let glows = CALayer()
+    private let glowMask = CAShapeLayer()
+    private let keysLayer = CALayer()
+    private let fxLayer = CALayer()
+    private var keys: [String: StageKey] = [:]
+    private var touchKeys: [ObjectIdentifier: String] = [:]
+    private var config = EffectsConfig()
+    private var frames: [String: EffectKeyFrame] = [:]
+    private var scale: CGFloat = 1
+    private var accent: UIColor = .systemBlue
+    private var letterSize: CGFloat = 1
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isMultipleTouchEnabled = true
+        backgroundColor = .clear
+        world.anchorPoint = .zero
+        glowMask.fillRule = .evenOdd
+        glows.mask = glowMask
+        for part in [glows, keysLayer, fxLayer] { world.addSublayer(part) }
+        layer.addSublayer(world)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    func update(config: EffectsConfig, frames: [String: EffectKeyFrame], scale: CGFloat, accent: UIColor, letterSize: CGFloat) {
+        self.config = config
+        self.accent = accent
+        self.letterSize = letterSize
+        let moved = frames != self.frames || abs(scale - self.scale) > 0.0001
+        self.frames = frames
+        self.scale = max(scale, 0.01)
+        if moved { layoutWorld() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layoutWorld()
+    }
+
+    private func layoutWorld() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        world.bounds = CGRect(x: 0, y: 0, width: bounds.width / scale, height: bounds.height / scale)
+        world.position = .zero
+        world.setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
+        for part in [glows, keysLayer, fxLayer] { part.frame = world.bounds }
+        glowMask.frame = glows.bounds
+        let outside = UIBezierPath(rect: world.bounds)
+        for (id, frame) in frames {
+            let key = keys[id] ?? makeKey(id)
+            key.frame = frame
+            let rect = CGRect(x: frame.rect.minX / scale, y: frame.rect.minY / scale,
+                              width: frame.rect.width / scale, height: frame.rect.height / scale)
+            let radius = frame.radius / scale
+            key.proxy.frame = rect
+            key.glowHolder.frame = rect
+            key.player.bounds = CGRect(origin: .zero, size: rect.size)
+            key.player.radius = radius
+            key.player.frameInOverlay = rect
+            key.player.layoutGlow()
+            outside.append(UIBezierPath(roundedRect: rect, cornerRadius: radius))
         }
-        .allowsHitTesting(false)
-    }
-
-    /// The lights around the keys: a glow under the finger and the wave, with every key's shape cut out.
-    private var glowLayer: some View {
-        ZStack {
-            ForEach(ids, id: \.self) { id in
-                if let frame = frames[id] {
-                    glow(frame, tint: tints[id] ?? .clear, lit: config.glow && down[id] != nil, wave: waves[id])
-                }
-            }
+        for (id, key) in keys where frames[id] == nil {
+            key.proxy.removeFromSuperlayer()
+            key.glowHolder.removeFromSuperlayer()
+            keys[id] = nil
         }
-        .mask(cutout)
-        .allowsHitTesting(false)
+        glowMask.path = outside.cgPath
+        CATransaction.commit()
     }
 
-    private func glow(_ frame: EffectKeyFrame, tint: Color, lit: Bool, wave: PulseRequest?) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: frame.radius, style: .continuous)
-                .fill(tint.opacity(lit ? config.glowStrength : 0))
-                .shadow(color: tint.opacity(lit ? config.glowStrength : 0), radius: 9 * config.glowSpread * scale)
-            if let wave = wave {
-                Pulse(strength: wave.strength, fade: max(config.glowFadeOut, 0.3), delay: wave.delay, tint: wave.tint,
-                      radius: 9 * scale)
-                    .id(wave.tick)
-            }
+    private func makeKey(_ id: String) -> StageKey {
+        let key = StageKey()
+        keysLayer.addSublayer(key.proxy)
+        glows.addSublayer(key.glowHolder)
+        let player = key.player
+        player.keyLayer = key.proxy
+        player.overlay = fxLayer
+        let holder = key.glowHolder
+        player.installGlow = { glow in holder.addSublayer(glow) }
+        player.echoImage = { [weak self, weak key] in
+            guard let self = self, let key = key else { return nil }
+            return self.labelImage(key.frame.label, size: key.player.bounds.size)
         }
-        .frame(width: frame.rect.width, height: frame.rect.height)
-        .position(x: frame.rect.midX, y: frame.rect.midY)
+        player.onMove = { [weak self] move in
+            guard let self = self else { return }
+            self.motions?.play(move, on: id, scale: self.scale)
+        }
+        player.onWave = { [weak self] color in self?.wave(from: id, color: color) }
+        keys[id] = key
+        return key
     }
 
-    /// Everything but the keys.
-    private var cutout: some View {
-        Rectangle().fill(Color.black)
-            .overlay(
-                ZStack {
-                    ForEach(ids, id: \.self) { id in
-                        if let frame = frames[id] {
-                            RoundedRectangle(cornerRadius: frame.radius, style: .continuous)
-                                .frame(width: frame.rect.width, height: frame.rect.height)
-                                .position(x: frame.rect.midX, y: frame.rect.midY)
-                        }
-                    }
-                }
-                .blendMode(.destinationOut)
-            )
-            .compositingGroup()
+    /// A key's label as the keyboard draws it (KeyView), for the echo.
+    private func labelImage(_ text: String, size: CGSize) -> CGImage? {
+        guard !text.isEmpty, size.width > 4, size.height > 0 else { return nil }
+        let font = text.count == 1 ? UIFont.systemFont(ofSize: 23 * letterSize, weight: .light) : UIFont.systemFont(ofSize: 16)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font,
+                                                         .foregroundColor: UIColor.label.resolvedColor(with: traitCollection)]
+        let box = CGSize(width: size.width - 4, height: size.height)
+        return UIGraphicsImageRenderer(size: box).image { _ in
+            let measured = (text as NSString).size(withAttributes: attributes)
+            (text as NSString).draw(at: CGPoint(x: (box.width - measured.width) / 2, y: (box.height - measured.height) / 2),
+                                    withAttributes: attributes)
+        }.cgImage
     }
 
-    private func key(at point: CGPoint) -> String? {
+    /// The wave: the keys around the pressed one pulse with its light, the farther ones a moment later.
+    private func wave(from id: String, color: UIColor) {
+        guard let origin = frames[id] else { return }
+        let unit = max(frames.values.map { $0.rect.width }.min() ?? 40, 1)
+        for (other, frame) in frames where other != id {
+            let distance = hypot(frame.rect.midX - origin.rect.midX, frame.rect.midY - origin.rect.midY) / unit
+            guard distance <= CGFloat(config.waveReach), let key = keys[other] else { continue }
+            let fade = 1 - distance / (CGFloat(config.waveReach) + 0.5)
+            key.player.config = config
+            key.player.waveLight(color: color, strength: Float(config.waveStrength) * Float(fade),
+                                 delay: TimeInterval(distance) * config.waveSpeed)
+        }
+    }
+
+    private func press(_ id: String, _ down: Bool) {
+        guard let key = keys[id] else { return }
+        key.player.config = config
+        key.player.accent = accent
+        key.player.press(down)
+    }
+
+    private func keyID(at point: CGPoint) -> String? {
         if let hit = frames.first(where: { $0.value.rect.contains(point) }) { return hit.key }
         // Between keys: the nearest one.
         let nearest = frames.min { distance(from: point, to: $0.value.rect) < distance(from: point, to: $1.value.rect) }
@@ -1048,470 +1052,27 @@ struct EffectsPlayground<Content: View>: View {
         return hypot(max(rect.minX - point.x, 0, point.x - rect.maxX), max(rect.minY - point.y, 0, point.y - rect.maxY))
     }
 
-    /// The colour of one press of the effect `id`: its own colour choice, else the one for all.
-    private func resolve(_ id: String) -> Color {
-        let mode = config.mode(for: id)
-        switch mode {
-        case "white":
-            return .white
-        case "custom":
-            return Color(config.custom(for: id))
-        case "accent":
-            return Color.currentAccent(name: accentName, hex: accentHex)
-        case "rainbow":
-            hue = (hue + 0.11).truncatingRemainder(dividingBy: 1)
-            let tint = EffectPalette.tint(mode, CGFloat(hue))
-            return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
-        default:
-            let tint = EffectPalette.tint(mode, CGFloat.random(in: 0..<1))
-            return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        for touch in touches {
+            guard let id = keyID(at: touch.location(in: self)) else { continue }
+            let held = touchKeys.values.contains(id)
+            touchKeys[ObjectIdentifier(touch)] = id
+            if !held { press(id, true) }
         }
     }
 
-    private func press(_ touch: Int, at point: CGPoint) {
-        guard let id = key(at: point), let frame = frames[id] else { return }
-        touchKeys[touch] = id
-        guard down[id] == nil else { return }
-        let tint = resolve("glow")
-        tints[id] = tint
-        counter += 1
-        let tick = counter
-        plays[id, default: []].append(Play(tick: tick, tint: tint))
-        // Long enough for the slowest effect to finish.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { plays[id]?.removeAll { $0.tick == tick } }
-        withAnimation(.easeOut(duration: max(config.glowFadeIn, 0.001))) { down[id] = tint }
-        if config.squish { squish(id) }
-        if config.jelly { jelly(id) }
-        if config.heartbeat {
-            let beat = CGFloat(config.heartbeatStrength)
-            play(id, [beat, 1, beat, 1], every: 0.12) { pose, value in pose.scale = value }
-        }
-        if config.shake {
-            let d = CGFloat(config.shakeDistance) * scale
-            play(id, [-d, d, -d * 0.7, d * 0.5, -d * 0.2, 0], every: 0.05) { pose, value in pose.offsetX = value }
-        }
-        if config.drop {
-            let d = CGFloat(config.dropDepth) * scale
-            play(id, [d, -d * 0.35, d * 0.12, 0], every: 0.09) { pose, value in pose.offsetY = value }
-        }
-        if config.glitch {
-            let d = CGFloat(config.glitchStrength) * 6 * scale
-            play(id, [-d, d * 0.8, -d * 0.5, d * 0.6, 0], every: 0.045) { pose, value in pose.offsetX = value }
-        }
-        if config.flip { flip(id) }
-        if config.wave {
-            let waveTint = resolve("wave")
-            let unit = max(frames.values.map { $0.rect.width }.min() ?? 40, 1)
-            for (other, otherFrame) in frames where other != id {
-                let apart = hypot(otherFrame.rect.midX - frame.rect.midX, otherFrame.rect.midY - frame.rect.midY) / unit
-                guard apart <= config.waveReach else { continue }
-                waves[other] = PulseRequest(tick: counter, delay: apart * config.waveSpeed,
-                                            strength: config.waveStrength * (1 - apart / (config.waveReach + 0.5)), tint: waveTint)
-            }
-        }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        lift(touches)
     }
 
-    /// The key squashes, then springs back.
-    private func squish(_ id: String) {
-        withAnimation(.easeOut(duration: 0.1)) { poses[id, default: EffectPose()].scale = CGFloat(config.squishDepth) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.interpolatingSpring(stiffness: 260, damping: 8)) { poses[id, default: EffectPose()].scale = 1 }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        lift(touches)
+    }
+
+    private func lift(_ touches: Set<UITouch>) {
+        for touch in touches {
+            guard let id = touchKeys.removeValue(forKey: ObjectIdentifier(touch)) else { continue }
+            if !touchKeys.values.contains(id) { press(id, false) }
         }
-    }
-
-    /// Moves a key's pose through `values` one after another, `every` seconds apart.
-    private func play(_ id: String, _ values: [CGFloat], every: Double, _ set: @escaping (inout EffectPose, CGFloat) -> Void) {
-        for (step, value) in values.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * every) {
-                withAnimation(.easeInOut(duration: every)) { set(&poses[id, default: EffectPose()], value) }
-            }
-        }
-    }
-
-    /// The key turns over once, then is back to normal.
-    private func flip(_ id: String) {
-        let duration = config.flipDuration
-        withAnimation(.easeInOut(duration: duration)) { poses[id, default: EffectPose()].flip = 360 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { poses[id, default: EffectPose()].flip = 0 }
-        }
-    }
-
-    /// The key swings back and forth, less each time.
-    private func jelly(_ id: String) {
-        let angle = config.jellyAngle
-        let swings = [angle, -angle * 0.8, angle * 0.5, -angle * 0.25, 0]
-        for (step, swing) in swings.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * 0.1) {
-                withAnimation(.easeInOut(duration: 0.1)) { poses[id, default: EffectPose()].angle = swing }
-            }
-        }
-    }
-
-    private func release(_ touch: Int) {
-        guard let id = touchKeys.removeValue(forKey: touch) else { return }
-        withAnimation(.easeIn(duration: max(config.glowFadeOut, 0.001))) { down[id] = nil }
-    }
-}
-
-/// The effects that play on the key itself, drawn where the key is.
-private struct EffectsKeyFX: View {
-    let config: EffectsConfig
-    let frame: EffectKeyFrame
-    let accent: Color
-    let tick: Int
-    /// The preview's size against the keyboard's: everything is drawn at the keyboard's size, then shrunk by this.
-    let scale: CGFloat
-
-    private var shape: RoundedRectangle { return RoundedRectangle(cornerRadius: frame.radius / scale, style: .continuous) }
-
-    var body: some View {
-        let width = frame.rect.width / scale
-        let height = frame.rect.height / scale
-        let borderTint = color("border")
-        let sweepTint = color("sweep")
-        ZStack {
-            // Effects that stay inside the key's shape.
-            ZStack {
-                if config.ripple { ripple(width: width).offset(x: start("ripple").x, y: start("ripple").y) }
-                if config.shine { shine(width: width, height: height) }
-                if config.flash { flash() }
-                if config.lightning { lightningFlash() }
-                if config.underline { underline(width: width, height: height) }
-                if config.glitch { glitchSlabs() }
-            }
-            .frame(width: width, height: height)
-            .clipShape(shape)
-            if config.border {
-                Burst(duration: config.borderFade, curve: { .easeIn(duration: $0) }) { done in
-                    shape.strokeBorder(borderTint, lineWidth: config.borderWidth).opacity(done ? 0 : 1)
-                }
-                .id(tick)
-                .frame(width: width, height: height)
-            }
-            if config.echo && !frame.label.isEmpty {
-                Burst(duration: config.echoDuration) { done in
-                    Text(frame.label).font(.system(size: 22, weight: .medium))
-                        .offset(x: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn("echo")).x : 0,
-                                y: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn("echo")).y : 0)
-                        .opacity(done ? 0 : 0.85)
-                }
-                .id(tick)
-                .offset(x: start("echo").x, y: start("echo").y)
-            }
-            if config.pop && !frame.label.isEmpty {
-                Burst(duration: config.popDuration, curve: { _ in .interpolatingSpring(stiffness: 260, damping: 8) }) { done in
-                    Text(frame.label).font(.system(size: 22, weight: .medium)).scaleEffect(done ? 1 : config.popScale)
-                }
-                .id(tick)
-            }
-            if config.sparks { sparks(width: width).offset(x: start("sparks").x, y: start("sparks").y) }
-            if config.shockwave { shockwave(width: width).offset(x: start("shockwave").x, y: start("shockwave").y) }
-            if config.confetti { confetti(width: width).offset(x: start("confetti").x, y: start("confetti").y) }
-            if config.bubbles { bubbles(width: width).offset(x: start("bubbles").x, y: start("bubbles").y) }
-            if config.sweep {
-                Burst(duration: config.sweepDuration, curve: { .linear(duration: $0) }) { done in
-                    shape.trim(from: done ? 0.85 : 0, to: done ? 1 : 0.15)
-                        .stroke(sweepTint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .opacity(done ? 0 : 1)
-                }
-                .id(tick)
-                .frame(width: width, height: height)
-            }
-            if config.lightning { lightning(width: width, height: height).offset(x: start("lightning").x, y: start("lightning").y) }
-            if config.beam { beam(width: width).offset(x: start("beam").x, y: start("beam").y) }
-            particles
-        }
-        .frame(width: width, height: height)
-        .scaleEffect(scale)
-        .position(x: frame.rect.midX, y: frame.rect.midY)
-    }
-
-    /// Where this press's effect `id` starts on the key, from the middle (its position setting).
-    private func start(_ id: String) -> CGPoint {
-        var draws = 0
-        return EffectPosition.offset(config.position(for: id),
-                                     size: CGSize(width: frame.rect.width / scale, height: frame.rect.height / scale),
-                                     random: { draws += 1; return CGFloat(unit(tick, Double(41 + draws))) })
-    }
-
-    /// The colour of the effect `id` for this press: its own colour choice, else the one for all.
-    private func color(_ id: String) -> Color {
-        let mode = config.mode(for: id)
-        switch mode {
-        case "white": return .white
-        case "custom": return Color(config.custom(for: id))
-        case "accent": return accent
-        default:
-            let salt = Double(id.utf8.reduce(7) { ($0 &* 31 &+ Int($1)) % 997 })
-            let tint = EffectPalette.tint(mode, CGFloat(unit(tick, salt)))
-            return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
-        }
-    }
-
-    /// The colour of one speck (`hue` picks it from the palette when the effect gives each speck its own colour).
-    private func speckColor(_ id: String, _ hue: Double, _ base: Color) -> Color {
-        let mode = config.mode(for: id)
-        guard EffectPalette.isMulti(mode) else { return base }
-        let tint = EffectPalette.tint(mode, CGFloat(hue))
-        return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
-    }
-
-    private func underline(width: CGFloat, height: CGFloat) -> some View {
-        let tint = color("underline")
-        return Burst(duration: config.underlineDuration) { done in
-            Capsule().fill(tint).frame(width: width * 0.8, height: 3)
-                .scaleEffect(x: done ? 1 : 0.05, y: 1)
-                .opacity(done ? 0 : 1)
-                .offset(y: height / 2 - 4)
-        }
-        .id(tick)
-    }
-
-    /// Pink and cyan copies of the key flicker over it.
-    private func glitchSlabs() -> some View {
-        let strength = config.glitchStrength
-        return Burst(duration: 0.26, curve: { .linear(duration: $0) }) { done in
-            ZStack {
-                Color.pink.opacity(0.4 * strength).offset(x: -3)
-                Color.cyan.opacity(0.4 * strength).offset(x: 3)
-            }
-            .opacity(done ? 0 : 1)
-        }
-        .id(tick)
-    }
-
-    /// A forked bolt strikes down onto the key (EffectBolt): glow, colour and a white core, fading.
-    private func lightning(width: CGFloat, height: CGFloat) -> some View {
-        let tint = color("lightning")
-        let salt = tick * 7
-        let bolt = EffectBolt.make(length: width * CGFloat(config.lightningLength), width: width) { index, _ in
-            CGFloat(unit(index + salt, 21))
-        }
-        let centre = CGPoint(x: width / 2, y: height / 2)
-        func line(_ points: [[CGPoint]]) -> Path {
-            var path = Path()
-            for run in points {
-                guard let first = run.first else { continue }
-                path.move(to: CGPoint(x: centre.x + first.x, y: centre.y + first.y))
-                for point in run.dropFirst() { path.addLine(to: CGPoint(x: centre.x + point.x, y: centre.y + point.y)) }
-            }
-            return path
-        }
-        let main = line([bolt.main])
-        let forks = line(bolt.forks)
-        let round = { (width: CGFloat) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
-        return Burst(duration: 0.45, curve: { .easeIn(duration: $0) }) { done in
-            ZStack {
-                main.stroke(tint.opacity(0.3), style: round(14))
-                main.stroke(tint.opacity(0.5), style: round(8))
-                main.stroke(tint, style: round(3.5))
-                main.stroke(Color.white, style: round(1.5))
-                forks.stroke(tint.opacity(0.3), style: round(8))
-                forks.stroke(tint.opacity(0.5), style: round(4))
-                forks.stroke(tint, style: round(1.8))
-                forks.stroke(Color.white, style: round(0.8))
-            }
-            .opacity(done ? 0 : 1)
-        }
-        .id(tick)
-    }
-
-    private func beam(width: CGFloat) -> some View {
-        let tint = color("beam")
-        let reach = width * CGFloat(config.beamHeight)
-        // The beam stands on the key's middle (the middle of this view), and turns about it.
-        return VStack(spacing: 0) {
-            Burst(duration: 0.5) { done in
-                Rectangle()
-                    .fill(LinearGradient(colors: [tint.opacity(0.8), tint.opacity(0)], startPoint: .bottom, endPoint: .top))
-                    .frame(width: width * 0.5, height: reach)
-                    .scaleEffect(x: 1, y: done ? 1 : 0.15, anchor: .bottom)
-                    .opacity(done ? 0 : 1)
-            }
-            Color.clear.frame(width: 1, height: reach)
-        }
-        .rotationEffect(.radians(Double(turn("beam"))))
-        .id(tick)
-    }
-
-    // The particle effects (EffectParticles), as the keyboard plays them.
-
-    private var particles: some View {
-        let specs = EffectParticles.make(config, keySize: CGSize(width: frame.rect.width / scale, height: frame.rect.height / scale)) { index, salt in CGFloat(unit(index + tick * 13, Double(salt))) }
-        return ZStack {
-            ForEach(0..<specs.count, id: \.self) { index in
-                Later(delay: specs[index].delay) { particle(specs[index]) }
-            }
-        }
-        .id(tick)
-    }
-
-    private func particle(_ spec: EffectParticle) -> some View {
-        let color: Color = spec.tint.map { Color(hue: Double($0.h), saturation: Double($0.s), brightness: Double($0.b)) } ?? accent
-        return Burst(duration: spec.duration, curve: { .linear(duration: $0) }) { done in
-            particleShape(spec, color: color)
-                .rotationEffect(.radians((spec.isOriented ? Double(spec.tilt) : 0) + (done ? Double(spec.spin) : 0)))
-                .scaleEffect(done ? spec.scaleTo : spec.scaleFrom)
-                .modifier(Along(progress: done ? 1 : 0, path: spec.path))
-                .opacity(done ? 0 : Double(spec.peak))
-        }
-    }
-
-    @ViewBuilder private func particleShape(_ spec: EffectParticle, color: Color) -> some View {
-        switch spec.shape {
-        case .art(let art):
-            EffectArtShape(art: art).fill(color, style: FillStyle(eoFill: art.cutsHoles))
-                .frame(width: spec.size, height: spec.size)
-        case .dot:
-            Circle().fill(color).frame(width: spec.size, height: spec.size)
-        case .streak(let angle):
-            Capsule().fill(color).frame(width: spec.size, height: 2).rotationEffect(.radians(Double(angle)))
-        case .drop:
-            Capsule()
-                .fill(LinearGradient(colors: [color.opacity(0), color], startPoint: .top, endPoint: .bottom))
-                .frame(width: 2, height: spec.size)
-        case .soft:
-            Circle().fill(color.opacity(0.35)).frame(width: spec.size, height: spec.size).blur(radius: 3)
-        case .ember:
-            Circle().fill(color).frame(width: spec.size, height: spec.size).shadow(color: color, radius: 3)
-        case .ring:
-            Circle().strokeBorder(color, lineWidth: 2).frame(width: spec.size, height: spec.size)
-        case .square:
-            Rectangle().fill(color).frame(width: spec.size, height: spec.size)
-        case .bar:
-            Rectangle().fill(color).frame(width: spec.size, height: spec.size * 0.4)
-        }
-    }
-
-    /// The key flashes white as the bolt strikes it.
-    private func lightningFlash() -> some View {
-        return Burst(duration: 0.3, curve: { .easeIn(duration: $0) }) { done in
-            Color.white.opacity(done ? 0 : 0.55)
-        }
-        .id(tick)
-    }
-
-    private func flash() -> some View {
-        let tint = color("flash")
-        return Burst(duration: config.flashDuration, curve: { .easeIn(duration: $0) }) { done in
-            tint.opacity(done ? 0 : config.flashStrength)
-        }
-        .id(tick)
-    }
-
-    private func shockwave(width: CGFloat) -> some View {
-        let tint = color("shockwave")
-        let diameter = width * CGFloat(config.shockReach) * 2
-        return Burst(duration: config.shockDuration) { done in
-            Circle().strokeBorder(tint.opacity(0.85), lineWidth: 2.5)
-                .frame(width: diameter, height: diameter)
-                .scaleEffect(done ? 1 : 0.1)
-                .opacity(done ? 0 : 1)
-        }
-        .id(tick)
-    }
-
-    /// The angle (from straight up, clockwise) the throwing effects go at for this press.
-    private func turn(_ id: String) -> CGFloat {
-        return EffectDirection.target(config.direction(for: id), random: { CGFloat(unit(tick, 31)) }) ?? 0
-    }
-
-    private func confetti(width: CGFloat) -> some View {
-        let tint = color("confetti")
-        let count = max(1, Int(config.confettiCount.rounded()))
-        return ZStack {
-            ForEach(0..<count, id: \.self) { index in
-                let dx = CGFloat(unit(index, 1) * 2 - 1) * width * 0.9
-                let dy = -CGFloat(0.8 + unit(index, 2)) * width
-                Burst(duration: config.confettiDuration, curve: { .linear(duration: $0) }) { done in
-                    Rectangle()
-                        .fill(speckColor("confetti", unit(index, 3), tint))
-                        .frame(width: 4 + CGFloat(unit(index, 4)) * 3, height: 2 + CGFloat(unit(index, 5)) * 2)
-                        .rotationEffect(.degrees(done ? (unit(index, 6) * 2 - 1) * 460 : 0))
-                        .modifier(Ballistic(progress: done ? 1 : 0, dx: dx, dy: dy, gravity: width * 3.2, turn: turn("confetti")))
-                        .opacity(done ? 0 : 1)
-                }
-            }
-        }
-        .id(tick)
-    }
-
-    private func bubbleOffset(_ index: Int, width: CGFloat, done: Bool) -> CGPoint {
-        let start = CGFloat(unit(index, 10) - 0.5) * width * 0.7
-        let sway = done ? CGFloat(unit(index, 11) - 0.5) * 14 : 0
-        return EffectDirection.turn(CGPoint(x: start + sway, y: done ? -CGFloat(config.bubbleRise) : 0), by: turn("bubbles"))
-    }
-
-    private func bubbles(width: CGFloat) -> some View {
-        let tint = color("bubbles")
-        let count = max(1, Int(config.bubbleCount.rounded()))
-        return ZStack {
-            ForEach(0..<count, id: \.self) { index in
-                let size = 5 + CGFloat(unit(index, 7)) * 6
-                Burst(duration: 0.7 + unit(index, 8) * 0.4, delay: unit(index, 9) * 0.25,
-                      curve: { .easeOut(duration: $0) }) { done in
-                    Circle()
-                        .strokeBorder(tint.opacity(0.9), lineWidth: 1.5)
-                        .background(Circle().fill(tint.opacity(0.18)))
-                        .frame(width: size, height: size)
-                        .offset(x: bubbleOffset(index, width: width, done: done).x,
-                                y: bubbleOffset(index, width: width, done: done).y)
-                        .opacity(done ? 0 : 1)
-                }
-            }
-        }
-        .id(tick)
-    }
-
-    private func ripple(width: CGFloat) -> some View {
-        let tint = color("ripple")
-        return Burst(duration: config.rippleDuration) { done in
-            ZStack {
-                if config.rippleStyle == "ring" {
-                    Circle().strokeBorder(tint.opacity(0.8), lineWidth: 3)
-                } else {
-                    Circle().fill(tint.opacity(0.55))
-                }
-            }
-            .frame(width: width * 1.4, height: width * 1.4)
-            .scaleEffect(done ? CGFloat(config.rippleReach) / 3 : 0.05)
-            .opacity(done ? 0 : 1)
-        }
-        .id(tick)
-    }
-
-    private func shine(width: CGFloat, height: CGFloat) -> some View {
-        let tint = color("shine")
-        let band = width * config.shineWidth
-        return Burst(duration: config.shineDuration, curve: { .easeInOut(duration: $0) }) { done in
-            LinearGradient(colors: [tint.opacity(0), tint.opacity(0.75), tint.opacity(0)], startPoint: .leading, endPoint: .trailing)
-                .frame(width: band, height: height * 1.6)
-                .rotationEffect(.degrees(18))
-                .offset(x: done ? width : -width)
-        }
-        .id(tick)
-    }
-
-    private func sparks(width: CGFloat) -> some View {
-        let tint = color("sparks")
-        let count = max(1, Int(config.sparkCount.rounded()))
-        return ZStack {
-            ForEach(0..<count, id: \.self) { index in
-                let angle = 2 * Double.pi * Double(index) / Double(count)
-                Burst(duration: config.sparkDuration) { done in
-                    Circle()
-                        .fill(speckColor("sparks", Double(index) / Double(count), tint))
-                        .frame(width: config.sparkSize, height: config.sparkSize)
-                        .scaleEffect(done ? 0.3 : 1)
-                        .offset(x: done ? cos(angle) * width * config.sparkDistance : 0,
-                                y: done ? sin(angle) * width * config.sparkDistance : 0)
-                        .opacity(done ? 0 : 1)
-                }
-            }
-        }
-        .id(tick)
     }
 }

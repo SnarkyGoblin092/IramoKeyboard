@@ -388,7 +388,8 @@ struct GlassToggle: View {
                 Button { isOn.toggle() } label: {
                     HStack(spacing: 12) {
                         label.frame(maxWidth: .infinity, alignment: .leading)
-                        Toggle("", isOn: $isOn).labelsHidden().allowsHitTesting(false)
+                        // The switch takes its own touches too, so it shows its glass while held and slid.
+                        Toggle("", isOn: $isOn).labelsHidden()
                     }
                     .contentShape(Rectangle())
                 }
@@ -452,7 +453,8 @@ struct GlassList<Content: View>: View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                // Lazy: a long screen (the Effects screen's hundred-odd cards) only builds the cards on screen.
+                LazyVStack(alignment: .leading, spacing: 0) {
                     Group(sections: content) { sections in
                         ForEach(sections) { section in
                             GlassCardSection(section: section)
@@ -630,10 +632,20 @@ extension View {
     }
 }
 
-/// The app's switch: a glass groove that fills with the accent when on, and a glass bead that slides across it
-/// (a frosted material before iOS 26). Every Toggle in the app takes it (ContentView sets it on the whole app).
+/// The app's switch. From iOS 26 the system's own Liquid Glass switch in the accent colour: its knob turns into a
+/// drop of glass while it slides or is held, as in the system's settings. Before that, a glass groove that fills with
+/// the accent when on and a frosted bead that stretches as it slides across. Every Toggle in the app takes it
+/// (ContentView sets it on the whole app).
 struct GlassSwitchStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
+    @ViewBuilder func makeBody(configuration: Configuration) -> some View {
+        if #available(iOS 26.0, *) {
+            NativeGlassSwitch(configuration: configuration)
+        } else {
+            drawnSwitch(configuration)
+        }
+    }
+
+    private func drawnSwitch(_ configuration: Configuration) -> some View {
         Button {
             configuration.isOn.toggle()
         } label: {
@@ -649,6 +661,20 @@ struct GlassSwitchStyle: ToggleStyle {
     }
 }
 
+/// The system's switch (Liquid Glass on iOS 26 and later), lit with the accent.
+@available(iOS 26.0, *)
+private struct NativeGlassSwitch: View {
+    let configuration: ToggleStyleConfiguration
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    var body: some View {
+        Toggle(configuration)
+            .toggleStyle(.switch)
+            .tint(Color.currentAccent(name: accentName, hex: accentHex))
+    }
+}
+
 private struct SwitchTrait: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
@@ -659,26 +685,33 @@ private struct SwitchTrait: ViewModifier {
     }
 }
 
-/// The switch itself: the groove and the bead.
+/// The drawn switch (before iOS 26): the groove and the bead, which stretches while it slides.
 private struct GlassSwitchKnob: View {
     let isOn: Bool
     @Environment(\.isEnabled) private var isEnabled
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @State private var stretched = false
 
     var body: some View {
         let accent = Color.currentAccent(name: accentName, hex: accentHex)
-        let bead: CGFloat = 27
+        let height: CGFloat = 27
+        let bead: CGFloat = stretched ? 36 : height
         ZStack(alignment: .leading) {
             Capsule().fill(Color.clear).frame(width: 52, height: 32)
                 .glassShape(Capsule(), tint: isOn ? accent.opacity(0.85) : nil)
-            Circle().fill(Color.clear).frame(width: bead, height: bead)
-                .glassShape(Circle(), tint: Color.white.opacity(0.4), interactive: true)
+            Capsule().fill(Color.clear).frame(width: bead, height: height)
+                .glassShape(Capsule(), tint: Color.white.opacity(0.4), interactive: true)
                 .shadow(color: .black.opacity(0.18), radius: 3, y: 1.5)
                 .offset(x: isOn ? 52 - bead - 2.5 : 2.5)
         }
         .frame(width: 52, height: 32)
         .animation(.spring(response: 0.3, dampingFraction: 0.72), value: isOn)
+        .animation(.spring(response: 0.22, dampingFraction: 0.6), value: stretched)
+        .onChange(of: isOn) { _ in
+            stretched = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { stretched = false }
+        }
         .opacity(isEnabled ? 1 : 0.5)
         .accessibilityHidden(true)
     }
