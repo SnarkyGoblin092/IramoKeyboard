@@ -8,6 +8,8 @@ struct ThemePreview: View {
     let accent: Color
     var showsStrip = true
     var cornerRadius: CGFloat = 14
+    /// The Effects screen's playground asks where every key is (EffectKeyReporter).
+    var reportsKeys = false
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
     @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
     @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
@@ -36,6 +38,8 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFontID = SettingDefault.keyFont
 
     @Environment(\.colorScheme) private var systemScheme
+    /// The Effects screen's squish and jelly move the keys.
+    @Environment(\.effectPoses) private var poses
 
     /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
     var language: Language? = nil
@@ -299,7 +303,7 @@ struct ThemePreview: View {
                     if showsStrip { strip(height: stripHeight, scale: s) }
                     VStack(spacing: 0) {
                         ForEach(0..<shownRows.count, id: \.self) { index in
-                            row(shownRows[index], rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
+                            row(shownRows[index], rowIndex: index, rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
                         }
                     }
                     .offset(x: shift)
@@ -321,7 +325,7 @@ struct ThemePreview: View {
 
     /// A row as KeyboardView lays it out: each key's touch cell is its share of the width by weight, and the
     /// key is drawn half the key gap in from each side of its cell and half the row gap from the top and bottom.
-    private func row(_ keys: [PreviewKey], rowWidth: CGFloat, rowHeight: CGFloat, keyHeight: CGFloat,
+    private func row(_ keys: [PreviewKey], rowIndex: Int, rowWidth: CGFloat, rowHeight: CGFloat, keyHeight: CGFloat,
                      scale s: CGFloat) -> some View {
         let total = keys.reduce(CGFloat(0)) { $0 + $1.weight }
         let unit = rowWidth / max(total, 1)
@@ -333,13 +337,27 @@ struct ThemePreview: View {
                     if k.spacer {
                         Color.clear
                     } else {
-                        key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s)
+                        tracked(key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s),
+                                id: "\(rowIndex).\(i)", label: k.space ? "" : k.title,
+                                radius: look.radius(width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight))
                     }
                 }
                 .frame(width: cell, height: rowHeight)
             }
         }
         .frame(width: rowWidth)
+    }
+
+    @ViewBuilder private func tracked<V: View>(_ view: V, id: String, label: String, radius: CGFloat) -> some View {
+        if reportsKeys {
+            let pose = poses[id] ?? EffectPose()
+            view.scaleEffect(pose.scale).rotationEffect(.degrees(pose.angle))
+                .rotation3DEffect(.degrees(pose.flip), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
+                .offset(x: pose.offsetX, y: pose.offsetY)
+                .background(EffectKeyReporter(id: id, label: label, radius: radius))
+        } else {
+            view
+        }
     }
 
     /// The suggestion strip: three slots with dividers (or on segments, as the Suggestions screen sets it) and

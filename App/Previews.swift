@@ -205,6 +205,8 @@ struct PinnedKeyboard: View {
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    /// Set on the Effects screen: the keys can be touched and play these effects.
+    var effects: EffectsConfig? = nil
 
     var body: some View {
         GeometryReader { geometry in
@@ -212,12 +214,20 @@ struct PinnedKeyboard: View {
             let rows: Double = (numberRow ? 5 : 4) + Double(ThemePreview.extraLetterRows)
             let aspect = CGFloat(440 / (barHeight + 8 + rows * (keyHeight + rowGap)))
             let width = min(geometry.size.width, geometry.size.height * aspect)
-            ThemePreview(theme: ThemeCatalog.theme(id: themeID, edits: themeEdits),
-                         accent: Color.currentAccent(name: accentName, hex: accentHex),
-                         cornerRadius: 14)
+            let board = ThemePreview(theme: ThemeCatalog.theme(id: themeID, edits: themeEdits),
+                                     accent: Color.currentAccent(name: accentName, hex: accentHex),
+                                     cornerRadius: 14, reportsKeys: effects != nil)
                 .frame(width: width, height: width / aspect)
-                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                .frame(width: geometry.size.width, height: geometry.size.height)
+            Group {
+                if let effects = effects {
+                    // The Effects screen: the keys can be touched.
+                    EffectsPlayground(config: effects) { board }
+                } else {
+                    board
+                }
+            }
+            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
     }

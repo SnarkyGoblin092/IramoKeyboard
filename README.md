@@ -210,11 +210,10 @@ A custom keyboard for iPhone and iPad. All settings live in the **Iramo app**.
 - Effects, each with its own switch and settings, one colour for them all (accent, white, a new rainbow hue per
   press, or any colour): glow (strength, spread, fade in, fade out), outline light, ripple (disc or ring, reach,
   duration), shine (a slanted band sweeping across the key), sparks (count, distance, size), pop (the label swells
-  or shrinks and springs back), echo (a copy of the label floats up), wave (the keys around light up in turn) and a
-  glowing swipe trail. Presets: Off, Glow, Neon, Ripple, Rainbow, Sparkle, Wave and Bounce. Every key's glow and
+  or shrinks and springs back), echo (a copy of the label floats up), wave (the keys around light up in turn), shockwave (a ring spreading far over the keys), confetti, bubbles, squish (the key squashes), flash, jelly (the key wobbles), hearts, stars, snow, notes, fireworks, starburst, rain, embers, smoke, lightning, orbit, spiral, heartbeat, flip, shake, drop, glitch, underline, neon sweep, beam and a
+  glowing swipe trail. Presets: Off, Glow, Neon, Ripple, Rainbow, Sparkle, Wave, Confetti, Bubbles, Jelly, Love, Winter, Storm, Party, Cyber, Space and Bounce. The Effects screen's texts are translated into every app language. Every key's glow and
   shadow is drawn on one layer under all the keys, with every key's shape cut out of it, so light never falls over
-  a key (sparks and the echo are the exception: they fly over the keys). The keys in the app's preview can be
-  touched to try it.
+  a key (sparks and the echo are the exception: they fly over the keys). The Effects screen shows the whole themed keyboard (every key, several fingers at once) to try it on.
 - Keys, Haptics, Suggestion bar, Gestures (swipe, delete, cursor, accents and flicks) and Hitboxes (size,
   adaptive keys, hit map), each with presets and fine-tuning; the keyboard preview follows every change.
 - Credits and licences for the word, emoji and icon data.

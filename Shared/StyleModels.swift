@@ -141,6 +141,114 @@ struct EffectsConfig: Hashable, Codable {
     var waveStrength = 0.5
     var waveSpeed = 0.07
 
+    /// A ring of light that spreads out far past the key.
+    var shockwave = false
+    var shockReach = 1.8
+    var shockDuration = 0.6
+
+    /// Small pieces of paper thrown up out of the key that tumble down.
+    var confetti = false
+    var confettiCount = 14.0
+    var confettiDuration = 0.9
+
+    /// Bubbles that float up from the key.
+    var bubbles = false
+    var bubbleCount = 5.0
+    var bubbleRise = 60.0
+
+    /// The key squashes under the finger and springs back.
+    var squish = false
+    var squishDepth = 0.85
+
+    /// The key flashes in the effect colour.
+    var flash = false
+    var flashStrength = 0.6
+    var flashDuration = 0.3
+
+    /// The key wobbles like jelly.
+    var jelly = false
+    var jellyAngle = 8.0
+
+    /// Little hearts float up from the key.
+    var hearts = false
+    var heartCount = 6.0
+
+    /// Stars burst out of the key and fade.
+    var stars = false
+    var starCount = 7.0
+
+    /// Snowflakes drift down past the key.
+    var snow = false
+    var snowCount = 10.0
+
+    /// Musical notes drift up and to the side.
+    var notes = false
+    var noteCount = 4.0
+
+    /// Streaks burst out of the key and fall like fireworks.
+    var fireworks = false
+    var fireworkCount = 16.0
+
+    /// Thin rays shoot out of the key in every direction.
+    var starburst = false
+    var rayCount = 12.0
+
+    /// Drops of rain fall past the key.
+    var rain = false
+    var rainCount = 9.0
+
+    /// Glowing embers rise and flicker out.
+    var embers = false
+    var emberCount = 9.0
+
+    /// Soft puffs of smoke rise from the key and grow.
+    var smoke = false
+    var smokeCount = 4.0
+
+    /// A bolt of lightning strikes up from the key.
+    var lightning = false
+    var lightningLength = 2.0
+
+    /// Little lights circle around the key.
+    var orbit = false
+    var orbitCount = 4.0
+
+    /// Specks spiral outwards from the key.
+    var spiral = false
+    var spiralCount = 12.0
+
+    /// The key pulses twice like a heartbeat.
+    var heartbeat = false
+    var heartbeatStrength = 1.15
+
+    /// The key flips over like a card.
+    var flip = false
+    var flipDuration = 0.45
+
+    /// The key shakes from side to side.
+    var shake = false
+    var shakeDistance = 6.0
+
+    /// The key sinks and bounces back.
+    var drop = false
+    var dropDepth = 8.0
+
+    /// The key glitches with flickering colours.
+    var glitch = false
+    var glitchStrength = 0.6
+
+    /// A line grows along the bottom of the key and fades.
+    var underline = false
+    var underlineDuration = 0.4
+
+    /// A light runs round the key's outline.
+    var sweep = false
+    var sweepDuration = 0.5
+
+    /// A beam of light rises from the key.
+    var beam = false
+    var beamHeight = 2.5
+
     /// The swipe trail glows in the effect colour.
     var trail = false
     var trailGlow = 0.8
@@ -181,15 +289,78 @@ struct EffectsConfig: Hashable, Codable {
         waveReach = value(c, .waveReach, waveReach)
         waveStrength = value(c, .waveStrength, waveStrength)
         waveSpeed = value(c, .waveSpeed, waveSpeed)
+        shockwave = value(c, .shockwave, shockwave)
+        shockReach = value(c, .shockReach, shockReach)
+        shockDuration = value(c, .shockDuration, shockDuration)
+        confetti = value(c, .confetti, confetti)
+        confettiCount = value(c, .confettiCount, confettiCount)
+        confettiDuration = value(c, .confettiDuration, confettiDuration)
+        bubbles = value(c, .bubbles, bubbles)
+        bubbleCount = value(c, .bubbleCount, bubbleCount)
+        bubbleRise = value(c, .bubbleRise, bubbleRise)
+        squish = value(c, .squish, squish)
+        squishDepth = value(c, .squishDepth, squishDepth)
+        flash = value(c, .flash, flash)
+        flashStrength = value(c, .flashStrength, flashStrength)
+        flashDuration = value(c, .flashDuration, flashDuration)
+        jelly = value(c, .jelly, jelly)
+        jellyAngle = value(c, .jellyAngle, jellyAngle)
+        hearts = value(c, .hearts, hearts)
+        heartCount = value(c, .heartCount, heartCount)
+        stars = value(c, .stars, stars)
+        starCount = value(c, .starCount, starCount)
+        snow = value(c, .snow, snow)
+        snowCount = value(c, .snowCount, snowCount)
+        notes = value(c, .notes, notes)
+        noteCount = value(c, .noteCount, noteCount)
+        fireworks = value(c, .fireworks, fireworks)
+        fireworkCount = value(c, .fireworkCount, fireworkCount)
+        starburst = value(c, .starburst, starburst)
+        rayCount = value(c, .rayCount, rayCount)
+        rain = value(c, .rain, rain)
+        rainCount = value(c, .rainCount, rainCount)
+        embers = value(c, .embers, embers)
+        emberCount = value(c, .emberCount, emberCount)
+        smoke = value(c, .smoke, smoke)
+        smokeCount = value(c, .smokeCount, smokeCount)
+        lightning = value(c, .lightning, lightning)
+        lightningLength = value(c, .lightningLength, lightningLength)
+        orbit = value(c, .orbit, orbit)
+        orbitCount = value(c, .orbitCount, orbitCount)
+        spiral = value(c, .spiral, spiral)
+        spiralCount = value(c, .spiralCount, spiralCount)
+        heartbeat = value(c, .heartbeat, heartbeat)
+        heartbeatStrength = value(c, .heartbeatStrength, heartbeatStrength)
+        flip = value(c, .flip, flip)
+        flipDuration = value(c, .flipDuration, flipDuration)
+        shake = value(c, .shake, shake)
+        shakeDistance = value(c, .shakeDistance, shakeDistance)
+        drop = value(c, .drop, drop)
+        dropDepth = value(c, .dropDepth, dropDepth)
+        glitch = value(c, .glitch, glitch)
+        glitchStrength = value(c, .glitchStrength, glitchStrength)
+        underline = value(c, .underline, underline)
+        underlineDuration = value(c, .underlineDuration, underlineDuration)
+        sweep = value(c, .sweep, sweep)
+        sweepDuration = value(c, .sweepDuration, sweepDuration)
+        beam = value(c, .beam, beam)
+        beamHeight = value(c, .beamHeight, beamHeight)
         trail = value(c, .trail, trail)
         trailGlow = value(c, .trailGlow, trailGlow)
     }
 
     /// Whether any effect is on.
-    var isOn: Bool { return glow || border || ripple || shine || sparks || pop || echo || wave || trail }
+    var isOn: Bool { return playsOnPress || trail }
 
     /// Whether any effect plays when a key goes down (the trail is for swipes).
-    var playsOnPress: Bool { return glow || border || ripple || shine || sparks || pop || echo || wave }
+    var playsOnPress: Bool {
+        return glow || border || ripple || shine || sparks || pop
+            || echo || wave || shockwave || confetti || bubbles || squish
+            || flash || jelly || hearts || stars || snow || notes
+            || fireworks || starburst || rain || embers || smoke || lightning
+            || orbit || spiral || heartbeat || flip || shake || drop
+            || glitch || underline || sweep || beam
+    }
 
     static let glowStrengthRange: ClosedRange<Double> = 0.1...1
     static let glowSpreadRange: ClosedRange<Double> = 0.5...2.5
@@ -212,6 +383,36 @@ struct EffectsConfig: Hashable, Codable {
     static let waveReachRange: ClosedRange<Double> = 1...3.5
     static let waveStrengthRange: ClosedRange<Double> = 0.1...1
     static let waveSpeedRange: ClosedRange<Double> = 0.02...0.2
+    static let shockReachRange: ClosedRange<Double> = 1...4
+    static let shockDurationRange: ClosedRange<Double> = 0.2...1.5
+    static let confettiCountRange: ClosedRange<Double> = 6...30
+    static let confettiDurationRange: ClosedRange<Double> = 0.5...1.6
+    static let bubbleCountRange: ClosedRange<Double> = 2...10
+    static let bubbleRiseRange: ClosedRange<Double> = 20...140
+    static let squishDepthRange: ClosedRange<Double> = 0.7...0.95
+    static let flashStrengthRange: ClosedRange<Double> = 0.1...1
+    static let flashDurationRange: ClosedRange<Double> = 0.1...0.8
+    static let jellyAngleRange: ClosedRange<Double> = 3...20
+    static let heartCountRange: ClosedRange<Double> = 3.0...12.0
+    static let starCountRange: ClosedRange<Double> = 3.0...14.0
+    static let snowCountRange: ClosedRange<Double> = 4.0...20.0
+    static let noteCountRange: ClosedRange<Double> = 2.0...8.0
+    static let fireworkCountRange: ClosedRange<Double> = 8.0...30.0
+    static let rayCountRange: ClosedRange<Double> = 6.0...24.0
+    static let rainCountRange: ClosedRange<Double> = 4.0...20.0
+    static let emberCountRange: ClosedRange<Double> = 4.0...20.0
+    static let smokeCountRange: ClosedRange<Double> = 2.0...8.0
+    static let lightningLengthRange: ClosedRange<Double> = 1.0...4.0
+    static let orbitCountRange: ClosedRange<Double> = 2.0...8.0
+    static let spiralCountRange: ClosedRange<Double> = 6.0...24.0
+    static let heartbeatStrengthRange: ClosedRange<Double> = 1.05...1.4
+    static let flipDurationRange: ClosedRange<Double> = 0.2...1.0
+    static let shakeDistanceRange: ClosedRange<Double> = 2.0...14.0
+    static let dropDepthRange: ClosedRange<Double> = 2.0...16.0
+    static let glitchStrengthRange: ClosedRange<Double> = 0.2...1.0
+    static let underlineDurationRange: ClosedRange<Double> = 0.15...1.0
+    static let sweepDurationRange: ClosedRange<Double> = 0.2...1.2
+    static let beamHeightRange: ClosedRange<Double> = 1.0...5.0
     static let trailGlowRange: ClosedRange<Double> = 0.2...1
 
     // MARK: Storage
