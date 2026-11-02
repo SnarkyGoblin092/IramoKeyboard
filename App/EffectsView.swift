@@ -107,6 +107,13 @@ struct EffectsView: View {
     private struct Preset {
         let name: String
         let make: () -> EffectsConfig
+
+        /// `make` gives the preset's mix; every preset is played toned down (EffectsConfig.toned), so typing with
+        /// several effects at once stays pleasant rather than busy.
+        init(name: String, make: @escaping () -> EffectsConfig) {
+            self.name = name
+            self.make = { make().toned() }
+        }
     }
 
     private let presets: [Preset] = [
@@ -326,7 +333,7 @@ struct EffectsView: View {
         } content: {
         GlassList {
             Section {
-                GlassChoiceLink(title: tr("Style"), symbol: "wand.and.stars",
+                GlassChoiceLink(title: tr("Preset"), symbol: "wand.and.stars",
                                 options: presets.indices.map { (value: $0, name: presets[$0].name) },
                                 selected: presetIndex, otherName: tr("Your own mix")) { index in
                     guard presets.indices.contains(index) else { return }
@@ -694,6 +701,68 @@ struct EffectsView: View {
 }
 
 private extension EffectsConfig {
+    /// The same mix, gentler: fewer specks, softer light, smaller moves. Only the effects that are on change, so a
+    /// preset with nothing on stays the plain defaults.
+    func toned() -> EffectsConfig {
+        var c = self
+        /// `value` times `factor`, kept in `range`: whole numbers for counts, else to two places.
+        func less(_ value: Double, _ factor: Double, _ range: ClosedRange<Double>, whole: Bool = false) -> Double {
+            let scaled = whole ? (value * factor).rounded() : (value * factor * 100).rounded() / 100
+            return min(max(scaled, range.lowerBound), range.upperBound)
+        }
+        /// A size or swell that rests at 1 (1.4 = 40% larger), brought `factor` of the way from 1.
+        func nearer(_ value: Double, _ factor: Double, _ range: ClosedRange<Double>) -> Double {
+            return less(1 + (value - 1) * factor, 1, range)
+        }
+        let counts = 0.6
+        if c.glow {
+            c.glowStrength = less(c.glowStrength, 0.7, EffectsConfig.glowStrengthRange)
+            c.glowSpread = nearer(c.glowSpread, 0.5, EffectsConfig.glowSpreadRange)
+        }
+        if c.ripple { c.rippleReach = less(c.rippleReach, 0.85, EffectsConfig.rippleReachRange) }
+        if c.sparks {
+            c.sparkCount = less(c.sparkCount, counts, EffectsConfig.sparkCountRange, whole: true)
+            c.sparkDistance = less(c.sparkDistance, 0.8, EffectsConfig.sparkDistanceRange)
+        }
+        if c.pop { c.popScale = nearer(c.popScale, 0.6, EffectsConfig.popScaleRange) }
+        if c.echo { c.echoRise = less(c.echoRise, 0.75, EffectsConfig.echoRiseRange, whole: true) }
+        if c.wave {
+            c.waveStrength = less(c.waveStrength, 0.7, EffectsConfig.waveStrengthRange)
+            c.waveReach = less(c.waveReach, 0.8, EffectsConfig.waveReachRange)
+        }
+        if c.shockwave { c.shockReach = less(c.shockReach, 0.75, EffectsConfig.shockReachRange) }
+        if c.confetti { c.confettiCount = less(c.confettiCount, counts, EffectsConfig.confettiCountRange, whole: true) }
+        if c.bubbles {
+            c.bubbleCount = less(c.bubbleCount, counts, EffectsConfig.bubbleCountRange, whole: true)
+            c.bubbleRise = less(c.bubbleRise, 0.75, EffectsConfig.bubbleRiseRange, whole: true)
+        }
+        if c.squish { c.squishDepth = nearer(c.squishDepth, 0.6, EffectsConfig.squishDepthRange) }
+        if c.flash { c.flashStrength = less(c.flashStrength, 0.65, EffectsConfig.flashStrengthRange) }
+        if c.jelly { c.jellyAngle = less(c.jellyAngle, 0.6, EffectsConfig.jellyAngleRange, whole: true) }
+        if c.hearts { c.heartCount = less(c.heartCount, counts, EffectsConfig.heartCountRange, whole: true) }
+        if c.stars { c.starCount = less(c.starCount, counts, EffectsConfig.starCountRange, whole: true) }
+        if c.snow { c.snowCount = less(c.snowCount, counts, EffectsConfig.snowCountRange, whole: true) }
+        if c.notes { c.noteCount = less(c.noteCount, counts, EffectsConfig.noteCountRange, whole: true) }
+        if c.fireworks { c.fireworkCount = less(c.fireworkCount, counts, EffectsConfig.fireworkCountRange, whole: true) }
+        if c.starburst { c.rayCount = less(c.rayCount, counts, EffectsConfig.rayCountRange, whole: true) }
+        if c.rain { c.rainCount = less(c.rainCount, counts, EffectsConfig.rainCountRange, whole: true) }
+        if c.embers { c.emberCount = less(c.emberCount, counts, EffectsConfig.emberCountRange, whole: true) }
+        if c.smoke { c.smokeCount = less(c.smokeCount, counts, EffectsConfig.smokeCountRange, whole: true) }
+        if c.lightning { c.lightningLength = less(c.lightningLength, 0.75, EffectsConfig.lightningLengthRange) }
+        if c.orbit { c.orbitCount = less(c.orbitCount, counts, EffectsConfig.orbitCountRange, whole: true) }
+        if c.spiral { c.spiralCount = less(c.spiralCount, counts, EffectsConfig.spiralCountRange, whole: true) }
+        if c.heartbeat { c.heartbeatStrength = nearer(c.heartbeatStrength, 0.6, EffectsConfig.heartbeatStrengthRange) }
+        if c.shake { c.shakeDistance = less(c.shakeDistance, 0.6, EffectsConfig.shakeDistanceRange, whole: true) }
+        if c.drop { c.dropDepth = less(c.dropDepth, 0.6, EffectsConfig.dropDepthRange, whole: true) }
+        if c.glitch { c.glitchStrength = less(c.glitchStrength, 0.7, EffectsConfig.glitchStrengthRange) }
+        if c.beam { c.beamHeight = less(c.beamHeight, 0.7, EffectsConfig.beamHeightRange) }
+        for item in EffectCatalog.all where c.isOn(item.id) {
+            guard let count = item.params.first(where: { $0.id == "count" }) else { continue }
+            c.set(item, "count", less(c.setting(item, "count"), counts, count.range, whole: true))
+        }
+        return c
+    }
+
     /// A fresh set of effects in one fixed colour.
     static func tinted(_ hex: UInt32) -> EffectsConfig {
         var c = EffectsConfig()
@@ -715,15 +784,14 @@ private extension ThemeRGBA {
 // MARK: - Playground
 
 /// How a key is moved while an effect plays (squish, jelly, the pop of its label); ThemePreview applies it to the
-/// key it draws. Angles in degrees.
+/// key it draws. `transform` is about the key's middle, in the preview's points.
 struct EffectPose: Equatable {
-    var scale: CGFloat = 1
-    var angle: Double = 0
-    /// A turn about the horizontal axis (the flip).
-    var flip: Double = 0
-    var offsetX: CGFloat = 0
-    var offsetY: CGFloat = 0
+    var transform = CATransform3DIdentity
     var labelScale: CGFloat = 1
+
+    static func == (a: EffectPose, b: EffectPose) -> Bool {
+        return CATransform3DEqualToTransform(a.transform, b.transform) && a.labelScale == b.labelScale
+    }
 }
 
 /// One key's pose. Each key watches only its own, so a moving key never redraws the rest of the keyboard.
@@ -731,65 +799,15 @@ final class KeyPoseModel: ObservableObject {
     @Published var pose = EffectPose()
 }
 
-/// The poses of the preview's keys, moved exactly as the keyboard moves its keys. On the keyboard every move is an
-/// additive Core Animation animation (KeyEffectPlayer.move), so moves of quick presses add up and each plays to its
-/// end. Here every move still playing is worked out frame by frame (KeyMove.value) and added up the same way, and
-/// the keys are set to the sum without SwiftUI animations (which would chase each new target instead of adding).
-final class EffectMotions: NSObject {
-    private struct Running {
-        let id: String
-        let move: KeyMove
-        let start: CFTimeInterval
-        /// The preview's size against the keyboard's, for the moves in points.
-        let scale: CGFloat
-    }
-
+/// The poses of the preview's keys (set by EffectsStageView from the keyboard's own animations, frame by frame).
+final class EffectMotions {
     private var models: [String: KeyPoseModel] = [:]
-    private var running: [Running] = []
-    private var link: CADisplayLink?
 
     func model(_ id: String) -> KeyPoseModel {
         if let model = models[id] { return model }
         let model = KeyPoseModel()
         models[id] = model
         return model
-    }
-
-    /// Plays `move` on the key `id`, its points shrunk by `scale` (the preview's size against the keyboard's).
-    func play(_ move: KeyMove, on id: String, scale: CGFloat) {
-        running.append(Running(id: id, move: move, start: CACurrentMediaTime(), scale: scale))
-        if link == nil {
-            let link = CADisplayLink(target: self, selector: #selector(step))
-            link.add(to: .main, forMode: .common)
-            self.link = link
-        }
-    }
-
-    @objc private func step() {
-        let now = CACurrentMediaTime()
-        // Every key that moved this frame, from rest plus each of its moves.
-        var poses: [String: EffectPose] = [:]
-        for item in running { poses[item.id] = EffectPose() }
-        for item in running {
-            let value = item.move.value(after: now - item.start)
-            var pose = poses[item.id] ?? EffectPose()
-            switch item.move.part {
-            case .scale: pose.scale += value
-            case .label: pose.labelScale += value
-            case .turn: pose.angle += Double(value) * 180 / .pi
-            case .x: pose.offsetX += value * item.scale
-            case .y: pose.offsetY += value * item.scale
-            case .flip: pose.flip += Double(value) * 180 / .pi
-            }
-            poses[item.id] = pose
-        }
-        for (id, pose) in poses where model(id).pose != pose { model(id).pose = pose }
-        // Finished moves have been set back to rest above; drop them.
-        running.removeAll { now - $0.start >= $0.move.duration }
-        if running.isEmpty {
-            link?.invalidate()
-            link = nil
-        }
     }
 }
 
@@ -813,10 +831,24 @@ struct PosedKey<Content: View>: View {
     var body: some View {
         let pose = model.pose
         content(pose.labelScale)
-            .scaleEffect(pose.scale)
-            .rotationEffect(.degrees(pose.angle))
-            .rotation3DEffect(.degrees(pose.flip), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
-            .offset(x: pose.offsetX, y: pose.offsetY)
+            .modifier(KeyTransformEffect(transform: pose.transform))
+    }
+}
+
+/// A Core Animation transform applied about the view's middle, as a layer applies it about its anchor point.
+private struct KeyTransformEffect: GeometryEffect {
+    var transform: CATransform3D
+
+    var animatableData: EmptyAnimatableData {
+        get { return EmptyAnimatableData() }
+        set {}
+    }
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        guard !CATransform3DIsIdentity(transform) else { return ProjectionTransform() }
+        let toMiddle = CATransform3DMakeTranslation(-size.width / 2, -size.height / 2, 0)
+        let back = CATransform3DMakeTranslation(size.width / 2, size.height / 2, 0)
+        return ProjectionTransform(CATransform3DConcat(CATransform3DConcat(toMiddle, transform), back))
     }
 }
 
@@ -824,7 +856,35 @@ struct PosedKey<Content: View>: View {
 struct EffectKeyFrame: Equatable {
     var rect: CGRect
     var radius: CGFloat
-    var label: String
+    var glyph: EffectKeyGlyph
+}
+
+/// What a key of the preview shows, as the keyboard draws it (for the echo): its text in the key font at the
+/// keyboard's size, or a symbol, or the emoji key's smiley, in the label's colour.
+struct EffectKeyGlyph: Equatable {
+    var text = ""
+    var symbol: String? = nil
+    var tabIcon: String? = nil
+    var fontID = SettingDefault.keyFont
+    var fontSize: CGFloat = 16
+    var light = false
+    var color: UIColor = .label
+
+    /// The key font in UIKit, as the keyboard's Theme.keyFont makes it (named fonts have one weight).
+    var uiFont: UIFont {
+        let font = KeyFont.named(fontID)
+        if let name = font.postScriptName, let named = UIFont(name: name, size: fontSize) { return named }
+        let system = UIFont.systemFont(ofSize: fontSize, weight: light ? .light : .regular)
+        let design: UIFontDescriptor.SystemDesign?
+        switch font {
+        case .rounded: design = .rounded
+        case .serif: design = .serif
+        case .mono: design = .monospaced
+        default: design = nil
+        }
+        guard let design = design, let descriptor = system.fontDescriptor.withDesign(design) else { return system }
+        return UIFont(descriptor: descriptor, size: fontSize)
+    }
 }
 
 struct EffectKeyFrames: PreferenceKey {
@@ -845,14 +905,14 @@ let effectsKeyboardSpace = "effectsKeyboard"
 /// Put on a key's background: reports where the key is.
 struct EffectKeyReporter: View {
     let id: String
-    let label: String
+    let glyph: EffectKeyGlyph
     let radius: CGFloat
 
     var body: some View {
         GeometryReader { proxy in
             Color.clear.preference(key: EffectKeyFrames.self,
                                    value: [id: EffectKeyFrame(rect: proxy.frame(in: .named(effectsKeyboardSpace)),
-                                                              radius: radius, label: label)])
+                                                              radius: radius, glyph: glyph)])
         }
     }
 }
@@ -920,7 +980,9 @@ private final class EffectsStageView: UIView {
         let proxy = CALayer()
         /// Holds the key's glow, under the mask.
         let glowHolder = CALayer()
-        var frame = EffectKeyFrame(rect: .zero, radius: 0, label: "")
+        /// Takes the label's moves (the pop), read back for the preview's label.
+        let labelProbe = CALayer()
+        var frame = EffectKeyFrame(rect: .zero, radius: 0, glyph: EffectKeyGlyph())
     }
 
     var motions: EffectMotions?
@@ -937,6 +999,9 @@ private final class EffectsStageView: UIView {
     private var scale: CGFloat = 1
     private var accent: UIColor = .systemBlue
     private var letterSize: CGFloat = 1
+    /// The keys whose moves are playing, and the frame clock that copies them onto the preview's keys.
+    private var moving: Set<String> = []
+    private var link: CADisplayLink?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -994,6 +1059,7 @@ private final class EffectsStageView: UIView {
         for (id, key) in keys where frames[id] == nil {
             key.proxy.removeFromSuperlayer()
             key.glowHolder.removeFromSuperlayer()
+            key.labelProbe.removeFromSuperlayer()
             keys[id] = nil
         }
         glowMask.path = outside.cgPath
@@ -1004,30 +1070,80 @@ private final class EffectsStageView: UIView {
         let key = StageKey()
         keysLayer.addSublayer(key.proxy)
         glows.addSublayer(key.glowHolder)
+        keysLayer.addSublayer(key.labelProbe)
         let player = key.player
         player.keyLayer = key.proxy
+        let probe = key.labelProbe
+        player.labelLayers = { [probe] }
         player.overlay = fxLayer
         let holder = key.glowHolder
         player.installGlow = { glow in holder.addSublayer(glow) }
         player.echoImage = { [weak self, weak key] in
             guard let self = self, let key = key else { return nil }
-            return self.labelImage(key.frame.label, size: key.player.bounds.size)
+            return self.labelImage(key.frame.glyph, size: key.player.bounds.size)
         }
-        player.onMove = { [weak self] move in
-            guard let self = self else { return }
-            self.motions?.play(move, on: id, scale: self.scale)
-        }
+        player.onMove = { [weak self] _ in self?.startMoving(id) }
         player.onWave = { [weak self] color in self?.wave(from: id, color: color) }
         keys[id] = key
         return key
     }
 
-    /// A key's label as the keyboard draws it (KeyView), for the echo.
-    private func labelImage(_ text: String, size: CGSize) -> CGImage? {
+    /// The key's moves (squish, jelly, flip, the pop) play as Core Animation animations on its stand-in layers, exactly
+    /// as on the keyboard's key, overlapping presses combined by Core Animation itself. Every frame while they play,
+    /// what they make of the stand-ins is copied onto the preview's drawing of the key.
+    private func startMoving(_ id: String) {
+        moving.insert(id)
+        guard link == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(copyMoves))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    @objc private func copyMoves() {
+        guard let motions = motions else { return }
+        // From the keyboard's points to the preview's: shrink, move, grow back.
+        let toReal = CATransform3DMakeScale(1 / scale, 1 / scale, 1)
+        let toPreview = CATransform3DMakeScale(scale, scale, 1)
+        for id in moving {
+            guard let key = keys[id] else { moving.remove(id); continue }
+            let playing = !(key.proxy.animationKeys() ?? []).isEmpty || !(key.labelProbe.animationKeys() ?? []).isEmpty
+            var pose = EffectPose()
+            if playing {
+                let real = key.proxy.presentation()?.transform ?? CATransform3DIdentity
+                pose.transform = CATransform3DConcat(CATransform3DConcat(toReal, real), toPreview)
+                let label = key.labelProbe.presentation()?.transform ?? CATransform3DIdentity
+                pose.labelScale = hypot(label.m11, label.m12)
+            } else {
+                moving.remove(id)
+            }
+            let model = motions.model(id)
+            if model.pose != pose { model.pose = pose }
+        }
+        if moving.isEmpty {
+            link?.invalidate()
+            link = nil
+        }
+    }
+
+    /// A key's label as the keyboard draws it (KeyView.configureContent and layoutSubviews), for the echo: the text
+    /// in the key font across the key less 2pt each side, or the symbol (or the emoji key's smiley) in its 26pt box.
+    private func labelImage(_ glyph: EffectKeyGlyph, size: CGSize) -> CGImage? {
+        let color = glyph.color.resolvedColor(with: traitCollection)
+        if let icon = glyph.tabIcon.flatMap({ EmojiTabIcons.icon(forKey: $0, side: 36, weight: 1.8) })
+            ?? glyph.symbol.flatMap({ UIImage(systemName: $0, withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)) }) {
+            let box = CGSize(width: 26, height: 26)
+            let tinted = icon.withTintColor(color, renderingMode: .alwaysTemplate)
+            return UIGraphicsImageRenderer(size: box).image { _ in
+                // A symbol is fitted to the box; the smiley is drawn at its own size, centred (and cut to the box).
+                let fit = glyph.tabIcon != nil ? 1 : min(box.width / tinted.size.width, box.height / tinted.size.height)
+                let drawn = CGSize(width: tinted.size.width * fit, height: tinted.size.height * fit)
+                tinted.draw(in: CGRect(x: (box.width - drawn.width) / 2, y: (box.height - drawn.height) / 2,
+                                       width: drawn.width, height: drawn.height))
+            }.cgImage
+        }
+        let text = glyph.text
         guard !text.isEmpty, size.width > 4, size.height > 0 else { return nil }
-        let font = text.count == 1 ? UIFont.systemFont(ofSize: 23 * letterSize, weight: .light) : UIFont.systemFont(ofSize: 16)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font,
-                                                         .foregroundColor: UIColor.label.resolvedColor(with: traitCollection)]
+        let attributes: [NSAttributedString.Key: Any] = [.font: glyph.uiFont, .foregroundColor: color]
         let box = CGSize(width: size.width - 4, height: size.height)
         return UIGraphicsImageRenderer(size: box).image { _ in
             let measured = (text as NSString).size(withAttributes: attributes)

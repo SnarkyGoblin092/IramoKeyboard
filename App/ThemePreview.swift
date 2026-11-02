@@ -337,7 +337,7 @@ struct ThemePreview: View {
                     if k.spacer {
                         Color.clear
                     } else {
-                        tracked(id: "\(rowIndex).\(i)", label: k.space ? "" : k.title,
+                        tracked(id: "\(rowIndex).\(i)", glyph: glyph(k),
                                 radius: look.radius(width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight)) { labelScale in
                             key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s, labelScale: labelScale)
                         }
@@ -350,11 +350,11 @@ struct ThemePreview: View {
     }
 
     /// A key, in its pose on the Effects screen (`view` draws it with its label at the given scale).
-    @ViewBuilder private func tracked<V: View>(id: String, label: String, radius: CGFloat,
+    @ViewBuilder private func tracked<V: View>(id: String, glyph: @autoclosure () -> EffectKeyGlyph, radius: CGFloat,
                                                @ViewBuilder _ view: @escaping (CGFloat) -> V) -> some View {
         if reportsKeys, let motions = motions {
             PosedKey(model: motions.model(id), content: view)
-                .background(EffectKeyReporter(id: id, label: label, radius: radius))
+                .background(EffectKeyReporter(id: id, glyph: glyph(), radius: radius))
         } else {
             view(1)
         }
@@ -469,6 +469,13 @@ struct ThemePreview: View {
             }
         }
         .frame(width: width, height: height)
+    }
+
+    /// What the key shows, at the keyboard's own size (KeyView.configureContent), for the Effects screen's echo.
+    private func glyph(_ k: PreviewKey) -> EffectKeyGlyph {
+        let size: CGFloat = k.space ? CGFloat(spaceTextSize) : (k.title.count == 1 ? 23 * CGFloat(letterSize) : 16)
+        return EffectKeyGlyph(text: k.title, symbol: k.symbol, tabIcon: k.tabIcon, fontID: keyFontID, fontSize: size,
+                              light: !k.space && k.title.count == 1, color: UIColor(k.accent ? onAccent : textColor))
     }
 
     /// The key's label: the emoji key's smiley, a symbol or its text.
