@@ -18,6 +18,16 @@ struct EffectsView: View {
         })
     }
 
+    private var positionNames: [(mode: String, name: String)] {
+        return [("auto", tr("Middle")), ("top", tr("Top")), ("bottom", tr("Bottom")), ("left", tr("Left")),
+                ("right", tr("Right")), ("random", tr("Random"))]
+    }
+
+    private var directionNames: [(mode: String, name: String)] {
+        return [("auto", tr("Auto")), ("up", tr("Up")), ("down", tr("Down")), ("left", tr("Left")),
+                ("right", tr("Right")), ("random", tr("Random"))]
+    }
+
     private var seconds: (Double) -> String { return { String(format: "%.2f s", $0) } }
     private var times: (Double) -> String { return { String(format: "%.1f\u{00D7}", $0) } }
 
@@ -53,6 +63,7 @@ struct EffectsView: View {
         },
         Preset(name: tr("Sparkle")) {
             var c = EffectsConfig()
+            c.position = "random"
             c.colorMode = "white"
             c.sparks = true; c.sparkCount = 10
             c.shine = true
@@ -66,6 +77,7 @@ struct EffectsView: View {
         },
         Preset(name: tr("Confetti")) {
             var c = EffectsConfig()
+            c.direction = "random"
             c.colorMode = "rainbow"
             c.confetti = true; c.confettiCount = 18
             c.squish = true
@@ -73,6 +85,7 @@ struct EffectsView: View {
         },
         Preset(name: tr("Bubbles")) {
             var c = EffectsConfig()
+            c.direction = "up"
             c.bubbles = true; c.bubbleCount = 6
             c.flash = true; c.flashStrength = 0.35
             return c
@@ -86,6 +99,8 @@ struct EffectsView: View {
         },
         Preset(name: tr("Love")) {
             var c = EffectsConfig()
+            c.position = "bottom"
+            c.direction = "up"
             c.hearts = true; c.heartCount = 8
             c.heartbeat = true
             c.glow = true; c.glowStrength = 0.5
@@ -93,6 +108,8 @@ struct EffectsView: View {
         },
         Preset(name: tr("Winter")) {
             var c = EffectsConfig()
+            c.position = "top"
+            c.direction = "down"
             c.colorMode = "white"
             c.snow = true; c.snowCount = 14
             c.sweep = true
@@ -100,6 +117,8 @@ struct EffectsView: View {
         },
         Preset(name: tr("Storm")) {
             var c = EffectsConfig()
+            c.position = "top"
+            c.direction = "down"
             c.rain = true; c.rainCount = 12
             c.lightning = true
             c.shake = true
@@ -107,6 +126,8 @@ struct EffectsView: View {
         },
         Preset(name: tr("Party")) {
             var c = EffectsConfig()
+            c.position = "random"
+            c.direction = "random"
             c.colorMode = "rainbow"
             c.fireworks = true
             c.stars = true
@@ -132,6 +153,7 @@ struct EffectsView: View {
         },
         Preset(name: tr("Garden")) {
             var c = EffectsConfig()
+            c.direction = "down"
             c.colorMode = "rainbow"
             c.setOn("petals", true)
             c.setOn("butterflies", true)
@@ -162,6 +184,56 @@ struct EffectsView: View {
             c.echo = true
             return c
         },
+        Preset(name: tr("Sunset")) { var c = EffectsConfig.tinted(0xFF7A45); c.glow = true; c.glowSpread = 1.6; c.setOn("flames", true); c.setOn("halo", true); return c },
+        Preset(name: tr("Ocean")) { var c = EffectsConfig.tinted(0x2AA8FF); c.bubbles = true; c.bubbleCount = 7; c.ripple = true; c.rippleStyle = "ring"; c.setOn("splash", true); return c },
+        Preset(name: tr("Forest")) { var c = EffectsConfig.tinted(0x4CD964); c.position = "bottom"; c.direction = "up"; c.setOn("leaves", true); c.setOn("fireflies", true); c.glow = true; c.glowStrength = 0.4; return c },
+        Preset(name: tr("Candy")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.pop = true; c.popScale = 1.4; c.setOn("balloons", true); c.setOn("glitter", true); return c },
+        Preset(name: tr("Lava")) { var c = EffectsConfig.tinted(0xFF4A1C); c.position = "bottom"; c.direction = "up"; c.glow = true; c.glowStrength = 0.9; c.glowSpread = 2; c.embers = true; c.smoke = true; c.shake = true; return c },
+        Preset(name: tr("Frost")) { var c = EffectsConfig.tinted(0xBDE9FF); c.snow = true; c.snowCount = 10; c.shine = true; c.border = true; return c },
+        Preset(name: tr("Thunder")) { var c = EffectsConfig.tinted(0xFFE15A); c.lightning = true; c.flash = true; c.setOn("zap", true); c.shake = true; return c },
+        Preset(name: tr("Nightclub")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.beam = true; c.setOn("disco", true); c.setOn("lasers", true); c.glow = true; return c },
+        Preset(name: tr("Retro")) { var c = EffectsConfig.tinted(0xFF5FA2); c.setOn("pixels", true); c.setOn("coins", true); c.glitch = true; c.underline = true; return c },
+        Preset(name: tr("Hacker")) { var c = EffectsConfig.tinted(0x2BFF6A); c.setOn("matrix", true); c.setOn("circuit", true); c.glitch = true; c.sweep = true; return c },
+        Preset(name: tr("Gold")) { var c = EffectsConfig.tinted(0xFFC83D); c.glow = true; c.shine = true; c.setOn("coins", true); c.setOn("gems", true); return c },
+        Preset(name: tr("Chrome")) { var c = EffectsConfig(); c.colorMode = "white"; c.shine = true; c.border = true; c.sweep = true; c.sweepDuration = 0.4; return c },
+        Preset(name: tr("Cherry")) { var c = EffectsConfig.tinted(0xFF3B5C); c.setOn("sakura", true); c.setOn("petals", true); c.heartbeat = true; return c },
+        Preset(name: tr("Mint")) { var c = EffectsConfig.tinted(0x5CF2C2); c.ripple = true; c.bubbles = true; c.bubbleCount = 4; c.shine = true; return c },
+        Preset(name: tr("Lavender")) { var c = EffectsConfig.tinted(0xB79CFF); c.glow = true; c.glowSpread = 1.5; c.setOn("butterflies", true); c.setOn("dandelion", true); return c },
+        Preset(name: tr("Twilight")) { var c = EffectsConfig.tinted(0x7F6BFF); c.glow = true; c.stars = true; c.starCount = 6; c.setOn("twinkle", true); c.setOn("aurora", true); return c },
+        Preset(name: tr("Dawn")) { var c = EffectsConfig.tinted(0xFFB38A); c.direction = "up"; c.beam = true; c.glow = true; c.glowStrength = 0.5; c.setOn("halo", true); return c },
+        Preset(name: tr("Midnight")) { var c = EffectsConfig.tinted(0x4C6FFF); c.glow = true; c.glowStrength = 0.35; c.setOn("twinkle", true); c.setOn("comet", true); return c },
+        Preset(name: tr("Dream")) { var c = EffectsConfig.tinted(0xE6B8FF); c.direction = "up"; c.smoke = true; c.setOn("nebula", true); c.setOn("sparkler", true); c.jelly = true; return c },
+        Preset(name: tr("Pulse")) { var c = EffectsConfig(); c.heartbeat = true; c.shockwave = true; c.glow = true; c.glowFadeOut = 0.5; return c },
+        Preset(name: tr("Launch")) { var c = EffectsConfig.tinted(0xFF8A3D); c.position = "bottom"; c.direction = "up"; c.setOn("rockets", true); c.embers = true; c.drop = true; c.shake = true; return c },
+        Preset(name: tr("Pinball")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("bounce", true); c.shockwave = true; c.squish = true; c.flash = true; return c },
+        Preset(name: tr("Carnival")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("streamers", true); c.setOn("balloons", true); c.confetti = true; c.confettiCount = 12; return c },
+        Preset(name: tr("Birthday")) { var c = EffectsConfig(); c.direction = "up"; c.colorMode = "rainbow"; c.setOn("balloons", true); c.confetti = true; c.fireworks = true; c.pop = true; return c },
+        Preset(name: tr("Wedding")) { var c = EffectsConfig.tinted(0xFFFFFF); c.hearts = true; c.heartCount = 6; c.setOn("petals", true); c.setOn("halo", true); return c },
+        Preset(name: tr("Halloween")) { var c = EffectsConfig.tinted(0xFF8A1F); c.setOn("ghosts", true); c.smoke = true; c.lightning = true; c.shake = true; return c },
+        Preset(name: tr("Christmas")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.snow = true; c.stars = true; c.setOn("sparkler", true); c.glow = true; return c },
+        Preset(name: tr("Spring")) { var c = EffectsConfig(); c.direction = "right"; c.colorMode = "rainbow"; c.setOn("petals", true); c.setOn("butterflies", true); c.setOn("dandelion", true); return c },
+        Preset(name: tr("Summer")) { var c = EffectsConfig.tinted(0xFFD23D); c.beam = true; c.shine = true; c.setOn("splash", true); c.setOn("smileys", true); return c },
+        Preset(name: tr("Autumn")) { var c = EffectsConfig.tinted(0xE5822B); c.position = "top"; c.direction = "down"; c.setOn("leaves", true); c.embers = true; c.glow = true; c.glowStrength = 0.4; return c },
+        Preset(name: tr("Monsoon")) { var c = EffectsConfig.tinted(0x6FB6FF); c.position = "top"; c.direction = "down"; c.rain = true; c.rainCount = 16; c.ripple = true; c.setOn("splash", true); return c },
+        Preset(name: tr("Blizzard")) { var c = EffectsConfig(); c.position = "top"; c.direction = "down"; c.colorMode = "white"; c.snow = true; c.snowCount = 20; c.starburst = true; c.shake = true; return c },
+        Preset(name: tr("Desert")) { var c = EffectsConfig.tinted(0xF0B565); c.direction = "right"; c.setOn("static", true); c.smoke = true; c.sweep = true; return c },
+        Preset(name: tr("Jungle")) { var c = EffectsConfig.tinted(0x2FD16B); c.setOn("leaves", true); c.setOn("butterflies", true); c.setOn("snake", true); c.jelly = true; return c },
+        Preset(name: tr("Volcano")) { var c = EffectsConfig.tinted(0xFF3B1F); c.position = "bottom"; c.direction = "up"; c.setOn("flames", true); c.embers = true; c.shockwave = true; c.drop = true; return c },
+        Preset(name: tr("Stardust")) { var c = EffectsConfig.tinted(0xFFF1B8); c.setOn("comet", true); c.setOn("meteors", true); c.stars = true; c.setOn("twinkle", true); return c },
+        Preset(name: tr("Future")) { var c = EffectsConfig.tinted(0x38F0FF); c.setOn("hologram", true); c.setOn("sonar", true); c.sweep = true; c.border = true; return c },
+        Preset(name: tr("Samurai")) { var c = EffectsConfig.tinted(0xFF2D55); c.setOn("ninjastars", true); c.setOn("sakura", true); c.underline = true; c.flash = true; return c },
+        Preset(name: tr("Pirate")) { var c = EffectsConfig.tinted(0xFFC83D); c.setOn("coins", true); c.setOn("gems", true); c.setOn("splash", true); c.jelly = true; return c },
+        Preset(name: tr("Royal")) { var c = EffectsConfig.tinted(0xB48AFF); c.setOn("crown", true); c.setOn("gems", true); c.shine = true; c.glow = true; return c },
+        Preset(name: tr("Casino")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.setOn("suits", true); c.setOn("dice", true); c.setOn("coins", true); c.flip = true; return c },
+        Preset(name: tr("Romance")) { var c = EffectsConfig.tinted(0xFF6B9A); c.position = "bottom"; c.direction = "up"; c.hearts = true; c.heartCount = 10; c.glow = true; c.setOn("sakura", true); return c },
+        Preset(name: tr("Calm")) { var c = EffectsConfig.tinted(0x8FD3FF); c.ripple = true; c.rippleDuration = 1.1; c.glow = true; c.glowStrength = 0.3; c.glowFadeOut = 1.2; return c },
+        Preset(name: tr("Energy")) { var c = EffectsConfig.tinted(0xFFE600); c.setOn("zap", true); c.sparks = true; c.sparkCount = 12; c.shockwave = true; c.squish = true; return c },
+        Preset(name: tr("Focus")) { var c = EffectsConfig(); c.colorMode = "white"; c.underline = true; c.border = true; c.borderFade = 0.5; return c },
+        Preset(name: tr("Playful")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.setOn("smileys", true); c.setOn("yoyo", true); c.setOn("juggle", true); c.squish = true; return c },
+        Preset(name: tr("Soft")) { var c = EffectsConfig.tinted(0xFFD6E8); c.glow = true; c.glowStrength = 0.4; c.glowSpread = 1.8; c.glowFadeOut = 1; c.setOn("halo", true); return c },
+        Preset(name: tr("Wild")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("dizzy", true); c.setOn("pinwheel", true); c.shake = true; c.glitch = true; c.flip = true; return c },
+        Preset(name: tr("Minimal")) { var c = EffectsConfig(); c.colorMode = "white"; c.glow = true; c.glowStrength = 0.25; c.glowSpread = 0.8; return c },
+        Preset(name: tr("Showtime")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.setOn("lasers", true); c.setOn("disco", true); c.setOn("rainbowburst", true); c.fireworks = true; c.beam = true; return c },
     ]
 
     private var presetIndex: Int? {
@@ -187,7 +259,8 @@ struct EffectsView: View {
                 } label: {
                     Label(tr("Style"), systemImage: "wand.and.stars")
                 }
-                .pickerStyle(.menu)
+                // A pushed list, not a menu: a menu's popup is drawn by the system over the pinned keyboard.
+                .pickerStyle(.navigationLink)
             } header: {
                 SectionHeader(tr("Presets"), symbol: "wand.and.stars", color: .purple)
             } footer: {
@@ -209,6 +282,35 @@ struct EffectsView: View {
                 SectionHeader(tr("Colour"), symbol: "paintpalette", color: .pink)
             } footer: {
                 Text(tr("Rainbow gives every press a new colour."))
+            }
+            .glassRows()
+
+            Section {
+                Picker(selection: bind(\.direction)) {
+                    ForEach(directionNames, id: \.mode) { Text($0.name).tag($0.mode) }
+                } label: {
+                    Label(tr("Direction"), systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+                }
+                // A pushed list, not a menu: a menu's popup is drawn by the system over the pinned keyboard.
+                .pickerStyle(.navigationLink)
+            } header: {
+                SectionHeader(tr("Direction"), symbol: "location.north.line", color: .mint)
+            } footer: {
+                Text(tr("Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press."))
+            }
+            .glassRows()
+
+            Section {
+                Picker(selection: bind(\.position)) {
+                    ForEach(positionNames, id: \.mode) { Text($0.name).tag($0.mode) }
+                } label: {
+                    Label(tr("Position"), systemImage: "scope")
+                }
+                .pickerStyle(.navigationLink)
+            } header: {
+                SectionHeader(tr("Position"), symbol: "scope", color: .cyan)
+            } footer: {
+                Text(tr("Where on the key the effects start. Random picks a new spot for every press."))
             }
             .glassRows()
 
@@ -514,12 +616,22 @@ struct EffectsView: View {
     private func effect<Settings: View>(_ title: String, _ symbol: String, _ color: Color, on: Binding<Bool>, note: String,
                                         @ViewBuilder settings: () -> Settings) -> some View {
         Section {
-            GlassToggle(title: title, subtitle: note, isOn: on)
+            GlassToggle(title: title, subtitle: note, isOn: on, tapsAnywhere: true)
             if on.wrappedValue { settings() }
         } header: {
             SectionHeader(title, symbol: symbol, color: color)
         }
         .glassRows()
+    }
+}
+
+private extension EffectsConfig {
+    /// A fresh set of effects in one fixed colour.
+    static func tinted(_ hex: UInt32) -> EffectsConfig {
+        var c = EffectsConfig()
+        c.colorMode = "custom"
+        c.customColor = ThemeRGBA(hex: hex)
+        return c
     }
 }
 
@@ -555,13 +667,14 @@ struct Pulse: View {
     let fade: Double
     let delay: Double
     let tint: Color
+    var radius: CGFloat = 9
     @State private var up = false
     @State private var down = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(tint.opacity(up && !down ? strength : 0))
-            .shadow(color: tint.opacity(up && !down ? strength : 0), radius: 9)
+            .shadow(color: tint.opacity(up && !down ? strength : 0), radius: radius)
             .onAppear {
                 withAnimation(.easeOut(duration: 0.12).delay(delay)) { up = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.12) {
@@ -600,6 +713,7 @@ private struct Ballistic: GeometryEffect {
     let dx: CGFloat
     let dy: CGFloat
     let gravity: CGFloat
+    var turn: CGFloat = 0
 
     var animatableData: CGFloat {
         get { return progress }
@@ -608,7 +722,8 @@ private struct Ballistic: GeometryEffect {
 
     func effectValue(size: CGSize) -> ProjectionTransform {
         let t = progress
-        return ProjectionTransform(CGAffineTransform(translationX: dx * t, y: dy * t + gravity * t * t / 2))
+        let offset = EffectDirection.turn(CGPoint(x: dx * t, y: dy * t + gravity * t * t / 2), by: turn)
+        return ProjectionTransform(CGAffineTransform(translationX: offset.x, y: offset.y))
     }
 }
 
@@ -651,6 +766,15 @@ private struct Later<Content: View>: View {
     }
 }
 
+/// A drawn picture of the particle effects (EffectArt) as a SwiftUI shape.
+private struct EffectArtShape: Shape {
+    let art: EffectArt
+
+    func path(in rect: CGRect) -> Path {
+        return Path(art.path(side: rect.width)).offsetBy(dx: rect.minX, dy: rect.minY)
+    }
+}
+
 /// A steady number in 0..<1 for (index, salt), so a redrawn view keeps its pieces where they were.
 private func unit(_ index: Int, _ salt: Double) -> Double {
     let x = sin(Double(index) * 12.9898 + salt * 78.233) * 43758.5453
@@ -669,6 +793,11 @@ struct EffectKeyFrames: PreferenceKey {
     static func reduce(value: inout [String: EffectKeyFrame], nextValue: () -> [String: EffectKeyFrame]) {
         value.merge(nextValue()) { _, new in new }
     }
+}
+
+private struct BoardWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// The name of the playground's coordinate space.
@@ -745,6 +874,14 @@ struct EffectsPlayground<Content: View>: View {
     @State private var plays: [String: [Play]] = [:]
     @State private var waves: [String: PulseRequest] = [:]
     @State private var poses: [String: EffectPose] = [:]
+    /// The preview's width. The effects are drawn at the keyboard's real size and shrunk by `scale`, so the sizes in
+    /// points (specks, lines, glow, labels) come out as they do on the keyboard instead of exaggerated.
+    @State private var boardWidth: CGFloat = 0
+
+    private var scale: CGFloat {
+        let real = CGFloat(DeviceMetrics.portraitWidth)
+        return boardWidth > 0 && real > 0 ? boardWidth / real : 1
+    }
 
     struct Play: Equatable {
         let tick: Int
@@ -760,6 +897,8 @@ struct EffectsPlayground<Content: View>: View {
 
     var body: some View {
         content()
+            .background(GeometryReader { proxy in Color.clear.preference(key: BoardWidthKey.self, value: proxy.size.width) })
+            .onPreferenceChange(BoardWidthKey.self) { if abs($0 - boardWidth) > 0.5 { boardWidth = $0 } }
             .onPreferenceChange(EffectKeyFrames.self) { frames = $0 }
             .overlay(
                 ZStack {
@@ -780,7 +919,7 @@ struct EffectsPlayground<Content: View>: View {
             ForEach(ids, id: \.self) { id in
                 if let frame = frames[id] {
                     ForEach(plays[id] ?? [], id: \.tick) { play in
-                        EffectsKeyFX(config: config, frame: frame, tint: play.tint, tick: play.tick)
+                        EffectsKeyFX(config: config, frame: frame, tint: play.tint, tick: play.tick, scale: scale)
                     }
                 }
             }
@@ -805,9 +944,10 @@ struct EffectsPlayground<Content: View>: View {
         ZStack {
             RoundedRectangle(cornerRadius: frame.radius, style: .continuous)
                 .fill(tint.opacity(lit ? config.glowStrength : 0))
-                .shadow(color: tint.opacity(lit ? config.glowStrength : 0), radius: 9 * config.glowSpread)
+                .shadow(color: tint.opacity(lit ? config.glowStrength : 0), radius: 9 * config.glowSpread * scale)
             if let wave = wave {
-                Pulse(strength: wave.strength, fade: max(config.glowFadeOut, 0.3), delay: wave.delay, tint: wave.tint)
+                Pulse(strength: wave.strength, fade: max(config.glowFadeOut, 0.3), delay: wave.delay, tint: wave.tint,
+                      radius: 9 * scale)
                     .id(wave.tick)
             }
         }
@@ -875,15 +1015,15 @@ struct EffectsPlayground<Content: View>: View {
             play(id, [beat, 1, beat, 1], every: 0.12) { pose, value in pose.scale = value }
         }
         if config.shake {
-            let d = CGFloat(config.shakeDistance)
+            let d = CGFloat(config.shakeDistance) * scale
             play(id, [-d, d, -d * 0.7, d * 0.5, -d * 0.2, 0], every: 0.05) { pose, value in pose.offsetX = value }
         }
         if config.drop {
-            let d = CGFloat(config.dropDepth)
+            let d = CGFloat(config.dropDepth) * scale
             play(id, [d, -d * 0.35, d * 0.12, 0], every: 0.09) { pose, value in pose.offsetY = value }
         }
         if config.glitch {
-            let d = CGFloat(config.glitchStrength) * 6
+            let d = CGFloat(config.glitchStrength) * 6 * scale
             play(id, [-d, d * 0.8, -d * 0.5, d * 0.6, 0], every: 0.045) { pose, value in pose.offsetX = value }
         }
         if config.flip { flip(id) }
@@ -949,16 +1089,19 @@ private struct EffectsKeyFX: View {
     let frame: EffectKeyFrame
     let tint: Color
     let tick: Int
+    /// The preview's size against the keyboard's: everything is drawn at the keyboard's size, then shrunk by this.
+    let scale: CGFloat
 
-    private var shape: RoundedRectangle { return RoundedRectangle(cornerRadius: frame.radius, style: .continuous) }
+    private var shape: RoundedRectangle { return RoundedRectangle(cornerRadius: frame.radius / scale, style: .continuous) }
 
     var body: some View {
-        let width = frame.rect.width
-        let height = frame.rect.height
+        let width = frame.rect.width / scale
+        let height = frame.rect.height / scale
+        let start = startOffset(width: width, height: height)
         ZStack {
             // Effects that stay inside the key's shape.
             ZStack {
-                if config.ripple { ripple(width: width) }
+                if config.ripple { ripple(width: width).offset(x: start.x, y: start.y) }
                 if config.shine { shine(width: width, height: height) }
                 if config.flash { flash() }
                 if config.lightning { lightningFlash() }
@@ -976,38 +1119,46 @@ private struct EffectsKeyFX: View {
             }
             if config.echo && !frame.label.isEmpty {
                 Burst(duration: config.echoDuration) { done in
-                    Text(frame.label).font(.title3.weight(.medium))
-                        .offset(y: done ? -config.echoRise : 0)
+                    Text(frame.label).font(.system(size: 22, weight: .medium))
+                        .offset(x: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn).x : 0,
+                                y: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn).y : 0)
                         .opacity(done ? 0 : 0.85)
                 }
                 .id(tick)
+                .offset(x: start.x, y: start.y)
             }
             if config.pop && !frame.label.isEmpty {
                 Burst(duration: config.popDuration, curve: { _ in .interpolatingSpring(stiffness: 260, damping: 8) }) { done in
-                    Text(frame.label).font(.title3.weight(.medium)).scaleEffect(done ? 1 : config.popScale)
+                    Text(frame.label).font(.system(size: 22, weight: .medium)).scaleEffect(done ? 1 : config.popScale)
                 }
                 .id(tick)
             }
-            if config.sparks { sparks(width: width) }
-            if config.shockwave { shockwave(width: width) }
-            if config.confetti { confetti(width: width) }
-            if config.bubbles { bubbles(width: width) }
+            if config.sparks { sparks(width: width).offset(x: start.x, y: start.y) }
+            if config.shockwave { shockwave(width: width).offset(x: start.x, y: start.y) }
+            if config.confetti { confetti(width: width).offset(x: start.x, y: start.y) }
+            if config.bubbles { bubbles(width: width).offset(x: start.x, y: start.y) }
             if config.sweep {
                 Burst(duration: config.sweepDuration, curve: { .linear(duration: $0) }) { done in
                     shape.trim(from: done ? 0.85 : 0, to: done ? 1 : 0.15)
-                        .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .shadow(color: tint, radius: 4)
+                        .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .opacity(done ? 0 : 1)
                 }
                 .id(tick)
                 .frame(width: width, height: height)
             }
-            if config.lightning { lightning(width: width, height: height) }
-            if config.beam { beam(width: width) }
-            particles
+            if config.lightning { lightning(width: width, height: height).offset(x: start.x, y: start.y) }
+            if config.beam { beam(width: width).offset(x: start.x, y: start.y) }
+            particles.offset(x: start.x, y: start.y)
         }
         .frame(width: width, height: height)
+        .scaleEffect(scale)
         .position(x: frame.rect.midX, y: frame.rect.midY)
+    }
+
+    /// Where this press's effects start, from the middle of the key (the position setting).
+    private func startOffset(width: CGFloat, height: CGFloat) -> CGPoint {
+        return EffectPosition.offset(config.position, size: CGSize(width: width, height: height),
+                                     random: { CGFloat(unit(tick, 41)) })
     }
 
     private func underline(width: CGFloat, height: CGFloat) -> some View {
@@ -1054,10 +1205,12 @@ private struct EffectsKeyFX: View {
         let round = { (width: CGFloat) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         return Burst(duration: 0.45, curve: { .easeIn(duration: $0) }) { done in
             ZStack {
-                main.stroke(tint.opacity(0.5), style: round(9)).shadow(color: tint, radius: 10)
+                main.stroke(tint.opacity(0.3), style: round(14))
+                main.stroke(tint.opacity(0.5), style: round(8))
                 main.stroke(tint, style: round(3.5))
                 main.stroke(Color.white, style: round(1.5))
-                forks.stroke(tint.opacity(0.5), style: round(4)).shadow(color: tint, radius: 10)
+                forks.stroke(tint.opacity(0.3), style: round(8))
+                forks.stroke(tint.opacity(0.5), style: round(4))
                 forks.stroke(tint, style: round(1.8))
                 forks.stroke(Color.white, style: round(0.8))
             }
@@ -1068,21 +1221,25 @@ private struct EffectsKeyFX: View {
 
     private func beam(width: CGFloat) -> some View {
         let reach = width * CGFloat(config.beamHeight)
-        return Burst(duration: 0.5) { done in
-            Rectangle()
-                .fill(LinearGradient(colors: [tint.opacity(0.8), tint.opacity(0)], startPoint: .bottom, endPoint: .top))
-                .frame(width: width * 0.5, height: reach)
-                .scaleEffect(x: 1, y: done ? 1 : 0.15, anchor: .bottom)
-                .opacity(done ? 0 : 1)
-                .offset(y: -reach / 2)
+        // The beam stands on the key's middle (the middle of this view), and turns about it.
+        return VStack(spacing: 0) {
+            Burst(duration: 0.5) { done in
+                Rectangle()
+                    .fill(LinearGradient(colors: [tint.opacity(0.8), tint.opacity(0)], startPoint: .bottom, endPoint: .top))
+                    .frame(width: width * 0.5, height: reach)
+                    .scaleEffect(x: 1, y: done ? 1 : 0.15, anchor: .bottom)
+                    .opacity(done ? 0 : 1)
+            }
+            Color.clear.frame(width: 1, height: reach)
         }
+        .rotationEffect(.radians(Double(turn)))
         .id(tick)
     }
 
     // The particle effects (EffectParticles), as the keyboard plays them.
 
     private var particles: some View {
-        let specs = EffectParticles.make(config, keySize: frame.rect.size) { index, salt in CGFloat(unit(index + tick * 13, Double(salt))) }
+        let specs = EffectParticles.make(config, keySize: CGSize(width: frame.rect.width / scale, height: frame.rect.height / scale)) { index, salt in CGFloat(unit(index + tick * 13, Double(salt))) }
         return ZStack {
             ForEach(0..<specs.count, id: \.self) { index in
                 Later(delay: specs[index].delay) { particle(specs[index]) }
@@ -1095,7 +1252,7 @@ private struct EffectsKeyFX: View {
         let color: Color = spec.hue.map { Color(hue: Double($0), saturation: 0.7, brightness: 1) } ?? tint
         return Burst(duration: spec.duration, curve: { .linear(duration: $0) }) { done in
             particleShape(spec, color: color)
-                .rotationEffect(.radians(done ? Double(spec.spin) : 0))
+                .rotationEffect(.radians((spec.isOriented ? Double(spec.tilt) : 0) + (done ? Double(spec.spin) : 0)))
                 .scaleEffect(done ? spec.scaleTo : spec.scaleFrom)
                 .modifier(Along(progress: done ? 1 : 0, path: spec.path))
                 .opacity(done ? 0 : Double(spec.peak))
@@ -1104,14 +1261,17 @@ private struct EffectsKeyFX: View {
 
     @ViewBuilder private func particleShape(_ spec: EffectParticle, color: Color) -> some View {
         switch spec.shape {
-        case .glyph(let text):
-            Text(text).font(.system(size: spec.size)).foregroundColor(color)
+        case .art(let art):
+            EffectArtShape(art: art).fill(color, style: FillStyle(eoFill: art.cutsHoles))
+                .frame(width: spec.size, height: spec.size)
         case .dot:
             Circle().fill(color).frame(width: spec.size, height: spec.size)
         case .streak(let angle):
             Capsule().fill(color).frame(width: spec.size, height: 2).rotationEffect(.radians(Double(angle)))
         case .drop:
-            Capsule().fill(color).frame(width: 1.5, height: spec.size)
+            Capsule()
+                .fill(LinearGradient(colors: [color.opacity(0), color], startPoint: .top, endPoint: .bottom))
+                .frame(width: 2, height: spec.size)
         case .soft:
             Circle().fill(color.opacity(0.35)).frame(width: spec.size, height: spec.size).blur(radius: 3)
         case .ember:
@@ -1151,6 +1311,11 @@ private struct EffectsKeyFX: View {
         .id(tick)
     }
 
+    /// The angle (from straight up, clockwise) the throwing effects go at for this press.
+    private var turn: CGFloat {
+        return EffectDirection.target(config.direction, random: { CGFloat(unit(tick, 31)) }) ?? 0
+    }
+
     private func confetti(width: CGFloat) -> some View {
         let count = max(1, Int(config.confettiCount.rounded()))
         return ZStack {
@@ -1162,12 +1327,18 @@ private struct EffectsKeyFX: View {
                         .fill(config.colorMode == "rainbow" ? Color(hue: unit(index, 3), saturation: 0.7, brightness: 1) : tint)
                         .frame(width: 4 + CGFloat(unit(index, 4)) * 3, height: 2 + CGFloat(unit(index, 5)) * 2)
                         .rotationEffect(.degrees(done ? (unit(index, 6) * 2 - 1) * 460 : 0))
-                        .modifier(Ballistic(progress: done ? 1 : 0, dx: dx, dy: dy, gravity: width * 3.2))
+                        .modifier(Ballistic(progress: done ? 1 : 0, dx: dx, dy: dy, gravity: width * 3.2, turn: turn))
                         .opacity(done ? 0 : 1)
                 }
             }
         }
         .id(tick)
+    }
+
+    private func bubbleOffset(_ index: Int, width: CGFloat, done: Bool) -> CGPoint {
+        let start = CGFloat(unit(index, 10) - 0.5) * width * 0.7
+        let sway = done ? CGFloat(unit(index, 11) - 0.5) * 14 : 0
+        return EffectDirection.turn(CGPoint(x: start + sway, y: done ? -CGFloat(config.bubbleRise) : 0), by: turn)
     }
 
     private func bubbles(width: CGFloat) -> some View {
@@ -1181,8 +1352,8 @@ private struct EffectsKeyFX: View {
                         .strokeBorder(tint.opacity(0.9), lineWidth: 1.5)
                         .background(Circle().fill(tint.opacity(0.18)))
                         .frame(width: size, height: size)
-                        .offset(x: CGFloat(unit(index, 10) - 0.5) * width * 0.7 + (done ? CGFloat(unit(index, 11) - 0.5) * 14 : 0),
-                                y: done ? -CGFloat(config.bubbleRise) : 0)
+                        .offset(x: bubbleOffset(index, width: width, done: done).x,
+                                y: bubbleOffset(index, width: width, done: done).y)
                         .opacity(done ? 0 : 1)
                 }
             }

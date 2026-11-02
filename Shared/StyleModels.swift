@@ -94,6 +94,11 @@ struct EffectsConfig: Hashable, Codable {
     /// "accent", "white", "rainbow" (a new hue each press) or "custom".
     var colorMode = "accent"
     var customColor = ThemeRGBA(hex: 0x00E5FF)
+    /// Which way the effects go: "auto" (each as designed), "up", "down", "left", "right" or "random" (a new way
+    /// for each press).
+    var direction = "auto"
+    /// Where on the key the effects start: "auto" (the middle), "top", "bottom", "left", "right" or "random".
+    var position = "auto"
 
     /// A light around the key that fades in under the finger and out after it lifts.
     var glow = false
@@ -262,6 +267,8 @@ struct EffectsConfig: Hashable, Codable {
     init(from decoder: Swift.Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         colorMode = value(c, .colorMode, colorMode)
+        direction = value(c, .direction, direction)
+        position = value(c, .position, position)
         customColor = value(c, .customColor, customColor)
         glow = value(c, .glow, glow)
         glowStrength = value(c, .glowStrength, glowStrength)

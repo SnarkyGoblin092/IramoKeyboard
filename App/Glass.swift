@@ -245,29 +245,26 @@ struct ValueBar: View {
             }
             .frame(maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 4)
-                    .onChanged { drag in
-                        guard isEnabled else { return }
-                        if horizontal == nil {
-                            horizontal = abs(drag.translation.width) > abs(drag.translation.height)
-                            if horizontal == true {
-                                startValue = value
-                                onEditingChanged(true)
-                            }
-                        }
-                        guard horizontal == true, width > 0 else { return }
-                        let next = snapped(startValue + Double(drag.translation.width / max(width - thumb, 1)) * span)
-                        if abs(next - value) > step * 0.01 {
-                            value = next
-                            Feedback.tick()   // once per step; nothing more at either end
-                        }
+            // A UIKit pan that only begins on a sideways drag, so a vertical drag starting on the bar scrolls the list.
+            .overlay(HorizontalPan(
+                began: {
+                    guard isEnabled else { return }
+                    horizontal = true
+                    startValue = value
+                    onEditingChanged(true)
+                },
+                changed: { translation in
+                    guard isEnabled, horizontal == true, width > 0 else { return }
+                    let next = snapped(startValue + Double(translation / max(width - thumb, 1)) * span)
+                    if abs(next - value) > step * 0.01 {
+                        value = next
+                        Feedback.tick()   // once per step; nothing more at either end
                     }
-                    .onEnded { _ in
-                        if horizontal == true { onEditingChanged(false) }
-                        horizontal = nil
-                    }
-            )
+                },
+                ended: {
+                    if horizontal == true { onEditingChanged(false) }
+                    horizontal = nil
+                }))
         }
         .frame(height: 72)
         .padding(.vertical, 2)
@@ -281,6 +278,48 @@ struct ValueBar: View {
             case .decrement: value = snapped(value - delta)
             @unknown default: break
             }
+        }
+    }
+}
+
+/// A pan recognizer that begins only when the drag starts out sideways, leaving vertical drags to the scroll view.
+private struct HorizontalPan: UIViewRepresentable {
+    let began: () -> Void
+    let changed: (CGFloat) -> Void
+    let ended: () -> Void
+
+    func makeCoordinator() -> Coordinator { return Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
+        pan.delegate = context.coordinator
+        view.addGestureRecognizer(pan)
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: HorizontalPan?
+
+        @objc func pan(_ recognizer: UIPanGestureRecognizer) {
+            guard let parent = parent else { return }
+            switch recognizer.state {
+            case .began: parent.began(); parent.changed(recognizer.translation(in: recognizer.view).x)
+            case .changed: parent.changed(recognizer.translation(in: recognizer.view).x)
+            case .ended, .cancelled, .failed: parent.ended()
+            default: break
+            }
+        }
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y)
         }
     }
 }
@@ -319,24 +358,44 @@ struct GlassToggle: View {
     /// A feature some languages can't use: greyed out when none of the enabled languages can, with a note naming
     /// the ones that can't.
     let feature: LanguageFeature?
+    /// A tap anywhere on the row flips it (the row itself takes the tap, not only the switch).
+    let tapsAnywhere: Bool
     @ObservedObject private var languages = EnabledLanguages.shared
 
-    init(title: String, subtitle: String, isOn: Binding<Bool>, feature: LanguageFeature? = nil) {
+    init(title: String, subtitle: String, isOn: Binding<Bool>, feature: LanguageFeature? = nil, tapsAnywhere: Bool = false) {
         self.title = title
         self.subtitle = subtitle
         self._isOn = isOn
         self.feature = feature
+        self.tapsAnywhere = tapsAnywhere
     }
 
     private var unavailable: Bool { return feature.map { languages.lacking($0).all } ?? false }
 
+    private var label: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+            Text(subtitle).font(.footnote).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let feature = feature { FeatureNote(feature) }
+        }
+    }
+
     var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                Text(subtitle).font(.footnote).foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let feature = feature { FeatureNote(feature) }
+        Group {
+            if tapsAnywhere {
+                // The row is one button: a single tap flips it at once (a list row's own switch can need a press and hold).
+                Button { isOn.toggle() } label: {
+                    HStack(spacing: 12) {
+                        label.frame(maxWidth: .infinity, alignment: .leading)
+                        Toggle("", isOn: $isOn).labelsHidden().allowsHitTesting(false)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityRepresentation { Toggle(isOn: $isOn) { label } }
+            } else {
+                Toggle(isOn: $isOn) { label }
             }
         }
         .onChange(of: isOn) { _ in Feedback.tick() }

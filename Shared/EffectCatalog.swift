@@ -297,7 +297,11 @@ enum EffectCatalog {
                                         size: CGFloat(config.setting(item, "size")), speed: config.setting(item, "speed"),
                                         extra: CGFloat(item.params.count > 3 ? config.setting(item, item.params[3].id) : 1),
                                         seed: 2000 + index * 100, rainbow: config.colorMode == "rainbow", random: random)
-            list += item.build(context)
+            var group = item.build(context)
+            if let target = EffectDirection.target(config.direction, random: { random(9500 + index, 1) }) {
+                EffectParticles.redirect(&group, from: 0, to: target, scale: context.w)
+            }
+            list += group
         }
         return list
     }
@@ -374,7 +378,7 @@ enum EffectCatalog {
             let radius = c.w * (0.45 + 0.5 * c.r(i, 2)) * c.extra
             let x = cos(angle) * radius
             let y = sin(angle) * radius * 0.8
-            list.append(c.speck(.glyph("\u{2726}"), c.between(8, 14, i, 3), 0.8, delay: Double(c.r(i, 4)) * 0.4, spin: 0.6,
+            list.append(c.speck(.art(.sparkle), c.between(8, 14, i, 3), 0.8, delay: Double(c.r(i, 4)) * 0.4, spin: 0.6,
                                 from: 0.2, to: 1.2, hue: c.hue(i), path: { _ in CGPoint(x: x, y: y) }))
         }
         return list
@@ -424,7 +428,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 1.2
-            list.append(c.speck(.glyph("\u{273F}"), c.between(10, 16, i, 2), 1.4 + Double(c.r(i, 3)) * 0.4,
+            list.append(c.speck(.art(.petal), c.between(10, 16, i, 2), 1.4 + Double(c.r(i, 3)) * 0.4,
                                 delay: Double(c.r(i, 4)) * 0.4, spin: (c.r(i, 5) - 0.5) * 6, from: 1, to: 0.8, hue: c.hue(i),
                                 path: EffectPath.fall(x: x0, top: -c.w * 0.9, bottom: c.w * 0.9, sway: 8 * c.extra,
                                                       phase: c.r(i, 6) * 6.28)))
@@ -436,7 +440,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 1.2
-            list.append(c.speck(.glyph("\u{2767}"), c.between(12, 18, i, 2), 1.6 + Double(c.r(i, 3)) * 0.4,
+            list.append(c.speck(.art(.leaf), c.between(12, 18, i, 2), 1.6 + Double(c.r(i, 3)) * 0.4,
                                 delay: Double(c.r(i, 4)) * 0.4, spin: (c.r(i, 5) - 0.5) * 9, from: 1, to: 0.8, hue: c.hue(i),
                                 path: EffectPath.fall(x: x0, top: -c.w, bottom: c.w, sway: 16 * c.extra,
                                                       phase: c.r(i, 6) * 6.28, turns: 1)))
@@ -450,7 +454,7 @@ enum EffectCatalog {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 0.6
             let phase = c.r(i, 2) * 6.28
             let w = c.w
-            list.append(c.speck(.glyph("\u{2740}"), c.between(10, 15, i, 3), 1.6, delay: Double(c.r(i, 4)) * 0.4,
+            list.append(c.speck(.art(.flower), c.between(10, 15, i, 3), 1.6, delay: Double(c.r(i, 4)) * 0.4,
                                 spin: 8, from: 1, to: 0.7, hue: c.hue(i),
                                 path: { t in
                                     let angle: CGFloat = t * 4 * .pi + phase
@@ -464,7 +468,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 0.5
-            list.append(c.speck(.glyph("\u{1F98B}"), 16, 1.6, delay: Double(c.r(i, 2)) * 0.5, from: 0.7, to: 1.1,
+            list.append(c.speck(.art(.butterfly), 16, 1.6, delay: Double(c.r(i, 2)) * 0.5, from: 0.7, to: 1.1,
                                 path: EffectPath.rise(x: x0, height: c.w * 1.6, sway: 18 * c.extra, phase: c.r(i, 3) * 6.28, turns: 2.2)))
         }
         return list
@@ -503,7 +507,7 @@ enum EffectCatalog {
             let y0 = (c.r(i, 1) - 0.5) * c.h * 0.6
             let drift = c.w * c.between(1.0, 1.8, i, 2)
             let phase = c.r(i, 3) * 6.28
-            list.append(c.speck(.glyph("\u{2727}"), c.between(9, 14, i, 4), 1.6, delay: Double(c.r(i, 5)) * 0.4,
+            list.append(c.speck(.art(.seed), c.between(9, 14, i, 4), 1.6, delay: Double(c.r(i, 5)) * 0.4,
                                 spin: (c.r(i, 6) - 0.5) * 4, from: 1, to: 0.6, hue: c.hue(i),
                                 path: { t in
                                     let angle: CGFloat = t * 2 * .pi * 2 + phase
@@ -554,7 +558,7 @@ enum EffectCatalog {
         for i in 0..<c.n {
             let dx = (c.r(i, 1) - 0.5) * c.w * 1.2
             let dy = -c.w * c.between(0.9, 1.6, i, 2)
-            list.append(c.speck(.glyph("$"), c.between(11, 16, i, 3), 1.0, delay: Double(c.r(i, 4)) * 0.15,
+            list.append(c.speck(.art(.coin), c.between(11, 16, i, 3), 1.0, delay: Double(c.r(i, 4)) * 0.15,
                                 spin: (c.r(i, 5) - 0.5) * 14, hue: c.hue(i),
                                 path: EffectPath.throwing(dx: dx, dy: dy, gravity: c.w * 3.2 * c.extra)))
         }
@@ -565,7 +569,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let angle = c.r(i, 1) * 2 * .pi
-            list.append(c.speck(.glyph("\u{25C6}"), c.between(8, 14, i, 2), 0.9, spin: (c.r(i, 3) - 0.5) * 6, from: 1, to: 0.4,
+            list.append(c.speck(.art(.gem), c.between(8, 14, i, 2), 0.9, spin: (c.r(i, 3) - 0.5) * 6, from: 1, to: 0.4,
                                 hue: c.hue(i),
                                 path: EffectPath.burst(angle: angle, distance: c.w * c.between(0.7, 1.4, i, 4), gravity: c.w * 0.6)))
         }
@@ -576,7 +580,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 0.9
-            list.append(c.speck(.glyph("\u{1F388}"), 18, 1.8, delay: Double(c.r(i, 2)) * 0.4, from: 0.8, to: 1.1,
+            list.append(c.speck(.art(.balloon), 18, 1.8, delay: Double(c.r(i, 2)) * 0.4, from: 0.8, to: 1.1,
                                 path: EffectPath.rise(x: x0, height: c.w * 2 * c.extra, sway: 10, phase: c.r(i, 3) * 6.28, turns: 1)))
         }
         return list
@@ -643,7 +647,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 1.2
-            list.append(c.speck(.glyph(i % 2 == 0 ? "0" : "1"), c.between(9, 13, i, 2), 0.9, delay: Double(c.r(i, 3)) * 0.4,
+            list.append(c.speck(.art(.bit(i % 2 == 1)), c.between(9, 13, i, 2), 0.9, delay: Double(c.r(i, 3)) * 0.4,
                                 peak: 0.9, hue: c.hue(i), path: { t in CGPoint(x: x0, y: -c.w * 1.2 + c.w * 2.0 * t) }))
         }
         return list
@@ -699,11 +703,10 @@ enum EffectCatalog {
     // MARK: Playful
 
     private static func smileys(_ c: EffectContext) -> [EffectParticle] {
-        let faces = ["\u{1F600}", "\u{1F60E}", "\u{1F973}", "\u{1F60D}", "\u{1F604}"]
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 0.8
-            list.append(c.speck(.glyph(faces[i % faces.count]), 18, 1.3, delay: Double(c.r(i, 2)) * 0.4, from: 0.6, to: 1.2,
+            list.append(c.speck(.art(.smiley), 18, 1.3, delay: Double(c.r(i, 2)) * 0.4, from: 0.6, to: 1.2,
                                 path: EffectPath.rise(x: x0, height: c.w * 1.5 * c.extra, sway: 8, phase: c.r(i, 3) * 6.28)))
         }
         return list
@@ -713,7 +716,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 0.8
-            list.append(c.speck(.glyph("\u{1F47B}"), 18, 1.6, delay: Double(c.r(i, 2)) * 0.4, from: 0.7, to: 1.2, peak: 0.9,
+            list.append(c.speck(.art(.ghost), 18, 1.6, delay: Double(c.r(i, 2)) * 0.4, from: 0.7, to: 1.2, peak: 0.9,
                                 path: EffectPath.rise(x: x0, height: c.w * 1.6, sway: 16 * c.extra, phase: c.r(i, 3) * 6.28, turns: 1.6)))
         }
         return list
@@ -725,7 +728,7 @@ enum EffectCatalog {
             let x0 = (c.r(i, 1) - 0.5) * c.w * 0.9
             let lean = (c.r(i, 2) - 0.5) * c.w * 0.4
             let height = c.w * 2.2 * c.extra
-            list.append(c.speck(.glyph("\u{1F680}"), 18, 0.8, delay: Double(c.r(i, 3)) * 0.3, from: 1, to: 0.8,
+            list.append(c.speck(.art(.rocket), 18, 0.8, delay: Double(c.r(i, 3)) * 0.3, from: 1, to: 0.8,
                                 path: { t in CGPoint(x: x0 + lean * t, y: -height * t * t) }))
         }
         return list
@@ -735,7 +738,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let angle = 2 * CGFloat.pi * CGFloat(i) / CGFloat(c.n) + c.r(i, 1) * 0.3
-            list.append(c.speck(.glyph("\u{2734}"), c.between(11, 16, i, 2), 0.7, spin: 14 * c.extra, from: 1, to: 0.6,
+            list.append(c.speck(.art(.ninja), c.between(11, 16, i, 2), 0.7, spin: 14 * c.extra, from: 1, to: 0.6,
                                 hue: c.hue(i), path: EffectPath.burst(angle: angle, distance: c.w * 1.5)))
         }
         return list
@@ -773,7 +776,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let start = 2 * CGFloat.pi * CGFloat(i) / CGFloat(c.n)
-            list.append(c.speck(.glyph("\u{273B}"), 12, 1.0, spin: 12 * c.extra, from: 1, to: 0.6, hue: c.hue(i),
+            list.append(c.speck(.art(.pinwheel), 12, 1.0, spin: 12 * c.extra, from: 1, to: 0.6, hue: c.hue(i),
                                 path: EffectPath.orbit(center: .zero, rx: c.w * 0.65, ry: c.h * 0.8, start: start, turns: 1)))
         }
         return list
@@ -831,7 +834,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let start = 2 * CGFloat.pi * CGFloat(i) / CGFloat(c.n)
-            list.append(c.speck(.glyph("\u{2605}"), 10, 1.2, spin: 2, from: 1, to: 0.8, hue: c.hue(i),
+            list.append(c.speck(.art(.star), 10, 1.2, spin: 2, from: 1, to: 0.8, hue: c.hue(i),
                                 path: EffectPath.orbit(center: CGPoint(x: 0, y: -c.h * 0.9), rx: c.w * 0.45, ry: c.h * 0.16,
                                                        start: start, turns: 2)))
         }
@@ -867,7 +870,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x = (CGFloat(i) - CGFloat(c.n - 1) / 2) * c.w * 0.5
-            list.append(c.speck(.glyph("\u{265B}"), 20, 1.0, delay: Double(i) * 0.1, from: 0.5, to: 1.1, hue: c.hue(i),
+            list.append(c.speck(.art(.crown), 20, 1.0, delay: Double(i) * 0.1, from: 0.5, to: 1.1, hue: c.hue(i),
                                 path: { t in CGPoint(x: x, y: -c.h * 0.8 - c.w * 0.6 * c.extra * t) }))
         }
         return list
@@ -877,7 +880,7 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x = (c.r(i, 1) - 0.5) * c.w * 0.9
-            list.append(c.speck(.glyph("\u{2191}"), c.between(12, 18, i, 2), 0.9, delay: Double(c.r(i, 3)) * 0.3, hue: c.hue(i),
+            list.append(c.speck(.art(.arrow), c.between(12, 18, i, 2), 0.9, delay: Double(c.r(i, 3)) * 0.3, hue: c.hue(i),
                                 path: { t in CGPoint(x: x, y: -c.w * 1.6 * c.extra * EffectPath.easeOut(t)) }))
         }
         return list
@@ -887,19 +890,19 @@ enum EffectCatalog {
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let x = (c.r(i, 1) - 0.5) * c.w * 0.9
-            list.append(c.speck(.glyph("\u{2713}"), c.between(13, 19, i, 2), 1.0, delay: Double(c.r(i, 3)) * 0.3, from: 0.3, to: 1.1,
+            list.append(c.speck(.art(.check), c.between(13, 19, i, 2), 1.0, delay: Double(c.r(i, 3)) * 0.3, from: 0.3, to: 1.1,
                                 hue: c.hue(i), path: { t in CGPoint(x: x, y: -c.w * 1.3 * c.extra * EffectPath.easeOut(t)) }))
         }
         return list
     }
 
     private static func suits(_ c: EffectContext) -> [EffectParticle] {
-        let glyphs = ["\u{2660}", "\u{2665}", "\u{2666}", "\u{2663}"]
+        let suits: [EffectArt] = [.spade, .heart, .diamond, .club]
         var list: [EffectParticle] = []
         for i in 0..<c.n {
             let dx = (c.r(i, 1) - 0.5) * c.w * 1.6
             let dy = -c.w * c.between(0.8, 1.5, i, 2)
-            list.append(c.speck(.glyph(glyphs[i % 4]), c.between(11, 16, i, 3), 1.1, delay: Double(c.r(i, 4)) * 0.15,
+            list.append(c.speck(.art(suits[i % 4]), c.between(11, 16, i, 3), 1.1, delay: Double(c.r(i, 4)) * 0.15,
                                 spin: (c.r(i, 5) - 0.5) * 8, hue: c.hue(i),
                                 path: EffectPath.throwing(dx: dx, dy: dy, gravity: c.w * 3 * c.extra)))
         }
@@ -912,8 +915,7 @@ enum EffectCatalog {
             let face = Int(c.r(i, 1) * 6) % 6
             let dx = (c.r(i, 2) - 0.5) * c.w * 1.6
             let dy = -c.w * c.between(0.7, 1.3, i, 3)
-            let scalar = Unicode.Scalar(0x2680 + face) ?? "\u{2680}"
-            list.append(c.speck(.glyph(String(Character(scalar))), c.between(15, 21, i, 4), 1.1, delay: Double(c.r(i, 5)) * 0.15,
+            list.append(c.speck(.art(.die(face)), c.between(15, 21, i, 4), 1.1, delay: Double(c.r(i, 5)) * 0.15,
                                 spin: 10 * c.extra * (c.r(i, 6) > 0.5 ? 1 : -1), hue: c.hue(i),
                                 path: EffectPath.throwing(dx: dx, dy: dy, gravity: c.w * 3)))
         }

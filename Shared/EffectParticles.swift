@@ -4,12 +4,12 @@ import CoreGraphics
 /// the Effects screen's keyboard (SwiftUI, EffectsView), so both play the same thing.
 struct EffectParticle {
     enum Shape {
-        /// A character (a heart, a star, a note...).
-        case glyph(String)
+        /// A drawn picture (a heart, a star, a note...): see EffectArt.
+        case art(EffectArt)
         case dot
         /// A thin line pointing along `angle`.
         case streak(angle: CGFloat)
-        /// A thin, tall drop.
+        /// A falling streak of rain: thin, fading out towards its tail.
         case drop
         /// A soft puff.
         case soft
@@ -36,8 +36,20 @@ struct EffectParticle {
     var peak: CGFloat = 1
     /// A hue of its own (the rainbow colour); nil takes the press's colour.
     var hue: CGFloat? = nil
+    /// How far it is turned (radians, clockwise) while it flies, for the shapes that point somewhere (rain, rockets,
+    /// arrows): set by the direction setting. Spin comes on top of it.
+    var tilt: CGFloat = 0
     /// Where it is, as an offset from the middle of the key, for `t` from 0 (start) to 1 (end).
     var path: (CGFloat) -> CGPoint
+
+    /// Whether it points somewhere, so that it is turned with the direction it flies in.
+    var isOriented: Bool {
+        switch shape {
+        case .drop: return true
+        case .art(let art): return art.isOriented
+        default: return false
+        }
+    }
 }
 
 enum EffectParticles {
@@ -48,11 +60,21 @@ enum EffectParticles {
         let h = max(keySize.height, 1)
         let rainbow = config.colorMode == "rainbow"
         var list: [EffectParticle] = []
+        // The direction setting turns each effect in turn (it needs to know where one ends and the next begins).
+        var groupStart = 0
+        var groupIndex = 0
+        func flush() {
+            defer { groupStart = list.count; groupIndex += 1 }
+            guard config.direction != "auto", groupStart < list.count,
+                  let target = EffectDirection.target(config.direction, random: { random(9000 + groupIndex, 1) }) else { return }
+            redirect(&list, from: groupStart, to: target, scale: w)
+        }
 
         func count(_ value: Double) -> Int { return max(1, Int(value.rounded())) }
         func easeOut(_ t: CGFloat) -> CGFloat { return 1 - (1 - t) * (1 - t) }
         func hue(_ base: Int, _ i: Int) -> CGFloat? { return rainbow ? random(base + i, 99) : nil }
 
+        flush()
         if config.hearts {
             for i in 0..<count(config.heartCount) {
                 let r = { (salt: Int) in random(100 + i, salt) }
@@ -60,7 +82,7 @@ enum EffectParticles {
                 let sway = 4 + r(5) * 6
                 let phase = r(7) * 2 * .pi
                 let rise = w * (1.2 + r(6) * 0.8)
-                list.append(EffectParticle(shape: .glyph("\u{2665}"), size: 12 + r(1) * 8, duration: 0.9 + Double(r(3)) * 0.5,
+                list.append(EffectParticle(shape: .art(.heart), size: 12 + r(1) * 8, duration: 0.9 + Double(r(3)) * 0.5,
                                            delay: Double(r(2)) * 0.3, spin: (r(8) - 0.5) * 0.8, scaleFrom: 0.6, scaleTo: 1.1,
                                            hue: hue(100, i),
                                            path: { t in
@@ -69,13 +91,14 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.stars {
             let n = count(config.starCount)
             for i in 0..<n {
                 let r = { (salt: Int) in random(200 + i, salt) }
                 let angle = 2 * .pi * CGFloat(i) / CGFloat(n) + r(1) * 0.5
                 let distance = w * (0.7 + r(2) * 0.8)
-                list.append(EffectParticle(shape: .glyph("\u{2605}"), size: 9 + r(3) * 6, duration: 0.7, spin: (r(4) - 0.5) * 6,
+                list.append(EffectParticle(shape: .art(.star), size: 9 + r(3) * 6, duration: 0.7, spin: (r(4) - 0.5) * 6,
                                            scaleFrom: 1, scaleTo: 0.3, hue: hue(200, i),
                                            path: { t in
                                                let out = easeOut(t)
@@ -85,12 +108,13 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.snow {
             for i in 0..<count(config.snowCount) {
                 let r = { (salt: Int) in random(300 + i, salt) }
                 let x0 = (r(1) - 0.5) * w * 1.2
                 let phase = r(2) * 2 * .pi
-                list.append(EffectParticle(shape: .glyph("\u{2744}"), size: 9 + r(5) * 6, duration: 1.2 + Double(r(3)) * 0.4,
+                list.append(EffectParticle(shape: .art(.snowflake), size: 9 + r(5) * 6, duration: 1.2 + Double(r(3)) * 0.4,
                                            delay: Double(r(4)) * 0.35, spin: 1.5, scaleFrom: 1, scaleTo: 0.8, hue: hue(300, i),
                                            path: { t in
                                                let angle: CGFloat = t * 2 * .pi * 1.5 + phase
@@ -98,13 +122,14 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.notes {
             for i in 0..<count(config.noteCount) {
                 let r = { (salt: Int) in random(400 + i, salt) }
                 let x0 = (r(1) - 0.5) * w * 0.5
                 let drift = (r(2) - 0.3) * w * 0.9
                 let rise = w * (1 + r(3) * 0.6)
-                list.append(EffectParticle(shape: .glyph(i % 2 == 0 ? "\u{266A}" : "\u{266B}"), size: 13 + r(4) * 6,
+                list.append(EffectParticle(shape: .art(.note), size: 13 + r(4) * 6,
                                            duration: 1.0, delay: Double(r(5)) * 0.3, spin: (r(6) - 0.5) * 0.6,
                                            scaleFrom: 0.7, scaleTo: 1, hue: hue(400, i),
                                            path: { t in
@@ -113,6 +138,7 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.fireworks {
             for i in 0..<count(config.fireworkCount) {
                 let r = { (salt: Int) in random(500 + i, salt) }
@@ -128,6 +154,7 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.starburst {
             let n = count(config.rayCount)
             for i in 0..<n {
@@ -140,15 +167,24 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.rain {
             for i in 0..<count(config.rainCount) {
                 let r = { (salt: Int) in random(700 + i, salt) }
                 let x0 = (r(1) - 0.5) * w * 1.1
-                list.append(EffectParticle(shape: .drop, size: 8 + r(2) * 4, duration: 0.6 + Double(r(3)) * 0.3,
-                                           delay: Double(r(4)) * 0.3, peak: 0.85, hue: hue(700, i),
-                                           path: { t in CGPoint(x: x0, y: -w * 0.5 + w * 1.4 * t * t) }))
+                let top = -w * 0.6
+                let bottom = w * 0.7
+                let delay = Double(r(4)) * 0.3
+                let fall = 0.42 + Double(r(3)) * 0.2
+                list.append(EffectParticle(shape: .drop, size: 12 + r(2) * 9, duration: fall, delay: delay, peak: 0.85,
+                                           hue: hue(700, i),
+                                           path: { t in CGPoint(x: x0, y: top + (bottom - top) * t) }))
+                list.append(EffectParticle(shape: .ring, size: 7, duration: 0.32, delay: delay + fall * 0.9,
+                                           scaleFrom: 0.3, scaleTo: 1.7, peak: 0.5, hue: hue(700, i),
+                                           path: { _ in CGPoint(x: x0, y: bottom) }))
             }
         }
+        flush()
         if config.embers {
             for i in 0..<count(config.emberCount) {
                 let r = { (salt: Int) in random(800 + i, salt) }
@@ -163,6 +199,7 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.smoke {
             for i in 0..<count(config.smokeCount) {
                 let r = { (salt: Int) in random(900 + i, salt) }
@@ -173,6 +210,7 @@ enum EffectParticles {
                                            path: { t in CGPoint(x: x0 + drift * t, y: -w * 0.9 * t) }))
             }
         }
+        flush()
         if config.orbit {
             let n = count(config.orbitCount)
             for i in 0..<n {
@@ -184,6 +222,7 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         if config.spiral {
             let n = count(config.spiralCount)
             for i in 0..<n {
@@ -198,6 +237,7 @@ enum EffectParticles {
                                            }))
             }
         }
+        flush()
         list += EffectCatalog.particles(config, keySize: keySize, random: random)
         return list
     }

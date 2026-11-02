@@ -343,6 +343,9 @@ final class KeyView: UIView {
     /// Where effects that leave the key (sparks, the echo) are drawn: a layer over all the keys, so a neighbouring
     /// key never hides them.
     private weak var effectsHost: CALayer?
+    /// The label drawn once for the echo, kept while the key shows the same thing.
+    private var echoImage: CGImage?
+    private var echoSignature = ""
     /// Called when the key goes down with an effect colour, so the keyboard can light the keys around it (wave).
     var onEffectPress: ((KeyView, UIColor) -> Void)?
     /// The light under the key: fades in on press, out on release, and pulses for the wave. Made on first use.
@@ -389,21 +392,17 @@ final class KeyView: UIView {
             return
         }
         let color = KeyView.effectColor(traits: traitCollection)
+        let start = EffectPosition.offset(effects.position, size: bounds.size, random: { CGFloat.random(in: 0..<1) })
+        effectOffset = start
         if effects.glow { fadeGlow(on: true, color: color) }
         if effects.border { lightBorder(color) }
         if effects.ripple { ripple(color) }
         if effects.shine { shine(color) }
-        if effects.sparks { sparks(color) }
         if effects.pop { pop() }
-        if effects.echo { echo() }
         if effects.wave { onEffectPress?(self, color) }
-        if effects.shockwave { shockwave(color) }
-        if effects.confetti { confetti(color) }
-        if effects.bubbles { bubbles(color) }
         if effects.squish { squish() }
         if effects.flash { flash(color) }
         if effects.jelly { jelly() }
-        if effects.lightning { lightning(color) }
         if effects.heartbeat { heartbeat() }
         if effects.flip { flip() }
         if effects.shake { shake() }
@@ -411,8 +410,38 @@ final class KeyView: UIView {
         if effects.glitch { glitch() }
         if effects.underline { underline(color) }
         if effects.sweep { neonSweep(color) }
-        if effects.beam { beam(color) }
-        playParticles(color)
+        // The effects that make many layers are built a moment later, after the press itself has been handled, and are
+        // left out while too many are still on screen: typing fast stays smooth.
+        guard KeyView.liveLayers < KeyView.layerBudget else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.window != nil else { return }
+            self.effectOffset = start
+            let effects = Prefs.effects
+            if effects.sparks { self.sparks(color) }
+            if effects.echo { self.echo() }
+            if effects.shockwave { self.shockwave(color) }
+            if effects.confetti { self.confetti(color) }
+            if effects.bubbles { self.bubbles(color) }
+            if effects.lightning { self.lightning(color) }
+            if effects.beam { self.beam(color) }
+            self.playParticles(color)
+        }
+    }
+
+    /// How many layers of the bursts (specks, pieces, bubbles) are on screen, and how many are allowed: past that,
+    /// new bursts are thinned out or skipped until the older ones have faded.
+    private static var liveLayers = 0
+    private static let layerBudget = 140
+
+    /// How many of `wanted` layers a burst may use now; they count as live until `release` is called with the same number.
+    private static func reserve(_ wanted: Int) -> Int {
+        let allowed = max(0, min(wanted, layerBudget + 20 - liveLayers))
+        liveLayers += allowed
+        return allowed
+    }
+
+    private static func release(_ count: Int) {
+        liveLayers = max(0, liveLayers - count)
     }
 
     private func glowLayer() -> CALayer {
@@ -492,11 +521,11 @@ final class KeyView: UIView {
 
     /// A holder the size of the key, clipped to its shape, for effects that stay inside the key.
     private func clippedHolder() -> CALayer {
-        let mask = CAShapeLayer()
-        mask.path = keyShapePath()
         let holder = CALayer()
         holder.frame = bounds
-        holder.mask = mask
+        holder.cornerRadius = Theme.keyCornerRadius(for: bounds.size)
+        holder.cornerCurve = .continuous
+        holder.masksToBounds = true
         layer.addSublayer(holder)
         return holder
     }
@@ -523,7 +552,7 @@ final class KeyView: UIView {
             disc.backgroundColor = color.withAlphaComponent(0.55).cgColor
             wave = disc
         }
-        wave.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        wave.position = CGPoint(x: bounds.midX + effectOffset.x, y: bounds.midY + effectOffset.y)
         wave.opacity = 0
         holder.addSublayer(wave)
         let duration = effects.rippleDuration
@@ -573,22 +602,26 @@ final class KeyView: UIView {
 
     /// The layer and the middle of the key in it, for effects that leave the key.
     private func overlayTarget() -> (host: CALayer, center: CGPoint) {
-        if let host = effectsHost { return (host, CGPoint(x: frame.midX, y: frame.midY)) }
-        return (layer, CGPoint(x: bounds.midX, y: bounds.midY))
+        if let host = effectsHost { return (host, CGPoint(x: frame.midX + effectOffset.x, y: frame.midY + effectOffset.y)) }
+        return (layer, CGPoint(x: bounds.midX + effectOffset.x, y: bounds.midY + effectOffset.y))
     }
+
+    /// Where the current press's effects start, from the middle of the key (the position setting).
+    private var effectOffset = CGPoint.zero
 
     /// Specks that fly out of the key in every direction and fade.
     private func sparks(_ color: UIColor) {
         guard bounds.width > 0 else { return }
         let effects = Prefs.effects
         let target = overlayTarget()
-        let count = max(1, Int(effects.sparkCount.rounded()))
+        let count = KeyView.reserve(max(1, Int(effects.sparkCount.rounded())))
+        guard count > 0 else { return }
         let size = CGFloat(effects.sparkSize)
         let reach = bounds.width * CGFloat(effects.sparkDistance)
         let offset = CGFloat.random(in: 0..<(2 * .pi))
         var specks: [CALayer] = []
         CATransaction.begin()
-        CATransaction.setCompletionBlock { specks.forEach { $0.removeFromSuperlayer() } }
+        CATransaction.setCompletionBlock { specks.forEach { $0.removeFromSuperlayer() }; KeyView.release(count) }
         for index in 0..<count {
             let angle = offset + 2 * .pi * CGFloat(index) / CGFloat(count)
             let distance = reach * CGFloat.random(in: 0.7...1.15)
@@ -641,20 +674,26 @@ final class KeyView: UIView {
         let effects = Prefs.effects
         let source: UIView = label.isHidden ? iconView : label
         guard source.bounds.width > 0, source.bounds.height > 0 else { return }
-        let image = UIGraphicsImageRenderer(bounds: source.bounds).image { source.layer.render(in: $0.cgContext) }
+        let signature = "\(label.text ?? "")|\(source.bounds.size)|\(label.isHidden)"
+        if echoSignature != signature || echoImage == nil {
+            echoImage = UIGraphicsImageRenderer(bounds: source.bounds).image { source.layer.render(in: $0.cgContext) }.cgImage
+            echoSignature = signature
+        }
+        guard let image = echoImage else { return }
         let target = overlayTarget()
         let ghost = CALayer()
         ghost.bounds = source.bounds
-        ghost.contents = image.cgImage
+        ghost.contents = image
         ghost.contentsScale = UIScreen.main.scale
         ghost.position = target.center
         ghost.opacity = 0
         target.host.addSublayer(ghost)
         CATransaction.begin()
         CATransaction.setCompletionBlock { ghost.removeFromSuperlayer() }
-        let rise = CABasicAnimation(keyPath: "position.y")
-        rise.fromValue = target.center.y
-        rise.toValue = target.center.y - CGFloat(effects.echoRise)
+        let away = EffectDirection.turn(CGPoint(x: 0, y: -CGFloat(effects.echoRise)), by: effectTurn())
+        let rise = CABasicAnimation(keyPath: "position")
+        rise.fromValue = NSValue(cgPoint: target.center)
+        rise.toValue = NSValue(cgPoint: CGPoint(x: target.center.x + away.x, y: target.center.y + away.y))
         rise.duration = effects.echoDuration
         rise.timingFunction = CAMediaTimingFunction(name: .easeOut)
         let fade = CABasicAnimation(keyPath: "opacity")
@@ -699,17 +738,24 @@ final class KeyView: UIView {
         CATransaction.commit()
     }
 
+    /// The angle, clockwise from straight up, the throwing effects go at for one press (0 when they go up as designed).
+    private func effectTurn() -> CGFloat {
+        return EffectDirection.target(Prefs.effects.direction, random: { CGFloat.random(in: 0..<1) }) ?? 0
+    }
+
     /// Small pieces of paper thrown up out of the key that tumble down, fading.
     private func confetti(_ color: UIColor) {
         guard bounds.width > 0 else { return }
         let effects = Prefs.effects
         let target = overlayTarget()
-        let count = max(1, Int(effects.confettiCount.rounded()))
+        let count = KeyView.reserve(max(1, Int(effects.confettiCount.rounded())))
+        guard count > 0 else { return }
         let duration = effects.confettiDuration
         let width = bounds.width
+        let turn = effectTurn()
         var pieces: [CALayer] = []
         CATransaction.begin()
-        CATransaction.setCompletionBlock { pieces.forEach { $0.removeFromSuperlayer() } }
+        CATransaction.setCompletionBlock { pieces.forEach { $0.removeFromSuperlayer() }; KeyView.release(count) }
         for _ in 0..<count {
             let piece = CALayer()
             piece.bounds = CGRect(x: 0, y: 0, width: CGFloat.random(in: 4...7), height: CGFloat.random(in: 2...4))
@@ -727,8 +773,8 @@ final class KeyView: UIView {
             var points: [NSValue] = []
             for step in 0...10 {
                 let t = CGFloat(step) / 10
-                points.append(NSValue(cgPoint: CGPoint(x: target.center.x + dx * t,
-                                                       y: target.center.y + dy * t + gravity * t * t / 2)))
+                let offset = EffectDirection.turn(CGPoint(x: dx * t, y: dy * t + gravity * t * t / 2), by: turn)
+                points.append(NSValue(cgPoint: CGPoint(x: target.center.x + offset.x, y: target.center.y + offset.y)))
             }
             let fly = CAKeyframeAnimation(keyPath: "position")
             fly.values = points
@@ -753,11 +799,13 @@ final class KeyView: UIView {
         guard bounds.width > 0 else { return }
         let effects = Prefs.effects
         let target = overlayTarget()
-        let count = max(1, Int(effects.bubbleCount.rounded()))
+        let count = KeyView.reserve(max(1, Int(effects.bubbleCount.rounded())))
+        guard count > 0 else { return }
         let rise = CGFloat(effects.bubbleRise)
+        let turn = effectTurn()
         var drops: [CALayer] = []
         CATransaction.begin()
-        CATransaction.setCompletionBlock { drops.forEach { $0.removeFromSuperlayer() } }
+        CATransaction.setCompletionBlock { drops.forEach { $0.removeFromSuperlayer() }; KeyView.release(count) }
         for _ in 0..<count {
             let size = CGFloat.random(in: 5...11)
             let bubble = CAShapeLayer()
@@ -768,7 +816,8 @@ final class KeyView: UIView {
             bubble.lineWidth = 1.5
             bubble.opacity = 0
             let startX = target.center.x + CGFloat.random(in: -0.35...0.35) * bounds.width
-            bubble.position = CGPoint(x: startX, y: target.center.y)
+            let lift = EffectDirection.turn(CGPoint(x: startX - target.center.x, y: 0), by: turn)
+            bubble.position = CGPoint(x: target.center.x + lift.x, y: target.center.y + lift.y)
             target.host.addSublayer(bubble)
             drops.append(bubble)
             let delay = Double.random(in: 0...0.25)
@@ -777,8 +826,8 @@ final class KeyView: UIView {
             var points: [NSValue] = []
             for step in 0...10 {
                 let t = CGFloat(step) / 10
-                points.append(NSValue(cgPoint: CGPoint(x: startX + sin(t * 2 * .pi * 1.5) * sway,
-                                                       y: target.center.y - rise * t)))
+                let offset = EffectDirection.turn(CGPoint(x: startX - target.center.x + sin(t * 2 * .pi * 1.5) * sway, y: -rise * t), by: turn)
+                points.append(NSValue(cgPoint: CGPoint(x: target.center.x + offset.x, y: target.center.y + offset.y)))
             }
             let float = CAKeyframeAnimation(keyPath: "position")
             float.values = points
@@ -852,15 +901,13 @@ final class KeyView: UIView {
     private func particleLayer(_ spec: EffectParticle, color: UIColor) -> CALayer {
         let size = spec.size
         switch spec.shape {
-        case .glyph(let text):
-            let glyph = CATextLayer()
-            glyph.string = text
-            glyph.fontSize = size
-            glyph.alignmentMode = .center
-            glyph.foregroundColor = color.cgColor
-            glyph.contentsScale = UIScreen.main.scale
-            glyph.bounds = CGRect(x: 0, y: 0, width: size * 1.4, height: size * 1.25)
-            return glyph
+        case .art(let art):
+            let picture = CAShapeLayer()
+            picture.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            picture.path = art.path(side: size)
+            picture.fillColor = color.cgColor
+            picture.fillRule = art.cutsHoles ? .evenOdd : .nonZero
+            return picture
         case .dot:
             let dot = CALayer()
             dot.bounds = CGRect(x: 0, y: 0, width: size, height: size)
@@ -880,10 +927,12 @@ final class KeyView: UIView {
             line.lineCap = .round
             return line
         case .drop:
-            let drop = CALayer()
-            drop.bounds = CGRect(x: 0, y: 0, width: 1.5, height: size)
-            drop.cornerRadius = 0.75
-            drop.backgroundColor = color.cgColor
+            let drop = CAGradientLayer()
+            drop.bounds = CGRect(x: 0, y: 0, width: 2, height: size)
+            drop.cornerRadius = 1
+            drop.colors = [color.withAlphaComponent(0).cgColor, color.cgColor]
+            drop.startPoint = CGPoint(x: 0.5, y: 0)
+            drop.endPoint = CGPoint(x: 0.5, y: 1)
             return drop
         case .soft:
             let puff = CALayer()
@@ -894,6 +943,7 @@ final class KeyView: UIView {
             puff.shadowRadius = 4
             puff.shadowOpacity = 0.8
             puff.shadowOffset = .zero
+            puff.shadowPath = CGPath(ellipseIn: puff.bounds, transform: nil)
             return puff
         case .ring:
             let ring = CAShapeLayer()
@@ -923,6 +973,7 @@ final class KeyView: UIView {
             ember.shadowRadius = 3
             ember.shadowOpacity = 1
             ember.shadowOffset = .zero
+            ember.shadowPath = CGPath(ellipseIn: ember.bounds, transform: nil)
             return ember
         }
     }
@@ -931,12 +982,15 @@ final class KeyView: UIView {
     /// that are on, flying out of the key over the keys around it.
     private func playParticles(_ color: UIColor) {
         guard bounds.width > 0 else { return }
-        let specs = EffectParticles.make(Prefs.effects, keySize: bounds.size) { _, _ in CGFloat.random(in: 0..<1) }
+        var specs = EffectParticles.make(Prefs.effects, keySize: bounds.size) { _, _ in CGFloat.random(in: 0..<1) }
         guard !specs.isEmpty else { return }
+        let allowed = KeyView.reserve(specs.count)
+        guard allowed > 0 else { return }
+        if allowed < specs.count { specs = Array(specs.prefix(allowed)) }
         let target = overlayTarget()
         var specks: [CALayer] = []
         CATransaction.begin()
-        CATransaction.setCompletionBlock { specks.forEach { $0.removeFromSuperlayer() } }
+        CATransaction.setCompletionBlock { specks.forEach { $0.removeFromSuperlayer() }; KeyView.release(allowed) }
         for spec in specs {
             let tint = spec.hue.map { UIColor(hue: $0, saturation: 0.7, brightness: 1, alpha: 1) } ?? color
             let speck = particleLayer(spec, color: tint)
@@ -947,8 +1001,8 @@ final class KeyView: UIView {
             let begin = CACurrentMediaTime() + spec.delay
 
             let move = CAKeyframeAnimation(keyPath: "position")
-            move.values = (0...12).map { step -> NSValue in
-                let offset = spec.path(CGFloat(step) / 12)
+            move.values = (0...20).map { step -> NSValue in
+                let offset = spec.path(CGFloat(step) / 20)
                 return NSValue(cgPoint: CGPoint(x: target.center.x + offset.x, y: target.center.y + offset.y))
             }
             let fade = CAKeyframeAnimation(keyPath: "opacity")
@@ -961,11 +1015,15 @@ final class KeyView: UIView {
                 scale.toValue = spec.scaleTo
                 animations.append(scale)
             }
-            if spec.spin != 0 {
-                let turn = CABasicAnimation(keyPath: "transform.rotation.z")
-                turn.fromValue = 0
-                turn.toValue = spec.spin
-                animations.append(turn)
+            if spec.spin != 0 || spec.tilt != 0 {
+                let tilt = spec.isOriented ? spec.tilt : 0
+                speck.transform = CATransform3DMakeRotation(tilt, 0, 0, 1)
+                if spec.spin != 0 {
+                    let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+                    turn.fromValue = tilt
+                    turn.toValue = tilt + spec.spin
+                    animations.append(turn)
+                }
             }
             for animation in animations {
                 animation.duration = spec.duration
@@ -998,8 +1056,8 @@ final class KeyView: UIView {
 
         // Wide glow, colour, white core: each stroke of the main bolt, then the thinner ones of the forks.
         let strokes: [(path: UIBezierPath, color: UIColor, width: CGFloat, glow: Bool)] = [
-            (main, color.withAlphaComponent(0.5), 9, true), (main, color, 3.5, false), (main, .white, 1.5, false),
-            (forks, color.withAlphaComponent(0.5), 4, true), (forks, color, 1.8, false), (forks, .white, 0.8, false),
+            (main, color.withAlphaComponent(0.3), 14, true), (main, color.withAlphaComponent(0.5), 8, true), (main, color, 3.5, false), (main, .white, 1.5, false),
+            (forks, color.withAlphaComponent(0.3), 8, true), (forks, color.withAlphaComponent(0.5), 4, true), (forks, color, 1.8, false), (forks, .white, 0.8, false),
         ]
         var layers: [CAShapeLayer] = []
         for stroke in strokes {
@@ -1011,12 +1069,6 @@ final class KeyView: UIView {
             layer.lineWidth = stroke.width
             layer.lineJoin = .round
             layer.lineCap = .round
-            if stroke.glow {
-                layer.shadowColor = color.cgColor
-                layer.shadowRadius = 10
-                layer.shadowOpacity = 1
-                layer.shadowOffset = .zero
-            }
             layer.opacity = 0
             target.host.addSublayer(layer)
             layers.append(layer)
@@ -1150,7 +1202,7 @@ final class KeyView: UIView {
     private func neonSweep(_ color: UIColor) {
         guard bounds.width > 0 else { return }
         let duration = Prefs.effects.sweepDuration
-        let width: CGFloat = 2.5
+        let width: CGFloat = 3
         let line = CAShapeLayer()
         line.frame = bounds
         line.path = UIBezierPath(roundedRect: bounds.insetBy(dx: width / 2, dy: width / 2),
@@ -1159,10 +1211,6 @@ final class KeyView: UIView {
         line.strokeColor = color.cgColor
         line.lineWidth = width
         line.lineCap = .round
-        line.shadowColor = color.cgColor
-        line.shadowRadius = 4
-        line.shadowOpacity = 1
-        line.shadowOffset = .zero
         line.opacity = 0
         layer.addSublayer(line)
         CATransaction.begin()
@@ -1191,14 +1239,19 @@ final class KeyView: UIView {
         let column = CAGradientLayer()
         column.bounds = CGRect(x: 0, y: 0, width: bounds.width * 0.5, height: height)
         column.anchorPoint = CGPoint(x: 0.5, y: 1)
-        column.position = target.center
+        // Held in a layer on the key's middle, which turns the beam to the chosen direction.
+        let turner = CALayer()
+        turner.position = target.center
+        turner.transform = CATransform3DMakeRotation(effectTurn(), 0, 0, 1)
+        column.position = .zero
         column.colors = [color.withAlphaComponent(0.8).cgColor, color.withAlphaComponent(0).cgColor]
         column.startPoint = CGPoint(x: 0.5, y: 1)
         column.endPoint = CGPoint(x: 0.5, y: 0)
         column.opacity = 0
-        target.host.addSublayer(column)
+        turner.addSublayer(column)
+        target.host.addSublayer(turner)
         CATransaction.begin()
-        CATransaction.setCompletionBlock { column.removeFromSuperlayer() }
+        CATransaction.setCompletionBlock { turner.removeFromSuperlayer() }
         let grow = CABasicAnimation(keyPath: "transform.scale.y")
         grow.fromValue = 0.15
         grow.toValue = 1
