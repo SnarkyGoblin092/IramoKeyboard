@@ -89,6 +89,15 @@ enum SystemEdits {
 
 // MARK: - Effects
 
+/// What one effect looks like on its own: its colour, the way it goes and where on the key it starts. "inherit" takes
+/// the setting for all the effects.
+struct EffectStyle: Hashable, Codable {
+    var colorMode = "inherit"
+    var customColor = ThemeRGBA(hex: 0x00E5FF)
+    var direction = "inherit"
+    var position = "inherit"
+}
+
 /// Everything the Effects screen changes: effects played on a key as it is pressed, each with its own settings.
 struct EffectsConfig: Hashable, Codable {
     /// "accent", "white", "rainbow" (a new hue each press) or "custom".
@@ -99,6 +108,9 @@ struct EffectsConfig: Hashable, Codable {
     var direction = "auto"
     /// Where on the key the effects start: "auto" (the middle), "top", "bottom", "left", "right" or "random".
     var position = "auto"
+    /// The effects that have a colour, direction or position of their own, by effect id (the flag's name, or the
+    /// catalog's id).
+    var styles: [String: EffectStyle] = [:]
 
     /// A light around the key that fades in under the finger and out after it lifts.
     var glow = false
@@ -269,6 +281,7 @@ struct EffectsConfig: Hashable, Codable {
         colorMode = value(c, .colorMode, colorMode)
         direction = value(c, .direction, direction)
         position = value(c, .position, position)
+        styles = value(c, .styles, styles)
         customColor = value(c, .customColor, customColor)
         glow = value(c, .glow, glow)
         glowStrength = value(c, .glowStrength, glowStrength)
@@ -427,6 +440,36 @@ struct EffectsConfig: Hashable, Codable {
     static let sweepDurationRange: ClosedRange<Double> = 0.2...1.2
     static let beamHeightRange: ClosedRange<Double> = 1.0...5.0
     static let trailGlowRange: ClosedRange<Double> = 0.2...1
+
+    // MARK: Each effect's own look
+
+    func style(_ id: String) -> EffectStyle { return styles[id] ?? EffectStyle() }
+
+    mutating func editStyle(_ id: String, _ edit: (inout EffectStyle) -> Void) {
+        var next = style(id)
+        edit(&next)
+        if next == EffectStyle() { styles.removeValue(forKey: id) } else { styles[id] = next }
+    }
+
+    /// The colour mode of an effect: its own, else the one for all.
+    func mode(for id: String) -> String {
+        let own = style(id).colorMode
+        return own == "inherit" ? colorMode : own
+    }
+
+    func custom(for id: String) -> ThemeRGBA {
+        return style(id).colorMode == "custom" ? style(id).customColor : customColor
+    }
+
+    func direction(for id: String) -> String {
+        let own = style(id).direction
+        return own == "inherit" ? direction : own
+    }
+
+    func position(for id: String) -> String {
+        let own = style(id).position
+        return own == "inherit" ? position : own
+    }
 
     // MARK: The catalog's effects
 

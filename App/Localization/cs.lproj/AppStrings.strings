@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Kterým směrem se efekty pohybují. Automatický nechá každý efekt jít tím směrem, pro který byl navržen; Náhodný zvolí při každém stisku nový směr.";
 "Middle" = "Střed";
 "Where on the key the effects start. Random picks a new spot for every press." = "Kde na klávese efekty začnou. Náhodně vybere nové místo při každém stisku.";
+"Warm" = "Teplé";
+"Cool" = "Chladné";
+"Pastel" = "Pastelové";
+"Same as all effects" = "Stejné jako všechny efekty";

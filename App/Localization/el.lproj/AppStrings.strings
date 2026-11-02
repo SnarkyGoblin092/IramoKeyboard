@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Προς τα πού κινούνται τα εφέ. Το Αυτόματο αφήνει κάθε εφέ να κινηθεί όπως σχεδιάστηκε· το Τυχαία επιλέγει νέα κατεύθυνση σε κάθε πάτημα.";
 "Middle" = "Μέση";
 "Where on the key the effects start. Random picks a new spot for every press." = "Από πού στο πλήκτρο ξεκινούν τα εφέ. Η Τυχαία επιλέγει νέα θέση σε κάθε πάτημα.";
+"Warm" = "Ζεστά";
+"Cool" = "Ψυχρά";
+"Pastel" = "Παστέλ";
+"Same as all effects" = "Όπως όλα τα εφέ";

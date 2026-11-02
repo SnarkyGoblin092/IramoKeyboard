@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "प्रभाव किस दिशा में चलें। ऑटो हर प्रभाव को उसकी डिज़ाइन के अनुसार चलने देता है; रैंडम हर बार दबाने पर एक नई दिशा चुनता है।";
 "Middle" = "बीच में";
 "Where on the key the effects start. Random picks a new spot for every press." = "कुंजी पर किस जगह से प्रभाव शुरू हों। रैंडम हर दबाने पर नई जगह चुनता है।";
+"Warm" = "गर्म";
+"Cool" = "ठंडा";
+"Pastel" = "पेस्टल";
+"Same as all effects" = "सभी प्रभावों जैसा";

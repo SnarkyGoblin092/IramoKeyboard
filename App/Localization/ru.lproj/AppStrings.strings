@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Куда движутся эффекты. Авто оставляет каждому эффекту направление, для которого он создан; Случайное выбирает новое направление при каждом нажатии.";
 "Middle" = "Середина";
 "Where on the key the effects start. Random picks a new spot for every press." = "Где на клавише начинаются эффекты. Случайно выбирает новое место при каждом нажатии.";
+"Warm" = "Тёплая";
+"Cool" = "Холодная";
+"Pastel" = "Пастельная";
+"Same as all effects" = "Как у всех эффектов";

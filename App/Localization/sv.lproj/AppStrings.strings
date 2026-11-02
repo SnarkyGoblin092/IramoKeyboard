@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Åt vilket håll effekterna rör sig. Auto låter varje effekt röra sig åt det håll den designades för; Slumpmässig väljer en ny riktning vid varje tryckning.";
 "Middle" = "Mitten";
 "Where on the key the effects start. Random picks a new spot for every press." = "Var på tangenten effekterna startar. Slumpmässig väljer en ny plats för varje tryckning.";
+"Warm" = "Varm";
+"Cool" = "Sval";
+"Pastel" = "Pastell";
+"Same as all effects" = "Samma som alla effekter";

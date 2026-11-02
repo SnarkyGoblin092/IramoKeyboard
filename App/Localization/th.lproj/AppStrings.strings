@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "เอฟเฟกต์จะเคลื่อนที่ไปทางไหน อัตโนมัติ ให้แต่ละเอฟเฟกต์เคลื่อนไปในทิศทางที่ออกแบบไว้ สุ่ม เลือกทิศทางใหม่ทุกครั้งที่กด";
 "Middle" = "ตรงกลาง";
 "Where on the key the effects start. Random picks a new spot for every press." = "เอฟเฟกต์จะเริ่มที่ตำแหน่งใดบนปุ่ม สุ่มจะเลือกตำแหน่งใหม่ทุกครั้งที่กด";
+"Warm" = "อุ่น";
+"Cool" = "เย็น";
+"Pastel" = "พาสเทล";
+"Same as all effects" = "เหมือนเอฟเฟกต์ทั้งหมด";

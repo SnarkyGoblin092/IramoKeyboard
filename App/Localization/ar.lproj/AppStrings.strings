@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "اتجاه حركة التأثيرات. يتيح الخيار التلقائي لكل تأثير أن يتحرك بالاتجاه الذي صُمم له، أما العشوائي فيختار اتجاهاً جديداً مع كل ضغطة.";
 "Middle" = "المنتصف";
 "Where on the key the effects start. Random picks a new spot for every press." = "مكان بدء التأثيرات على المفتاح. عشوائي يختار موضعا جديدا مع كل ضغطة.";
+"Warm" = "دافئ";
+"Cool" = "بارد";
+"Pastel" = "باستيل";
+"Same as all effects" = "مثل كل التأثيرات";

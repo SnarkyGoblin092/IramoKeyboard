@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Kierunek ruchu efektów. Auto pozwala każdemu efektowi poruszać się w zaprojektowanym kierunku; Losowy wybiera nowy kierunek przy każdym naciśnięciu.";
 "Middle" = "Środek";
 "Where on the key the effects start. Random picks a new spot for every press." = "Miejsce na klawiszu, w którym zaczynają się efekty. Losowo wybiera nowe miejsce przy każdym naciśnięciu.";
+"Warm" = "Ciepła";
+"Cool" = "Chłodna";
+"Pastel" = "Pastelowa";
+"Same as all effects" = "Jak we wszystkich efektach";

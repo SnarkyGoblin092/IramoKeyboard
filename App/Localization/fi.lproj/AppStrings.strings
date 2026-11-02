@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Mihin suuntaan tehosteet liikkuvat. Automaattinen antaa jokaisen tehosteen kulkea suunnittelunsa mukaan; Satunnainen valitsee uuden suunnan joka painalluksella.";
 "Middle" = "Keskellä";
 "Where on the key the effects start. Random picks a new spot for every press." = "Missä kohdassa näppäintä efektit alkavat. Satunnainen valitsee uuden kohdan jokaisella painalluksella.";
+"Warm" = "Lämmin";
+"Cool" = "Viileä";
+"Pastel" = "Pastelli";
+"Same as all effects" = "Sama kuin kaikissa tehosteissa";

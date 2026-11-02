@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "효과가 움직이는 방향입니다. 자동은 각 효과가 설계된 방향으로 움직이게 하고, 무작위는 누를 때마다 새 방향을 고릅니다.";
 "Middle" = "가운데";
 "Where on the key the effects start. Random picks a new spot for every press." = "키에서 효과가 시작되는 위치입니다. 무작위는 누를 때마다 새 위치를 고릅니다.";
+"Warm" = "따뜻함";
+"Cool" = "차가움";
+"Pastel" = "파스텔";
+"Same as all effects" = "모든 효과와 같음";

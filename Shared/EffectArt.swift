@@ -277,6 +277,51 @@ enum EffectArt: Hashable {
     }
 }
 
+/// The colours an effect can have: one colour (the accent, white or the user's own) or a spread of them.
+enum EffectPalette {
+    static let modes = ["accent", "white", "rainbow", "warm", "cool", "pastel", "neon", "random", "custom"]
+
+    /// Whether every press (or every speck) gets a colour of its own.
+    static func isMulti(_ mode: String) -> Bool {
+        return ["rainbow", "warm", "cool", "pastel", "neon", "random"].contains(mode)
+    }
+
+    /// The hue, saturation and brightness of one colour of the palette; `h` is a number in 0..<1 picking it.
+    static func tint(_ mode: String, _ h: CGFloat) -> EffectTint {
+        let h = h - floor(h)
+        switch mode {
+        case "warm": return EffectTint(h: h * 0.14, s: 0.85, b: 1)
+        case "cool": return EffectTint(h: 0.48 + h * 0.3, s: 0.75, b: 1)
+        case "pastel": return EffectTint(h: h, s: 0.32, b: 1)
+        case "neon": return EffectTint(h: h, s: 1, b: 1)
+        default: return EffectTint(h: h, s: 0.75, b: 1)
+        }
+    }
+
+    /// A plain colour as a tint.
+    static func tint(of color: ThemeRGBA) -> EffectTint {
+        let high = max(color.r, color.g, color.b)
+        let low = min(color.r, color.g, color.b)
+        let delta = high - low
+        var hue = 0.0
+        if delta > 0 {
+            if high == color.r { hue = ((color.g - color.b) / delta).truncatingRemainder(dividingBy: 6) }
+            else if high == color.g { hue = (color.b - color.r) / delta + 2 }
+            else { hue = (color.r - color.g) / delta + 4 }
+            hue /= 6
+            if hue < 0 { hue += 1 }
+        }
+        return EffectTint(h: CGFloat(hue), s: CGFloat(high == 0 ? 0 : delta / high), b: CGFloat(high))
+    }
+}
+
+/// A colour as hue, saturation and brightness (0...1 each).
+struct EffectTint: Hashable {
+    var h: CGFloat
+    var s: CGFloat
+    var b: CGFloat
+}
+
 /// Where on the key the effects start: the Effects screen's position setting moves the effects that leave the key
 /// (specks, sparks, confetti, bubbles, the echo, the shockwave, the bolt, the beam) and the ripple.
 enum EffectPosition {

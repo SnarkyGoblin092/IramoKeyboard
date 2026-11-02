@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Virziens, kurā pārvietojas efekti. Auto ļauj katram efektam virzīties tā, kā tas ir paredzēts; Nejauši katru reizi izvēlas jaunu virzienu.";
 "Middle" = "Vidus";
 "Where on the key the effects start. Random picks a new spot for every press." = "Kur uz taustiņa sākas efekti. Nejaušs katram nospiedienam izvēlas jaunu vietu.";
+"Warm" = "Silta";
+"Cool" = "Auksta";
+"Pastel" = "Pasteļtoņi";
+"Same as all effects" = "Kā visiem efektiem";

@@ -36,6 +36,8 @@ struct EffectParticle {
     var peak: CGFloat = 1
     /// A hue of its own (the rainbow colour); nil takes the press's colour.
     var hue: CGFloat? = nil
+    /// Its colour as the effect's palette gives it; nil takes the press's colour (the accent).
+    var tint: EffectTint? = nil
     /// How far it is turned (radians, clockwise) while it flies, for the shapes that point somewhere (rain, rockets,
     /// arrows): set by the direction setting. Spin comes on top of it.
     var tilt: CGFloat = 0
@@ -58,16 +60,16 @@ enum EffectParticles {
     static func make(_ config: EffectsConfig, keySize: CGSize, random: @escaping (Int, Int) -> CGFloat) -> [EffectParticle] {
         let w = max(keySize.width, 1)
         let h = max(keySize.height, 1)
-        let rainbow = config.colorMode == "rainbow"
+        let rainbow = true   // every speck has a hue; the effect's colour setting decides whether it is used
         var list: [EffectParticle] = []
         // The direction setting turns each effect in turn (it needs to know where one ends and the next begins).
         var groupStart = 0
         var groupIndex = 0
+        var groupID = ""
         func flush() {
             defer { groupStart = list.count; groupIndex += 1 }
-            guard config.direction != "auto", groupStart < list.count,
-                  let target = EffectDirection.target(config.direction, random: { random(9000 + groupIndex, 1) }) else { return }
-            redirect(&list, from: groupStart, to: target, scale: w)
+            guard groupStart < list.count else { return }
+            finish(&list, from: groupStart, id: groupID, config: config, size: keySize) { random(9100 + groupIndex, $0) }
         }
 
         func count(_ value: Double) -> Int { return max(1, Int(value.rounded())) }
@@ -75,6 +77,7 @@ enum EffectParticles {
         func hue(_ base: Int, _ i: Int) -> CGFloat? { return rainbow ? random(base + i, 99) : nil }
 
         flush()
+        groupID = "hearts"
         if config.hearts {
             for i in 0..<count(config.heartCount) {
                 let r = { (salt: Int) in random(100 + i, salt) }
@@ -92,6 +95,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "stars"
         if config.stars {
             let n = count(config.starCount)
             for i in 0..<n {
@@ -109,6 +113,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "snow"
         if config.snow {
             for i in 0..<count(config.snowCount) {
                 let r = { (salt: Int) in random(300 + i, salt) }
@@ -123,6 +128,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "notes"
         if config.notes {
             for i in 0..<count(config.noteCount) {
                 let r = { (salt: Int) in random(400 + i, salt) }
@@ -139,6 +145,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "fireworks"
         if config.fireworks {
             for i in 0..<count(config.fireworkCount) {
                 let r = { (salt: Int) in random(500 + i, salt) }
@@ -155,6 +162,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "starburst"
         if config.starburst {
             let n = count(config.rayCount)
             for i in 0..<n {
@@ -168,6 +176,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "rain"
         if config.rain {
             for i in 0..<count(config.rainCount) {
                 let r = { (salt: Int) in random(700 + i, salt) }
@@ -185,6 +194,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "embers"
         if config.embers {
             for i in 0..<count(config.emberCount) {
                 let r = { (salt: Int) in random(800 + i, salt) }
@@ -200,6 +210,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "smoke"
         if config.smoke {
             for i in 0..<count(config.smokeCount) {
                 let r = { (salt: Int) in random(900 + i, salt) }
@@ -211,6 +222,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "orbit"
         if config.orbit {
             let n = count(config.orbitCount)
             for i in 0..<n {
@@ -223,6 +235,7 @@ enum EffectParticles {
             }
         }
         flush()
+        groupID = "spiral"
         if config.spiral {
             let n = count(config.spiralCount)
             for i in 0..<n {
@@ -244,6 +257,46 @@ enum EffectParticles {
 }
 
 extension EffectParticles {
+    /// Everything that makes one effect's particles its own for this press: the way it goes (the effect's direction
+    /// setting), a place and a way of its own so it does not repeat, where on the key it starts and its colour.
+    static func finish(_ list: inout [EffectParticle], from start: Int, id: String, config: EffectsConfig, size: CGSize,
+                       random: (Int) -> CGFloat) {
+        guard start < list.count else { return }
+        let w = max(size.width, 1)
+        let h = max(size.height, 1)
+        let direction = config.direction(for: id)
+        if direction != "auto", let target = EffectDirection.target(direction, random: { random(2) }) {
+            redirect(&list, from: start, to: target, scale: w)
+        }
+        scatter(&list, from: start, width: w, height: h) { random(10 + $0) }
+        var draws = 0
+        let place = EffectPosition.offset(config.position(for: id), size: size, random: { draws += 1; return random(20 + draws) })
+        if place != .zero {
+            for index in start..<list.count {
+                let old = list[index].path
+                list[index].path = { t in
+                    let point = old(t)
+                    return CGPoint(x: point.x + place.x, y: point.y + place.y)
+                }
+            }
+        }
+        // The colour.
+        let mode = config.mode(for: id)
+        let custom = config.custom(for: id)
+        for index in start..<list.count {
+            switch mode {
+            case "accent":
+                list[index].tint = nil
+            case "white":
+                list[index].tint = EffectTint(h: 0, s: 0, b: 1)
+            case "custom":
+                list[index].tint = EffectPalette.tint(of: custom)
+            default:
+                list[index].tint = EffectPalette.tint(mode, list[index].hue ?? random(40 + index))
+            }
+        }
+    }
+
     /// Turns the particles `list[from...]` (one effect) so that the way they mainly go points at `target` (see
     /// EffectDirection). Effects that spread evenly in every direction have no way of their own and stay as they are.
     static func redirect(_ list: inout [EffectParticle], from start: Int, to target: CGFloat, scale: CGFloat) {
@@ -262,6 +315,27 @@ extension EffectParticles {
         for index in start..<list.count {
             let old = list[index].path
             list[index].path = { t in EffectDirection.turn(old(t), by: turn) }
+            if list[index].isOriented { list[index].tilt += turn }
+            if case .streak(let angle) = list[index].shape { list[index].shape = .streak(angle: angle + turn) }
+        }
+    }
+}
+
+extension EffectParticles {
+    /// Gives one effect a place and a way of its own for this press, so it does not start at the same spot and fly
+    /// the same way every time: all of its particles are moved together by a random distance and turned a little
+    /// (about 17 degrees either way). `random(salt)` is a number in 0..<1.
+    static func scatter(_ list: inout [EffectParticle], from start: Int, width: CGFloat, height: CGFloat,
+                        random: (Int) -> CGFloat) {
+        guard start < list.count else { return }
+        let turn = (random(1) * 2 - 1) * 0.3
+        let shift = CGPoint(x: (random(2) * 2 - 1) * width * 0.3, y: (random(3) * 2 - 1) * height * 0.25)
+        for index in start..<list.count {
+            let old = list[index].path
+            list[index].path = { t in
+                let point = EffectDirection.turn(old(t), by: turn)
+                return CGPoint(x: point.x + shift.x, y: point.y + shift.y)
+            }
             if list[index].isOriented { list[index].tilt += turn }
             if case .streak(let angle) = list[index].shape { list[index].shape = .streak(angle: angle + turn) }
         }

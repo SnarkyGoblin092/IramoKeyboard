@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Cap on es mouen els efectes. Automàtic deixa cada efecte anar en la direcció en què va ser dissenyat; Aleatòria tria una direcció nova cada vegada.";
 "Middle" = "Centre";
 "Where on the key the effects start. Random picks a new spot for every press." = "On a la tecla començaran els efectes. Aleatori tria un lloc nou a cada pulsació.";
+"Warm" = "Càlid";
+"Cool" = "Fred";
+"Pastel" = "Pastel";
+"Same as all effects" = "Igual que tots els efectes";

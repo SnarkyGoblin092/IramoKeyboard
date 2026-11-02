@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "جهت حرکت جلوه‌ها. خودکار هر جلوه را در جهتی که طراحی شده حرکت می‌دهد و تصادفی با هر فشردن جهت تازه‌ای انتخاب می‌کند.";
 "Middle" = "وسط";
 "Where on the key the effects start. Random picks a new spot for every press." = "محل شروع جلوه‌ها روی کلید. تصادفی با هر فشار نقطه‌ی تازه‌ای انتخاب می‌کند.";
+"Warm" = "گرم";
+"Cool" = "سرد";
+"Pastel" = "پاستلی";
+"Same as all effects" = "مانند همه جلوه‌ها";

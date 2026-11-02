@@ -296,11 +296,9 @@ enum EffectCatalog {
             let context = EffectContext(w: max(keySize.width, 1), h: max(keySize.height, 1), n: n,
                                         size: CGFloat(config.setting(item, "size")), speed: config.setting(item, "speed"),
                                         extra: CGFloat(item.params.count > 3 ? config.setting(item, item.params[3].id) : 1),
-                                        seed: 2000 + index * 100, rainbow: config.colorMode == "rainbow", random: random)
+                                        seed: 2000 + index * 100, rainbow: true, random: random)
             var group = item.build(context)
-            if let target = EffectDirection.target(config.direction, random: { random(9500 + index, 1) }) {
-                EffectParticles.redirect(&group, from: 0, to: target, scale: context.w)
-            }
+            EffectParticles.finish(&group, from: 0, id: item.id, config: config, size: keySize) { random(9600 + index, $0) }
             list += group
         }
         return list

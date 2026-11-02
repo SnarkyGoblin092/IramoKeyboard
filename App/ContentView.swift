@@ -30,6 +30,7 @@ struct ContentView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationDestination(for: Screen.self) { $0.view }
         }
+        .toggleStyle(GlassSwitchStyle())   // every switch in the app is a piece of Liquid Glass
         // Everything is built again in the new language when it changes (tr reads it as the views are drawn).
         .id(appLanguage)
         .environment(\.locale, AppLanguage.locale)

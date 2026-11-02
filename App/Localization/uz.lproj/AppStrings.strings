@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Effektlar qaysi yo'nalishda harakatlanishi. Avto har bir effektni ishlab chiqilgan yo'nalishda qoldiradi; Tasodifiy har bosishda yangi yo'nalish tanlaydi.";
 "Middle" = "O'rta";
 "Where on the key the effects start. Random picks a new spot for every press." = "Effektlar tugmaning qayerida boshlanishi. Tasodifiy har bir bosishda yangi joyni tanlaydi.";
+"Warm" = "Iliq";
+"Cool" = "Sovuq";
+"Pastel" = "Pastel";
+"Same as all effects" = "Barcha effektlar bilan bir xil";

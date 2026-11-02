@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "效果嘅移動方向。自動會令每個效果跟返設計時嘅方向；隨機每次按都揀一個新方向。";
 "Middle" = "中間";
 "Where on the key the effects start. Random picks a new spot for every press." = "效果喺按鍵嘅邊個位置開始。隨機會每次按下都揀一個新位置。";
+"Warm" = "暖色";
+"Cool" = "冷色";
+"Pastel" = "柔和色";
+"Same as all effects" = "同所有效果一樣";

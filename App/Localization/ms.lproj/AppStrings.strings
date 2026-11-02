@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Arah pergerakan kesan. Auto membiarkan setiap kesan bergerak mengikut reka bentuknya; Rawak memilih arah baharu setiap kali tekan.";
 "Middle" = "Tengah";
 "Where on the key the effects start. Random picks a new spot for every press." = "Di mana pada kekunci kesan bermula. Rawak memilih tempat baharu setiap kali ditekan.";
+"Warm" = "Hangat";
+"Cool" = "Sejuk";
+"Pastel" = "Pastel";
+"Same as all effects" = "Sama seperti semua kesan";

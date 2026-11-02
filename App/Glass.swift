@@ -630,6 +630,127 @@ extension View {
     }
 }
 
+/// The app's switch: a glass groove that fills with the accent when on, and a glass bead that slides across it
+/// (a frosted material before iOS 26). Every Toggle in the app takes it (ContentView sets it on the whole app).
+struct GlassSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 12) {
+                configuration.label.frame(maxWidth: .infinity, alignment: .leading)
+                GlassSwitchKnob(isOn: configuration.isOn)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(configuration.isOn ? "1" : "0")
+        .modifier(SwitchTrait())
+    }
+}
+
+private struct SwitchTrait: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.accessibilityAddTraits(.isToggle)
+        } else {
+            content.accessibilityAddTraits(.isButton)
+        }
+    }
+}
+
+/// The switch itself: the groove and the bead.
+private struct GlassSwitchKnob: View {
+    let isOn: Bool
+    @Environment(\.isEnabled) private var isEnabled
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    var body: some View {
+        let accent = Color.currentAccent(name: accentName, hex: accentHex)
+        let bead: CGFloat = 27
+        ZStack(alignment: .leading) {
+            Capsule().fill(Color.clear).frame(width: 52, height: 32)
+                .glassShape(Capsule(), tint: isOn ? accent.opacity(0.85) : nil)
+            Circle().fill(Color.clear).frame(width: bead, height: bead)
+                .glassShape(Circle(), tint: Color.white.opacity(0.4), interactive: true)
+                .shadow(color: .black.opacity(0.18), radius: 3, y: 1.5)
+                .offset(x: isOn ? 52 - bead - 2.5 : 2.5)
+        }
+        .frame(width: 52, height: 32)
+        .animation(.spring(response: 0.3, dampingFraction: 0.72), value: isOn)
+        .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A row showing the current choice that opens a glass screen to pick another (instead of a system menu, whose popup
+/// is drawn over the pinned keyboard, or a system selection list, which has neither the glass nor the backdrop).
+struct GlassChoiceLink<Value: Hashable>: View {
+    let title: String
+    let symbol: String
+    let options: [(value: Value, name: String)]
+    let selected: Value?
+    /// What the row says when nothing in `options` is selected (a mix of the user's own).
+    var otherName: String? = nil
+    let choose: (Value) -> Void
+
+    private var currentName: String {
+        return options.first { $0.value == selected }?.name ?? otherName ?? ""
+    }
+
+    var body: some View {
+        NavigationLink {
+            GlassChoiceScreen(title: title, options: options, selected: selected, choose: choose)
+        } label: {
+            HStack {
+                Label(title, systemImage: symbol)
+                Spacer()
+                Text(currentName).foregroundColor(.secondary)
+                DisclosureChevron()
+            }
+            .foregroundColor(.primary)
+            .contentShape(Rectangle())
+        }
+    }
+}
+
+/// The screen of a GlassChoiceLink: the choices as glass rows on the app's backdrop, a tick on the chosen one.
+private struct GlassChoiceScreen<Value: Hashable>: View {
+    let title: String
+    let options: [(value: Value, name: String)]
+    let selected: Value?
+    let choose: (Value) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        GlassList {
+            Section {
+                ForEach(options.indices, id: \.self) { index in
+                    Button {
+                        Feedback.choose()
+                        choose(options[index].value)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(options[index].name).foregroundColor(.primary)
+                            Spacer()
+                            if options[index].value == selected {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold))
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+            }
+            .glassRows()
+        }
+        .glassScreen()
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 /// The disclosure arrow of a NavigationLink row on the glass cards (a List draws its own).
 struct DisclosureChevron: View {
     @Environment(\.inGlassCards) private var inGlassCards

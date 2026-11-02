@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Smjer kretanja efekata. Auto ostavlja svaki efekt da ide smjerom za koji je osmišljen; Nasumično bira novi smjer pri svakom pritisku.";
 "Middle" = "Sredina";
 "Where on the key the effects start. Random picks a new spot for every press." = "Gdje na tipki efekti počinju. Nasumično bira novo mjesto pri svakom pritisku.";
+"Warm" = "Toplo";
+"Cool" = "Hladno";
+"Pastel" = "Pastelno";
+"Same as all effects" = "Kao svi efekti";

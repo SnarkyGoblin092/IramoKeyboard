@@ -732,3 +732,7 @@
 "Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press." = "Efektlerin hangi yöne gideceği. Otomatik her efektin tasarlandığı yöne gitmesini sağlar; Rastgele her basışta yeni bir yön seçer.";
 "Middle" = "Orta";
 "Where on the key the effects start. Random picks a new spot for every press." = "Efektlerin tuşun neresinden başlayacağı. Rastgele her basışta yeni bir yer seçer.";
+"Warm" = "Sıcak";
+"Cool" = "Soğuk";
+"Pastel" = "Pastel";
+"Same as all effects" = "Tüm efektlerle aynı";

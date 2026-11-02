@@ -6,7 +6,7 @@ import SwiftUI
 struct EffectsView: View {
     @AppStorage(SettingKey.effects, store: SharedStore.defaults) private var json = SettingDefault.effects
 
-    private let colorModes = ["accent", "white", "rainbow", "custom"]
+    private let colorModes = EffectPalette.modes
 
     private var config: EffectsConfig { return EffectsConfig.decode(json) }
 
@@ -21,6 +21,59 @@ struct EffectsView: View {
     private var positionNames: [(mode: String, name: String)] {
         return [("auto", tr("Middle")), ("top", tr("Top")), ("bottom", tr("Bottom")), ("left", tr("Left")),
                 ("right", tr("Right")), ("random", tr("Random"))]
+    }
+
+    private func colorName(_ mode: String) -> String {
+        switch mode {
+        case "accent": return tr("Accent")
+        case "white": return tr("White")
+        case "rainbow": return tr("Rainbow")
+        case "warm": return tr("Warm")
+        case "cool": return tr("Cool")
+        case "pastel": return tr("Pastel")
+        case "neon": return tr("Neon")
+        case "random": return tr("Random")
+        case "custom": return tr("Custom")
+        default: return tr("Same as all effects")
+        }
+    }
+
+    // What each effect can have of its own. The others have no colour, or no way or place that would show.
+    private static let plain: Set<String> = ["pop", "squish", "jelly", "heartbeat", "flip", "shake", "drop", "glitch", "echo", "trail"]
+    private static let going: Set<String> = ["confetti", "bubbles", "echo", "beam", "hearts", "snow", "notes", "rain", "embers", "smoke"]
+    private static let placed: Set<String> = ["ripple", "sparks", "echo", "shockwave", "confetti", "bubbles", "lightning", "beam", "hearts",
+                                              "stars", "snow", "notes", "fireworks", "starburst", "rain", "embers", "smoke", "orbit", "spiral"]
+
+    private func editStyle(_ id: String, _ edit: @escaping (inout EffectStyle) -> Void) {
+        var next = config
+        next.editStyle(id, edit)
+        json = next.encoded()
+    }
+
+    /// The colour, direction and position of one effect, under its switch.
+    @ViewBuilder private func lookRows(_ id: String) -> some View {
+        let isCatalog = EffectCatalog.entry(id) != nil
+        let style = config.style(id)
+        if isCatalog || !EffectsView.plain.contains(id) {
+            GlassChoiceLink(title: tr("Colour"), symbol: "paintpalette",
+                            options: ["inherit"].map { (value: $0, name: colorName($0)) } + colorModes.map { (value: $0, name: colorName($0)) },
+                            selected: style.colorMode) { mode in editStyle(id) { $0.colorMode = mode } }
+            if style.colorMode == "custom" {
+                ColorPicker(tr("Custom colour"), selection: Binding(get: { Color(style.customColor) }, set: { color in
+                    editStyle(id) { $0.customColor = ThemeRGBA(effectColor: color) }
+                }), supportsOpacity: false)
+            }
+        }
+        if isCatalog || EffectsView.going.contains(id) {
+            GlassChoiceLink(title: tr("Direction"), symbol: "arrow.up.and.down.and.arrow.left.and.right",
+                            options: [(value: "inherit", name: tr("Same as all effects"))] + directionNames.map { (value: $0.mode, name: $0.name) },
+                            selected: style.direction) { value in editStyle(id) { $0.direction = value } }
+        }
+        if isCatalog || EffectsView.placed.contains(id) {
+            GlassChoiceLink(title: tr("Position"), symbol: "scope",
+                            options: [(value: "inherit", name: tr("Same as all effects"))] + positionNames.map { (value: $0.mode, name: $0.name) },
+                            selected: style.position) { value in editStyle(id) { $0.position = value } }
+        }
     }
 
     private var directionNames: [(mode: String, name: String)] {
@@ -104,7 +157,7 @@ struct EffectsView: View {
             c.hearts = true; c.heartCount = 8
             c.heartbeat = true
             c.glow = true; c.glowStrength = 0.5
-            return c
+            c.editStyle("hearts") { $0.colorMode = "warm" }; return c
         },
         Preset(name: tr("Winter")) {
             var c = EffectsConfig()
@@ -113,7 +166,7 @@ struct EffectsView: View {
             c.colorMode = "white"
             c.snow = true; c.snowCount = 14
             c.sweep = true
-            return c
+            c.editStyle("snow") { $0.colorMode = "white" }; c.editStyle("sweep") { $0.colorMode = "cool" }; return c
         },
         Preset(name: tr("Storm")) {
             var c = EffectsConfig()
@@ -122,7 +175,7 @@ struct EffectsView: View {
             c.rain = true; c.rainCount = 12
             c.lightning = true
             c.shake = true
-            return c
+            c.editStyle("rain") { $0.colorMode = "cool" }; return c
         },
         Preset(name: tr("Party")) {
             var c = EffectsConfig()
@@ -132,7 +185,7 @@ struct EffectsView: View {
             c.fireworks = true
             c.stars = true
             c.confetti = true
-            return c
+            c.editStyle("confetti") { $0.colorMode = "pastel" }; c.editStyle("fireworks") { $0.colorMode = "neon" }; return c
         },
         Preset(name: tr("Cyber")) {
             var c = EffectsConfig()
@@ -158,7 +211,7 @@ struct EffectsView: View {
             c.setOn("petals", true)
             c.setOn("butterflies", true)
             c.setOn("sakura", true)
-            return c
+            c.editStyle("petals") { $0.colorMode = "pastel" }; return c
         },
         Preset(name: tr("Arcade")) {
             var c = EffectsConfig()
@@ -184,14 +237,14 @@ struct EffectsView: View {
             c.echo = true
             return c
         },
-        Preset(name: tr("Sunset")) { var c = EffectsConfig.tinted(0xFF7A45); c.glow = true; c.glowSpread = 1.6; c.setOn("flames", true); c.setOn("halo", true); return c },
-        Preset(name: tr("Ocean")) { var c = EffectsConfig.tinted(0x2AA8FF); c.bubbles = true; c.bubbleCount = 7; c.ripple = true; c.rippleStyle = "ring"; c.setOn("splash", true); return c },
+        Preset(name: tr("Sunset")) { var c = EffectsConfig.tinted(0xFF7A45); c.glow = true; c.glowSpread = 1.6; c.setOn("flames", true); c.setOn("halo", true); c.editStyle("flames") { $0.colorMode = "warm" }; c.editStyle("halo") { $0.colorMode = "pastel" }; return c },
+        Preset(name: tr("Ocean")) { var c = EffectsConfig.tinted(0x2AA8FF); c.bubbles = true; c.bubbleCount = 7; c.ripple = true; c.rippleStyle = "ring"; c.setOn("splash", true); c.editStyle("bubbles") { $0.colorMode = "cool" }; c.editStyle("splash") { $0.colorMode = "cool" }; return c },
         Preset(name: tr("Forest")) { var c = EffectsConfig.tinted(0x4CD964); c.position = "bottom"; c.direction = "up"; c.setOn("leaves", true); c.setOn("fireflies", true); c.glow = true; c.glowStrength = 0.4; return c },
-        Preset(name: tr("Candy")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.pop = true; c.popScale = 1.4; c.setOn("balloons", true); c.setOn("glitter", true); return c },
-        Preset(name: tr("Lava")) { var c = EffectsConfig.tinted(0xFF4A1C); c.position = "bottom"; c.direction = "up"; c.glow = true; c.glowStrength = 0.9; c.glowSpread = 2; c.embers = true; c.smoke = true; c.shake = true; return c },
+        Preset(name: tr("Candy")) { var c = EffectsConfig(); c.position = "random"; c.direction = "random"; c.colorMode = "rainbow"; c.pop = true; c.popScale = 1.4; c.setOn("balloons", true); c.setOn("glitter", true); c.editStyle("glitter") { $0.colorMode = "pastel" }; c.editStyle("balloons") { $0.colorMode = "neon" }; return c },
+        Preset(name: tr("Lava")) { var c = EffectsConfig.tinted(0xFF4A1C); c.position = "bottom"; c.direction = "up"; c.glow = true; c.glowStrength = 0.9; c.glowSpread = 2; c.embers = true; c.smoke = true; c.shake = true; c.editStyle("embers") { $0.colorMode = "warm" }; c.editStyle("smoke") { $0.colorMode = "white" }; return c },
         Preset(name: tr("Frost")) { var c = EffectsConfig.tinted(0xBDE9FF); c.snow = true; c.snowCount = 10; c.shine = true; c.border = true; return c },
         Preset(name: tr("Thunder")) { var c = EffectsConfig.tinted(0xFFE15A); c.lightning = true; c.flash = true; c.setOn("zap", true); c.shake = true; return c },
-        Preset(name: tr("Nightclub")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.beam = true; c.setOn("disco", true); c.setOn("lasers", true); c.glow = true; return c },
+        Preset(name: tr("Nightclub")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.beam = true; c.setOn("disco", true); c.setOn("lasers", true); c.glow = true; c.editStyle("lasers") { $0.colorMode = "neon" }; c.editStyle("disco") { $0.colorMode = "neon" }; return c },
         Preset(name: tr("Retro")) { var c = EffectsConfig.tinted(0xFF5FA2); c.setOn("pixels", true); c.setOn("coins", true); c.glitch = true; c.underline = true; return c },
         Preset(name: tr("Hacker")) { var c = EffectsConfig.tinted(0x2BFF6A); c.setOn("matrix", true); c.setOn("circuit", true); c.glitch = true; c.sweep = true; return c },
         Preset(name: tr("Gold")) { var c = EffectsConfig.tinted(0xFFC83D); c.glow = true; c.shine = true; c.setOn("coins", true); c.setOn("gems", true); return c },
@@ -210,15 +263,15 @@ struct EffectsView: View {
         Preset(name: tr("Birthday")) { var c = EffectsConfig(); c.direction = "up"; c.colorMode = "rainbow"; c.setOn("balloons", true); c.confetti = true; c.fireworks = true; c.pop = true; return c },
         Preset(name: tr("Wedding")) { var c = EffectsConfig.tinted(0xFFFFFF); c.hearts = true; c.heartCount = 6; c.setOn("petals", true); c.setOn("halo", true); return c },
         Preset(name: tr("Halloween")) { var c = EffectsConfig.tinted(0xFF8A1F); c.setOn("ghosts", true); c.smoke = true; c.lightning = true; c.shake = true; return c },
-        Preset(name: tr("Christmas")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.snow = true; c.stars = true; c.setOn("sparkler", true); c.glow = true; return c },
-        Preset(name: tr("Spring")) { var c = EffectsConfig(); c.direction = "right"; c.colorMode = "rainbow"; c.setOn("petals", true); c.setOn("butterflies", true); c.setOn("dandelion", true); return c },
+        Preset(name: tr("Christmas")) { var c = EffectsConfig(); c.colorMode = "rainbow"; c.snow = true; c.stars = true; c.setOn("sparkler", true); c.glow = true; c.editStyle("snow") { $0.colorMode = "white" }; c.editStyle("stars") { $0.colorMode = "warm" }; return c },
+        Preset(name: tr("Spring")) { var c = EffectsConfig(); c.direction = "right"; c.colorMode = "rainbow"; c.setOn("petals", true); c.setOn("butterflies", true); c.setOn("dandelion", true); c.editStyle("petals") { $0.colorMode = "pastel" }; c.editStyle("butterflies") { $0.colorMode = "neon" }; return c },
         Preset(name: tr("Summer")) { var c = EffectsConfig.tinted(0xFFD23D); c.beam = true; c.shine = true; c.setOn("splash", true); c.setOn("smileys", true); return c },
-        Preset(name: tr("Autumn")) { var c = EffectsConfig.tinted(0xE5822B); c.position = "top"; c.direction = "down"; c.setOn("leaves", true); c.embers = true; c.glow = true; c.glowStrength = 0.4; return c },
-        Preset(name: tr("Monsoon")) { var c = EffectsConfig.tinted(0x6FB6FF); c.position = "top"; c.direction = "down"; c.rain = true; c.rainCount = 16; c.ripple = true; c.setOn("splash", true); return c },
+        Preset(name: tr("Autumn")) { var c = EffectsConfig.tinted(0xE5822B); c.position = "top"; c.direction = "down"; c.setOn("leaves", true); c.embers = true; c.glow = true; c.glowStrength = 0.4; c.editStyle("leaves") { $0.colorMode = "warm" }; return c },
+        Preset(name: tr("Monsoon")) { var c = EffectsConfig.tinted(0x6FB6FF); c.position = "top"; c.direction = "down"; c.rain = true; c.rainCount = 16; c.ripple = true; c.setOn("splash", true); c.editStyle("rain") { $0.colorMode = "cool" }; c.editStyle("splash") { $0.colorMode = "cool" }; return c },
         Preset(name: tr("Blizzard")) { var c = EffectsConfig(); c.position = "top"; c.direction = "down"; c.colorMode = "white"; c.snow = true; c.snowCount = 20; c.starburst = true; c.shake = true; return c },
         Preset(name: tr("Desert")) { var c = EffectsConfig.tinted(0xF0B565); c.direction = "right"; c.setOn("static", true); c.smoke = true; c.sweep = true; return c },
-        Preset(name: tr("Jungle")) { var c = EffectsConfig.tinted(0x2FD16B); c.setOn("leaves", true); c.setOn("butterflies", true); c.setOn("snake", true); c.jelly = true; return c },
-        Preset(name: tr("Volcano")) { var c = EffectsConfig.tinted(0xFF3B1F); c.position = "bottom"; c.direction = "up"; c.setOn("flames", true); c.embers = true; c.shockwave = true; c.drop = true; return c },
+        Preset(name: tr("Jungle")) { var c = EffectsConfig.tinted(0x2FD16B); c.setOn("leaves", true); c.setOn("butterflies", true); c.setOn("snake", true); c.jelly = true; c.editStyle("butterflies") { $0.colorMode = "neon" }; c.editStyle("leaves") { $0.colorMode = "warm" }; return c },
+        Preset(name: tr("Volcano")) { var c = EffectsConfig.tinted(0xFF3B1F); c.position = "bottom"; c.direction = "up"; c.setOn("flames", true); c.embers = true; c.shockwave = true; c.drop = true; c.editStyle("flames") { $0.colorMode = "warm" }; c.editStyle("embers") { $0.colorMode = "warm" }; return c },
         Preset(name: tr("Stardust")) { var c = EffectsConfig.tinted(0xFFF1B8); c.setOn("comet", true); c.setOn("meteors", true); c.stars = true; c.setOn("twinkle", true); return c },
         Preset(name: tr("Future")) { var c = EffectsConfig.tinted(0x38F0FF); c.setOn("hologram", true); c.setOn("sonar", true); c.sweep = true; c.border = true; return c },
         Preset(name: tr("Samurai")) { var c = EffectsConfig.tinted(0xFF2D55); c.setOn("ninjastars", true); c.setOn("sakura", true); c.underline = true; c.flash = true; return c },
@@ -249,18 +302,12 @@ struct EffectsView: View {
         } content: {
         GlassList {
             Section {
-                Picker(selection: Binding(get: { presetIndex ?? -1 }, set: { index in
+                GlassChoiceLink(title: tr("Style"), symbol: "wand.and.stars",
+                                options: presets.indices.map { (value: $0, name: presets[$0].name) },
+                                selected: presetIndex, otherName: tr("Your own mix")) { index in
                     guard presets.indices.contains(index) else { return }
-                    Feedback.choose()
                     json = presets[index].make().encoded()
-                })) {
-                    if presetIndex == nil { Text(tr("Your own mix")).tag(-1) }
-                    ForEach(presets.indices, id: \.self) { Text(presets[$0].name).tag($0) }
-                } label: {
-                    Label(tr("Style"), systemImage: "wand.and.stars")
                 }
-                // A pushed list, not a menu: a menu's popup is drawn by the system over the pinned keyboard.
-                .pickerStyle(.navigationLink)
             } header: {
                 SectionHeader(tr("Presets"), symbol: "wand.and.stars", color: .purple)
             } footer: {
@@ -269,10 +316,11 @@ struct EffectsView: View {
             .glassRows()
 
             Section {
-                SegmentedChoice(names: [tr("Accent"), tr("White"), tr("Rainbow"), tr("Custom")],
-                                selected: colorModes.firstIndex(of: config.colorMode)) { bind(\.colorMode).wrappedValue = colorModes[$0] }
+                GlassChoiceLink(title: tr("Colour"), symbol: "paintpalette",
+                                options: colorModes.map { (value: $0, name: colorName($0)) },
+                                selected: config.colorMode) { bind(\.colorMode).wrappedValue = $0 }
                 if config.colorMode == "custom" {
-                    ColorPicker(tr("Colour"), selection: Binding(get: { Color(config.customColor) }, set: { color in
+                    ColorPicker(tr("Custom colour"), selection: Binding(get: { Color(config.customColor) }, set: { color in
                         var next = config
                         next.customColor = ThemeRGBA(effectColor: color)
                         json = next.encoded()
@@ -286,13 +334,9 @@ struct EffectsView: View {
             .glassRows()
 
             Section {
-                Picker(selection: bind(\.direction)) {
-                    ForEach(directionNames, id: \.mode) { Text($0.name).tag($0.mode) }
-                } label: {
-                    Label(tr("Direction"), systemImage: "arrow.up.and.down.and.arrow.left.and.right")
-                }
-                // A pushed list, not a menu: a menu's popup is drawn by the system over the pinned keyboard.
-                .pickerStyle(.navigationLink)
+                GlassChoiceLink(title: tr("Direction"), symbol: "arrow.up.and.down.and.arrow.left.and.right",
+                                options: directionNames.map { (value: $0.mode, name: $0.name) },
+                                selected: config.direction) { bind(\.direction).wrappedValue = $0 }
             } header: {
                 SectionHeader(tr("Direction"), symbol: "location.north.line", color: .mint)
             } footer: {
@@ -301,12 +345,9 @@ struct EffectsView: View {
             .glassRows()
 
             Section {
-                Picker(selection: bind(\.position)) {
-                    ForEach(positionNames, id: \.mode) { Text($0.name).tag($0.mode) }
-                } label: {
-                    Label(tr("Position"), systemImage: "scope")
-                }
-                .pickerStyle(.navigationLink)
+                GlassChoiceLink(title: tr("Position"), symbol: "scope",
+                                options: positionNames.map { (value: $0.mode, name: $0.name) },
+                                selected: config.position) { bind(\.position).wrappedValue = $0 }
             } header: {
                 SectionHeader(tr("Position"), symbol: "scope", color: .cyan)
             } footer: {
@@ -314,7 +355,7 @@ struct EffectsView: View {
             }
             .glassRows()
 
-            effect(tr("Glow"), "light.max", .orange, on: bind(\.glow),
+            effect(tr("Glow"), "light.max", .orange, id: "glow", on: bind(\.glow),
                    note: tr("A light that fades in under your finger and fades out after it lifts.")) {
                 GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.glowStrength),
                             range: EffectsConfig.glowStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
@@ -326,7 +367,7 @@ struct EffectsView: View {
                             range: EffectsConfig.glowFadeOutRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Outline light"), "square.dashed", .blue, on: bind(\.border),
+            effect(tr("Outline light"), "square.dashed", .blue, id: "border", on: bind(\.border),
                    note: tr("A line round the key lights up and fades away.")) {
                 GlassSlider(title: tr("Width"), symbol: "lineweight", value: bind(\.borderWidth),
                             range: EffectsConfig.borderWidthRange, step: 0.1) { String(format: "%.1f pt", $0) }
@@ -334,7 +375,7 @@ struct EffectsView: View {
                             range: EffectsConfig.borderFadeRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Ripple"), "circle.hexagongrid.fill", .teal, on: bind(\.ripple),
+            effect(tr("Ripple"), "circle.hexagongrid.fill", .teal, id: "ripple", on: bind(\.ripple),
                    note: tr("Light spreads from the middle of the key, inside its shape, and fades away.")) {
                 SegmentedChoice(title: tr("Shape"), names: [tr("Disc"), tr("Ring")],
                                 selected: config.rippleStyle == "ring" ? 1 : 0) { bind(\.rippleStyle).wrappedValue = $0 == 1 ? "ring" : "disc" }
@@ -344,7 +385,7 @@ struct EffectsView: View {
                             range: EffectsConfig.rippleDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Shine"), "sun.max.fill", .yellow, on: bind(\.shine),
+            effect(tr("Shine"), "sun.max.fill", .yellow, id: "shine", on: bind(\.shine),
                    note: tr("A slanted band of light sweeps across the key.")) {
                 GlassSlider(title: tr("Band width"), symbol: "arrow.left.and.right", value: bind(\.shineWidth),
                             range: EffectsConfig.shineWidthRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
@@ -352,7 +393,7 @@ struct EffectsView: View {
                             range: EffectsConfig.shineDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Sparks"), "sparkles", .pink, on: bind(\.sparks),
+            effect(tr("Sparks"), "sparkles", .pink, id: "sparks", on: bind(\.sparks),
                    note: tr("Specks fly out of the key in every direction and fade.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.sparkCount),
                             range: EffectsConfig.sparkCountRange, step: 1) { "\(Int($0.rounded()))" }
@@ -364,7 +405,7 @@ struct EffectsView: View {
                             range: EffectsConfig.sparkDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Pop"), "arrow.up.left.and.down.right.magnifyingglass", .green, on: bind(\.pop),
+            effect(tr("Pop"), "arrow.up.left.and.down.right.magnifyingglass", .green, id: "pop", on: bind(\.pop),
                    note: tr("The label swells (or shrinks) and springs back.")) {
                 GlassSlider(title: tr("Size"), symbol: "textformat.size", value: bind(\.popScale),
                             range: EffectsConfig.popScaleRange, step: 0.05, format: times)
@@ -372,7 +413,7 @@ struct EffectsView: View {
                             range: EffectsConfig.popDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Echo"), "text.append", .indigo, on: bind(\.echo),
+            effect(tr("Echo"), "text.append", .indigo, id: "echo", on: bind(\.echo),
                    note: tr("A copy of the label floats up out of the key and fades.")) {
                 GlassSlider(title: tr("Rise"), symbol: "arrow.up", value: bind(\.echoRise),
                             range: EffectsConfig.echoRiseRange, step: 1) { "\(Int($0.rounded())) pt" }
@@ -380,7 +421,7 @@ struct EffectsView: View {
                             range: EffectsConfig.echoDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Wave"), "dot.radiowaves.left.and.right", .cyan, on: bind(\.wave),
+            effect(tr("Wave"), "dot.radiowaves.left.and.right", .cyan, id: "wave", on: bind(\.wave),
                    note: tr("The keys around the pressed one light up in turn, the farther ones a moment later.")) {
                 GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.waveReach),
                             range: EffectsConfig.waveReachRange, step: 0.1) { String(format: "%.1f keys", $0) }
@@ -390,7 +431,7 @@ struct EffectsView: View {
                             range: EffectsConfig.waveSpeedRange, step: 0.01) { String(format: "%.0f ms/key", $0 * 1000) }
             }
 
-            effect(tr("Shockwave"), "dot.radiowaves.right", .mint, on: bind(\.shockwave),
+            effect(tr("Shockwave"), "dot.radiowaves.right", .mint, id: "shockwave", on: bind(\.shockwave),
                    note: tr("A ring of light spreads far out over the keys around the one you press.")) {
                 GlassSlider(title: tr("Reach"), symbol: "arrow.up.left.and.arrow.down.right", value: bind(\.shockReach),
                             range: EffectsConfig.shockReachRange, step: 0.1) { String(format: "%.1f keys", $0) }
@@ -398,7 +439,7 @@ struct EffectsView: View {
                             range: EffectsConfig.shockDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Confetti"), "gift.fill", .orange, on: bind(\.confetti),
+            effect(tr("Confetti"), "gift.fill", .orange, id: "confetti", on: bind(\.confetti),
                    note: tr("Little pieces of paper are thrown up out of the key and tumble down.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.confettiCount),
                             range: EffectsConfig.confettiCountRange, step: 1) { "\(Int($0.rounded()))" }
@@ -406,7 +447,7 @@ struct EffectsView: View {
                             range: EffectsConfig.confettiDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Bubbles"), "circle.grid.2x2.fill", .cyan, on: bind(\.bubbles),
+            effect(tr("Bubbles"), "circle.grid.2x2.fill", .cyan, id: "bubbles", on: bind(\.bubbles),
                    note: tr("Bubbles float up from the key, swaying as they go.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.bubbleCount),
                             range: EffectsConfig.bubbleCountRange, step: 1) { "\(Int($0.rounded()))" }
@@ -414,13 +455,13 @@ struct EffectsView: View {
                             range: EffectsConfig.bubbleRiseRange, step: 5) { "\(Int($0.rounded())) pt" }
             }
 
-            effect(tr("Squish"), "arrow.down.right.and.arrow.up.left", .green, on: bind(\.squish),
+            effect(tr("Squish"), "arrow.down.right.and.arrow.up.left", .green, id: "squish", on: bind(\.squish),
                    note: tr("The key squashes under your finger and springs back.")) {
                 GlassSlider(title: tr("Depth"), symbol: "arrow.down.to.line", value: bind(\.squishDepth),
                             range: EffectsConfig.squishDepthRange, step: 0.01) { String(format: "%.0f%%", (1 - $0) * 100) }
             }
 
-            effect(tr("Flash"), "bolt.fill", .yellow, on: bind(\.flash),
+            effect(tr("Flash"), "bolt.fill", .yellow, id: "flash", on: bind(\.flash),
                    note: tr("The key lights up in the effect colour for a moment.")) {
                 GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.flashStrength),
                             range: EffectsConfig.flashStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
@@ -428,127 +469,127 @@ struct EffectsView: View {
                             range: EffectsConfig.flashDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Jelly"), "waveform.path", .purple, on: bind(\.jelly),
+            effect(tr("Jelly"), "waveform.path", .purple, id: "jelly", on: bind(\.jelly),
                    note: tr("The key wobbles like jelly, the swings getting smaller.")) {
                 GlassSlider(title: tr("Swing"), symbol: "arrow.left.and.right", value: bind(\.jellyAngle),
                             range: EffectsConfig.jellyAngleRange, step: 1) { "\(Int($0.rounded()))\u{00B0}" }
             }
 
-            effect(tr("Hearts"), "heart.fill", .pink, on: bind(\.hearts),
+            effect(tr("Hearts"), "heart.fill", .pink, id: "hearts", on: bind(\.hearts),
                    note: tr("Little hearts float up from the key.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.heartCount),
                             range: EffectsConfig.heartCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Stars"), "star.fill", .yellow, on: bind(\.stars),
+            effect(tr("Stars"), "star.fill", .yellow, id: "stars", on: bind(\.stars),
                    note: tr("Stars burst out of the key and fade.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.starCount),
                             range: EffectsConfig.starCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Snow"), "snowflake", .cyan, on: bind(\.snow),
+            effect(tr("Snow"), "snowflake", .cyan, id: "snow", on: bind(\.snow),
                    note: tr("Snowflakes drift down past the key.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.snowCount),
                             range: EffectsConfig.snowCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Notes"), "music.note", .purple, on: bind(\.notes),
+            effect(tr("Notes"), "music.note", .purple, id: "notes", on: bind(\.notes),
                    note: tr("Musical notes drift up and to the side.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.noteCount),
                             range: EffectsConfig.noteCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Fireworks"), "sparkle", .orange, on: bind(\.fireworks),
+            effect(tr("Fireworks"), "sparkle", .orange, id: "fireworks", on: bind(\.fireworks),
                    note: tr("Streaks burst out of the key and fall like fireworks.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.fireworkCount),
                             range: EffectsConfig.fireworkCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Starburst"), "sun.max", .yellow, on: bind(\.starburst),
+            effect(tr("Starburst"), "sun.max", .yellow, id: "starburst", on: bind(\.starburst),
                    note: tr("Thin rays shoot out of the key in every direction.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.rayCount),
                             range: EffectsConfig.rayCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Rain"), "cloud.rain.fill", .blue, on: bind(\.rain),
+            effect(tr("Rain"), "cloud.rain.fill", .blue, id: "rain", on: bind(\.rain),
                    note: tr("Drops of rain fall past the key.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.rainCount),
                             range: EffectsConfig.rainCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Embers"), "flame.fill", .red, on: bind(\.embers),
+            effect(tr("Embers"), "flame.fill", .red, id: "embers", on: bind(\.embers),
                    note: tr("Glowing embers rise and flicker out.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.emberCount),
                             range: EffectsConfig.emberCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Smoke"), "smoke.fill", .gray, on: bind(\.smoke),
+            effect(tr("Smoke"), "smoke.fill", .gray, id: "smoke", on: bind(\.smoke),
                    note: tr("Soft puffs of smoke rise from the key and grow.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.smokeCount),
                             range: EffectsConfig.smokeCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Lightning"), "bolt.circle.fill", .indigo, on: bind(\.lightning),
+            effect(tr("Lightning"), "bolt.circle.fill", .indigo, id: "lightning", on: bind(\.lightning),
                    note: tr("A bolt of lightning strikes up from the key.")) {
                 GlassSlider(title: tr("Length"), symbol: "arrow.up.and.down", value: bind(\.lightningLength),
                             range: EffectsConfig.lightningLengthRange, step: 0.1) { String(format: "%.1f keys", $0) }
             }
 
-            effect(tr("Orbit"), "atom", .teal, on: bind(\.orbit),
+            effect(tr("Orbit"), "atom", .teal, id: "orbit", on: bind(\.orbit),
                    note: tr("Little lights circle around the key.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.orbitCount),
                             range: EffectsConfig.orbitCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Spiral"), "tornado", .mint, on: bind(\.spiral),
+            effect(tr("Spiral"), "tornado", .mint, id: "spiral", on: bind(\.spiral),
                    note: tr("Specks spiral outwards from the key.")) {
                 GlassSlider(title: tr("Count"), symbol: "number", value: bind(\.spiralCount),
                             range: EffectsConfig.spiralCountRange, step: 1) { "\(Int($0.rounded()))" }
             }
 
-            effect(tr("Heartbeat"), "heart.circle.fill", .pink, on: bind(\.heartbeat),
+            effect(tr("Heartbeat"), "heart.circle.fill", .pink, id: "heartbeat", on: bind(\.heartbeat),
                    note: tr("The key pulses twice like a heartbeat.")) {
                 GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.heartbeatStrength),
                             range: EffectsConfig.heartbeatStrengthRange, step: 0.01) { String(format: "+%.0f%%", ($0 - 1) * 100) }
             }
 
-            effect(tr("Flip"), "rectangle.2.swap", .blue, on: bind(\.flip),
+            effect(tr("Flip"), "rectangle.2.swap", .blue, id: "flip", on: bind(\.flip),
                    note: tr("The key flips over like a card.")) {
                 GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.flipDuration),
                             range: EffectsConfig.flipDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Shake"), "iphone.radiowaves.left.and.right", .orange, on: bind(\.shake),
+            effect(tr("Shake"), "iphone.radiowaves.left.and.right", .orange, id: "shake", on: bind(\.shake),
                    note: tr("The key shakes from side to side.")) {
                 GlassSlider(title: tr("Distance"), symbol: "arrow.left.and.right", value: bind(\.shakeDistance),
                             range: EffectsConfig.shakeDistanceRange, step: 1) { "\(Int($0.rounded())) pt" }
             }
 
-            effect(tr("Drop"), "arrow.down.circle.fill", .green, on: bind(\.drop),
+            effect(tr("Drop"), "arrow.down.circle.fill", .green, id: "drop", on: bind(\.drop),
                    note: tr("The key sinks and bounces back.")) {
                 GlassSlider(title: tr("Depth"), symbol: "arrow.down.to.line", value: bind(\.dropDepth),
                             range: EffectsConfig.dropDepthRange, step: 1) { "\(Int($0.rounded())) pt" }
             }
 
-            effect(tr("Glitch"), "waveform.path.ecg", .red, on: bind(\.glitch),
+            effect(tr("Glitch"), "waveform.path.ecg", .red, id: "glitch", on: bind(\.glitch),
                    note: tr("The key glitches with flickering colours.")) {
                 GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: bind(\.glitchStrength),
                             range: EffectsConfig.glitchStrengthRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
             }
 
-            effect(tr("Underline"), "underline", .cyan, on: bind(\.underline),
+            effect(tr("Underline"), "underline", .cyan, id: "underline", on: bind(\.underline),
                    note: tr("A line grows along the bottom of the key and fades.")) {
                 GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.underlineDuration),
                             range: EffectsConfig.underlineDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Neon sweep"), "arrow.triangle.2.circlepath", .teal, on: bind(\.sweep),
+            effect(tr("Neon sweep"), "arrow.triangle.2.circlepath", .teal, id: "sweep", on: bind(\.sweep),
                    note: tr("A light runs round the key's outline.")) {
                 GlassSlider(title: tr("Duration"), symbol: "timer", value: bind(\.sweepDuration),
                             range: EffectsConfig.sweepDurationRange, step: 0.05, format: seconds)
             }
 
-            effect(tr("Beam"), "rays", .yellow, on: bind(\.beam),
+            effect(tr("Beam"), "rays", .yellow, id: "beam", on: bind(\.beam),
                    note: tr("A beam of light rises from the key.")) {
                 GlassSlider(title: tr("Height"), symbol: "arrow.up.to.line", value: bind(\.beamHeight),
                             range: EffectsConfig.beamHeightRange, step: 0.1) { String(format: "%.1f keys", $0) }
@@ -556,7 +597,7 @@ struct EffectsView: View {
 
             ForEach(EffectCatalog.all, id: \.id) { item in moreEffect(item) }
 
-            effect(tr("Swipe trail"), "scribble", .red, on: bind(\.trail),
+            effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
                    note: tr("The line you draw while swipe typing takes the colour and glows.")) {
                 GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
                             range: EffectsConfig.trailGlowRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
@@ -582,7 +623,7 @@ struct EffectsView: View {
             next.setOn(item.id, value)
             json = next.encoded()
         })
-        return effect(tr(item.title), item.symbol, catalogColor(item.color), on: on, note: tr(item.note)) {
+        return effect(tr(item.title), item.symbol, catalogColor(item.color), id: item.id, on: on, note: tr(item.note)) {
             ForEach(item.params, id: \.id) { param in
                 GlassSlider(title: tr(param.title), symbol: param.symbol,
                             value: Binding(get: { config.setting(item, param.id) }, set: { value in
@@ -613,11 +654,14 @@ struct EffectsView: View {
     }
 
     /// One effect: a switch with a line of explanation, and its settings underneath while it is on.
-    private func effect<Settings: View>(_ title: String, _ symbol: String, _ color: Color, on: Binding<Bool>, note: String,
-                                        @ViewBuilder settings: () -> Settings) -> some View {
+    private func effect<Settings: View>(_ title: String, _ symbol: String, _ color: Color, id: String, on: Binding<Bool>,
+                                        note: String, @ViewBuilder settings: () -> Settings) -> some View {
         Section {
             GlassToggle(title: title, subtitle: note, isOn: on, tapsAnywhere: true)
-            if on.wrappedValue { settings() }
+            if on.wrappedValue {
+                settings()
+                lookRows(id)
+            }
         } header: {
             SectionHeader(title, symbol: symbol, color: color)
         }
@@ -919,7 +963,8 @@ struct EffectsPlayground<Content: View>: View {
             ForEach(ids, id: \.self) { id in
                 if let frame = frames[id] {
                     ForEach(plays[id] ?? [], id: \.tick) { play in
-                        EffectsKeyFX(config: config, frame: frame, tint: play.tint, tick: play.tick, scale: scale)
+                        EffectsKeyFX(config: config, frame: frame, accent: Color.currentAccent(name: accentName, hex: accentHex),
+                                     tick: play.tick, scale: scale)
                     }
                 }
             }
@@ -985,22 +1030,31 @@ struct EffectsPlayground<Content: View>: View {
         return hypot(max(rect.minX - point.x, 0, point.x - rect.maxX), max(rect.minY - point.y, 0, point.y - rect.maxY))
     }
 
+    /// The colour of one press of the effect `id`: its own colour choice, else the one for all.
+    private func resolve(_ id: String) -> Color {
+        let mode = config.mode(for: id)
+        switch mode {
+        case "white":
+            return .white
+        case "custom":
+            return Color(config.custom(for: id))
+        case "accent":
+            return Color.currentAccent(name: accentName, hex: accentHex)
+        case "rainbow":
+            hue = (hue + 0.11).truncatingRemainder(dividingBy: 1)
+            let tint = EffectPalette.tint(mode, CGFloat(hue))
+            return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
+        default:
+            let tint = EffectPalette.tint(mode, CGFloat.random(in: 0..<1))
+            return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
+        }
+    }
+
     private func press(_ touch: Int, at point: CGPoint) {
         guard let id = key(at: point), let frame = frames[id] else { return }
         touchKeys[touch] = id
         guard down[id] == nil else { return }
-        let tint: Color
-        switch config.colorMode {
-        case "white":
-            tint = .white
-        case "custom":
-            tint = Color(config.customColor)
-        case "rainbow":
-            hue = (hue + 0.11).truncatingRemainder(dividingBy: 1)
-            tint = Color(hue: hue, saturation: 0.75, brightness: 1)
-        default:
-            tint = Color.currentAccent(name: accentName, hex: accentHex)
-        }
+        let tint = resolve("glow")
         tints[id] = tint
         counter += 1
         let tick = counter
@@ -1028,12 +1082,13 @@ struct EffectsPlayground<Content: View>: View {
         }
         if config.flip { flip(id) }
         if config.wave {
+            let waveTint = resolve("wave")
             let unit = max(frames.values.map { $0.rect.width }.min() ?? 40, 1)
             for (other, otherFrame) in frames where other != id {
                 let apart = hypot(otherFrame.rect.midX - frame.rect.midX, otherFrame.rect.midY - frame.rect.midY) / unit
                 guard apart <= config.waveReach else { continue }
                 waves[other] = PulseRequest(tick: counter, delay: apart * config.waveSpeed,
-                                            strength: config.waveStrength * (1 - apart / (config.waveReach + 0.5)), tint: tint)
+                                            strength: config.waveStrength * (1 - apart / (config.waveReach + 0.5)), tint: waveTint)
             }
         }
     }
@@ -1087,7 +1142,7 @@ struct EffectsPlayground<Content: View>: View {
 private struct EffectsKeyFX: View {
     let config: EffectsConfig
     let frame: EffectKeyFrame
-    let tint: Color
+    let accent: Color
     let tick: Int
     /// The preview's size against the keyboard's: everything is drawn at the keyboard's size, then shrunk by this.
     let scale: CGFloat
@@ -1097,11 +1152,12 @@ private struct EffectsKeyFX: View {
     var body: some View {
         let width = frame.rect.width / scale
         let height = frame.rect.height / scale
-        let start = startOffset(width: width, height: height)
+        let borderTint = color("border")
+        let sweepTint = color("sweep")
         ZStack {
             // Effects that stay inside the key's shape.
             ZStack {
-                if config.ripple { ripple(width: width).offset(x: start.x, y: start.y) }
+                if config.ripple { ripple(width: width).offset(x: start("ripple").x, y: start("ripple").y) }
                 if config.shine { shine(width: width, height: height) }
                 if config.flash { flash() }
                 if config.lightning { lightningFlash() }
@@ -1112,7 +1168,7 @@ private struct EffectsKeyFX: View {
             .clipShape(shape)
             if config.border {
                 Burst(duration: config.borderFade, curve: { .easeIn(duration: $0) }) { done in
-                    shape.strokeBorder(tint, lineWidth: config.borderWidth).opacity(done ? 0 : 1)
+                    shape.strokeBorder(borderTint, lineWidth: config.borderWidth).opacity(done ? 0 : 1)
                 }
                 .id(tick)
                 .frame(width: width, height: height)
@@ -1120,12 +1176,12 @@ private struct EffectsKeyFX: View {
             if config.echo && !frame.label.isEmpty {
                 Burst(duration: config.echoDuration) { done in
                     Text(frame.label).font(.system(size: 22, weight: .medium))
-                        .offset(x: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn).x : 0,
-                                y: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn).y : 0)
+                        .offset(x: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn("echo")).x : 0,
+                                y: done ? EffectDirection.turn(CGPoint(x: 0, y: -config.echoRise), by: turn("echo")).y : 0)
                         .opacity(done ? 0 : 0.85)
                 }
                 .id(tick)
-                .offset(x: start.x, y: start.y)
+                .offset(x: start("echo").x, y: start("echo").y)
             }
             if config.pop && !frame.label.isEmpty {
                 Burst(duration: config.popDuration, curve: { _ in .interpolatingSpring(stiffness: 260, damping: 8) }) { done in
@@ -1133,35 +1189,60 @@ private struct EffectsKeyFX: View {
                 }
                 .id(tick)
             }
-            if config.sparks { sparks(width: width).offset(x: start.x, y: start.y) }
-            if config.shockwave { shockwave(width: width).offset(x: start.x, y: start.y) }
-            if config.confetti { confetti(width: width).offset(x: start.x, y: start.y) }
-            if config.bubbles { bubbles(width: width).offset(x: start.x, y: start.y) }
+            if config.sparks { sparks(width: width).offset(x: start("sparks").x, y: start("sparks").y) }
+            if config.shockwave { shockwave(width: width).offset(x: start("shockwave").x, y: start("shockwave").y) }
+            if config.confetti { confetti(width: width).offset(x: start("confetti").x, y: start("confetti").y) }
+            if config.bubbles { bubbles(width: width).offset(x: start("bubbles").x, y: start("bubbles").y) }
             if config.sweep {
                 Burst(duration: config.sweepDuration, curve: { .linear(duration: $0) }) { done in
                     shape.trim(from: done ? 0.85 : 0, to: done ? 1 : 0.15)
-                        .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .stroke(sweepTint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .opacity(done ? 0 : 1)
                 }
                 .id(tick)
                 .frame(width: width, height: height)
             }
-            if config.lightning { lightning(width: width, height: height).offset(x: start.x, y: start.y) }
-            if config.beam { beam(width: width).offset(x: start.x, y: start.y) }
-            particles.offset(x: start.x, y: start.y)
+            if config.lightning { lightning(width: width, height: height).offset(x: start("lightning").x, y: start("lightning").y) }
+            if config.beam { beam(width: width).offset(x: start("beam").x, y: start("beam").y) }
+            particles
         }
         .frame(width: width, height: height)
         .scaleEffect(scale)
         .position(x: frame.rect.midX, y: frame.rect.midY)
     }
 
-    /// Where this press's effects start, from the middle of the key (the position setting).
-    private func startOffset(width: CGFloat, height: CGFloat) -> CGPoint {
-        return EffectPosition.offset(config.position, size: CGSize(width: width, height: height),
-                                     random: { CGFloat(unit(tick, 41)) })
+    /// Where this press's effect `id` starts on the key, from the middle (its position setting).
+    private func start(_ id: String) -> CGPoint {
+        var draws = 0
+        return EffectPosition.offset(config.position(for: id),
+                                     size: CGSize(width: frame.rect.width / scale, height: frame.rect.height / scale),
+                                     random: { draws += 1; return CGFloat(unit(tick, Double(41 + draws))) })
+    }
+
+    /// The colour of the effect `id` for this press: its own colour choice, else the one for all.
+    private func color(_ id: String) -> Color {
+        let mode = config.mode(for: id)
+        switch mode {
+        case "white": return .white
+        case "custom": return Color(config.custom(for: id))
+        case "accent": return accent
+        default:
+            let salt = Double(id.utf8.reduce(7) { ($0 &* 31 &+ Int($1)) % 997 })
+            let tint = EffectPalette.tint(mode, CGFloat(unit(tick, salt)))
+            return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
+        }
+    }
+
+    /// The colour of one speck (`hue` picks it from the palette when the effect gives each speck its own colour).
+    private func speckColor(_ id: String, _ hue: Double, _ base: Color) -> Color {
+        let mode = config.mode(for: id)
+        guard EffectPalette.isMulti(mode) else { return base }
+        let tint = EffectPalette.tint(mode, CGFloat(hue))
+        return Color(hue: Double(tint.h), saturation: Double(tint.s), brightness: Double(tint.b))
     }
 
     private func underline(width: CGFloat, height: CGFloat) -> some View {
+        let tint = color("underline")
         return Burst(duration: config.underlineDuration) { done in
             Capsule().fill(tint).frame(width: width * 0.8, height: 3)
                 .scaleEffect(x: done ? 1 : 0.05, y: 1)
@@ -1186,6 +1267,7 @@ private struct EffectsKeyFX: View {
 
     /// A forked bolt strikes down onto the key (EffectBolt): glow, colour and a white core, fading.
     private func lightning(width: CGFloat, height: CGFloat) -> some View {
+        let tint = color("lightning")
         let salt = tick * 7
         let bolt = EffectBolt.make(length: width * CGFloat(config.lightningLength), width: width) { index, _ in
             CGFloat(unit(index + salt, 21))
@@ -1220,6 +1302,7 @@ private struct EffectsKeyFX: View {
     }
 
     private func beam(width: CGFloat) -> some View {
+        let tint = color("beam")
         let reach = width * CGFloat(config.beamHeight)
         // The beam stands on the key's middle (the middle of this view), and turns about it.
         return VStack(spacing: 0) {
@@ -1232,7 +1315,7 @@ private struct EffectsKeyFX: View {
             }
             Color.clear.frame(width: 1, height: reach)
         }
-        .rotationEffect(.radians(Double(turn)))
+        .rotationEffect(.radians(Double(turn("beam"))))
         .id(tick)
     }
 
@@ -1249,7 +1332,7 @@ private struct EffectsKeyFX: View {
     }
 
     private func particle(_ spec: EffectParticle) -> some View {
-        let color: Color = spec.hue.map { Color(hue: Double($0), saturation: 0.7, brightness: 1) } ?? tint
+        let color: Color = spec.tint.map { Color(hue: Double($0.h), saturation: Double($0.s), brightness: Double($0.b)) } ?? accent
         return Burst(duration: spec.duration, curve: { .linear(duration: $0) }) { done in
             particleShape(spec, color: color)
                 .rotationEffect(.radians((spec.isOriented ? Double(spec.tilt) : 0) + (done ? Double(spec.spin) : 0)))
@@ -1294,6 +1377,7 @@ private struct EffectsKeyFX: View {
     }
 
     private func flash() -> some View {
+        let tint = color("flash")
         return Burst(duration: config.flashDuration, curve: { .easeIn(duration: $0) }) { done in
             tint.opacity(done ? 0 : config.flashStrength)
         }
@@ -1301,6 +1385,7 @@ private struct EffectsKeyFX: View {
     }
 
     private func shockwave(width: CGFloat) -> some View {
+        let tint = color("shockwave")
         let diameter = width * CGFloat(config.shockReach) * 2
         return Burst(duration: config.shockDuration) { done in
             Circle().strokeBorder(tint.opacity(0.85), lineWidth: 2.5)
@@ -1312,11 +1397,12 @@ private struct EffectsKeyFX: View {
     }
 
     /// The angle (from straight up, clockwise) the throwing effects go at for this press.
-    private var turn: CGFloat {
-        return EffectDirection.target(config.direction, random: { CGFloat(unit(tick, 31)) }) ?? 0
+    private func turn(_ id: String) -> CGFloat {
+        return EffectDirection.target(config.direction(for: id), random: { CGFloat(unit(tick, 31)) }) ?? 0
     }
 
     private func confetti(width: CGFloat) -> some View {
+        let tint = color("confetti")
         let count = max(1, Int(config.confettiCount.rounded()))
         return ZStack {
             ForEach(0..<count, id: \.self) { index in
@@ -1324,10 +1410,10 @@ private struct EffectsKeyFX: View {
                 let dy = -CGFloat(0.8 + unit(index, 2)) * width
                 Burst(duration: config.confettiDuration, curve: { .linear(duration: $0) }) { done in
                     Rectangle()
-                        .fill(config.colorMode == "rainbow" ? Color(hue: unit(index, 3), saturation: 0.7, brightness: 1) : tint)
+                        .fill(speckColor("confetti", unit(index, 3), tint))
                         .frame(width: 4 + CGFloat(unit(index, 4)) * 3, height: 2 + CGFloat(unit(index, 5)) * 2)
                         .rotationEffect(.degrees(done ? (unit(index, 6) * 2 - 1) * 460 : 0))
-                        .modifier(Ballistic(progress: done ? 1 : 0, dx: dx, dy: dy, gravity: width * 3.2, turn: turn))
+                        .modifier(Ballistic(progress: done ? 1 : 0, dx: dx, dy: dy, gravity: width * 3.2, turn: turn("confetti")))
                         .opacity(done ? 0 : 1)
                 }
             }
@@ -1338,10 +1424,11 @@ private struct EffectsKeyFX: View {
     private func bubbleOffset(_ index: Int, width: CGFloat, done: Bool) -> CGPoint {
         let start = CGFloat(unit(index, 10) - 0.5) * width * 0.7
         let sway = done ? CGFloat(unit(index, 11) - 0.5) * 14 : 0
-        return EffectDirection.turn(CGPoint(x: start + sway, y: done ? -CGFloat(config.bubbleRise) : 0), by: turn)
+        return EffectDirection.turn(CGPoint(x: start + sway, y: done ? -CGFloat(config.bubbleRise) : 0), by: turn("bubbles"))
     }
 
     private func bubbles(width: CGFloat) -> some View {
+        let tint = color("bubbles")
         let count = max(1, Int(config.bubbleCount.rounded()))
         return ZStack {
             ForEach(0..<count, id: \.self) { index in
@@ -1362,6 +1449,7 @@ private struct EffectsKeyFX: View {
     }
 
     private func ripple(width: CGFloat) -> some View {
+        let tint = color("ripple")
         Burst(duration: config.rippleDuration) { done in
             ZStack {
                 if config.rippleStyle == "ring" {
@@ -1378,6 +1466,7 @@ private struct EffectsKeyFX: View {
     }
 
     private func shine(width: CGFloat, height: CGFloat) -> some View {
+        let tint = color("shine")
         let band = width * config.shineWidth
         return Burst(duration: config.shineDuration, curve: { .easeInOut(duration: $0) }) { done in
             LinearGradient(colors: [tint.opacity(0), tint.opacity(0.75), tint.opacity(0)], startPoint: .leading, endPoint: .trailing)
@@ -1389,13 +1478,14 @@ private struct EffectsKeyFX: View {
     }
 
     private func sparks(width: CGFloat) -> some View {
+        let tint = color("sparks")
         let count = max(1, Int(config.sparkCount.rounded()))
         return ZStack {
             ForEach(0..<count, id: \.self) { index in
                 let angle = 2 * Double.pi * Double(index) / Double(count)
                 Burst(duration: config.sparkDuration) { done in
                     Circle()
-                        .fill(config.colorMode == "rainbow" ? Color(hue: Double(index) / Double(count), saturation: 0.7, brightness: 1) : tint)
+                        .fill(speckColor("sparks", Double(index) / Double(count), tint))
                         .frame(width: config.sparkSize, height: config.sparkSize)
                         .scaleEffect(done ? 0.3 : 1)
                         .offset(x: done ? cos(angle) * width * config.sparkDistance : 0,
