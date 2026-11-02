@@ -22,7 +22,10 @@ targets:
     sources:
       - path: App
       - path: Shared
-      - path: Keyboard/EmojiTabIcons.swift   # the theme preview draws the keyboard's emoji key icon
+      - path: Keyboard                       # the Effects screen shows the keyboard's own keys (LiveKeyboard)
+        excludes:
+          - KeyboardViewController.swift     # the extension's entry point
+          - Resources                        # the dictionaries and emoji data stay in the keyboard
     dependencies:
       - target: HunKeysKeyboard
     info:
