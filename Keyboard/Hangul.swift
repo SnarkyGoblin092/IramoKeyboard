@@ -34,8 +34,6 @@ struct HangulComposer {
     /// The current syllable after each jamo typed into it, so backspace can step back.
     private var history: [Syllable] = []
 
-    var isComposing: Bool { return !history.isEmpty }
-
     static func isJamo(_ character: Character) -> Bool {
         return initials.contains(character) || medials.contains(character)
     }

@@ -123,16 +123,6 @@ enum Language: String, CaseIterable {
         }
     }
 
-    /// How a language typed by sound is spelled ("Jyutping", "Pinyin"), shown in place of its layout.
-    var phoneticSystem: String? {
-        switch self {
-        case .cantonese: return "Jyutping"
-        case .mandarin: return "Pinyin"
-        case .japanese: return "Romaji"
-        default: return nil
-        }
-    }
-
     /// The enabled languages that can't use `feature`, and whether that is every one of them.
     static func lacking(_ feature: LanguageFeature, among languages: [Language]) -> (languages: [Language], all: Bool) {
         let lacking = languages.filter { !$0.supports(feature) }

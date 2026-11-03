@@ -284,7 +284,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     func keyboardViewDidHoldEmoji(_ view: KeyboardView) {}
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {}
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {}
-    func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {}
+    /// No word is decoded here: the keys the path aims at play their effects.
+    func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {
+        view.playSwipeEffects(alongPath: path)
+    }
     func keyboardViewDidCancelSwipe(_ view: KeyboardView) {}
 
     /// Swiping draws its trail (the Swipe trail effect) whenever swipe typing is on.

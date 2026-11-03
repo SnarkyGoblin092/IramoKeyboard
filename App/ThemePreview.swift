@@ -258,13 +258,7 @@ struct ThemePreview: View {
 
     // MARK: Body
 
-    /// The real keyboard's size in points (Keyboard/KeyboardViewController.applyHeight): 440 wide, the strip over
-    /// four rows of keys (key height + row gap) and 8pt of padding; 276pt at the defaults. Callers use these
-    /// ratios so the preview has the keyboard's proportions.
-    /// (Read straight from the defaults: the Settings snapshot can lag a moment behind the app's own controls.)
-    static var aspectWithStrip: CGFloat {
-        return 440 / (CGFloat(stored(SettingKey.suggestionHeight)) + keysHeight)
-    }
+    /// The real keyboard's width over its height in keys only (440pt wide), for the preview's proportions.
     static var aspectKeysOnly: CGFloat { return 440 / keysHeight }
 
     /// The rows of keys (the number row adds one) at the key height and row gap, and the padding.

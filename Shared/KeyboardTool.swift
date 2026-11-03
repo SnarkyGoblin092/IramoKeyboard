@@ -64,11 +64,6 @@ enum KeyboardTool: String, CaseIterable {
         }
     }
 
-    /// Copy, cut, paste and the clipboard use the system clipboard, which needs Full Access.
-    var needsFullAccess: Bool {
-        return self == .copy || self == .cut || self == .paste || self == .clipboard
-    }
-
     /// The tools a new install's panel shows (split only appears on an iPad).
     static let standard: [KeyboardTool] = [.oneHanded, .split, .emoji, .copy, .paste, .clipboard, .numberRow, .swipeTyping, .nextLanguage, .openApp]
 

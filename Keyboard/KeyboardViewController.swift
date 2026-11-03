@@ -1469,6 +1469,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func commitSwipe(_ words: [String]) {
         guard let first = words.first else { return }
+        keyboardView.playSwipeEffects(word: first)
 
         if isSearchingEmoji {
             if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }

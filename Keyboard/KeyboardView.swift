@@ -98,8 +98,6 @@ final class KeyboardView: UIView {
         var startsAtSpace = false
         /// Where the finger last was on the space bar while waiting for the next word.
         var lastBarPoint: CGPoint?
-        /// The letter key the swiping finger is over, whose effects last played.
-        weak var swipeKey: KeyView?
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
@@ -953,8 +951,6 @@ final class KeyboardView: UIView {
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
-        state.swipeKey = state.startKey   // its effects played when it went down
-        if let point = state.path.last { playSwipeEffects(state, at: point) }
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }
 
@@ -1012,17 +1008,75 @@ final class KeyboardView: UIView {
             trailLayer.opacity = 1
         }
         updateTrail(state.path)
-        playSwipeEffects(state, at: point)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }
 
-    /// The swiping finger reached another letter: its press effects play, as when typed.
-    private func playSwipeEffects(_ state: TouchState, at point: CGPoint) {
-        guard let index = keyIndex(at: point) else { return }
-        let key = keyViews[index.row][index.col]
-        guard key !== state.swipeKey, letter(of: key.spec) != nil else { return }
-        state.swipeKey = key
-        key.playSwipeEffects()
+    /// The key the last swiped word started on, whose effects already played when the finger went down on it
+    /// (nil when the word went on from another swipe).
+    private weak var swipeStartKey: KeyView?
+
+    /// A swiped word was typed: the press effects play on its letters' keys, one after another in the word's order
+    /// (only the keys typed, not every key the finger crossed).
+    func playSwipeEffects(word: String) {
+        var keys: [KeyView] = []
+        for character in word.lowercased() where character.isLetter {
+            guard let key = letterKey(for: character) else { continue }
+            if key !== keys.last { keys.append(key) }   // a double letter plays once
+        }
+        if let first = keys.first, first === swipeStartKey { keys.removeFirst() }
+        playInTurn(keys)
+    }
+
+    /// Where no word is decoded (the app's preview keyboard): the keys the path aims at play their effects, which
+    /// are where it starts, where it turns sharply and where it ends.
+    func playSwipeEffects(alongPath path: [CGPoint]) {
+        guard path.count > 1 else { return }
+        let step = max(6, letterKeySize().width * 0.3)
+        var points = [path[0]]
+        for point in path.dropFirst() where hypot(point.x - points[points.count - 1].x, point.y - points[points.count - 1].y) >= step {
+            points.append(point)
+        }
+        if let last = path.last, points.last != last { points.append(last) }
+        var aims = [points[0]]
+        if points.count > 2 {
+            for index in 1..<(points.count - 1) {
+                let a = points[index - 1], b = points[index], c = points[index + 1]
+                var turn = abs(atan2(c.y - b.y, c.x - b.x) - atan2(b.y - a.y, b.x - a.x))
+                if turn > .pi { turn = 2 * .pi - turn }
+                if turn > .pi * 50 / 180 { aims.append(b) }
+            }
+        }
+        aims.append(points[points.count - 1])
+        var keys: [KeyView] = []
+        for point in aims {
+            guard let index = keyIndex(at: point) else { continue }
+            let key = keyViews[index.row][index.col]
+            if letter(of: key.spec) != nil && key !== keys.last { keys.append(key) }
+        }
+        if let first = keys.first, first === swipeStartKey { keys.removeFirst() }
+        playInTurn(keys)
+    }
+
+    /// The letter key that types `character` (an accented letter falls back to its plain key).
+    private func letterKey(for character: Character) -> KeyView? {
+        let plain = String(character).folding(options: .diacriticInsensitive, locale: nil).first
+        var fallback: KeyView?
+        for row in keyViews {
+            for key in row where key.superview != nil {
+                guard let typed = letter(of: key.spec) else { continue }
+                if typed == character { return key }
+                if fallback == nil, typed == plain { fallback = key }
+            }
+        }
+        return fallback
+    }
+
+    private func playInTurn(_ keys: [KeyView]) {
+        for (index, key) in keys.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.035 * Double(index)) { [weak key] in
+                key?.playSwipeEffects()
+            }
+        }
     }
 
     /// The path of the word just swiped, without the glide to or from the space bar: the decoder would read the
@@ -1073,7 +1127,6 @@ final class KeyboardView: UIView {
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
-        playSwipeEffects(state, at: point)
         Haptics.shared.tick()
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }
@@ -1097,6 +1150,7 @@ final class KeyboardView: UIView {
             lastTapPoint = swipe.startPoint
             delegate?.keyboardView(self, didTap: key.spec.action)
         } else {
+            swipeStartKey = swipe.continued ? nil : swipe.startKey
             delegate?.keyboardView(self, didFinishSwipe: swipe.path)
         }
     }
