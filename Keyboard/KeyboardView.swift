@@ -495,15 +495,26 @@ final class KeyboardView: UIView {
         return shapesHitboxes ? shapedKeyIndex(at: point, base: base) : base
     }
 
-    /// Which key a touch at `point` counts as (with every hitbox setting), for the app's drawing of the touch areas:
-    /// its place in the rows, and the letter it types (nil for the other keys).
-    func touchArea(at point: CGPoint) -> (id: Int, letter: Character?)? {
-        guard let index = keyIndex(at: point), index.row < rows.count, index.col < rows[index.row].count else { return nil }
-        return (index.row * 1000 + index.col, letter(of: rows[index.row][index.col]))
+    /// Every key's touch area as the app draws it over the keys (the Hitboxes screen): the drawn key grown or
+    /// shrunk by its touch-area factor and moved by the hit map, with the key's corners. `factor` is 1 for a key
+    /// whose area is not changed; `letter` is nil for the other keys.
+    func touchOutlines() -> [(rect: CGRect, cornerRadius: CGFloat, factor: CGFloat, letter: Character?)] {
+        if hitRects.count != rows.count, !rows.isEmpty, bounds.width > 0 { layoutIfNeeded() }
+        guard hitRects.count == rows.count, keyViews.count == rows.count else { return [] }
+        var outlines: [(rect: CGRect, cornerRadius: CGFloat, factor: CGFloat, letter: Character?)] = []
+        for (r, row) in rows.enumerated() {
+            for (c, spec) in row.enumerated() where !spec.isSpacer && c < keyViews[r].count && c < hitRects[r].count {
+                let key = keyViews[r][c]
+                let drawn = key.bounds.size
+                let shape = shapesHitboxes ? touchShape(row: r, col: c) : (center: CGPoint(x: hitRects[r][c].midX, y: hitRects[r][c].midY), factor: 1)
+                let size = CGSize(width: drawn.width * shape.factor, height: drawn.height * shape.factor)
+                let rect = CGRect(x: shape.center.x - size.width / 2, y: shape.center.y - size.height / 2,
+                                  width: size.width, height: size.height)
+                outlines.append((rect, Theme.keyCornerRadius(for: drawn) * shape.factor, shape.factor, letter(of: spec)))
+            }
+        }
+        return outlines
     }
-
-    /// Whether the touch areas are shaped on this page (they are the drawn cells otherwise).
-    var hitboxesShaped: Bool { return shapesHitboxes }
 
     // MARK: Hitbox shaping
 
@@ -549,6 +560,17 @@ final class KeyboardView: UIView {
         let rect = hitRects[row][col]
         // Measured to the edge of the touch cell on the point's side (farther on a side with a spacer's room).
         let cell = row < touchRects.count && col < touchRects[row].count ? touchRects[row][col] : rect
+        let (center, factor) = touchShape(row: row, col: col)
+        let halfWidth = point.x < rect.midX ? rect.midX - cell.minX : cell.maxX - rect.midX
+        let halfHeight = point.y < rect.midY ? rect.midY - cell.minY : cell.maxY - rect.midY
+        let dx = abs(point.x - center.x) / max(halfWidth, 1)
+        let dy = abs(point.y - center.y) / max(halfHeight, 1)
+        return max(dx, dy) / max(factor, 0.1)
+    }
+
+    /// A key's touch centre (its cell's, moved by the hit map) and touch-area factor (letter room and adaptive keys).
+    private func touchShape(row: Int, col: Int) -> (center: CGPoint, factor: CGFloat) {
+        let rect = hitRects[row][col]
         var center = CGPoint(x: rect.midX, y: rect.midY)
         var factor: CGFloat = 1
         if let letter = letter(of: rows[row][col]) {
@@ -560,11 +582,7 @@ final class KeyboardView: UIView {
                 center.y += shift.y * drawn.height
             }
         }
-        let halfWidth = point.x < rect.midX ? rect.midX - cell.minX : cell.maxX - rect.midX
-        let halfHeight = point.y < rect.midY ? rect.midY - cell.minY : cell.maxY - rect.midY
-        let dx = abs(point.x - center.x) / max(halfWidth, 1)
-        let dy = abs(point.y - center.y) / max(halfHeight, 1)
-        return max(dx, dy) / max(factor, 0.1)
+        return (center, factor)
     }
 
     /// The key whose shaped touch area claims the point: the cell under it or one of its neighbours.

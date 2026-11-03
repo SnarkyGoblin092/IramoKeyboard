@@ -408,7 +408,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 /// recognizes as soon as a finger lands on the keyboard, which fails the navigation's swipe back for that touch,
 /// and only that: every touch still reaches the keys and the bar, and no other gesture is held up. A swipe from
 /// the edge beside the keyboard and the back button go back as before.
-private final class BackSwipeBlocker: UIGestureRecognizer {
+final class BackSwipeBlocker: UIGestureRecognizer {
     private var fingers = 0
 
     override init(target: Any?, action: Selector?) {
