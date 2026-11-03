@@ -354,7 +354,7 @@ struct ThemePreview: View {
                 let best = i == 1
                 Text(words[i])
                     .font(keyFont(17 * s, weight: best ? .semibold : .regular))
-                    .foregroundColor(best ? onAccent : (segments && followTheme ? textColor : stripText))
+                    .foregroundColor(best ? look.onPill : look.suggestionText(onSegments: segments && followTheme))
                     .lineLimit(1)
                     .padding(.horizontal, best && !segments ? 14 * s : 0)
                     .frame(minWidth: best && !segments ? pillHeight * 1.6 : 0)
@@ -396,7 +396,7 @@ struct ThemePreview: View {
             }
             Image(systemName: "keyboard.chevron.compact.down")
                 .font(.system(size: 15 * s))
-                .foregroundColor(accentColor)
+                .foregroundColor(look.barIcons)
                 .frame(width: 52 * s)
         }
         .padding(.leading, 8 * s)
@@ -429,18 +429,21 @@ struct ThemePreview: View {
     private func key(_ k: PreviewKey, hints: [String: String], width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
         // Theme.keyCornerRadius: the roundness share of half the key's shorter side.
         let radius = look.radius(width: width, height: height)
-        let tint: Color = k.accent ? onAccent : textColor
+        // The return key draws with its own colours, shift when on with its own (both in the accent by default).
+        let kind: ThemeLook.KeyKind = k.accent ? (k.symbol == "return.left" ? .returnKey : .accent)
+            : (k.space ? .space : (k.function ? .function : .letter))
+        let tint = look.labelColor(kind)
         let hint = keyHints && k.title.count == 1 ? hints[k.title.lowercased()] : nil
         let hintScale = CGFloat(hintSize)
         return ZStack {
-            look.keyShape(k.accent ? .accent : (k.function ? .function : .letter), radius: radius, scale: s)
+            look.keyShape(kind, radius: radius, scale: s)
             glyph(k, tint: tint, scale: s)
                 .keyLabelGlow(look, color: tint, scale: s)
             if let hint = hint {
                 // Where KeyView.layoutHint puts it.
                 Text(hint)
                     .font(.system(size: (radius > 12 * s ? 9 : 10) * s * hintScale))
-                    .foregroundColor(textColor.opacity(0.55))
+                    .foregroundColor(look.hintColor)
                     .padding(.horizontal, 4 * s + radius * 0.3)
                     .padding(.vertical, 2 * s)
                     .frame(width: width, height: height, alignment: hintAlignment)
@@ -559,7 +562,41 @@ struct ThemeLook {
         self.accentName = accentName
     }
 
-    enum KeyKind { case letter, function, accent }
+    /// `accent`: shift when on (and any other accent key); `returnKey` and `space` can have colours of their own.
+    enum KeyKind { case letter, function, accent, returnKey, space }
+
+    private func isAccentKind(_ kind: KeyKind) -> Bool { return kind == .accent || kind == .returnKey }
+
+    /// A key's fill (Theme.returnKey, shiftOn, spaceKey...).
+    private func fillColour(_ kind: KeyKind) -> Color {
+        switch kind {
+        case .returnKey: return style.map { Color($0.returnKey) } ?? accentColor
+        case .accent: return style.map { Color($0.shiftOn) } ?? accentColor
+        case .space: return style.map { Color($0.spaceFill) } ?? keyFill
+        case .function: return functionFill
+        case .letter: return keyFill
+        }
+    }
+
+    /// A key's label colour (KeyView.refreshAppearance).
+    func labelColor(_ kind: KeyKind) -> Color {
+        switch kind {
+        case .returnKey: return style.map { Color($0.returnText) } ?? onAccent
+        case .accent: return style.map { Color($0.shiftText) } ?? onAccent
+        case .function: return style.map { Color($0.functionText) } ?? textColor
+        case .letter, .space: return textColor
+        }
+    }
+
+    var hintColor: Color { return style.map { Color($0.hint) } ?? textColor.opacity(0.55) }
+    var pillColor: Color { return style.map { Color($0.pill) } ?? accentColor }
+    var onPill: Color { return style.map { Color($0.pillText) } ?? onAccent }
+    var barIcons: Color { return style.map { Color($0.barIcons) } ?? accentColor }
+    /// The suggestion bar's words (Theme.suggestionText).
+    func suggestionText(onSegments: Bool) -> Color {
+        if let style = style { return Color(style.suggestionText) }
+        return onSegments ? textColor : stripText
+    }
 
     /// A designed theme's look (nil for the system themes).
     var style: ThemeStyle? { return theme.style }
@@ -623,7 +660,9 @@ struct ThemeLook {
 
     /// The keyboard's background. `scale`: points of the preview per keyboard point (a designed theme's texture).
     @ViewBuilder func backdrop(scale: CGFloat = 1) -> some View {
-        if let style = style {
+        if style?.transparentBackdrop == true {
+            Color.clear
+        } else if let style = style {
             ZStack {
                 if style.gradient == .radial {
                     EllipticalGradient(colors: [Color(style.background), Color(style.backgroundEnd)], center: .center)
@@ -673,14 +712,14 @@ struct ThemeLook {
         } else if theme.kind == .liquidGlass {
             // The keyboard's tints (KeyView.applyGlass, Theme's Liquid Glass palette).
             GlassKeyShape(radius: radius,
-                          tint: kind == .accent ? accentColor.opacity(0.85)
+                          tint: isAccentKind(kind) ? accentColor.opacity(0.85)
                               : (kind == .function ? (dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)) : nil),
                           dark: dark)
         } else {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             let shadow = shadowStyle
             shape
-                .fill(kind == .accent ? accentColor : (kind == .function ? functionFill : keyFill))
+                .fill(fillColour(kind))
                 .overlay {
                     if surface != "flat" {
                         let sheen = system?.sheen ?? 1
@@ -707,10 +746,10 @@ struct ThemeLook {
                     .blur(radius: CGFloat(shadow.radius) * s)
                     .offset(x: CGFloat(shadow.x) * s, y: CGFloat(shadow.y) * s)
             }
-            if style.frosted && kind != .accent {
+            if style.frosted && !isAccentKind(kind) {
                 shape.fill(.ultraThinMaterial)
             }
-            shape.fill(kind == .accent ? accentColor : (kind == .function ? functionFill : keyFill))
+            shape.fill(fillColour(kind))
             if style.hasSheen {
                 shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity(alphas.top), location: 0),
                                                   .init(color: Color.white.opacity(0), location: 0.55),
@@ -718,7 +757,7 @@ struct ThemeLook {
                                           startPoint: .top, endPoint: .bottom))
             }
             if style.borderWidth > 0.01 {
-                shape.strokeBorder(Color(style.line), lineWidth: CGFloat(style.borderWidth) * max(s, 0.6))
+                shape.strokeBorder(Color(style.outline), lineWidth: CGFloat(style.borderWidth) * max(s, 0.6))
             }
         }
     }
@@ -726,9 +765,9 @@ struct ThemeLook {
     /// The suggestion bar's accent pill (accent-tinted glass in the Liquid Glass theme).
     @ViewBuilder func pill(radius: CGFloat) -> some View {
         if theme.kind == .liquidGlass {
-            GlassKeyShape(radius: radius, tint: accentColor, dark: dark)
+            GlassKeyShape(radius: radius, tint: pillColor, dark: dark)
         } else {
-            RoundedRectangle(cornerRadius: radius, style: .continuous).fill(accentColor)
+            RoundedRectangle(cornerRadius: radius, style: .continuous).fill(pillColor)
         }
     }
 

@@ -8,7 +8,6 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
-    @AppStorage(SettingKey.transparentBackground, store: SharedStore.defaults) private var transparent = SettingDefault.transparentBackground
     @Environment(\.openScreen) private var openScreen
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
@@ -63,12 +62,6 @@ struct ThemesView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())
-            GlassToggle(title: tr("Transparent background"),
-                        subtitle: tr("No backdrop behind the keys, with every theme: the keys stay as they are."),
-                        isOn: $transparent, tapsAnywhere: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.06)))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)

@@ -21,7 +21,11 @@ final class Prefs {
     static var numberRow = SettingDefault.numberRow
     static var keyHints = SettingDefault.keyHints
     static var extraKeys: [String] = []
-    static var transparentBackground = SettingDefault.transparentBackground
+    static var commaKey = SettingDefault.commaKey
+    static var periodKey = SettingDefault.periodKey
+    static var emojiKey = SettingDefault.emojiKey
+    static var commaHold: [String] = []
+    static var periodHold: [String] = []
     static var keyHeight = SettingDefault.keyHeight
     static var landscapeSeparate = SettingDefault.landscapeSeparate
     static var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
@@ -110,7 +114,11 @@ final class Prefs {
         numberRow = s.numberRow
         keyHints = s.keyHints
         extraKeys = s.extraKeys
-        transparentBackground = s.transparentBackground
+        commaKey = s.commaKey
+        periodKey = s.periodKey
+        emojiKey = s.emojiKey
+        commaHold = s.commaHold
+        periodHold = s.periodHold
         keyHeight = s.keyHeight
         landscapeSeparate = s.landscapeSeparate
         landscapeKeyHeight = s.landscapeKeyHeight

@@ -453,17 +453,25 @@ enum LayoutBuilder {
         result.append(row3)
 
         // The extra symbol keys (the Keys screen) sit between the space bar and the full stop, taking their room
-        // from the space bar (which never gets narrower than about two and a half keys).
+        // from the space bar (which never gets narrower than about two and a half keys); the emoji, comma and full
+        // stop keys taken off give theirs to it.
         let extras = Prefs.extraKeys.map { KeySpec(action: .character($0), title: $0, weight: 1.0) }
-        result.append([
-            KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true),
-            KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
-            KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0, alternates: commaAlternates(language)),
-            KeySpec(action: .space, title: language.displayName, weight: max(2.4, 3.9 - CGFloat(extras.count)))
-        ] + extras + [
-            KeySpec(action: .character(language.fullStop), title: language.fullStop, weight: 1.0, alternates: dotAlternates(language)),
-            KeySpec(action: .enter, title: returnTitle, symbol: "return.left", weight: 1.8, isFunction: true)
-        ])
+        let removed = [Prefs.emojiKey, Prefs.commaKey, Prefs.periodKey].filter { !$0 }.count
+        var bottom = [KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true)]
+        if Prefs.emojiKey { bottom.append(KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true)) }
+        if Prefs.commaKey {
+            bottom.append(KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0,
+                                  alternates: Prefs.commaHold.isEmpty ? commaAlternates(language) : Prefs.commaHold))
+        }
+        bottom.append(KeySpec(action: .space, title: language.displayName,
+                              weight: max(2.4, 3.9 - CGFloat(extras.count)) + CGFloat(removed)))
+        bottom += extras
+        if Prefs.periodKey {
+            bottom.append(KeySpec(action: .character(language.fullStop), title: language.fullStop, weight: 1.0,
+                                  alternates: Prefs.periodHold.isEmpty ? dotAlternates(language) : Prefs.periodHold))
+        }
+        bottom.append(KeySpec(action: .enter, title: returnTitle, symbol: "return.left", weight: 1.8, isFunction: true))
+        result.append(bottom)
         return result
     }
 

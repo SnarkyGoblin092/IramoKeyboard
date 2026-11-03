@@ -115,7 +115,7 @@ final class KeyboardViewController: UIInputViewController {
     /// (no backdrop of its own) for Liquid Glass.
     override func loadView() {
         Theme.reload()
-        rootIsKeyboardStyle = !Theme.isLiquidGlass && !Settings.shared.transparentBackground
+        rootIsKeyboardStyle = !Theme.isLiquidGlass && Theme.style?.transparentBackdrop != true
         let inputView = UIInputView(frame: CGRect(x: 0, y: 0, width: 320, height: 260),
                                     inputViewStyle: rootIsKeyboardStyle ? .keyboard : .default)
         inputView.allowsSelfSizing = true
@@ -317,7 +317,7 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
-            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), "\(s.transparentBackground)",
+            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             "\(s.splitKeyboard)", s.oneHanded,
             s.effectsJSON, s.systemEditsJSON
         ].joined(separator: "|")
@@ -401,7 +401,7 @@ final class KeyboardViewController: UIInputViewController {
         clipboardPanel = nil
         for sub in container.subviews { sub.removeFromSuperview() }
 
-        if Prefs.transparentBackground {
+        if Theme.style?.transparentBackdrop == true {
             // No backdrop at all: only the keys (and the bar's words) are drawn. A root created with the system
             // backdrop keeps it until the keyboard is opened again.
         } else if let style = Theme.style {

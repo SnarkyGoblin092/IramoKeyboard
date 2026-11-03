@@ -123,22 +123,22 @@ final class SuggestionBar: UIView {
         separatorLayer.isHidden = segments || Prefs.separatorStyle == "none"
         strip.layer.addSublayer(separatorLayer)
 
-        bestPill.backgroundColor = Theme.accent
+        bestPill.backgroundColor = Theme.pill
         bestPill.layer.cornerCurve = .continuous
         bestPill.isHidden = true
         strip.addSubview(bestPill)
         if usesGlass {
             // Accent-tinted glass, like the keys' glass.
-            pillGlass = GlassSupport.addBackground(to: bestPill, tint: Theme.accent.withAlphaComponent(0.85))
+            pillGlass = GlassSupport.addBackground(to: bestPill, tint: Theme.pill.withAlphaComponent(0.85))
         }
 
-        dismissIcon.tintColor = Theme.accent
+        dismissIcon.tintColor = Theme.barIcons
         dismissIcon.contentMode = .center
         // Drawn smaller than its touch area, which is still the bar's whole right end (`dismissMinX`).
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
-        toolsIcon.tintColor = Theme.accent
+        toolsIcon.tintColor = Theme.barIcons
         toolsIcon.contentMode = .center
         setToolsImage()
         glass.contentView.addSubview(toolsIcon)
@@ -174,7 +174,7 @@ final class SuggestionBar: UIView {
     }
 
     private var textColor: UIColor {
-        return followTheme && segments ? Theme.keyText : Theme.text
+        return Theme.suggestionText(onSegments: followTheme && segments)
     }
 
     // MARK: Content
@@ -290,7 +290,7 @@ final class SuggestionBar: UIView {
         guard index < labels.count, index < suggestions.count else { return }
         labels[index].font = suggestions[index].kind == .emoji ? UIFont.systemFont(ofSize: 26)
             : Theme.keyFont(ofSize: 17, weight: onPill ? .semibold : .regular)
-        labels[index].textColor = onPill ? Theme.onAccent : textColor
+        labels[index].textColor = onPill ? Theme.onPill : textColor
     }
 
     private func addSlot() {
@@ -303,13 +303,13 @@ final class SuggestionBar: UIView {
         segmentGlass.append(usesGlass ? GlassSupport.addBackground(to: segment, tint: nil) : nil)
 
         let highlight = UIView()
-        highlight.backgroundColor = Theme.accent
+        highlight.backgroundColor = Theme.pill
         highlight.layer.cornerCurve = .continuous
         highlight.alpha = 0
         highlight.isUserInteractionEnabled = false
         strip.addSubview(highlight)
         highlights.append(highlight)
-        highlightGlass.append(usesGlass ? GlassSupport.addBackground(to: highlight, tint: Theme.accent.withAlphaComponent(0.85)) : nil)
+        highlightGlass.append(usesGlass ? GlassSupport.addBackground(to: highlight, tint: Theme.pill.withAlphaComponent(0.85)) : nil)
 
         let label = UILabel()
         label.textAlignment = .center
@@ -339,10 +339,12 @@ final class SuggestionBar: UIView {
         let dismissWidth: CGFloat = 52
         let toolsWidth: CGFloat = 48
         let contentWidth = max(0, area.width - dismissWidth - toolsWidth)
-        dismissMinX = area.width - dismissWidth
-        toolsMaxX = toolsWidth
+        // The buttons' touch areas reach a little into the words beside them: a thumb aiming at the bar's end
+        // often lands just inside it.
+        dismissMinX = area.width - dismissWidth - 12
+        toolsMaxX = toolsWidth + 16
 
-        dismissIcon.frame = CGRect(x: dismissMinX, y: 0, width: dismissWidth, height: area.height)
+        dismissIcon.frame = CGRect(x: area.width - dismissWidth, y: 0, width: dismissWidth, height: area.height)
         toolsIcon.frame = CGRect(x: 0, y: 0, width: toolsWidth, height: area.height)
         hintLabel.frame = CGRect(x: toolsWidth, y: 0, width: contentWidth, height: area.height)
         // Bounds and centre rather than frame: the strip may be mid-switch with a transform.

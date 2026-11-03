@@ -91,7 +91,7 @@ final class KeyView: UIView {
 
         hintLabel.textAlignment = .right
         hintLabel.font = UIFont.systemFont(ofSize: 10, weight: .regular)
-        hintLabel.textColor = Theme.keySecondaryText
+        hintLabel.textColor = Theme.hintText
         hintLabel.text = spec.hint
         host.addSubview(hintLabel)
 
@@ -160,6 +160,12 @@ final class KeyView: UIView {
         hintLabel.alpha = alpha
     }
 
+    /// Hides the key with its light and shadow (another key is drawn over it: the stretched backspace).
+    func setCovered(_ covered: Bool) {
+        alpha = covered ? 0 : 1
+        halo.opacity = covered ? 0 : 1
+    }
+
     /// The return key is always accent-coloured (like Gboard); shift lights up in the accent when on.
     private var usesAccent: Bool {
         if isProminent || isActive { return true }
@@ -169,10 +175,12 @@ final class KeyView: UIView {
 
     private func refreshAppearance() {
         let textColor: UIColor
-        if usesAccent {
-            textColor = Theme.onAccent
+        if spec.action == .enter {
+            textColor = Theme.onReturnKey
+        } else if usesAccent {
+            textColor = Theme.onShiftOn
         } else {
-            textColor = Theme.keyText
+            textColor = spec.isFunction ? Theme.functionKeyText : Theme.keyText
         }
         label.textColor = textColor
         iconView.tintColor = textColor
@@ -184,8 +192,12 @@ final class KeyView: UIView {
 
         let fill: UIColor
         // A press does not change the key's colour: lighting it up is the Flash effect's job.
-        if usesAccent {
-            fill = Theme.accent
+        if spec.action == .enter {
+            fill = Theme.returnKey
+        } else if usesAccent {
+            fill = Theme.shiftOn
+        } else if spec.action == .space {
+            fill = Theme.spaceKey
         } else {
             fill = spec.isFunction ? Theme.functionKey : Theme.letterKey
         }
@@ -404,10 +416,10 @@ final class KeyView: UIView {
         player.frameInOverlay = frame
     }
 
+    /// The effects follow the key's size (the stretched backspace grows while its press effects still play).
     private func layoutEffects(radius: CGFloat) {
-        guard pressGlow != nil else { return }
         syncEffects()
-        effects.layoutGlow()
+        effects.refit()
     }
 
     private func playPressEffects(pressed: Bool) {

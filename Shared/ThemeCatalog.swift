@@ -131,12 +131,37 @@ struct ThemeStyle: Hashable, Codable {
     var gradient: GradientDirection = .vertical
     /// The labels' weight in steps from the keyboard's own (-2 thin ... 0 as the keyboard has it ... 3 heavy).
     var labelWeight: Int = 0
+    /// No backdrop at all: only the keys (and the bar's words) are drawn, over whatever is behind the keyboard.
+    /// The backdrop's colours still decide light or dark.
+    var transparentBackdrop: Bool = false
+
+    // The editor's colours of their own, each for one part (nil: that part takes the shared colour above, as
+    // the theme was designed).
+    var spaceColour: ThemeRGBA? = nil
+    var returnColour: ThemeRGBA? = nil
+    var shiftColour: ThemeRGBA? = nil
+    var functionTextColour: ThemeRGBA? = nil
+    var returnTextColour: ThemeRGBA? = nil
+    var shiftTextColour: ThemeRGBA? = nil
+    var hintColour: ThemeRGBA? = nil
+    var suggestionTextColour: ThemeRGBA? = nil
+    var pillColour: ThemeRGBA? = nil
+    var pillTextColour: ThemeRGBA? = nil
+    var barIconColour: ThemeRGBA? = nil
+    var trailColour: ThemeRGBA? = nil
+    var outlineColour: ThemeRGBA? = nil
+    var textureColour: ThemeRGBA? = nil
+    var blockShadowColour: ThemeRGBA? = nil
+    var glowColour: ThemeRGBA? = nil
 }
 
 extension ThemeStyle {
     private enum CodingKeys: String, CodingKey {
         case background, backgroundEnd, key, function, text, accent, line, roundness, keyOpacity, frosted, depth, sheen,
-             borderWidth, shadow, shadowStrength, textGlow, texture, textureStrength, gradient, labelWeight
+             borderWidth, shadow, shadowStrength, textGlow, texture, textureStrength, gradient, labelWeight, transparentBackdrop,
+             spaceColour, returnColour, shiftColour, functionTextColour, returnTextColour, shiftTextColour, hintColour,
+             suggestionTextColour, pillColour, pillTextColour, barIconColour, trailColour, outlineColour, textureColour,
+             blockShadowColour, glowColour
     }
 
     /// A value missing from stored edits (made before it was added) takes the default; an unknown one (a texture
@@ -166,6 +191,24 @@ extension ThemeStyle {
         textureStrength = optional(.textureStrength, 0)
         gradient = optional(.gradient, GradientDirection.vertical)
         labelWeight = min(max(optional(.labelWeight, 0), ThemeStyle.labelWeightRange.lowerBound), ThemeStyle.labelWeightRange.upperBound)
+        transparentBackdrop = optional(.transparentBackdrop, false)
+        func colour(_ key: CodingKeys) -> ThemeRGBA? { return (try? c.decodeIfPresent(ThemeRGBA.self, forKey: key)) ?? nil }
+        spaceColour = colour(.spaceColour)
+        returnColour = colour(.returnColour)
+        shiftColour = colour(.shiftColour)
+        functionTextColour = colour(.functionTextColour)
+        returnTextColour = colour(.returnTextColour)
+        shiftTextColour = colour(.shiftTextColour)
+        hintColour = colour(.hintColour)
+        suggestionTextColour = colour(.suggestionTextColour)
+        pillColour = colour(.pillColour)
+        pillTextColour = colour(.pillTextColour)
+        barIconColour = colour(.barIconColour)
+        trailColour = colour(.trailColour)
+        outlineColour = colour(.outlineColour)
+        textureColour = colour(.textureColour)
+        blockShadowColour = colour(.blockShadowColour)
+        glowColour = colour(.glowColour)
     }
 }
 
@@ -188,11 +231,56 @@ extension ThemeStyle {
     var isDark: Bool { return background.mixed(with: backgroundEnd, 0.5).luminance < 0.5 }
 
     /// Near-black on light accents, white on dark ones.
-    var onAccent: ThemeRGBA {
-        return accent.luminance > 0.6 ? ThemeRGBA(0.07, 0.07, 0.08, 1) : ThemeRGBA(1, 1, 1, 1)
+    var onAccent: ThemeRGBA { return ThemeStyle.readable(on: accent) }
+
+    /// Near-black on a light colour, white on a dark one.
+    static func readable(on colour: ThemeRGBA) -> ThemeRGBA {
+        return colour.luminance > 0.6 ? ThemeRGBA(0.07, 0.07, 0.08, 1) : ThemeRGBA(1, 1, 1, 1)
     }
 
     var secondaryText: ThemeRGBA { return text.withAlpha(text.a * 0.6) }
+
+    // Each part's colour: its own, else the shared one it was drawn with before.
+    var space: ThemeRGBA { return spaceColour ?? key }
+    var spaceFill: ThemeRGBA { return space.withAlpha(space.a * keyOpacity) }
+    var returnKey: ThemeRGBA { return returnColour ?? accent }
+    var shiftOn: ThemeRGBA { return shiftColour ?? accent }
+    var functionText: ThemeRGBA { return functionTextColour ?? text }
+    var returnText: ThemeRGBA { return returnTextColour ?? ThemeStyle.readable(on: returnKey) }
+    var shiftText: ThemeRGBA { return shiftTextColour ?? ThemeStyle.readable(on: shiftOn) }
+    var hint: ThemeRGBA { return hintColour ?? secondaryText }
+    var suggestionText: ThemeRGBA { return suggestionTextColour ?? text }
+    var pill: ThemeRGBA { return pillColour ?? accent }
+    var pillText: ThemeRGBA { return pillTextColour ?? ThemeStyle.readable(on: pill) }
+    var barIcons: ThemeRGBA { return barIconColour ?? accent }
+    var trail: ThemeRGBA { return trailColour ?? accent }
+    var outline: ThemeRGBA { return outlineColour ?? line }
+    var textureInk: ThemeRGBA { return textureColour ?? line }
+    var blockShadow: ThemeRGBA { return blockShadowColour ?? line }
+    var glowShadow: ThemeRGBA { return glowColour ?? accent }
+
+    /// Gives every part its own colour, as it shows now: from then on changing one colour changes only that part
+    /// (the editor does this before any colour change).
+    mutating func separateColours() {
+        let current = (space, returnKey, shiftOn, functionText, returnText, shiftText, hint, suggestionText, pill,
+                       pillText, barIcons, trail, outline, textureInk, blockShadow, glowShadow)
+        spaceColour = current.0
+        returnColour = current.1
+        shiftColour = current.2
+        functionTextColour = current.3
+        returnTextColour = current.4
+        shiftTextColour = current.5
+        hintColour = current.6
+        suggestionTextColour = current.7
+        pillColour = current.8
+        pillTextColour = current.9
+        barIconColour = current.10
+        trailColour = current.11
+        outlineColour = current.12
+        textureColour = current.13
+        blockShadowColour = current.14
+        glowColour = current.15
+    }
 
     var keyFill: ThemeRGBA { return key.withAlpha(key.a * keyOpacity) }
     var functionFill: ThemeRGBA { return function.withAlpha(function.a * keyOpacity) }
@@ -234,9 +322,9 @@ extension ThemeStyle {
                                  radius: 0, x: 0, y: pressed ? 0.5 : 1 + 4 * s)
         case .block:
             let offset = pressed ? 0.5 : 1 + 4 * s
-            return ShadowMetrics(color: line.withAlpha(1), opacity: 1, radius: 0, x: offset, y: offset)
+            return ShadowMetrics(color: blockShadow.withAlpha(1), opacity: 1, radius: 0, x: offset, y: offset)
         case .glow:
-            return ShadowMetrics(color: accent.withAlpha(1), opacity: (0.35 + 0.65 * s) * (pressed ? 0.6 : 1),
+            return ShadowMetrics(color: glowShadow.withAlpha(1), opacity: (0.35 + 0.65 * s) * (pressed ? 0.6 : 1),
                                  radius: 3 + 10 * s, x: 0, y: 0)
         }
     }
@@ -250,7 +338,7 @@ extension ThemeStyle {
     /// The backdrop's texture, in keyboard points: the pattern's pitch, the mark's size and its colour.
     var textureMetrics: (spacing: Double, size: Double, color: ThemeRGBA)? {
         guard texture != .none, textureStrength > 0.001 else { return nil }
-        let color = line.withAlpha(line.a * textureStrength * 0.45)
+        let color = textureInk.withAlpha(textureInk.a * textureStrength * 0.45)
         switch texture {
         case .none: return nil
         case .dots: return (12, 1.2, color)

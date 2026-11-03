@@ -77,6 +77,25 @@ final class KeyEffectPlayer {
     /// The light under the key: fades in on press, out on release, and pulses for the wave.
     private(set) var pressGlow: CALayer?
 
+    /// The effects still playing on the key, each with how to fit it to a new size and corner radius.
+    private var fitters: [(layer: CALayer, fit: (CGRect, CGFloat) -> Void)] = []
+
+    private func track(_ layer: CALayer, _ fit: @escaping (CGRect, CGFloat) -> Void) {
+        fitters.removeAll { $0.layer.superlayer == nil }
+        fitters.append((layer, fit))
+    }
+
+    /// The key changed size (the stretched backspace): the glow and everything still playing on it follow, so
+    /// outlines, flashes, shines and the rest always cover the key as it is now.
+    func refit() {
+        fitters.removeAll { $0.layer.superlayer == nil }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for fitter in fitters { fitter.fit(bounds, radius) }
+        CATransaction.commit()
+        layoutGlow()
+    }
+
     // MARK: Colours
 
     /// The next rainbow hue (shared by every key, so each press is a new colour).
@@ -278,6 +297,7 @@ final class KeyEffectPlayer {
         line.lineWidth = width
         line.opacity = 0
         keyLayer.addSublayer(line)
+        track(line) { bounds, radius in KeyEffectPlayer.fitOutline(line, width: width, bounds: bounds, radius: radius) }
         CATransaction.begin()
         CATransaction.setCompletionBlock { line.removeFromSuperlayer() }
         let fade = CABasicAnimation(keyPath: "opacity")
@@ -289,7 +309,15 @@ final class KeyEffectPlayer {
         CATransaction.commit()
     }
 
-    /// A holder the size of the key, clipped to its shape, for effects that stay inside the key.
+    /// An outline stroke of `width` round a key of `bounds` and `radius`.
+    private static func fitOutline(_ line: CAShapeLayer, width: CGFloat, bounds: CGRect, radius: CGFloat) {
+        line.frame = bounds
+        line.path = UIBezierPath(roundedRect: bounds.insetBy(dx: width / 2, dy: width / 2),
+                                 cornerRadius: max(0, radius - width / 2)).cgPath
+    }
+
+    /// A holder the size of the key, clipped to its shape, for effects that stay inside the key. When the key
+    /// changes size the holder takes the new shape and what is in it is stretched to match.
     private func clippedHolder() -> CALayer {
         let holder = CALayer()
         holder.frame = bounds
@@ -297,6 +325,17 @@ final class KeyEffectPlayer {
         holder.cornerCurve = .continuous
         holder.masksToBounds = true
         keyLayer?.addSublayer(holder)
+        let made = bounds.size
+        track(holder) { bounds, radius in
+            holder.frame = bounds
+            holder.cornerRadius = radius
+            // Content laid out for `made`, scaled about the holder's middle so its corner stays at the corner.
+            let kx = made.width > 0 ? bounds.width / made.width : 1
+            let ky = made.height > 0 ? bounds.height / made.height : 1
+            holder.sublayerTransform = CATransform3DConcat(
+                CATransform3DMakeScale(kx, ky, 1),
+                CATransform3DMakeTranslation((kx - 1) * bounds.width / 2, (ky - 1) * bounds.height / 2, 0))
+        }
         return holder
     }
 
@@ -304,7 +343,8 @@ final class KeyEffectPlayer {
     private func ripple(_ color: UIColor) {
         guard bounds.width > 0 else { return }
         let effects = config
-        let diameter = hypot(unit, bounds.height)
+        // Across the whole key, whatever its width, so the widest setting always reaches its edges.
+        let diameter = hypot(bounds.width, bounds.height)
         let holder = clippedHolder()
         let wave: CALayer
         if effects.rippleStyle == "ring" {
@@ -349,7 +389,8 @@ final class KeyEffectPlayer {
         guard bounds.width > 0 else { return }
         let effects = config
         let holder = clippedHolder()
-        let bandWidth = unit * CGFloat(effects.shineWidth)
+        // A share of the key's own width, so a wide key gets a band in proportion.
+        let bandWidth = bounds.width * CGFloat(effects.shineWidth)
         let band = CAGradientLayer()
         band.bounds = CGRect(x: 0, y: 0, width: bandWidth, height: bounds.height * 1.6)
         band.position = CGPoint(x: -bandWidth, y: bounds.midY)
@@ -435,6 +476,7 @@ final class KeyEffectPlayer {
         line.lineCap = .round
         line.opacity = 0
         keyLayer.addSublayer(line)
+        track(line) { bounds, radius in KeyEffectPlayer.fitOutline(line, width: width, bounds: bounds, radius: radius) }
         CATransaction.begin()
         CATransaction.setCompletionBlock { line.removeFromSuperlayer() }
         let head = CABasicAnimation(keyPath: "strokeEnd")

@@ -17,7 +17,6 @@ struct LiveKeyboard: View {
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
-    @AppStorage(SettingKey.transparentBackground, store: SharedStore.defaults) private var transparent = SettingDefault.transparentBackground
 
     var body: some View {
         GeometryReader { geometry in
@@ -27,11 +26,11 @@ struct LiveKeyboard: View {
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardHost(effects: effects)
-                    // The transparent background shows only the keys, over whatever the screen has behind them.
+                    // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(look.backdrop(scale: scale)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                        .opacity(transparent ? 0 : 1))
+                        .opacity(look.style?.transparentBackdrop == true ? 0 : 1))
             }
             .frame(width: size.width * scale, height: size.height * scale)
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -127,7 +126,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
-            "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), "\(s.transparentBackground)",
+            "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             s.systemEditsJSON
         ].joined(separator: "|")
     }

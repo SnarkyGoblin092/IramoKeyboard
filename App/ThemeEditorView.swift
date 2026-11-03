@@ -80,13 +80,27 @@ private struct StyleEditor {
         })
     }
 
-    /// A colour attribute as the system colour picker's Color.
+    /// A colour attribute as the system colour picker's Color. Every part keeps its own colour
+    /// (ThemeStyle.separateColours), so a change never carries over to the parts that shared it.
     func colour(_ keyPath: WritableKeyPath<ThemeStyle, ThemeRGBA>) -> Binding<Color> {
         return Binding(get: { Color(style[keyPath: keyPath]) }, set: { color in
             let rgba = ThemeRGBA(color: color)
             guard rgba != style[keyPath: keyPath] else { return }
             var next = style
+            next.separateColours()
             next[keyPath: keyPath] = rgba
+            save(next)
+        })
+    }
+
+    /// A part's own colour (`own`), shown as `shown` (what it is drawn with) while it has none.
+    func colour(_ own: WritableKeyPath<ThemeStyle, ThemeRGBA?>, shown: KeyPath<ThemeStyle, ThemeRGBA>) -> Binding<Color> {
+        return Binding(get: { Color(style[keyPath: shown]) }, set: { color in
+            let rgba = ThemeRGBA(color: color)
+            guard rgba != style[keyPath: shown] else { return }
+            var next = style
+            next.separateColours()
+            next[keyPath: own] = rgba
             save(next)
         })
     }
@@ -170,6 +184,9 @@ private struct ThemeColoursTab: View {
 
     var body: some View {
         Section {
+            GlassToggle(title: tr("Transparent background"),
+                        subtitle: tr("No backdrop behind the keys; the keys stay as they are."),
+                        isOn: edit.binding(\.transparentBackdrop))
             ColourRow(title: tr("Top"), subtitle: tr("The backdrop's colour at the top."), colour: edit.colour(\.background))
             ColourRow(title: tr("Bottom"), subtitle: tr("Where the gradient ends; the same colour twice makes it plain."),
                       colour: edit.colour(\.backgroundEnd))
@@ -185,20 +202,67 @@ private struct ThemeColoursTab: View {
         } header: {
             SectionHeader(tr("Backdrop"), symbol: "rectangle.fill", color: .indigo)
         } footer: {
-            Text(edit.style.isDark ? tr("A dark backdrop: the keyboard is in dark mode.") : tr("A light backdrop: the keyboard is in light mode."))
+            Text((edit.style.isDark ? tr("A dark backdrop: the keyboard is in dark mode.") : tr("A light backdrop: the keyboard is in light mode."))
+                 + (edit.style.transparentBackdrop ? " " + tr("While it's transparent, its colours only set light or dark mode.") : ""))
         }
         .glassRows()
 
         Section {
-            ColourRow(title: tr("Letter keys"), subtitle: tr("Letters, numbers and the space bar."), colour: edit.colour(\.key))
+            ColourRow(title: tr("Letter keys"), subtitle: tr("Letters and numbers."), colour: edit.colour(\.key))
+            ColourRow(title: tr("Space bar"), subtitle: tr("The space bar."), colour: edit.colour(\.spaceColour, shown: \.space))
             ColourRow(title: tr("Function keys"), subtitle: tr("Shift, delete, 123 and the emoji key."), colour: edit.colour(\.function))
-            ColourRow(title: tr("Labels"), subtitle: tr("The keys' letters and symbols, and the suggestions."), colour: edit.colour(\.text))
-            ColourRow(title: tr("Accent"), subtitle: tr("Return, shift when on, the suggestion pill and the glow."),
-                      colour: edit.colour(\.accent))
-            ColourRow(title: tr("Lines"), subtitle: tr("Outlines, the texture and the block shadow."),
-                      colour: edit.colour(\.line), opacity: true)
+            ColourRow(title: tr("Return key"), subtitle: tr("The return key."), colour: edit.colour(\.returnColour, shown: \.returnKey))
+            ColourRow(title: tr("Shift when on"), subtitle: tr("Shift and caps lock while they're on."),
+                      colour: edit.colour(\.shiftColour, shown: \.shiftOn))
         } header: {
             SectionHeader(tr("Keys"), symbol: "keyboard.fill", color: .blue)
+        }
+        .glassRows()
+
+        Section {
+            ColourRow(title: tr("Letters"), subtitle: tr("Letters, numbers and the space bar's name."), colour: edit.colour(\.text))
+            ColourRow(title: tr("Function key symbols"), subtitle: tr("Shift, delete, 123 and the emoji key."),
+                      colour: edit.colour(\.functionTextColour, shown: \.functionText))
+            ColourRow(title: tr("Return key label"), subtitle: tr("The word or arrow on the return key."),
+                      colour: edit.colour(\.returnTextColour, shown: \.returnText))
+            ColourRow(title: tr("Shift symbol when on"), subtitle: tr("The arrow on shift and caps lock while they're on."),
+                      colour: edit.colour(\.shiftTextColour, shown: \.shiftText))
+            ColourRow(title: tr("Accent hints"), subtitle: tr("The small accent in a key's corner."),
+                      colour: edit.colour(\.hintColour, shown: \.hint), opacity: true)
+        } header: {
+            SectionHeader(tr("Labels"), symbol: "textformat", color: .orange)
+        }
+        .glassRows()
+
+        Section {
+            ColourRow(title: tr("Words"), subtitle: tr("The suggested words."),
+                      colour: edit.colour(\.suggestionTextColour, shown: \.suggestionText))
+            ColourRow(title: tr("Pill"), subtitle: tr("Behind the word space will write, and a word you press."),
+                      colour: edit.colour(\.pillColour, shown: \.pill))
+            ColourRow(title: tr("Word on the pill"), subtitle: tr("The word on the pill."),
+                      colour: edit.colour(\.pillTextColour, shown: \.pillText))
+            ColourRow(title: tr("Buttons"), subtitle: tr("Functions and hide keyboard, at the bar's ends."),
+                      colour: edit.colour(\.barIconColour, shown: \.barIcons))
+        } header: {
+            SectionHeader(tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo)
+        }
+        .glassRows()
+
+        Section {
+            ColourRow(title: tr("Outlines"), subtitle: tr("The line round each key."),
+                      colour: edit.colour(\.outlineColour, shown: \.outline), opacity: true)
+            ColourRow(title: tr("Texture"), subtitle: tr("The backdrop's pattern."),
+                      colour: edit.colour(\.textureColour, shown: \.textureInk), opacity: true)
+            ColourRow(title: tr("Block shadow"), subtitle: tr("The hard shadow of the Block shadow."),
+                      colour: edit.colour(\.blockShadowColour, shown: \.blockShadow))
+            ColourRow(title: tr("Glow"), subtitle: tr("The halo of the Glow shadow."),
+                      colour: edit.colour(\.glowColour, shown: \.glowShadow))
+            ColourRow(title: tr("Swipe trail"), subtitle: tr("The line your finger draws while swiping."),
+                      colour: edit.colour(\.trailColour, shown: \.trail))
+            ColourRow(title: tr("Other highlights"), subtitle: tr("Key pop-up choices and everything else in the accent."),
+                      colour: edit.colour(\.accent))
+        } header: {
+            SectionHeader(tr("Lines and effects"), symbol: "sparkles", color: .purple)
         }
         .glassRows()
     }

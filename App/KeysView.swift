@@ -27,6 +27,11 @@ struct KeysView: View {
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
     @AppStorage(SettingKey.extraKeys, store: SharedStore.defaults) private var extraKeys = SettingDefault.extraKeys
+    @AppStorage(SettingKey.commaKey, store: SharedStore.defaults) private var commaKey = SettingDefault.commaKey
+    @AppStorage(SettingKey.periodKey, store: SharedStore.defaults) private var periodKey = SettingDefault.periodKey
+    @AppStorage(SettingKey.emojiKey, store: SharedStore.defaults) private var emojiKey = SettingDefault.emojiKey
+    @AppStorage(SettingKey.commaHold, store: SharedStore.defaults) private var commaHold = SettingDefault.commaHold
+    @AppStorage(SettingKey.periodHold, store: SharedStore.defaults) private var periodHold = SettingDefault.periodHold
 
     // MARK: Presets
 
@@ -46,6 +51,21 @@ struct KeysView: View {
     private let gaps: [(key: Double, row: Double)] = [(4, 8), (6, 11), (8, 14), (10, 17)]
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
+
+    /// The symbols a hold on a key offers, typed in a row ("" keeps the language's own).
+    private func holdField(_ title: String, text: Binding<String>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            TextField(tr("Language's own"), text: Binding(get: { text.wrappedValue }, set: { value in
+                text.wrappedValue = Settings.holdSymbols(value).joined()
+            }))
+            .multilineTextAlignment(.trailing)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .font(.body.monospaced())
+        }
+    }
 
     /// A symbol on (in the order picked) or off; at most `Settings.extraKeysLimit` at once.
     private func symbolChip(_ symbol: String) -> some View {
@@ -253,6 +273,24 @@ struct KeysView: View {
                 SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
             } footer: {
                 Text(tr("Up to three symbols get their own key next to the full stop on the letters page."))
+            }
+            .glassRows()
+
+            Section {
+                GlassToggle(title: tr("Emoji key"), subtitle: tr("Without it, the emoji are in the Functions panel when Emoji is one of its tools."),
+                            isOn: $emojiKey)
+                GlassToggle(title: tr("Comma key"), subtitle: tr("The comma left of the space bar."), isOn: $commaKey)
+                if commaKey {
+                    holdField(tr("Hold comma for"), text: $commaHold)
+                }
+                GlassToggle(title: tr("Full stop key"), subtitle: tr("The full stop right of the space bar."), isOn: $periodKey)
+                if periodKey {
+                    holdField(tr("Hold full stop for"), text: $periodHold)
+                }
+            } header: {
+                SectionHeader(tr("Bottom row"), symbol: "keyboard.chevron.compact.down", color: .gray)
+            } footer: {
+                Text(tr("Keys you take off give their room to the space bar. Type the symbols a hold offers, in order (up to ten); leave it empty for your language's own."))
             }
             .glassRows()
         }

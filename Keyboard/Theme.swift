@@ -224,7 +224,7 @@ enum Theme {
     /// The outline: a designed theme's line colour, or the theme's hairline, a stronger line in the key label's
     /// colour, or the accent.
     static var keyBorderColor: UIColor {
-        if let style = style { return style.line.uiColor }
+        if let style = style { return style.outline.uiColor }
         switch keyBorderStyle {
         case .none: return UIColor.clear
         case .thin: return kind == .native ? pick(black(0.18), white(0.28)) : palette.keyBorder
@@ -273,6 +273,25 @@ enum Theme {
     static var functionKey: UIColor { return keyPalette.functionKey }
     static var letterKeyPressed: UIColor { return keyPalette.letterKeyPressed }
     static var functionKeyPressed: UIColor { return keyPalette.functionKeyPressed }
+
+    // Parts a designed theme can colour on their own (the editor's Colours); the other themes draw them with the
+    // shared colours.
+    static var spaceKey: UIColor { return style?.spaceFill.uiColor ?? letterKey }
+    static var returnKey: UIColor { return style?.returnKey.uiColor ?? accent }
+    static var onReturnKey: UIColor { return style?.returnText.uiColor ?? onAccent }
+    static var shiftOn: UIColor { return style?.shiftOn.uiColor ?? accent }
+    static var onShiftOn: UIColor { return style?.shiftText.uiColor ?? onAccent }
+    static var functionKeyText: UIColor { return style?.functionText.uiColor ?? keyText }
+    static var hintText: UIColor { return style?.hint.uiColor ?? keySecondaryText }
+    static var pill: UIColor { return style?.pill.uiColor ?? accent }
+    static var onPill: UIColor { return style?.pillText.uiColor ?? onAccent }
+    static var barIcons: UIColor { return style?.barIcons.uiColor ?? accent }
+    static var swipeTrail: UIColor { return style?.trail.uiColor ?? accent }
+    /// The suggestion bar's words; on key-like segments the key labels' colour (for the themes without one of their own).
+    static func suggestionText(onSegments: Bool) -> UIColor {
+        if let colour = style?.suggestionText { return colour.uiColor }
+        return onSegments ? keyText : text
+    }
 
     /// Set while the keys' light/dark differs from the app's, whose style the system keyboard backdrop follows
     /// (dark keys on a light backdrop, or light keys on a dark one). The keys then use `contrastPalette`.
@@ -417,7 +436,7 @@ enum Theme {
                 letterKeyPressed: style.keyPressedFill.uiColor,
                 functionKeyPressed: style.functionPressedFill.uiColor,
                 keyShadow: UIColor.clear,
-                keyBorder: style.line.uiColor,
+                keyBorder: style.outline.uiColor,
                 popupFill: style.popupFill.uiColor,
                 panelBackground: style.background.uiColor,
                 stripFill: UIColor.clear,

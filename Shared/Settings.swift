@@ -42,8 +42,13 @@ enum SettingKey {
     static let keyHints = "hunkeys.keyHints"
     /// Symbols that get their own key on the letters page, next to the full stop (e.g. "@").
     static let extraKeys = "hunkeys.extraKeys"
-    /// No backdrop behind the keys: only the keys themselves are drawn.
-    static let transparentBackground = "hunkeys.transparentBackground"
+    /// The letters page's comma, full stop and emoji keys can be taken off (their room goes to the space bar).
+    static let commaKey = "hunkeys.commaKey"
+    static let periodKey = "hunkeys.periodKey"
+    static let emojiKey = "hunkeys.emojiKey"
+    /// The symbols a hold on the comma and the full stop offers, in order ("": the language's own).
+    static let commaHold = "hunkeys.commaHold"
+    static let periodHold = "hunkeys.periodHold"
     static let theme = "hunkeys.theme"
     /// The theme editor's changes to the designed themes (ThemeEdits: JSON by theme id; "" for none).
     static let themeEdits = "hunkeys.themeEdits"
@@ -148,7 +153,7 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints, extraKeys, transparentBackground,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints, extraKeys, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
@@ -198,7 +203,11 @@ enum SettingDefault {
     static let numberRow = false
     static let keyHints = true
     static let extraKeys = ""
-    static let transparentBackground = false
+    static let commaKey = true
+    static let periodKey = true
+    static let emojiKey = true
+    static let commaHold = ""
+    static let periodHold = ""
     static let theme = "native"
     static let themeEdits = ""
     static let appLanguage = "system"
@@ -424,7 +433,11 @@ final class Settings {
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
             SettingKey.extraKeys: SettingDefault.extraKeys,
-            SettingKey.transparentBackground: SettingDefault.transparentBackground,
+            SettingKey.commaKey: SettingDefault.commaKey,
+            SettingKey.periodKey: SettingDefault.periodKey,
+            SettingKey.emojiKey: SettingDefault.emojiKey,
+            SettingKey.commaHold: SettingDefault.commaHold,
+            SettingKey.periodHold: SettingDefault.periodHold,
             SettingKey.theme: SettingDefault.theme,
             SettingKey.themeEdits: SettingDefault.themeEdits,
             SettingKey.appLanguage: SettingDefault.appLanguage,
@@ -632,10 +645,26 @@ final class Settings {
         return Array((readString(SettingKey.extraKeys) ?? SettingDefault.extraKeys).map { String($0) }.prefix(Settings.extraKeysLimit))
     }
     static let extraKeysLimit = 3
+
+    var commaKey: Bool { return readBool(SettingKey.commaKey) }
+    var periodKey: Bool { return readBool(SettingKey.periodKey) }
+    var emojiKey: Bool { return readBool(SettingKey.emojiKey) }
+    /// A hold's own symbols, one character each, without spaces or repeats (empty: the language's own).
+    var commaHold: [String] { return Settings.holdSymbols(readString(SettingKey.commaHold) ?? "") }
+    var periodHold: [String] { return Settings.holdSymbols(readString(SettingKey.periodHold) ?? "") }
+    static let holdSymbolsLimit = 10
+
+    static func holdSymbols(_ text: String) -> [String] {
+        var seen = Set<String>()
+        var symbols: [String] = []
+        for character in text where !character.isWhitespace {
+            let symbol = String(character)
+            if seen.insert(symbol).inserted { symbols.append(symbol) }
+        }
+        return Array(symbols.prefix(holdSymbolsLimit))
+    }
     /// Symbols offered for the extra keys (the Keys screen).
     static let extraKeyChoices = ["@", "#", "/", "-", "_", "&", "?", "!", ":", "'", "$", "*"]
-
-    var transparentBackground: Bool { return readBool(SettingKey.transparentBackground) }
 
     /// A theme id from `ThemeCatalog` ("native" by default; unknown ids fall back to native).
     var theme: String {

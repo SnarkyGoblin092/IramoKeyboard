@@ -161,7 +161,7 @@ final class KeyboardView: UIView {
             glassContainer = container
         }
 
-        trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
+        trailLayer.strokeColor = Theme.swipeTrail.withAlphaComponent(0.55).cgColor
         trailLayer.fillColor = nil
         trailLayer.lineWidth = 7
         trailLayer.lineCap = .round
@@ -941,10 +941,13 @@ final class KeyboardView: UIView {
         let stretched = wordDeleteKey
         wordDeleteKey = key
         if let key = key { key.superview?.bringSubviewToFront(key) }
+        // The keys it grows over (the rest of its row) go out of sight altogether, their light and shadow too.
+        let covered = key.flatMap { key in keyViews.first { $0.contains { $0 === key } } } ?? []
         UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
             for row in self.keyViews {
                 for other in row {
                     other.setContentAlpha(key == nil || other === key ? 1.0 : 0.12)
+                    other.setCovered(other !== key && covered.contains { $0 === other })
                 }
             }
             // Back to its own cell, even while its press effect still scales it (layoutSubviews leaves those alone).
@@ -1023,7 +1026,7 @@ final class KeyboardView: UIView {
             trailLayer.shadowRadius = 8
             trailLayer.shadowOffset = .zero
         } else {
-            trailLayer.strokeColor = Theme.accent.withAlphaComponent(0.55).cgColor
+            trailLayer.strokeColor = Theme.swipeTrail.withAlphaComponent(0.55).cgColor
             trailLayer.shadowOpacity = 0
         }
     }
