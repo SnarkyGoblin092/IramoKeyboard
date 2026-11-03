@@ -416,6 +416,18 @@ final class KeyView: UIView {
         effects.press(pressed)
     }
 
+    /// A swiping finger passed over the key: its press effects play once (the glow comes and goes) without the key
+    /// itself showing as held down.
+    func playSwipeEffects() {
+        guard Prefs.effects.playsOnPress else { return }
+        syncEffects()
+        effects.press(true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self = self, !self.isPressed else { return }
+            self.effects.press(false)
+        }
+    }
+
     /// The key lights up as part of a wave that started at a neighbour: a pulse of its glow, `delay` seconds late.
     func waveLight(color: UIColor, strength: Float, delay: TimeInterval) {
         guard haloAttached else { return }

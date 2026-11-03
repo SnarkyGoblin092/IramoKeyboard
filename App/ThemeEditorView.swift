@@ -173,6 +173,15 @@ private struct ThemeColoursTab: View {
             ColourRow(title: tr("Top"), subtitle: tr("The backdrop's colour at the top."), colour: edit.colour(\.background))
             ColourRow(title: tr("Bottom"), subtitle: tr("Where the gradient ends; the same colour twice makes it plain."),
                       colour: edit.colour(\.backgroundEnd))
+            // A plain backdrop has no gradient to turn.
+            if edit.style.background != edit.style.backgroundEnd {
+                let directions = ThemeStyle.GradientDirection.allCases
+                SegmentedChoice(title: tr("Gradient"),
+                                names: [tr("Down"), tr("Diagonal"), tr("Across"), tr("Radial")],
+                                selected: directions.firstIndex(of: edit.style.gradient)) {
+                    edit.binding(\.gradient).wrappedValue = directions[$0]
+                }
+            }
         } header: {
             SectionHeader(tr("Backdrop"), symbol: "rectangle.fill", color: .indigo)
         } footer: {
@@ -225,9 +234,12 @@ private struct ThemeKeysTab: View {
         Section {
             GlassSlider(title: tr("Solid"), symbol: "circle.lefthalf.filled", value: edit.binding(\.keyOpacity),
                         range: 0...1, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
-            GlassToggle(title: tr("Frosted"),
-                        subtitle: tr("Blurs the backdrop behind each key, like frosted glass. Shows on keys that aren't fully solid."),
-                        isOn: edit.binding(\.frosted))
+            // Frosting only shows through keys that aren't fully solid.
+            if edit.style.keyOpacity < 0.999 {
+                GlassToggle(title: tr("Frosted"),
+                            subtitle: tr("Blurs the backdrop behind each key, like frosted glass."),
+                            isOn: edit.binding(\.frosted))
+            }
             GlassSlider(title: tr("Sheen"), symbol: "sun.max", value: edit.binding(\.sheen), range: 0...1, step: 0.05) {
                 DeviceMetrics.level($0, in: 0...1)
             }
@@ -252,8 +264,10 @@ private struct ThemeEffectsTab: View {
         (.none, tr("None")), (.soft, tr("Soft")), (.lift, tr("Lift")), (.block, tr("Block")), (.glow, tr("Glow"))
     ]
     private let textures: [(value: ThemeStyle.Texture, title: String)] = [
-        (.none, tr("None")), (.dots, tr("Dots")), (.grid, tr("Grid")), (.lines, tr("Lines")), (.scanlines, tr("Scanlines"))
+        (.none, tr("None")), (.dots, tr("Dots")), (.grid, tr("Grid")), (.lines, tr("Lines")),
+        (.scanlines, tr("Scanlines")), (.diagonal, tr("Stripes")), (.checker, tr("Checks")), (.crosses, tr("Crosses"))
     ]
+    private let textureColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
 
     /// The theme with another shadow (at a strength that shows it), for that option's picture.
     private func withShadow(_ shadow: ThemeStyle.Shadow) -> ThemeStyle {
@@ -290,11 +304,11 @@ private struct ThemeEffectsTab: View {
                 }
             }
             .padding(.vertical, 4)
-            GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: edit.binding(\.shadowStrength), range: 0...1, step: 0.05) {
-                DeviceMetrics.level($0, in: 0...1)
+            if style.shadow != .none {
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: edit.binding(\.shadowStrength), range: 0...1, step: 0.05) {
+                    DeviceMetrics.level($0, in: 0...1)
+                }
             }
-            .disabled(style.shadow == .none)
-            .opacity(style.shadow == .none ? 0.45 : 1)
         } header: {
             SectionHeader(tr("Shadow"), symbol: "shadow", color: .purple)
         } footer: {
@@ -303,18 +317,23 @@ private struct ThemeEffectsTab: View {
         .glassRows()
 
         Section {
+            let weights = Array(ThemeStyle.labelWeightRange)
+            SegmentedChoice(title: tr("Weight"), names: [tr("Thin"), tr("Light"), tr("Normal"), tr("Medium"), tr("Bold"), tr("Heavy")],
+                            selected: weights.firstIndex(of: style.labelWeight)) {
+                edit.binding(\.labelWeight).wrappedValue = weights[$0]
+            }
             GlassSlider(title: tr("Label glow"), symbol: "lightbulb.max", value: edit.binding(\.textGlow), range: 0...1, step: 0.05) {
                 DeviceMetrics.level($0, in: 0...1)
             }
         } header: {
             SectionHeader(tr("Labels"), symbol: "textformat", color: .orange)
         } footer: {
-            Text(tr("A neon halo around the letters and symbols, in their own colour."))
+            Text(tr("How heavy the letters and symbols are, and a neon halo around them in their own colour."))
         }
         .glassRows()
 
         Section {
-            HStack(spacing: 6) {
+            LazyVGrid(columns: textureColumns, spacing: 6) {
                 ForEach(textures.indices, id: \.self) { index in
                     let option = textures[index]
                     OptionCard(title: option.title, isOn: style.texture == option.value) {
@@ -330,11 +349,11 @@ private struct ThemeEffectsTab: View {
                 }
             }
             .padding(.vertical, 4)
-            GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: edit.binding(\.textureStrength), range: 0...1, step: 0.05) {
-                DeviceMetrics.level($0, in: 0...1)
+            if style.texture != .none {
+                GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: edit.binding(\.textureStrength), range: 0...1, step: 0.05) {
+                    DeviceMetrics.level($0, in: 0...1)
+                }
             }
-            .disabled(style.texture == .none)
-            .opacity(style.texture == .none ? 0.45 : 1)
         } header: {
             SectionHeader(tr("Texture"), symbol: "circle.grid.3x3.fill", color: .teal)
         } footer: {
@@ -385,7 +404,9 @@ private struct ThemeResetSection: View {
             } label: {
                 Label(tr("Reset %@", "\(theme.name)"), systemImage: "arrow.counterclockwise")
             }
+            .buttonStyle(ActionButtonStyle())   // its red glass capsule, standing on the backdrop without a card
             .disabled(!theme.isEdited)
+            .glassOutsideCard()
             .confirmationDialog(tr("Put %@ back as designed?", "\(theme.name)"), isPresented: $confirming, titleVisibility: .visible) {
                 Button(tr("Reset %@", "\(theme.name)"), role: .destructive) {
                     Feedback.delete()

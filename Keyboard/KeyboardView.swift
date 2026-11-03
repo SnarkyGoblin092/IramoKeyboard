@@ -98,6 +98,8 @@ final class KeyboardView: UIView {
         var startsAtSpace = false
         /// Where the finger last was on the space bar while waiting for the next word.
         var lastBarPoint: CGPoint?
+        /// The letter key the swiping finger is over, whose effects last played.
+        weak var swipeKey: KeyView?
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
@@ -951,6 +953,8 @@ final class KeyboardView: UIView {
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
+        state.swipeKey = state.startKey   // its effects played when it went down
+        if let point = state.path.last { playSwipeEffects(state, at: point) }
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }
 
@@ -1008,7 +1012,17 @@ final class KeyboardView: UIView {
             trailLayer.opacity = 1
         }
         updateTrail(state.path)
+        playSwipeEffects(state, at: point)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
+    }
+
+    /// The swiping finger reached another letter: its press effects play, as when typed.
+    private func playSwipeEffects(_ state: TouchState, at point: CGPoint) {
+        guard let index = keyIndex(at: point) else { return }
+        let key = keyViews[index.row][index.col]
+        guard key !== state.swipeKey, letter(of: key.spec) != nil else { return }
+        state.swipeKey = key
+        key.playSwipeEffects()
     }
 
     /// The path of the word just swiped, without the glide to or from the space bar: the decoder would read the
@@ -1059,6 +1073,7 @@ final class KeyboardView: UIView {
         trailLayer.removeAllAnimations()
         trailLayer.opacity = 1
         updateTrail(state.path)
+        playSwipeEffects(state, at: point)
         Haptics.shared.tick()
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }

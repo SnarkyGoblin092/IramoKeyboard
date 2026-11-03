@@ -41,6 +41,15 @@ struct SystemThemeSections: View {
         return false
     }
 
+    /// Whether the keys have an outline (Auto: every theme but Native), so its width means something.
+    private var hasBorder: Bool {
+        switch style.border {
+        case "none": return false
+        case "auto": return theme.kind != .native || style.borderWidth != nil
+        default: return true
+        }
+    }
+
     /// A colour that replaces the theme's own while it is on.
     private func optionalColour(_ keyPath: WritableKeyPath<SystemStyle, ThemeRGBA?>, _ title: String,
                                 _ subtitle: String, start: ThemeRGBA) -> some View {
@@ -72,57 +81,62 @@ struct SystemThemeSections: View {
         }
         .glassRows()
 
-        Section {
-            Group {
+        // Real Liquid Glass keys are glass: no surface, outline, glow, fill or solidity of their own, so none of
+        // that is offered for them.
+        if !glassKeys {
+            Section {
                 SegmentedChoice(title: tr("Surface"), names: [tr("Auto"), tr("Flat"), tr("Sheen"), tr("Raised")],
                                 selected: surfaces.firstIndex(of: style.surface)) { binding(\.surface).wrappedValue = surfaces[$0] }
-                GlassSlider(title: tr("Sheen strength"), symbol: "sun.max", value: binding(\.sheen),
-                            range: SystemStyle.sheenRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
+                // Only a sheen or raised key has a sheen to make stronger.
+                if style.surface == "sheen" || style.surface == "raised" {
+                    GlassSlider(title: tr("Sheen strength"), symbol: "sun.max", value: binding(\.sheen),
+                                range: SystemStyle.sheenRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
+                }
                 SegmentedChoice(title: tr("Border"), names: [tr("Auto"), tr("None"), tr("Thin"), tr("Bold"), tr("Accent")],
                                 selected: borders.firstIndex(of: style.border)) { binding(\.border).wrappedValue = borders[$0] }
-                GlassToggle(title: tr("Own outline width"),
-                            subtitle: tr("Set the outline's width in points instead of the border's."),
-                            isOn: Binding(get: { style.borderWidth != nil }, set: { on in
-                                binding(\.borderWidth).wrappedValue = on ? 1 : nil
-                            }))
-                if let width = style.borderWidth {
-                    GlassSlider(title: tr("Outline width"), symbol: "square.dashed",
-                                value: Binding(get: { width }, set: { binding(\.borderWidth).wrappedValue = $0 }),
-                                range: SystemStyle.borderWidthRange, step: 0.1) { String(format: "%.1f pt", $0) }
+                if hasBorder {
+                    GlassToggle(title: tr("Own outline width"),
+                                subtitle: tr("Set the outline's width in points instead of the border's."),
+                                isOn: Binding(get: { style.borderWidth != nil }, set: { on in
+                                    binding(\.borderWidth).wrappedValue = on ? 1 : nil
+                                }))
+                    if let width = style.borderWidth {
+                        GlassSlider(title: tr("Outline width"), symbol: "square.dashed",
+                                    value: Binding(get: { width }, set: { binding(\.borderWidth).wrappedValue = $0 }),
+                                    range: SystemStyle.borderWidthRange, step: 0.1) { String(format: "%.1f pt", $0) }
+                    }
                 }
                 SegmentedChoice(title: tr("Glow"), names: [tr("Off"), tr("Soft"), tr("Strong")],
                                 selected: glows.firstIndex(of: style.glow)) { binding(\.glow).wrappedValue = glows[$0] }
+            } header: {
+                SectionHeader(tr("Key style"), symbol: "sparkles", color: .purple)
+            } footer: {
+                Text(tr("Auto follows the theme: flat keys, with a thin outline on every theme but Native. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour."))
             }
-            .disabled(glassKeys)
-            .opacity(glassKeys ? 0.45 : 1)
-        } header: {
-            SectionHeader(tr("Key style"), symbol: "sparkles", color: .purple)
-        } footer: {
-            Text(glassKeys
-                 ? tr("Not used by the Liquid Glass theme: its keys are real glass, without a surface, outline or glow of their own.")
-                 : tr("Auto follows the theme: flat keys, with a thin outline on every theme but Native. Sheen lights the top of each key; Raised adds a shadow under it. Glow and Accent use the accent colour."))
+            .glassRows()
         }
-        .glassRows()
 
         Section {
-            GlassSlider(title: tr("Key solidity"), symbol: "circle.lefthalf.filled", value: binding(\.keyOpacity),
-                        range: SystemStyle.keyOpacityRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
-                .disabled(glassKeys)
-                .opacity(glassKeys ? 0.45 : 1)
+            if !glassKeys {
+                GlassSlider(title: tr("Key solidity"), symbol: "circle.lefthalf.filled", value: binding(\.keyOpacity),
+                            range: SystemStyle.keyOpacityRange, step: 0.05) { String(format: "%.0f%%", $0 * 100) }
+            }
             GlassSlider(title: tr("Label glow"), symbol: "light.max", value: binding(\.labelGlow),
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-            Group {
+            if !glassKeys {
                 optionalColour(\.letterColor, tr("Own letter key colour"), tr("Letters, numbers and the space bar."),
                                start: ThemeRGBA(1, 1, 1, 1))
                 optionalColour(\.functionColor, tr("Own function key colour"), tr("Shift, delete, 123 and the emoji key."),
                                start: ThemeRGBA(0.675, 0.702, 0.745, 1))
             }
-            .disabled(glassKeys)
-            .opacity(glassKeys ? 0.45 : 1)
             optionalColour(\.labelColor, tr("Own label colour"), tr("The keys' letters and symbols."),
                            start: ThemeRGBA(0, 0, 0, 1))
         } header: {
-            SectionHeader(tr("Colours and fills"), symbol: "paintpalette", color: .orange)
+            SectionHeader(glassKeys ? tr("Labels") : tr("Colours and fills"), symbol: "paintpalette", color: .orange)
+        } footer: {
+            if glassKeys {
+                Text(tr("Liquid Glass keys are real glass: they take their colour from what is behind them, so only the labels can be changed."))
+            }
         }
         .glassRows()
 
@@ -133,8 +147,8 @@ struct SystemThemeSections: View {
             } label: {
                 Label(tr("Reset %@", "\(theme.name)"), systemImage: "arrow.counterclockwise")
             }
-            .buttonStyle(ActionButtonStyle())
-            .disabled(SystemEdits.decode(systemEdits)[theme.id] == nil)
+            .buttonStyle(ActionButtonStyle())   // its red glass capsule, standing on the backdrop without a card
+            .disabled(SystemEdits.decode(systemEdits)[theme.id] == nil)            .glassOutsideCard()
         } footer: {
             Text(tr("Puts the theme back as it came, with the corners and key style set on the old Keys screen."))
         }

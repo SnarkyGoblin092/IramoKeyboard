@@ -8,6 +8,7 @@ final class Prefs {
     static var holdDelay = SettingDefault.holdDelay
     static var vibration = SettingDefault.vibration
     static var clickSound = SettingDefault.clickSound
+    static var clickSoundStyle = KeySound.tock
     static var keyPopups = SettingDefault.keyPopups
     static var swipe = SettingDefault.swipe
     static var suggestions = SettingDefault.suggestions
@@ -93,6 +94,7 @@ final class Prefs {
         holdDelay = s.holdDelay
         vibration = s.vibrationStrength
         clickSound = s.clickSound
+        clickSoundStyle = s.clickSoundStyle
         keyPopups = s.keyPopups
         swipe = s.swipeEnabled
         suggestions = s.suggestionsEnabled

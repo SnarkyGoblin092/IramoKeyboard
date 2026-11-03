@@ -168,9 +168,23 @@ struct GlassSlider: View {
     let range: ClosedRange<Double>
     let step: Double
     let format: (Double) -> String
+    /// Set for a slider that is felt (the vibration's): called with the new value at each step in place of the
+    /// click, on the drawn bar (the system slider's own knock at either end came on top).
+    let onStep: ((Double) -> Void)?
+
+    init(title: String, symbol: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double,
+         onStep: ((Double) -> Void)? = nil, format: @escaping (Double) -> String) {
+        self.title = title
+        self.symbol = symbol
+        self._value = value
+        self.range = range
+        self.step = step
+        self.onStep = onStep
+        self.format = format
+    }
 
     var body: some View {
-        ValueBar(title: title, symbol: symbol, value: $value, range: range, step: step, format: format)
+        ValueBar(title: title, symbol: symbol, value: $value, range: range, step: step, format: format, onStep: onStep)
     }
 }
 
@@ -187,11 +201,16 @@ struct ValueBar: View {
     let format: (Double) -> String
     /// Called with true when a drag starts and false when it ends.
     var onEditingChanged: (Bool) -> Void = { _ in }
+    /// A felt setting (the vibration): the drawn bar, calling this with the new value at each step instead of the
+    /// click, so the only haptic is the one the setting itself plays.
+    var onStep: ((Double) -> Void)? = nil
 
     @Environment(\.isEnabled) private var isEnabled
     /// Whether the current drag is sideways (decided once, at its start); nil until it is known.
     @State private var horizontal: Bool?
     @State private var startValue: Double = 0
+    /// A finger is on the drawn bar (its knob turns into a lens of glass, as the system slider's).
+    @State private var dragging = false
 
     private var span: Double { return max(range.upperBound - range.lowerBound, .ulpOfOne) }
 
@@ -203,7 +222,7 @@ struct ValueBar: View {
     }
 
     var body: some View {
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), onStep == nil {
             systemBar
         } else {
             drawnBar
@@ -249,6 +268,37 @@ struct ValueBar: View {
         .padding(.vertical, 2)
     }
 
+    /// The drawn bar as the iOS 26 system slider looks (the vibration sliders, which can't use the system one): a
+    /// thin track filling with the accent and a white capsule knob that swells into a lens of Liquid Glass while
+    /// held. Its centre is where the classic bead's would be, so the drag maths is the same.
+    @available(iOS 26.0, *)
+    private func systemLikeTrack(width: CGFloat, fraction: CGFloat) -> some View {
+        let thumb: CGFloat = 30
+        let center = thumb / 2 + max(0, width - thumb) * fraction
+        let knob = CGSize(width: 38, height: 24)
+        return ZStack(alignment: .leading) {
+            Capsule().fill(Color(.systemFill)).frame(height: 6)
+            Capsule()
+                .fill(Color.accentColor)
+                .frame(width: max(6, center), height: 6)
+                .opacity(isEnabled ? 1 : 0.5)
+            Group {
+                if dragging {
+                    Capsule().fill(Color.clear)
+                        .glassShape(Capsule(), interactive: true)
+                        .glassEdge(Capsule())
+                } else {
+                    Capsule().fill(Color.white)
+                        .shadow(color: .black.opacity(0.22), radius: 4, y: 1.5)
+                }
+            }
+            .frame(width: knob.width, height: knob.height)
+            .scaleEffect(dragging ? 1.4 : 1)
+            .offset(x: center - knob.width / 2)
+        }
+        .frame(height: thumb)
+    }
+
     private var drawnBar: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
@@ -258,25 +308,29 @@ struct ValueBar: View {
             let edge = thumb / 2 + travel * fraction
             VStack(alignment: .leading, spacing: 8) {
                 header
-                // A glass groove with the accent filling it, and a glass bead on the end of the fill.
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.clear).frame(height: 14)
-                        .glassShape(Capsule())
-                    Capsule()
-                        .fill(LinearGradient(colors: [Color.accentColor.opacity(0.55), Color.accentColor],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(0, edge), height: 8)
-                        .padding(.leading, 3)
-                        .opacity(isEnabled ? 1 : 0.5)
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: thumb, height: thumb)
-                        .glassShape(Circle(), tint: Color.white.opacity(0.35), interactive: true)
-                        .overlay(Circle().fill(Color.accentColor).frame(width: 8, height: 8))
-                        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
-                        .offset(x: travel * fraction)
+                if #available(iOS 26.0, *) {
+                    systemLikeTrack(width: width, fraction: fraction)
+                } else {
+                    // A glass groove with the accent filling it, and a glass bead on the end of the fill.
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.clear).frame(height: 14)
+                            .glassShape(Capsule())
+                        Capsule()
+                            .fill(LinearGradient(colors: [Color.accentColor.opacity(0.55), Color.accentColor],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(0, edge), height: 8)
+                            .padding(.leading, 3)
+                            .opacity(isEnabled ? 1 : 0.5)
+                        Circle()
+                            .fill(Color.clear)
+                            .frame(width: thumb, height: thumb)
+                            .glassShape(Circle(), tint: Color.white.opacity(0.35), interactive: true)
+                            .overlay(Circle().fill(Color.accentColor).frame(width: 8, height: 8))
+                            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                            .offset(x: travel * fraction)
+                    }
+                    .frame(height: thumb)
                 }
-                .frame(height: thumb)
             }
             .frame(maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())
@@ -285,6 +339,7 @@ struct ValueBar: View {
                 began: {
                     guard isEnabled else { return }
                     horizontal = true
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) { dragging = true }
                     startValue = value
                     onEditingChanged(true)
                 },
@@ -293,12 +348,14 @@ struct ValueBar: View {
                     let next = snapped(startValue + Double(translation / max(width - thumb, 1)) * span)
                     if abs(next - value) > step * 0.01 {
                         value = next
-                        Feedback.tick()   // once per step; nothing more at either end
+                        // Once per step; nothing more at either end.
+                        if let onStep = onStep { onStep(next) } else { Feedback.tick() }
                     }
                 },
                 ended: {
                     if horizontal == true { onEditingChanged(false) }
                     horizontal = nil
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { dragging = false }
                 }))
         }
         .frame(height: 72)
@@ -500,6 +557,7 @@ struct GlassList<Content: View>: View {
                 .padding(.bottom, 24)
             }
             .environment(\.inGlassCards, true)
+            .buttonStyle(GlassPressStyle())   // a press on any row lights a lens of glass under it
         } else {
             list
         }
@@ -511,6 +569,7 @@ struct GlassList<Content: View>: View {
     private var list: some View {
         List { content }
             .listStyle(.insetGrouped)
+            .buttonStyle(GlassPressStyle())
     }
 }
 

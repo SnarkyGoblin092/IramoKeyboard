@@ -16,9 +16,6 @@ final class Haptics {
     /// Set by the keyboard when it appears. System sounds only play with Full Access.
     var hasFullAccess = false
 
-    /// The system keyboard's key-tap sound.
-    private static let keyTapSound: SystemSoundID = 1104
-
     private init() {}
 
     /// The haptic feel's sharpness (0 = soft ... 1 = rigid) as one of the system's impact styles. Mirrored by
@@ -59,7 +56,7 @@ final class Haptics {
             // `playInputClick` is usually silent in keyboard extensions, so play the system key-tap
             // sound (it follows the silent switch). Without Full Access only the input click can work.
             if hasFullAccess {
-                AudioServicesPlaySystemSound(Haptics.keyTapSound)
+                AudioServicesPlaySystemSound(Prefs.clickSoundStyle.soundID)
             } else {
                 UIDevice.current.playInputClick()
             }

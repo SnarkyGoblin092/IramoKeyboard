@@ -1,3 +1,4 @@
+import AudioToolbox
 import SwiftUI
 
 /// Key-press vibration (its strength and how sharp it feels), the cursor's ticks and key clicks. The keyboard
@@ -8,6 +9,7 @@ struct HapticsView: View {
     @AppStorage(SettingKey.cursorStartHaptic, store: SharedStore.defaults) private var cursorStart = SettingDefault.cursorStartHaptic
     @AppStorage(SettingKey.cursorTickHaptic, store: SharedStore.defaults) private var cursorTick = SettingDefault.cursorTickHaptic
     @AppStorage(SettingKey.clickSound, store: SharedStore.defaults) private var clicks = SettingDefault.clickSound
+    @AppStorage(SettingKey.clickSoundStyle, store: SharedStore.defaults) private var soundStyle = SettingDefault.clickSoundStyle
 
     private struct Feel {
         let name: String
@@ -22,7 +24,6 @@ struct HapticsView: View {
                          Feel(name: tr("Crisp"), sharpness: 0.9, strength: 0.6)]
 
     private var isOn: Bool { return strength > 0.01 }
-
     private var feelIndex: Int? {
         return feels.firstIndex { abs($0.sharpness - sharpness) < 0.001 && abs($0.strength - strength) < 0.001 }
     }
@@ -46,10 +47,11 @@ struct HapticsView: View {
                         strength = feels[index].strength
                         Feedback.test(strength: strength, sharpness: sharpness)
                     }
-                    GlassSlider(title: tr("Strength"), symbol: "speaker.wave.2", value: $strength,
-                                range: 0.1...1, step: 0.05) { DeviceMetrics.level($0, in: 0.1...1) }
-                    GlassSlider(title: tr("Sharpness"), symbol: "waveform.path", value: $sharpness,
-                                range: 0...1, step: 0.05) { value in
+                    // Each step plays the vibration as it is now set.
+                    GlassSlider(title: tr("Strength"), symbol: "speaker.wave.2", value: $strength, range: 0.1...1, step: 0.05,
+                                onStep: { Feedback.test(strength: $0, sharpness: sharpness) }) { DeviceMetrics.level($0, in: 0.1...1) }
+                    GlassSlider(title: tr("Sharpness"), symbol: "waveform.path", value: $sharpness, range: 0...1, step: 0.05,
+                                onStep: { Feedback.test(strength: strength, sharpness: $0) }) { value in
                         [tr("Soft"), tr("Light"), tr("Medium"), tr("Firm"), tr("Crisp")][min(4, max(0, Int(value * 5)))]
                     }
                 }
@@ -75,6 +77,14 @@ struct HapticsView: View {
             Section {
                 GlassToggle(title: tr("Key clicks"), subtitle: tr("The system key sound, muted by the silent switch."),
                             isOn: $clicks)
+                if clicks {
+                    GlassChoiceLink(title: tr("Click sound"), symbol: "music.note",
+                                    options: KeySound.allCases.map { (value: $0.rawValue, name: tr($0.displayName)) },
+                                    selected: soundStyle) { choice in
+                        soundStyle = choice
+                        if let sound = KeySound(rawValue: choice) { AudioServicesPlaySystemSound(sound.soundID) }
+                    }
+                }
             } header: {
                 SectionHeader(tr("Sound"), symbol: "speaker.wave.2.fill", color: .orange)
             }

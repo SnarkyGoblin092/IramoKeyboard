@@ -1,7 +1,7 @@
 import UIKit
 
-/// A designed theme's backdrop behind the whole keyboard (suggestion bar, keys and panels): its vertical gradient
-/// and its texture (dots, grid, ruled lines or scanlines) in the line colour. Mirrors ThemeLook.backdrop in the
+/// A designed theme's backdrop behind the whole keyboard (suggestion bar, keys and panels): its gradient (top to
+/// bottom, diagonal, sideways or from the middle) and its texture in the line colour. Mirrors ThemeLook.backdrop in the
 /// app (App/ThemePreview.swift).
 final class ThemeBackdropView: UIView {
     override class var layerClass: AnyClass { return CAGradientLayer.self }
@@ -11,8 +11,9 @@ final class ThemeBackdropView: UIView {
         isUserInteractionEnabled = false
         if let gradient = layer as? CAGradientLayer {
             gradient.colors = [style.background.uiColor.cgColor, style.backgroundEnd.uiColor.cgColor]
-            gradient.startPoint = CGPoint(x: 0.5, y: 0)
-            gradient.endPoint = CGPoint(x: 0.5, y: 1)
+            if style.gradient == .radial { gradient.type = .radial }
+            gradient.startPoint = style.gradientPoints.start
+            gradient.endPoint = style.gradientPoints.end
         }
         if style.textureMetrics != nil {
             let texture = TextureView(style: style)
@@ -81,6 +82,15 @@ private final class TextureView: UIView {
             while y < bounds.height {
                 context.fill(CGRect(x: 0, y: y, width: bounds.width, height: size))
                 y += spacing
+            }
+        case .diagonal, .checker, .crosses:
+            context.addPath(ThemeTexturePath.path(style.texture, in: bounds.size, spacing: spacing, size: size))
+            if style.texture == .diagonal {
+                context.setStrokeColor(texture.color.uiColor.cgColor)
+                context.setLineWidth(size)
+                context.strokePath()
+            } else {
+                context.fillPath()
             }
         }
     }

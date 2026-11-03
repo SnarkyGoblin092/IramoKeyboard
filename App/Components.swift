@@ -266,6 +266,7 @@ struct SettingSlider: View {
 
     @AppStorage private var stored: Double
     @State private var local: Double
+    @State private var editing = false
 
     init(_ title: String,
          key: String,
@@ -302,11 +303,16 @@ struct SettingSlider: View {
                     }
                 }
             }
-            ValueBar(title: title, value: $local, range: range, step: step, format: format) { editing in
-                if !editing { stored = local }
+            ValueBar(title: title, value: $local, range: range, step: step, format: format) { isEditing in
+                editing = isEditing
+                if !isEditing { stored = local }
             }
         }
         .padding(.vertical, 2)
+        // The system slider can report the drag's end before its last step: a value that arrives after it is saved too.
+        .onChange(of: local) { value in
+            if !editing && value != stored { stored = value }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .hunKeysSettingsReset)) { _ in
             local = min(max(defaultValue, range.lowerBound), range.upperBound)
         }
@@ -316,14 +322,91 @@ struct SettingSlider: View {
 
 // MARK: - Styling helpers
 
-/// Slight shrink while pressed, so every card and swatch answers the finger at once.
+/// Slight shrink while pressed, so every card and swatch answers the finger at once, with a bloom of light over it.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .overlay(GlassSheen(pressed: configuration.isPressed).allowsHitTesting(false))
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
     }
+}
+
+/// Every plain button and row of the glass lists: while held, a lens of Liquid Glass swells up under it, lit with
+/// the accent and a bright edge, and the content leans in a little; on release it springs back and melts away.
+struct GlassPressStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed && isEnabled
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return configuration.label
+            .background(
+                GlassHighlight(shape: shape, pressed: pressed)
+                    .padding(.horizontal, -10)
+                    .padding(.vertical, -6)
+                    .allowsHitTesting(false))
+            .scaleEffect(pressed ? 0.975 : 1)
+            .opacity(isEnabled ? 1 : 0.45)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pressed)
+    }
+}
+
+/// The lens of a GlassPressStyle press: real interactive Liquid Glass on iOS 26 and later (a frosted material
+/// before), swelling from a little smaller than the row and fading in, with GlassSheen's light on top.
+private struct GlassHighlight<S: InsettableShape>: View {
+    let shape: S
+    let pressed: Bool
+
+    var body: some View {
+        Color.clear
+            .glassShape(shape, tint: Color.accentColor.opacity(0.22), interactive: true)
+            .overlay(GlassSheen(pressed: pressed, shape: shape))
+            .glassEdge(shape)
+            .scaleEffect(pressed ? 1 : 0.9)
+            .opacity(pressed ? 1 : 0)
+    }
+}
+
+/// The light a press puts on glass: a bright specular wash from the top left fading into the accent, and a rim
+/// that catches it.
+struct GlassSheen: View {
+    let pressed: Bool
+    var shape: AnyInsettableShape = AnyInsettableShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    @Environment(\.colorScheme) private var scheme
+
+    init(pressed: Bool) {
+        self.pressed = pressed
+    }
+
+    init<S: InsettableShape>(pressed: Bool, shape: S) {
+        self.pressed = pressed
+        self.shape = AnyInsettableShape(shape)
+    }
+
+    var body: some View {
+        let light = scheme == .dark ? 0.28 : 0.55
+        shape
+            .fill(RadialGradient(colors: [Color.white.opacity(light), Color.accentColor.opacity(0.12), .clear],
+                                 center: .topLeading, startRadius: 0, endRadius: 220))
+            .overlay(shape.strokeBorder(Color.white.opacity(light), lineWidth: 1))
+            .blendMode(.plusLighter)
+            .opacity(pressed ? 1 : 0)
+    }
+}
+
+/// Any insettable shape, so GlassSheen can take the shape of whatever it lights.
+struct AnyInsettableShape: InsettableShape {
+    private let base: (CGRect) -> Path
+    private let insetBy: (CGFloat) -> AnyInsettableShape
+
+    init<S: InsettableShape>(_ shape: S) {
+        base = { shape.path(in: $0) }
+        insetBy = { AnyInsettableShape(shape.inset(by: $0)) }
+    }
+
+    func path(in rect: CGRect) -> Path { return base(rect) }
+    func inset(by amount: CGFloat) -> AnyInsettableShape { return insetBy(amount) }
 }
 
 /// The app's action button: a full-width tinted capsule (or small, for a button beside a title), red when destructive.
@@ -343,9 +426,10 @@ struct ActionButtonStyle: ButtonStyle {
             .padding(.horizontal, small ? 14 : 16)
             .padding(.vertical, small ? 6 : 11)
             .glassShape(Capsule(), tint: color.opacity(configuration.isPressed ? 0.45 : 0.28), interactive: true)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .overlay(GlassSheen(pressed: configuration.isPressed, shape: Capsule()).allowsHitTesting(false))
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(isEnabled ? 1 : 0.4)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.spring(response: 0.28, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 

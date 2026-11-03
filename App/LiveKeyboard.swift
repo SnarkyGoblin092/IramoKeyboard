@@ -132,6 +132,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// A new bar and KeyboardView, as the controller makes them in buildInterface (they read the theme as they are
     /// made).
     private func rebuild() {
+        Settings.shared.refresh()
         Prefs.refresh()
         applyEffects()
         Theme.reload()
@@ -184,6 +185,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.refreshQueued = false
+            // The settings' half-second snapshot would hide the slider's latest values (the last step of a drag
+            // only showed after the next change): read the shared defaults afresh.
+            Settings.shared.refresh()
             Prefs.refresh()
             self.applyEffects()
             if self.signature() != self.builtSignature { self.rebuild() }

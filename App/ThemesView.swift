@@ -24,8 +24,8 @@ struct ThemesView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 header
 
-                group(tr("Designed"), themes: ThemeCatalog.designed)
                 group(tr("System"), themes: ThemeCatalog.system)
+                group(tr("Designed"), themes: ThemeCatalog.designed)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)

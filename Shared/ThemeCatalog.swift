@@ -80,7 +80,19 @@ struct ThemeStyle: Hashable, Codable {
     }
 
     enum Texture: String, Codable, CaseIterable {
-        case none, dots, grid, lines, scanlines
+        case none, dots, grid, lines, scanlines, diagonal, checker, crosses
+    }
+
+    /// Which way the backdrop's gradient runs.
+    enum GradientDirection: String, Codable, CaseIterable {
+        /// Top to bottom.
+        case vertical
+        /// Top left to bottom right.
+        case diagonal
+        /// Left to right.
+        case horizontal
+        /// From the middle outwards.
+        case radial
     }
 
     /// The backdrop: a vertical gradient from `background` (top) to `backgroundEnd` (bottom); the same colour twice
@@ -115,11 +127,62 @@ struct ThemeStyle: Hashable, Codable {
     var textGlow: Double
     var texture: Texture
     var textureStrength: Double
+    /// Which way the backdrop's gradient runs.
+    var gradient: GradientDirection = .vertical
+    /// The labels' weight in steps from the keyboard's own (-2 thin ... 0 as the keyboard has it ... 3 heavy).
+    var labelWeight: Int = 0
+}
+
+extension ThemeStyle {
+    private enum CodingKeys: String, CodingKey {
+        case background, backgroundEnd, key, function, text, accent, line, roundness, keyOpacity, frosted, depth, sheen,
+             borderWidth, shadow, shadowStrength, textGlow, texture, textureStrength, gradient, labelWeight
+    }
+
+    /// A value missing from stored edits (made before it was added) takes the default; an unknown one (a texture
+    /// from a newer version) too.
+    init(from decoder: Swift.Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func optional<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
+            return ((try? c.decodeIfPresent(T.self, forKey: key)) ?? nil) ?? fallback
+        }
+        background = try c.decode(ThemeRGBA.self, forKey: .background)
+        backgroundEnd = try c.decode(ThemeRGBA.self, forKey: .backgroundEnd)
+        key = try c.decode(ThemeRGBA.self, forKey: .key)
+        function = try c.decode(ThemeRGBA.self, forKey: .function)
+        text = try c.decode(ThemeRGBA.self, forKey: .text)
+        accent = try c.decode(ThemeRGBA.self, forKey: .accent)
+        line = try c.decode(ThemeRGBA.self, forKey: .line)
+        roundness = optional(.roundness, 0.26)
+        keyOpacity = optional(.keyOpacity, 1)
+        frosted = optional(.frosted, false)
+        depth = optional(.depth, 0)
+        sheen = optional(.sheen, 0)
+        borderWidth = optional(.borderWidth, 0)
+        shadow = optional(.shadow, Shadow.none)
+        shadowStrength = optional(.shadowStrength, 0)
+        textGlow = optional(.textGlow, 0)
+        texture = optional(.texture, Texture.none)
+        textureStrength = optional(.textureStrength, 0)
+        gradient = optional(.gradient, GradientDirection.vertical)
+        labelWeight = min(max(optional(.labelWeight, 0), ThemeStyle.labelWeightRange.lowerBound), ThemeStyle.labelWeightRange.upperBound)
+    }
 }
 
 extension ThemeStyle {
     /// The editor's ranges.
     static let borderWidthRange: ClosedRange<Double> = 0...3
+    static let labelWeightRange: ClosedRange<Int> = -2...3
+
+    /// The gradient's start and end, in unit coordinates (for radial: the centre and the corner it reaches).
+    var gradientPoints: (start: CGPoint, end: CGPoint) {
+        switch gradient {
+        case .vertical: return (CGPoint(x: 0.5, y: 0), CGPoint(x: 0.5, y: 1))
+        case .diagonal: return (CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 1))
+        case .horizontal: return (CGPoint(x: 0, y: 0.5), CGPoint(x: 1, y: 0.5))
+        case .radial: return (CGPoint(x: 0.5, y: 0.5), CGPoint(x: 1, y: 1))
+        }
+    }
 
     /// Dark themes force the keyboard (and the system's own parts, such as the globe menu) into dark mode.
     var isDark: Bool { return background.mixed(with: backgroundEnd, 0.5).luminance < 0.5 }
@@ -194,7 +257,54 @@ extension ThemeStyle {
         case .grid: return (22, 0.6, color)
         case .lines: return (16, 0.7, color)
         case .scanlines: return (3, 1, color)
+        case .diagonal: return (14, 0.8, color)
+        case .checker: return (14, 0, color)
+        case .crosses: return (18, 0.8, color)
         }
+    }
+}
+
+/// The patterns of the newer textures, as one path the keyboard (ThemeBackdropView) and the app's previews
+/// (ThemeTexture) both draw: diagonal stripes (stroked), a checkerboard and small crosses (filled).
+enum ThemeTexturePath {
+    static func path(_ texture: ThemeStyle.Texture, in size: CGSize, spacing: CGFloat, size mark: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        switch texture {
+        case .diagonal:
+            var x = -size.height
+            while x < size.width {
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x + size.height, y: 0))
+                x += spacing
+            }
+        case .checker:
+            var row = 0
+            var y: CGFloat = 0
+            while y < size.height {
+                var x: CGFloat = row % 2 == 0 ? 0 : spacing
+                while x < size.width {
+                    path.addRect(CGRect(x: x, y: y, width: spacing, height: spacing))
+                    x += spacing * 2
+                }
+                y += spacing
+                row += 1
+            }
+        case .crosses:
+            let arm = spacing * 0.22
+            var y = spacing / 2
+            while y < size.height {
+                var x = spacing / 2
+                while x < size.width {
+                    path.addRect(CGRect(x: x - arm, y: y - mark / 2, width: arm * 2, height: mark))
+                    path.addRect(CGRect(x: x - mark / 2, y: y - arm, width: mark, height: arm * 2))
+                    x += spacing
+                }
+                y += spacing
+            }
+        default:
+            break
+        }
+        return path
     }
 }
 
@@ -277,7 +387,8 @@ enum ThemeCatalog {
     /// The themes that follow the system's own look.
     static let system: [ThemeDefinition] = [native, transparent, liquidGlass]
     /// One of each designed look, in picker order.
-    static let designed: [ThemeDefinition] = [synthwave, terminal, keycap, frost, candy, paper, brutalist, gilded, ember, clay]
+    static let designed: [ThemeDefinition] = [synthwave, terminal, keycap, frost, candy, paper, brutalist, gilded, ember, clay,
+                                                aurora, sunset, blueprint, cyberpunk, arcade, matcha, ocean, mono, lavender, espresso]
     static let all: [ThemeDefinition] = system + designed
 
     /// The theme as designed, without the user's edits. Unknown ids (including the removed key-colour themes)
@@ -387,4 +498,71 @@ enum ThemeCatalog {
         key: c(0xEAE5DE), function: c(0xD8D1C6), text: c(0x5E554C), accent: c(0xE07A5F), line: c(0xFFFFFF, 0.7),
         roundness: 0.45, keyOpacity: 1, frosted: false, depth: 0.15, sheen: 0.55, borderWidth: 0.6,
         shadow: .soft, shadowStrength: 0.7, textGlow: 0, texture: .none, textureStrength: 0))
+
+    static let aurora = make("aurora", "Aurora", "Northern lights glowing from the middle", ThemeStyle(
+        background: c(0x1FD1A5), backgroundEnd: c(0x0B0F2E),
+        key: c(0x0E1A3A), function: c(0x16244A), text: c(0xD9FFF4), accent: c(0x2EF2B5), line: c(0x7CF5D6, 0.45),
+        roundness: 0.35, keyOpacity: 0.55, frosted: true, depth: 0, sheen: 0.25, borderWidth: 0.6,
+        shadow: .glow, shadowStrength: 0.35, textGlow: 0.3, texture: .none, textureStrength: 0,
+        gradient: .radial))
+
+    static let sunset = make("sunset", "Sunset", "Warm dusk gradient under glassy keys", ThemeStyle(
+        background: c(0xFF9A5A), backgroundEnd: c(0x8E2DE2),
+        key: c(0xFFFFFF), function: c(0xFFE1D0), text: c(0x3A1240), accent: c(0xFF3D7F), line: c(0xFFFFFF, 0.8),
+        roundness: 0.45, keyOpacity: 0.4, frosted: true, depth: 0, sheen: 0.45, borderWidth: 0.7,
+        shadow: .soft, shadowStrength: 0.35, textGlow: 0, texture: .none, textureStrength: 0,
+        gradient: .diagonal, labelWeight: 1))
+
+    static let blueprint = make("blueprint", "Blueprint", "White ink on drafting blue", ThemeStyle(
+        background: c(0x1E4FA8), backgroundEnd: c(0x153A80),
+        key: c(0x1E4FA8), function: c(0x1A4594), text: c(0xF2F7FF), accent: c(0xFFFFFF), line: c(0xE6F0FF, 0.9),
+        roundness: 0.06, keyOpacity: 0.25, frosted: false, depth: 0, sheen: 0, borderWidth: 1,
+        shadow: .none, shadowStrength: 0, textGlow: 0, texture: .grid, textureStrength: 0.55,
+        labelWeight: -1))
+
+    static let cyberpunk = make("cyberpunk", "Cyberpunk", "Hazard yellow, black keys and cyan neon", ThemeStyle(
+        background: c(0xFCEE0A), backgroundEnd: c(0xF5D300),
+        key: c(0x101014), function: c(0x1C1C24), text: c(0x00F0FF), accent: c(0xFF003C), line: c(0x101014),
+        roundness: 0.04, keyOpacity: 1, frosted: false, depth: 0, sheen: 0, borderWidth: 0,
+        shadow: .block, shadowStrength: 0.45, textGlow: 0.45, texture: .diagonal, textureStrength: 0.35,
+        labelWeight: 2))
+
+    static let arcade = make("arcade", "Arcade", "Checkerboard floor and chunky glowing caps", ThemeStyle(
+        background: c(0x1B1036), backgroundEnd: c(0x0A0618),
+        key: c(0x3A1C71), function: c(0x24104A), text: c(0xFFF275), accent: c(0x00E5FF), line: c(0x8A5CFF, 0.6),
+        roundness: 0.2, keyOpacity: 1, frosted: false, depth: 0.35, sheen: 0.3, borderWidth: 0,
+        shadow: .lift, shadowStrength: 0.75, textGlow: 0.4, texture: .checker, textureStrength: 0.3,
+        labelWeight: 2))
+
+    static let matcha = make("matcha", "Matcha", "Calm green tea tones, soft and round", ThemeStyle(
+        background: c(0xDDE8C8), backgroundEnd: c(0xC6D7A8),
+        key: c(0xF4F8EA), function: c(0xB5C98E), text: c(0x34452A), accent: c(0x5E8B3A), line: c(0xFFFFFF, 0.7),
+        roundness: 0.55, keyOpacity: 1, frosted: false, depth: 0.12, sheen: 0.4, borderWidth: 0,
+        shadow: .soft, shadowStrength: 0.45, textGlow: 0, texture: .none, textureStrength: 0))
+
+    static let ocean = make("ocean", "Deep Sea", "Bioluminescent keys in the dark blue", ThemeStyle(
+        background: c(0x003A5C), backgroundEnd: c(0x000814),
+        key: c(0x02233A), function: c(0x01182A), text: c(0x9BF6FF), accent: c(0x00B4D8), line: c(0x48CAE4, 0.5),
+        roundness: 0.5, keyOpacity: 0.85, frosted: false, depth: 0.2, sheen: 0.15, borderWidth: 0.6,
+        shadow: .glow, shadowStrength: 0.4, textGlow: 0.5, texture: .dots, textureStrength: 0.25))
+
+    static let mono = make("mono", "Mono", "Stark black and white, heavy type", ThemeStyle(
+        background: c(0x000000), backgroundEnd: c(0x000000),
+        key: c(0x000000), function: c(0x000000), text: c(0xFFFFFF), accent: c(0xFFFFFF), line: c(0xFFFFFF),
+        roundness: 0.15, keyOpacity: 1, frosted: false, depth: 0, sheen: 0, borderWidth: 1.4,
+        shadow: .none, shadowStrength: 0, textGlow: 0, texture: .none, textureStrength: 0,
+        labelWeight: 3))
+
+    static let lavender = make("lavender", "Lavender", "Pastel lilac with stitched crosses", ThemeStyle(
+        background: c(0xEDE3FF), backgroundEnd: c(0xD9C8FF),
+        key: c(0xFFFFFF), function: c(0xE4D6FF), text: c(0x4B3B78), accent: c(0x9B6BFF), line: c(0xA48CE0, 0.6),
+        roundness: 0.6, keyOpacity: 0.9, frosted: false, depth: 0.1, sheen: 0.5, borderWidth: 0,
+        shadow: .soft, shadowStrength: 0.4, textGlow: 0, texture: .crosses, textureStrength: 0.45))
+
+    static let espresso = make("espresso", "Espresso", "Roasted browns and crema highlights", ThemeStyle(
+        background: c(0x3B2618), backgroundEnd: c(0x1E130B),
+        key: c(0x5A3B26), function: c(0x452D1C), text: c(0xF3E3CF), accent: c(0xD9A066), line: c(0x2A1A10),
+        roundness: 0.3, keyOpacity: 1, frosted: false, depth: 0.35, sheen: 0.2, borderWidth: 0,
+        shadow: .lift, shadowStrength: 0.6, textGlow: 0, texture: .none, textureStrength: 0,
+        gradient: .diagonal))
 }

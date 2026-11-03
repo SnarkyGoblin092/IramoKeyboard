@@ -415,7 +415,7 @@ struct ThemePreview: View {
 
     /// The keyboard's key font (KeyFont) at a size, as Theme.keyFont makes it.
     private func keyFont(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        return KeyFont.named(keyFontID).font(size: size, weight: weight)
+        return KeyFont.named(keyFontID).font(size: size, weight: Font.Weight.stepped(weight, by: look.style?.labelWeight ?? 0))
     }
 
     /// "Follow theme": a faded version of the key labels, else the neutral hairline.
@@ -628,8 +628,13 @@ struct ThemeLook {
     @ViewBuilder func backdrop(scale: CGFloat = 1) -> some View {
         if let style = style {
             ZStack {
-                LinearGradient(colors: [Color(style.background), Color(style.backgroundEnd)],
-                               startPoint: .top, endPoint: .bottom)
+                if style.gradient == .radial {
+                    EllipticalGradient(colors: [Color(style.background), Color(style.backgroundEnd)], center: .center)
+                } else {
+                    LinearGradient(colors: [Color(style.background), Color(style.backgroundEnd)],
+                                   startPoint: UnitPoint(x: style.gradientPoints.start.x, y: style.gradientPoints.start.y),
+                                   endPoint: UnitPoint(x: style.gradientPoints.end.x, y: style.gradientPoints.end.y))
+                }
                 if style.textureMetrics != nil {
                     ThemeTexture(style: style, scale: scale)
                 }
@@ -832,6 +837,12 @@ private struct ThemeTexture: View {
                     path.addRect(CGRect(x: 0, y: y, width: size.width, height: mark))
                     y += spacing
                 }
+            case .diagonal:
+                let stripes = Path(ThemeTexturePath.path(.diagonal, in: size, spacing: spacing, size: mark))
+                context.stroke(stripes, with: .color(Color(texture.color)), lineWidth: mark)
+                return
+            case .checker, .crosses:
+                path = Path(ThemeTexturePath.path(style.texture, in: size, spacing: spacing, size: mark))
             }
             context.fill(path, with: .color(Color(texture.color)))
         }
@@ -890,5 +901,15 @@ extension KeyFont {
         case .mono: return .system(size: size, weight: weight, design: .monospaced)
         default: return .system(size: size, weight: weight)
         }
+    }
+}
+
+extension Font.Weight {
+    private static let steps: [Font.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
+
+    /// `weight` made `steps` heavier (or lighter, below 0): a designed theme's label weight (Theme.keyFont).
+    static func stepped(_ weight: Font.Weight, by steps: Int) -> Font.Weight {
+        guard steps != 0, let index = Font.Weight.steps.firstIndex(of: weight) else { return weight }
+        return Font.Weight.steps[min(max(index + steps, 0), Font.Weight.steps.count - 1)]
     }
 }

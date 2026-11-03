@@ -7,6 +7,7 @@ enum SettingKey {
     static let holdDelay = "hunkeys.holdDelay"
     static let vibration = "hunkeys.vibrationStrength"
     static let clickSound = "hunkeys.clickSound"
+    static let clickSoundStyle = "hunkeys.clickSoundStyle"
     static let keyPopups = "hunkeys.keyPopups"
     // Typing
     static let swipe = "hunkeys.swipeTyping"
@@ -141,7 +142,7 @@ enum SettingKey {
 
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
-        holdDelay, vibration, clickSound, keyPopups, swipe, suggestions, emojiSuggestions,
+        holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
@@ -160,6 +161,7 @@ enum SettingDefault {
     static let holdDelay = 0.35
     static let vibration = 0.5
     static let clickSound = false
+    static let clickSoundStyle = KeySound.tock.rawValue
     static let keyPopups = true
     static let swipe = true
     static let suggestions = true
@@ -384,6 +386,7 @@ final class Settings {
             SettingKey.holdDelay: SettingDefault.holdDelay,
             SettingKey.vibration: SettingDefault.vibration,
             SettingKey.clickSound: SettingDefault.clickSound,
+            SettingKey.clickSoundStyle: SettingDefault.clickSoundStyle,
             SettingKey.keyPopups: SettingDefault.keyPopups,
             SettingKey.swipe: SettingDefault.swipe,
             SettingKey.suggestions: SettingDefault.suggestions,
@@ -494,6 +497,10 @@ final class Settings {
     var clickSound: Bool {
         get { return readBool(SettingKey.clickSound) }
         set { put(newValue, SettingKey.clickSound) }
+    }
+
+    var clickSoundStyle: KeySound {
+        return KeySound(rawValue: readString(SettingKey.clickSoundStyle) ?? "") ?? .tock
     }
 
     var keyPopups: Bool {
@@ -965,6 +972,43 @@ final class Settings {
         set {
             put(Language.list(from: newValue, fallback: .english).map { $0.rawValue },
                 SettingKey.enabledLanguages)
+        }
+    }
+}
+
+/// The sounds a key press can make: the system's own sounds, which a keyboard may play (with Full Access) and which
+/// follow the silent switch.
+enum KeySound: String, CaseIterable {
+    case tock, tink, click, modifier, delete, softTock, pinPad, tone, toneLow, toneHigh
+
+    var soundID: UInt32 {
+        switch self {
+        case .tock: return 1104
+        case .tink: return 1103
+        case .click: return 1123
+        case .modifier: return 1156
+        case .delete: return 1155
+        case .softTock: return 1306
+        case .pinPad: return 1057
+        case .tone: return 1201
+        case .toneLow: return 1200
+        case .toneHigh: return 1209
+        }
+    }
+
+    /// The name shown on the Haptics screen (not yet translated: tr falls back to it).
+    var displayName: String {
+        switch self {
+        case .tock: return "Tock"
+        case .tink: return "Tink"
+        case .click: return "Click"
+        case .modifier: return "Modifier"
+        case .delete: return "Delete"
+        case .softTock: return "Soft tock"
+        case .pinPad: return "PIN pad"
+        case .tone: return "Tone"
+        case .toneLow: return "Low tone"
+        case .toneHigh: return "High tone"
         }
     }
 }

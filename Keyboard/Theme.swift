@@ -184,7 +184,8 @@ enum Theme {
 
     /// The keys' and the suggestion bar's typeface at a size (KeyFont, the Keys screen's Font). Named fonts have
     /// one weight; the system designs keep the weight asked for.
-    static func keyFont(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+    static func keyFont(ofSize size: CGFloat, weight asked: UIFont.Weight = .regular) -> UIFont {
+        let weight = stepped(asked, by: style?.labelWeight ?? 0)
         let choice = KeyFont.named(Prefs.keyFont)
         if let name = choice.postScriptName, let font = UIFont(name: name, size: size) { return font }
         let system = UIFont.systemFont(ofSize: size, weight: weight)
@@ -197,6 +198,14 @@ enum Theme {
         }
         guard let descriptor = system.fontDescriptor.withDesign(design) else { return system }
         return UIFont(descriptor: descriptor, size: size)
+    }
+
+    private static let weightSteps: [UIFont.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
+
+    /// `weight` made `steps` heavier (or lighter, below 0): a designed theme's label weight.
+    private static func stepped(_ weight: UIFont.Weight, by steps: Int) -> UIFont.Weight {
+        guard steps != 0, let index = weightSteps.firstIndex(of: weight) else { return weight }
+        return weightSteps[min(max(index + steps, 0), weightSteps.count - 1)]
     }
 
     static var keyBorderWidth: CGFloat {
