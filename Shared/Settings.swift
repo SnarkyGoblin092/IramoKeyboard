@@ -669,8 +669,16 @@ final class Settings {
         }
         return Array(symbols.prefix(holdSymbolsLimit))
     }
-    /// Symbols offered for the extra keys (the Keys screen).
-    static let extraKeyChoices = ["@", "#", "/", "-", "_", "&", "?", "!", ":", "'", "$", "*"]
+    /// Symbols offered for the extra keys (the Keys screen), in groups (the names go through tr). One character each.
+    static let extraKeyGroups: [(name: String, symbols: [String])] = [
+        ("Common", ["@", "#", "/", "-", "_", "&", "?", "!", ":", ";", "'", "\""]),
+        ("Brackets", ["(", ")", "[", "]", "{", "}", "<", ">", "\u{00AB}", "\u{00BB}", "\u{201E}", "\u{201C}"]),
+        ("Maths", ["+", "=", "*", "%", "^", "~", "|", "\\", "\u{00D7}", "\u{00F7}", "\u{00B1}", "\u{2260}"]),
+        ("Currency", ["$", "\u{20AC}", "\u{00A3}", "\u{00A5}", "\u{00A2}", "\u{20B9}", "\u{20A9}", "\u{20BD}",
+                      "\u{20BA}", "\u{20AA}", "\u{20AB}", "\u{20BF}"]),
+        ("More", ["\u{2022}", "\u{00B7}", "\u{2026}", "\u{00A7}", "\u{00B0}", "\u{00A9}", "\u{00AE}", "\u{2122}",
+                  "\u{00BF}", "\u{00A1}", "\u{2013}", "\u{2014}"])
+    ]
 
     /// A theme id from `ThemeCatalog` ("native" by default; unknown ids fall back to native).
     var theme: String {

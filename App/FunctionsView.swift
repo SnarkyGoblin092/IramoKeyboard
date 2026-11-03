@@ -1,12 +1,16 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The keyboard's Functions panel (the button at the left of the suggestion bar): which tools it shows and in
-/// what order. Tools move up or down, swipe left to remove, and come back from the list under them.
+/// what order. Hold a tool and drag it: within the panel's list to reorder, onto it from the list under it to add
+/// it, or back down to take it off.
 struct FunctionsView: View {
     /// The panel's tools as this device shows them (split only on an iPad).
     @State private var tools: [KeyboardTool] = []
     /// The stored list has split, which an iPhone does not show but keeps for the iPad.
     @State private var keepsSplit = false
+    /// The tool being dragged (it moves between and within the lists as it passes over their rows).
+    @State private var dragging: KeyboardTool?
 
     private var isPad: Bool { return UIDevice.current.userInterfaceIdiom == .pad }
 
@@ -19,52 +23,33 @@ struct FunctionsView: View {
         GlassList {
             Section {
                 if tools.isEmpty {
-                    Text(tr("No functions yet: add some below.")).foregroundColor(.secondary)
+                    dropZone(tr("No functions yet: drag some here from below."), onPanel: true)
                 } else {
                     ForEach(tools, id: \.self) { tool in
-                        let index = tools.firstIndex(of: tool) ?? 0
-                        HStack(spacing: 12) {
-                            ToolRow(tool: tool)
-                            Spacer(minLength: 8)
-                            VStack(spacing: 2) {
-                                arrow("chevron.up", enabled: index > 0) { move(index, by: -1) }
-                                arrow("chevron.down", enabled: index < tools.count - 1) { move(index, by: 1) }
-                            }
-                        }
-                        .swipeToDelete { remove(tool) }
+                        draggableRow(tool, onPanel: true)
                     }
                 }
             } header: {
                 SectionHeader(tr("On the panel"), symbol: "square.grid.2x2.fill", color: .pink)
             } footer: {
-                Text(tr("Tap the grid button at the left of the suggestion bar to open the panel; the order here is the panel's, left to right and row by row. Swipe a function left to remove it."))
+                Text(tr("Tap the grid button at the left of the suggestion bar to open the panel; the order here is the panel's, left to right and row by row. Hold a function and drag it to move it."))
             }
             .glassRows()
 
-            if !others.isEmpty {
-                Section {
+            Section {
+                if others.isEmpty {
+                    dropZone(tr("Every function is on the panel. Drag one here to take it off."), onPanel: false)
+                } else {
                     ForEach(others, id: \.self) { tool in
-                        Button {
-                            add(tool)
-                        } label: {
-                            HStack(spacing: 12) {
-                                ToolRow(tool: tool)
-                                Spacer(minLength: 8)
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.tint)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        draggableRow(tool, onPanel: false)
                     }
-                } header: {
-                    SectionHeader(tr("Add"), symbol: "plus", color: .green)
-                } footer: {
-                    Text(tr("Copy, cut, paste, the clipboard and vibration need Full Access."))
                 }
-                .glassRows()
+            } header: {
+                SectionHeader(tr("Not on the panel"), symbol: "square.dashed", color: .gray)
+            } footer: {
+                Text(tr("Drag a function up to add it to the panel, or down here to take it off. Copy, cut, paste, the clipboard and vibration need Full Access."))
             }
+            .glassRows()
 
             Section {
                 Button(tr("Restore the standard functions")) {
@@ -77,6 +62,11 @@ struct FunctionsView: View {
             .glassRows()
         }
         .glassScreen()
+        // A drag let go anywhere else ends too.
+        .onDrop(of: [UTType.text], isTargeted: nil) { _ in
+            dragging = nil
+            return false
+        }
         .navigationTitle(tr("Functions panel"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -87,41 +77,71 @@ struct FunctionsView: View {
         }
     }
 
-    private func arrow(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.caption.weight(.bold))
-                .frame(width: 30, height: 18)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .disabled(!enabled)
-        .accessibilityLabel(symbol == "chevron.up" ? tr("Move up") : tr("Move down"))
+    /// A tool's row: held, it is dragged; another tool dragged over it takes its place.
+    private func draggableRow(_ tool: KeyboardTool, onPanel: Bool) -> some View {
+        ToolRow(tool: tool)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .opacity(dragging == tool ? 0.35 : 1)
+            .onDrag {
+                dragging = tool
+                Feedback.choose()
+                return NSItemProvider(object: tool.rawValue as NSString)
+            }
+            .onDrop(of: [UTType.text], delegate: ToolDrop(enter: { move(onto: tool, onPanel: onPanel) },
+                                                          end: { dragging = nil }))
     }
 
-    private func move(_ index: Int, by step: Int) {
-        let target = index + step
-        guard target >= 0, target < tools.count else { return }
-        Feedback.tick()
+    /// The row an empty list shows, which takes the dragged tool.
+    private func dropZone(_ text: String, onPanel: Bool) -> some View {
+        Text(text)
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+            .onDrop(of: [UTType.text], delegate: ToolDrop(enter: { move(onto: nil, onPanel: onPanel) },
+                                                          end: { dragging = nil }))
+    }
+
+    /// The dragged tool passes over `target` (nil: an empty list): on the panel it takes the target's place (added
+    /// if it was not there); in the other list it comes off the panel.
+    private func move(onto target: KeyboardTool?, onPanel: Bool) {
+        guard let tool = dragging, tool != target else { return }
         var list = tools
-        list.swapAt(index, target)
+        if onPanel {
+            let to = target.flatMap { list.firstIndex(of: $0) } ?? list.count
+            if let from = list.firstIndex(of: tool) {
+                guard from != to else { return }
+                list.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+            } else {
+                list.insert(tool, at: to)
+            }
+        } else {
+            guard list.contains(tool) else { return }
+            list.removeAll { $0 == tool }
+        }
+        Feedback.tick()
         save(list)
-    }
-
-    private func add(_ tool: KeyboardTool) {
-        Feedback.success()
-        save(tools + [tool])
-    }
-
-    private func remove(_ tool: KeyboardTool) {
-        Feedback.delete()
-        save(tools.filter { $0 != tool })
     }
 
     private func save(_ list: [KeyboardTool]) {
         withAnimation(.easeOut(duration: 0.2)) { tools = list }
         let stored = keepsSplit && !list.contains(.split) ? list + [.split] : list
         SharedStore.defaults.set(stored.map { $0.rawValue }, forKey: SettingKey.keyboardTools)
+    }
+}
+
+/// Moves the dragged tool as it enters a row, and ends the drag when it is let go there.
+private struct ToolDrop: DropDelegate {
+    let enter: () -> Void
+    let end: () -> Void
+
+    func dropEntered(info: DropInfo) { enter() }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { return DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        end()
+        return true
     }
 }
 

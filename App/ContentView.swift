@@ -623,8 +623,17 @@ struct ShortcutsView: View {
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
                 TextField(tr("Phrase (e.g. On my way!)"), text: $phrase)
-                Button(tr("Add"), action: add)
-                    .disabled(!canAdd)
+                Button(action: add) {
+                    Text(tr("Add shortcut"))
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .glassTile(Capsule(), isOn: true)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(!canAdd)
+                .opacity(canAdd ? 1 : 0.45)
             } header: {
                 Text(tr("New shortcut"))
             }

@@ -67,28 +67,97 @@ struct KeysView: View {
         }
     }
 
-    /// A symbol on (in the order picked) or off; at most `Settings.extraKeysLimit` at once.
-    private func symbolChip(_ symbol: String) -> some View {
-        let isOn = extraKeys.contains(symbol)
-        let isFull = extraKeys.count >= Settings.extraKeysLimit
-        return Button {
+    /// The extra symbols picked, in order.
+    private var pickedSymbols: [String] {
+        return Array(extraKeys.map { String($0) }.prefix(Settings.extraKeysLimit))
+    }
+
+    private func toggleSymbol(_ symbol: String) {
+        var picked = pickedSymbols
+        if let index = picked.firstIndex(of: symbol) {
+            picked.remove(at: index)
+            Feedback.delete()
+        } else if picked.count < Settings.extraKeysLimit {
+            picked.append(symbol)
             Feedback.choose()
-            if isOn {
-                extraKeys = extraKeys.replacingOccurrences(of: symbol, with: "")
-            } else if !isFull {
-                extraKeys += symbol
+        } else {
+            return
+        }
+        withAnimation(.easeOut(duration: 0.18)) { extraKeys = picked.joined() }
+    }
+
+    /// The bottom row as the letters page has it: the space bar, the three places for symbols (a picked symbol
+    /// taps off; an empty place waits for one from below) and the full stop.
+    private var symbolSlots: some View {
+        let picked = pickedSymbols
+        return HStack(spacing: 6) {
+            Text(tr("space"))
+                .font(.footnote.weight(.medium))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: false)
+                .layoutPriority(1)
+            ForEach(0..<Settings.extraKeysLimit, id: \.self) { index in
+                if index < picked.count {
+                    let symbol = picked[index]
+                    Button { toggleSymbol(symbol) } label: {
+                        Text(symbol)
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 46, height: 46)
+                            .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: true)
+                            .overlay(alignment: .topTrailing) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, .black.opacity(0.45))
+                                    .offset(x: 5, y: -5)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel(tr("Remove %@", symbol))
+                } else {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .frame(width: 46, height: 46)
+                        .overlay(Image(systemName: "plus").font(.footnote.weight(.semibold)).foregroundColor(.secondary))
+                        .accessibilityHidden(true)
+                }
             }
-        } label: {
+            Text(".")
+                .font(.title3.weight(.medium))
+                .foregroundColor(.secondary)
+                .frame(width: 38, height: 46)
+                .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: false)
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// A symbol to pick: lit, with its place number, when it is one of the picked ones.
+    private func symbolChip(_ symbol: String) -> some View {
+        let place = pickedSymbols.firstIndex(of: symbol)
+        let isOn = place != nil
+        let isFull = pickedSymbols.count >= Settings.extraKeysLimit
+        return Button { toggleSymbol(symbol) } label: {
             Text(symbol)
                 .font(.title3.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 40)
+                .frame(maxWidth: .infinity, minHeight: 42)
                 .foregroundColor(isOn ? .white : .primary)
                 .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: isOn)
+                .overlay(alignment: .topLeading) {
+                    if let place = place {
+                        Text("\(place + 1)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white.opacity(0.9))
+                            .padding(4)
+                    }
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
         .disabled(!isOn && isFull)
-        .opacity(!isOn && isFull ? 0.45 : 1)
+        .opacity(!isOn && isFull ? 0.4 : 1)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
@@ -261,16 +330,25 @@ struct KeysView: View {
             .glassRows()
 
             Section {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
-                    ForEach(Settings.extraKeyChoices, id: \.self) { symbol in
-                        symbolChip(symbol)
+                symbolSlots
+                ForEach(Settings.extraKeyGroups.indices, id: \.self) { groupIndex in
+                    let group = Settings.extraKeyGroups[groupIndex]
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(tr(group.name)).font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
+                            ForEach(group.symbols, id: \.self) { symbol in
+                                symbolChip(symbol)
+                            }
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
             } header: {
                 SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
             } footer: {
-                Text(tr("Up to three symbols get their own key next to the full stop on the letters page."))
+                Text(pickedSymbols.count >= Settings.extraKeysLimit
+                     ? tr("All three places are taken: tap a symbol in the row above to free its place.")
+                     : tr("Tap up to three symbols to give each its own key between the space bar and the full stop, in the order you pick them."))
             }
             .glassRows()
 
