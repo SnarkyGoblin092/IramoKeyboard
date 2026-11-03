@@ -727,10 +727,11 @@ final class KeyboardView: UIView {
         }
     }
 
-    /// Held past the hold delay without sliding: backspace deletes at once, then keeps repeating.
+    /// Held past the delete delay (the Gestures screen) without sliding: backspace deletes at once, then keeps
+    /// repeating letter by letter. A slide left before then deletes whole words; a tap deletes one as it lifts.
     private func startBackspaceRepeat(_ state: TouchState) {
         state.holdTimer?.invalidate()
-        state.holdTimer = makeTimer(after: Prefs.holdDelay, repeats: false) { [weak self, weak state] in
+        state.holdTimer = makeTimer(after: Prefs.deleteRepeatDelay, repeats: false) { [weak self, weak state] in
             guard let self = self, let state = state, !state.isWordDeleting else { return }
             state.backspaceRepeated = true
             Haptics.shared.keyPress()

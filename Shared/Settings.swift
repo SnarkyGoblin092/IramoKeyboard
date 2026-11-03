@@ -19,6 +19,8 @@ enum SettingKey {
     static let cursorControl = "hunkeys.cursorControl"
     static let deleteSwipe = "hunkeys.deleteSwipe"
     static let deleteSwipedWord = "hunkeys.deleteSwipedWord"
+    /// How long delete is held before it starts repeating (a slide left before then deletes words instead).
+    static let deleteRepeatDelay = "hunkeys.deleteRepeatDelay"
     static let twoThumbSwipe = "hunkeys.twoThumbSwipe"
     static let spaceCommits = "hunkeys.spaceCommits"
     static let multiWordSwipe = "hunkeys.multiWordSwipe"
@@ -153,7 +155,7 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints, extraKeys, commaKey, periodKey, emojiKey, commaHold, periodHold,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
@@ -182,6 +184,7 @@ enum SettingDefault {
     static let cursorControl = true
     static let deleteSwipe = true
     static let deleteSwipedWord = true
+    static let deleteRepeatDelay = 0.5
     static let twoThumbSwipe = true
     static let spaceCommits = true
     /// Off until tried: a phrase reading only wins clearly, but a single word is the safer default.
@@ -415,6 +418,7 @@ final class Settings {
             SettingKey.cursorControl: SettingDefault.cursorControl,
             SettingKey.deleteSwipe: SettingDefault.deleteSwipe,
             SettingKey.deleteSwipedWord: SettingDefault.deleteSwipedWord,
+            SettingKey.deleteRepeatDelay: SettingDefault.deleteRepeatDelay,
             SettingKey.twoThumbSwipe: SettingDefault.twoThumbSwipe,
             SettingKey.spaceCommits: SettingDefault.spaceCommits,
             SettingKey.multiWordSwipe: SettingDefault.multiWordSwipe,
@@ -585,6 +589,8 @@ final class Settings {
     // MARK: Swipe and flick gestures
 
     var deleteSwipedWord: Bool { return readBool(SettingKey.deleteSwipedWord) }
+    static let deleteRepeatDelayRange: ClosedRange<Double> = 0.2...1.5
+    var deleteRepeatDelay: Double { return clamp(readDouble(SettingKey.deleteRepeatDelay), Settings.deleteRepeatDelayRange) }
     var twoThumbSwipe: Bool { return readBool(SettingKey.twoThumbSwipe) }
     var spaceCommits: Bool { return readBool(SettingKey.spaceCommits) }
     var multiWordSwipe: Bool { return readBool(SettingKey.multiWordSwipe) }

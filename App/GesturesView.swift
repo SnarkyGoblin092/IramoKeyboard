@@ -81,10 +81,16 @@ struct GesturesView: View {
                 GlassToggle(title: tr("Delete whole words"),
                             subtitle: tr("Slide left from the delete key: each step removes one more word."),
                             isOn: $deleteWords)
+                SettingSlider(tr("Repeat delay"),
+                              key: SettingKey.deleteRepeatDelay,
+                              defaultValue: SettingDefault.deleteRepeatDelay,
+                              range: Settings.deleteRepeatDelayRange,
+                              step: 0.05,
+                              subtitle: tr("How long to hold delete before it repeats letter by letter")) { String(format: "%.2f s", $0) }
             } header: {
                 SectionHeader(tr("Delete key"), symbol: "delete.left.fill", color: .red)
             } footer: {
-                Text(tr("Holding delete repeats it, letter by letter."))
+                Text(tr("A tap deletes one letter when you let go. Hold to repeat letter by letter, or slide left before the delay to delete whole words."))
             }
             .glassRows()
         }

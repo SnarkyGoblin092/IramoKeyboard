@@ -73,6 +73,7 @@ final class Prefs {
     static var effects = EffectsConfig()
     static var keyFont = SettingDefault.keyFont
     static var deleteSwipedWord = SettingDefault.deleteSwipedWord
+    static var deleteRepeatDelay = SettingDefault.deleteRepeatDelay
     static var twoThumbSwipe = SettingDefault.twoThumbSwipe
     static var spaceCommits = SettingDefault.spaceCommits
     static var multiWordSwipe = SettingDefault.multiWordSwipe
@@ -166,6 +167,7 @@ final class Prefs {
         effects = EffectsConfig.decode(s.effectsJSON)
         keyFont = s.keyFont
         deleteSwipedWord = s.deleteSwipedWord
+        deleteRepeatDelay = s.deleteRepeatDelay
         twoThumbSwipe = s.twoThumbSwipe
         spaceCommits = s.spaceCommits
         multiWordSwipe = s.multiWordSwipe
