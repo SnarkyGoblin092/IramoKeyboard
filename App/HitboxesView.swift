@@ -150,15 +150,11 @@ private struct HitMapSection: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
             }
-            VStack(alignment: .leading, spacing: 10) {
-                HitMapDrawing(rows: ThemePreview.letterRows(for: language), data: data,
-                               strength: isOn ? strength : 0)
-                Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-            }
-            .padding(.vertical, 6)
+            Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .monospacedDigit()
+                .padding(.vertical, 6)
             GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: $strength,
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 .disabled(!isOn)
@@ -203,60 +199,5 @@ private struct HitMapSection: View {
     private func reload() {
         Settings.shared.refresh()
         data = Settings.shared.hitMapData(for: language.rawValue)
-    }
-}
-
-/// The letter rows with each moved key's room drawn where learning has shifted it (at the current strength).
-private struct HitMapDrawing: View {
-    let rows: [[String]]
-    let data: [String: [Double]]
-    let strength: Double
-
-    private var columns: Int { return max(rows.map { $0.count }.max() ?? 10, 1) }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let keyWidth = geometry.size.width / CGFloat(columns)
-            let keyHeight = geometry.size.height / CGFloat(max(rows.count, 1))
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: 0) {
-                        ForEach(row, id: \.self) { letter in
-                            key(letter, width: keyWidth, height: keyHeight)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .aspectRatio(CGFloat(columns) / (CGFloat(max(rows.count, 1)) * 1.35), contentMode: .fit)
-        .accessibilityHidden(true)
-    }
-
-    private func key(_ letter: String, width: CGFloat, height: CGFloat) -> some View {
-        // The same shift the keyboard applies (HitMap.offsets): none before 8 taps, trusted more up to 40.
-        let entry = data[letter] ?? []
-        let taps = entry.first ?? 0
-        let moved = entry.count == 3 && taps >= 8
-        let scale = strength * min(1, taps / 40)
-        let x = moved ? CGFloat(min(max(entry[1] * scale, -0.35), 0.35)) : 0
-        let y = moved ? CGFloat(min(max(entry[2] * scale, -0.35), 0.35)) : 0
-        return ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.primary.opacity(0.10))
-                .padding(2.5)
-            Text(letter.uppercased())
-                .font(.system(size: min(width, height) * 0.42, weight: .medium))
-                .foregroundColor(.secondary)
-            if moved {
-                // Where the key's room has moved to.
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.tint.opacity(0.28))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(.tint, lineWidth: 1.5))
-                    .padding(2.5)
-                    .offset(x: x * width, y: y * height)
-            }
-        }
-        .frame(width: width, height: height)
     }
 }

@@ -4,8 +4,7 @@ import UIKit
 /// - hitboxes: a tinted box over every letter where its touch area is, with every hitbox setting (letter room,
 ///   adaptive keys, the hit map) as the keyboard applies them (KeyboardView.touchOutlines); other keys get a faint
 ///   outline.
-/// - hitMap: what the hit map learned, as the Hit map section draws it: each letter key faintly, and a tinted box
-///   where a moved key's room has gone (KeyboardView.hitMapOutlines).
+/// - hitMap: what the hit map learned: a tinted box where a moved key's room has gone (KeyboardView.hitMapOutlines).
 final class HitboxOverlay: UIView {
     enum Mode {
         case hitboxes
@@ -50,11 +49,6 @@ final class HitboxOverlay: UIView {
             }
         case .hitMap:
             for outline in keyboard.hitMapOutlines() {
-                if let path = box(keyboard.convert(outline.key, to: self)) {
-                    context.setFillColor(UIColor.white.withAlphaComponent(0.08).cgColor)
-                    context.addPath(path.cgPath)
-                    context.fillPath()
-                }
                 if let moved = outline.moved, let path = box(keyboard.convert(moved, to: self)) {
                     highlight(path, accent: accent, in: context)
                 }
