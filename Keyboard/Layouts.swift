@@ -307,6 +307,11 @@ enum KeyAction: Equatable {
     case spacer
 }
 
+extension KeyAction {
+    /// The keys that change the page (123, ABC, #+=).
+    var switchesPage: Bool { return self == .showLetters || self == .showNumbers || self == .showSymbols }
+}
+
 struct KeySpec {
     var action: KeyAction
     var title: String = ""

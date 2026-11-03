@@ -91,6 +91,8 @@ final class KeyboardView: UIView {
         var cursorLastX: CGFloat = 0
         var cursorRemainder: CGFloat = 0
         var isWordDeleting = false
+        /// Backspace was held long enough to repeat: it has deleted already, so lifting deletes nothing more.
+        var backspaceRepeated = false
         var wordSteps = 0
         /// A flick on a letter: 1 = up (capital), -1 = down (first accent), 0 = none.
         var flick = 0
@@ -200,20 +202,27 @@ final class KeyboardView: UIView {
 
     func configure(rows newRows: [[KeySpec]], page newPage: KeyboardPage, shift newShift: ShiftState) {
         endGesturesForRebuild()
-        for row in keyViews {
-            for key in row {
-                key.detachHalo()
-                key.removeFromSuperview()
-            }
-        }
+        let oldRows = keyViews
+        var kept = Set<ObjectIdentifier>()
         rows = newRows
         page = newPage
         shift = newShift
 
         var built: [[KeyView]] = []
-        for row in newRows {
+        for (r, row) in newRows.enumerated() {
             var builtRow: [KeyView] = []
-            for spec in row {
+            // Rows are matched from the bottom (a number row on the letters page only adds one at the top).
+            let oldR = oldRows.count - (newRows.count - r)
+            for (c, spec) in row.enumerated() {
+                // A page key (123, ABC, #+=) in the place of one on the old page stays the same key with its new
+                // title: the press effects it just started play on instead of vanishing with the old page.
+                if spec.action.switchesPage, oldR >= 0, oldR < oldRows.count, c < oldRows[oldR].count,
+                   case let old = oldRows[oldR][c], old.spec.action.switchesPage, !kept.contains(ObjectIdentifier(old)) {
+                    kept.insert(ObjectIdentifier(old))
+                    old.reuse(as: spec)
+                    builtRow.append(old)
+                    continue
+                }
                 let key = KeyView(spec: spec)
                 if !spec.isSpacer {
                     (glassContainer?.contentView ?? self).addSubview(key)
@@ -224,6 +233,12 @@ final class KeyboardView: UIView {
                 builtRow.append(key)
             }
             built.append(builtRow)
+        }
+        for row in oldRows {
+            for key in row where !kept.contains(ObjectIdentifier(key)) {
+                key.detachHalo()
+                key.removeFromSuperview()
+            }
         }
         keyViews = built
         hitRects = []
@@ -646,7 +661,7 @@ final class KeyboardView: UIView {
 
         switch key.spec.action {
         case .backspace:
-            delegate?.keyboardView(self, didTap: .backspace)
+            // Nothing is deleted yet: a slide left may still turn this into deleting words.
             startBackspaceRepeat(state)
         case .space:
             state.startedOnSpace = true
@@ -712,10 +727,14 @@ final class KeyboardView: UIView {
         }
     }
 
+    /// Held past the hold delay without sliding: backspace deletes at once, then keeps repeating.
     private func startBackspaceRepeat(_ state: TouchState) {
         state.holdTimer?.invalidate()
         state.holdTimer = makeTimer(after: Prefs.holdDelay, repeats: false) { [weak self, weak state] in
-            guard let self = self, let state = state else { return }
+            guard let self = self, let state = state, !state.isWordDeleting else { return }
+            state.backspaceRepeated = true
+            Haptics.shared.keyPress()
+            self.delegate?.keyboardView(self, didTap: .backspace)
             state.repeatTimer?.invalidate()
             state.repeatTimer = self.makeTimer(after: 0.06, repeats: true) { [weak self] in
                 guard let self = self else { return }
@@ -840,7 +859,10 @@ final class KeyboardView: UIView {
             if travel(of: state) > max(14, letterKeySize().width * 0.6) { return }
             if key.spec.action == .emoji { return }
         }
-        if key.spec.action != .backspace {          // backspace already fired on touch-down
+        if key.spec.action == .backspace {
+            // A tap deletes as it lifts (so a slide can start without deleting); a hold has been deleting already.
+            if !state.backspaceRepeated { delegate?.keyboardView(self, didTap: .backspace) }
+        } else {
             lastTapPoint = state.startPoint
             delegate?.keyboardView(self, didTap: key.spec.action)
         }

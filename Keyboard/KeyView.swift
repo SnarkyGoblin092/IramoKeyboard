@@ -143,6 +143,15 @@ final class KeyView: UIView {
         }
     }
 
+    /// The key becomes `newSpec` (the page key on the next page), keeping its view and the effects playing on it.
+    func reuse(as newSpec: KeySpec) {
+        spec = newSpec
+        hintLabel.text = newSpec.hint
+        configureContent()
+        refreshAppearance()
+        setNeedsLayout()
+    }
+
     func setIcon(_ symbolName: String) {
         iconView.image = UIImage(systemName: symbolName,
                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .regular))

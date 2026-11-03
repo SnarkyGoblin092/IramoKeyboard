@@ -81,8 +81,6 @@ final class KeyboardViewController: UIInputViewController {
         case composing(String)
         case search(String)
     }
-    /// What the last single backspace took (the press that starts a word-deleting slide fires one first).
-    private var lastBackspacePiece: DeletedPiece?
     /// The words deleted by the current slide, oldest first (nil: a step that found nothing to delete).
     private var wordDeleteStack: [DeletedPiece?] = []
     /// `Settings.personalRevision` when the learned data was last read.
@@ -1002,15 +1000,12 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleBackspace() {
-        lastBackspacePiece = nil
         if isSearchingEmoji {
-            if !searchQuery.isEmpty { lastBackspacePiece = .search(searchQuery) }
             if !searchQuery.isEmpty { searchQuery.removeLast() }
             refreshEmojiSearch()
             return
         }
         if !composing.isEmpty {
-            lastBackspacePiece = .composing(composing)
             composing.removeLast()
             showComposing()
             return
@@ -1034,10 +1029,8 @@ final class KeyboardViewController: UIInputViewController {
             for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
             noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
             clearSwipeState()
-            lastBackspacePiece = .text(inserted)
         } else {
             clearSwipeState()
-            if let last = before.last { lastBackspacePiece = .text(String(last)) }
             textDocumentProxy.deleteBackward()
         }
         lastSpaceTime = Date.distantPast
@@ -1723,12 +1716,6 @@ extension KeyboardViewController: KeyboardViewDelegate {
 
     func keyboardViewDidBeginWordDelete(_ view: KeyboardView) {
         wordDeleteStack = []
-        // The press already deleted a character: put it back, so the slide works in whole words and sliding all
-        // the way back leaves the text as it was.
-        if let piece = lastBackspacePiece {
-            lastBackspacePiece = nil
-            restore(piece)
-        }
     }
 
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
