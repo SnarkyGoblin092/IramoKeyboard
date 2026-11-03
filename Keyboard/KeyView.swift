@@ -147,6 +147,7 @@ final class KeyView: UIView {
     func reuse(as newSpec: KeySpec) {
         spec = newSpec
         hintLabel.text = newSpec.hint
+        lastGlassState = ""   // a fresh piece of glass with the right tint, not one the container blended
         configureContent()
         refreshAppearance()
         setNeedsLayout()

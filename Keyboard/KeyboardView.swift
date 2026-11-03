@@ -203,7 +203,27 @@ final class KeyboardView: UIView {
     func configure(rows newRows: [[KeySpec]], page newPage: KeyboardPage, shift newShift: ShiftState) {
         endGesturesForRebuild()
         let oldRows = keyViews
-        var kept = Set<ObjectIdentifier>()
+        // A page key (123, ABC, #+=) in the place of one on the old page stays the same key with its new title: the
+        // press effects it just started play on instead of vanishing with the old page. Rows are matched from the
+        // bottom (a number row on the letters page only adds one at the top).
+        var kept: [Int: [Int: KeyView]] = [:]
+        for (r, row) in newRows.enumerated() {
+            let oldR = oldRows.count - (newRows.count - r)
+            guard oldR >= 0, oldR < oldRows.count else { continue }
+            for (c, spec) in row.enumerated() where spec.action.switchesPage && c < oldRows[oldR].count {
+                let old = oldRows[oldR][c]
+                if old.spec.action.switchesPage { kept[r, default: [:]][c] = old }
+            }
+        }
+        let keptIDs = Set(kept.values.flatMap { $0.values }.map { ObjectIdentifier($0) })
+        // The old keys go before the new ones are added: Liquid Glass pieces sharing the container with the old
+        // page's keys took on their tints (every key turned the accent colour of the return key).
+        for row in oldRows {
+            for key in row where !keptIDs.contains(ObjectIdentifier(key)) {
+                key.detachHalo()
+                key.removeFromSuperview()
+            }
+        }
         rows = newRows
         page = newPage
         shift = newShift
@@ -211,14 +231,8 @@ final class KeyboardView: UIView {
         var built: [[KeyView]] = []
         for (r, row) in newRows.enumerated() {
             var builtRow: [KeyView] = []
-            // Rows are matched from the bottom (a number row on the letters page only adds one at the top).
-            let oldR = oldRows.count - (newRows.count - r)
             for (c, spec) in row.enumerated() {
-                // A page key (123, ABC, #+=) in the place of one on the old page stays the same key with its new
-                // title: the press effects it just started play on instead of vanishing with the old page.
-                if spec.action.switchesPage, oldR >= 0, oldR < oldRows.count, c < oldRows[oldR].count,
-                   case let old = oldRows[oldR][c], old.spec.action.switchesPage, !kept.contains(ObjectIdentifier(old)) {
-                    kept.insert(ObjectIdentifier(old))
+                if let old = kept[r]?[c] {
                     old.reuse(as: spec)
                     builtRow.append(old)
                     continue
@@ -233,12 +247,6 @@ final class KeyboardView: UIView {
                 builtRow.append(key)
             }
             built.append(builtRow)
-        }
-        for row in oldRows {
-            for key in row where !kept.contains(ObjectIdentifier(key)) {
-                key.detachHalo()
-                key.removeFromSuperview()
-            }
         }
         keyViews = built
         hitRects = []
