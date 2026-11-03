@@ -2,8 +2,7 @@ import UIKit
 
 /// The Hitboxes screen's drawing over the live keyboard. It takes no touches: the keys under it still type.
 /// - hitboxes: a tinted box over every letter where its touch area is, with every hitbox setting (letter room,
-///   adaptive keys, the hit map) as the keyboard applies them (KeyboardView.touchOutlines); other keys get a faint
-///   outline.
+///   adaptive keys, the hit map) as the keyboard applies them (KeyboardView.touchOutlines).
 /// - hitMap: what the hit map learned: a tinted box where a moved key's room has gone (KeyboardView.hitMapOutlines).
 final class HitboxOverlay: UIView {
     enum Mode {
@@ -39,13 +38,9 @@ final class HitboxOverlay: UIView {
         let accent = tintColor ?? UIColor.systemBlue
         switch mode {
         case .hitboxes:
-            for outline in keyboard.touchOutlines() {
+            for outline in keyboard.touchOutlines() where outline.letter != nil {
                 guard let path = box(keyboard.convert(outline.rect, to: self)) else { continue }
-                if outline.letter == nil {
-                    stroke(path, UIColor.white.withAlphaComponent(0.3), width: 1, in: context)
-                } else {
-                    highlight(path, accent: accent, in: context)
-                }
+                highlight(path, accent: accent, in: context)
             }
         case .hitMap:
             for outline in keyboard.hitMapOutlines() {

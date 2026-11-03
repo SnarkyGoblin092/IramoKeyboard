@@ -139,8 +139,19 @@ private struct HitMapSection: View {
                         subtitle: tr("Notices where you really tap each key and moves its room there."),
                         isOn: $isOn, feature: .keyLearning)
             // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
+            // What was learned in that language, under its name.
             HStack {
-                Label(tr("Language"), systemImage: "globe")
+                Label {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(tr("Language"))
+                        Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                } icon: {
+                    Image(systemName: "globe")
+                }
                 Spacer()
                 Picker(tr("Language"), selection: $language) {
                     ForEach(languages, id: \.self) { language in
@@ -150,11 +161,6 @@ private struct HitMapSection: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
             }
-            Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .monospacedDigit()
-                .padding(.vertical, 6)
             GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: $strength,
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 .disabled(!isOn)
