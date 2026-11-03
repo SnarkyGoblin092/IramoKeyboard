@@ -14,6 +14,9 @@ struct HitboxesView: View {
     @AppStorage(SettingKey.hitMap, store: SharedStore.defaults) private var hitMap = SettingDefault.hitMap
     @AppStorage(SettingKey.hitMapStrength, store: SharedStore.defaults) private var hitMapStrength = SettingDefault.hitMapStrength
 
+    /// What the preview draws over the keys: 0 the touch areas, 1 the hit map.
+    @AppStorage("hitboxPreviewMode") private var previewMode = 0
+
     private let sizes: [Double] = [0.85, 1.0, 1.2]
 
     private struct Adaptive {
@@ -45,7 +48,11 @@ struct HitboxesView: View {
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
         PinnedPreview(id: "hitboxes", height: 260, fills: true) {
-            LiveKeyboard(showsHitboxes: true)
+            VStack(spacing: 8) {
+                SegmentedChoice(names: [tr("Hitboxes"), tr("Hit map")], selected: previewMode) { previewMode = $0 }
+                    .padding(.horizontal)
+                LiveKeyboard(showsHitboxes: true, hitboxMode: previewMode == 1 ? .hitMap : .hitboxes)
+            }
         } content: {
         GlassList {
             Section {

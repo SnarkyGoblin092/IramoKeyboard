@@ -13,6 +13,8 @@ struct LiveKeyboard: View {
     /// The Hitboxes screen: the touch areas drawn over the keys (HitboxOverlay), and the letters typed on the
     /// preview drive adaptive keys as they do while typing.
     var showsHitboxes = false
+    /// What the Hitboxes preview draws over the keys: the touch areas or the hit map.
+    var hitboxMode: HitboxOverlay.Mode = .hitboxes
 
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
@@ -28,7 +30,7 @@ struct LiveKeyboard: View {
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode))
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
-                LiveKeyboardHost(effects: effects, showsHitboxes: showsHitboxes)
+                LiveKeyboardHost(effects: effects, showsHitboxes: showsHitboxes, hitboxMode: hitboxMode)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(look.backdrop(scale: scale)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -45,11 +47,13 @@ struct LiveKeyboard: View {
 private struct LiveKeyboardHost: UIViewRepresentable {
     let effects: EffectsConfig?
     let showsHitboxes: Bool
+    let hitboxMode: HitboxOverlay.Mode
 
     func makeUIView(context: Context) -> LiveKeyboardView {
         let view = LiveKeyboardView()
         view.effectsOverride = effects
         view.showsHitboxes = showsHitboxes
+        view.hitboxMode = hitboxMode
         return view
     }
 
@@ -57,6 +61,7 @@ private struct LiveKeyboardHost: UIViewRepresentable {
         // Read by the keys at every press (KeyView.syncEffects), so a change shows on the next one.
         view.effectsOverride = effects
         view.showsHitboxes = showsHitboxes
+        view.hitboxMode = hitboxMode
     }
 }
 
@@ -85,6 +90,11 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// The Hitboxes screen's preview (LiveKeyboard.showsHitboxes).
     var showsHitboxes = false {
         didSet { if showsHitboxes != oldValue { updateHitboxes() } }
+    }
+    /// What the overlay draws (LiveKeyboard.hitboxMode).
+    var hitboxMode: HitboxOverlay.Mode {
+        get { return hitboxOverlay.mode }
+        set { hitboxOverlay.mode = newValue }
     }
     private let hitboxOverlay = HitboxOverlay()
     /// The word typed on the preview so far (the Hitboxes screen), which adaptive keys follow.

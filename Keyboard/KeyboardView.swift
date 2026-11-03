@@ -495,6 +495,26 @@ final class KeyboardView: UIView {
         return shapesHitboxes ? shapedKeyIndex(at: point, base: base) : base
     }
 
+    /// Every letter key as the app's hit map draws it over the keys (the Hitboxes screen): the drawn key, and where
+    /// the hit map has moved its room to (nil when it has not moved it).
+    func hitMapOutlines() -> [(key: CGRect, moved: CGRect?)] {
+        guard keyViews.count == rows.count else { return [] }
+        var outlines: [(key: CGRect, moved: CGRect?)] = []
+        for (r, row) in rows.enumerated() {
+            for (c, spec) in row.enumerated() where c < keyViews[r].count {
+                guard let letter = letter(of: spec) else { continue }
+                let key = keyViews[r][c]
+                let rect = key.convert(key.bounds, to: self)
+                var moved: CGRect? = nil
+                if let shift = hitOffsets[letter], shift != .zero {
+                    moved = rect.offsetBy(dx: shift.x * rect.width, dy: shift.y * rect.height)
+                }
+                outlines.append((rect, moved))
+            }
+        }
+        return outlines
+    }
+
     /// Every key's touch area as the app draws it over the keys (the Hitboxes screen): the drawn key grown or
     /// shrunk by its touch-area factor and moved by the hit map, with the key's corners. `factor` is 1 for a key
     /// whose area is not changed; `letter` is nil for the other keys.

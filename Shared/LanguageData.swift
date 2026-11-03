@@ -15,6 +15,8 @@ enum LanguageData {
     /// copy if it ships uncompressed, else the unpacked one (unpacked now if it is not yet). nil if there is none.
     static func url(forResource name: String, withExtension ext: String) -> URL? {
         if let plain = Bundle.main.url(forResource: name, withExtension: ext) { return plain }
+        // In the app, files the keyboard ships uncompressed (emoji.json) are in the keyboard's bundle inside it.
+        if let plain = packedBundle?.url(forResource: name, withExtension: ext) { return plain }
         let file = "\(name).\(ext)"
         guard let packed = packedURL(file), let stamp = size(of: packed) else { return nil }
         let unpackedName = "\(file).\(stamp)"
