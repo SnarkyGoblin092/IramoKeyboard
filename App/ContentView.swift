@@ -103,23 +103,24 @@ private struct HeaderSection: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    if SharedStore.isShared, let url = URL(string: UIApplication.openSettingsURLString) {
-                        // The app's own page in Settings lists Keyboards > Iramo and Allow Full Access.
-                        Button {
-                            Feedback.tap()
-                            openURL(url)
-                        } label: {
-                            Text(tr("Open Settings"))
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 40)
-                                .foregroundColor(.white)
-                                .glassTile(Capsule(), isOn: true)
-                        }
-                        .buttonStyle(PressableStyle())
-                    }
                 }
                 .padding(.vertical, 6)
                 .listRowBackground(GlassRowFill())
+                if SharedStore.isShared, let url = URL(string: UIApplication.openSettingsURLString) {
+                    // The app's own page in Settings lists Keyboards > Iramo and Allow Full Access.
+                    Button {
+                        Feedback.tap()
+                        openURL(url)
+                    } label: {
+                        Text(tr("Open Settings"))
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .foregroundColor(.white)
+                            .glassTile(Capsule(), isOn: true)
+                    }
+                    .buttonStyle(PressableStyle())
+                    .glassOutsideCard()
+                }
             }
         }
         // Read when the screen opens or the app comes back to the front - no polling.
@@ -298,7 +299,7 @@ private struct LookSection: View {
     var body: some View {
         Section {
             ScreenRow(.themes) {
-                SettingsRow(title: tr("Theme"), symbol: "paintbrush.fill", color: .purple, value: theme.name)
+                SettingsRow(title: tr("Themes"), symbol: "paintbrush.fill", color: .purple, value: theme.name)
             }
             ScreenRow(.keys) {
                 SettingsRow(title: tr("Keys"), symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
@@ -623,6 +624,12 @@ struct ShortcutsView: View {
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
                 TextField(tr("Phrase (e.g. On my way!)"), text: $phrase)
+            } header: {
+                Text(tr("New shortcut"))
+            }
+            .glassRows()
+
+            Section {
                 Button(action: add) {
                     Text(tr("Add shortcut"))
                         .font(.body.weight(.semibold))
@@ -634,8 +641,7 @@ struct ShortcutsView: View {
                 .buttonStyle(PressableStyle())
                 .disabled(!canAdd)
                 .opacity(canAdd ? 1 : 0.45)
-            } header: {
-                Text(tr("New shortcut"))
+                .glassOutsideCard()
             }
             .glassRows()
 

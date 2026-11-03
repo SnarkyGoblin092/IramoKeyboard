@@ -148,7 +148,8 @@ struct SystemThemeSections: View {
                 Label(tr("Reset %@", "\(theme.name)"), systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(ActionButtonStyle())   // its red glass capsule, standing on the backdrop without a card
-            .disabled(SystemEdits.decode(systemEdits)[theme.id] == nil)            .glassOutsideCard()
+            .disabled(SystemEdits.decode(systemEdits)[theme.id] == nil)
+            .glassOutsideCard()
         } footer: {
             Text(tr("Puts the theme back as it came, with the corners and key style set on the old Keys screen."))
         }

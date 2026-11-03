@@ -419,7 +419,8 @@ struct AnyInsettableShape: InsettableShape {
     func inset(by amount: CGFloat) -> AnyInsettableShape { return insetBy(amount) }
 }
 
-/// The app's action button: a full-width tinted capsule (or small, for a button beside a title), red when destructive.
+/// The app's action button: a full-width accent-tinted glass capsule (or small, for a button beside a title), red
+/// when destructive, with white text.
 struct ActionButtonStyle: ButtonStyle {
     var compact = false
     @Environment(\.isEnabled) private var isEnabled
@@ -431,11 +432,11 @@ struct ActionButtonStyle: ButtonStyle {
         let small = compact || controlSize == .small
         return configuration.label
             .font((small ? Font.footnote : Font.body).weight(.semibold))
-            .foregroundColor(color)
+            .foregroundColor(.white)
             .frame(maxWidth: small ? nil : .infinity)
             .padding(.horizontal, small ? 14 : 16)
             .padding(.vertical, small ? 6 : 11)
-            .glassShape(Capsule(), tint: color.opacity(configuration.isPressed ? 0.45 : 0.28), interactive: true)
+            .glassShape(Capsule(), tint: color.opacity(configuration.isPressed ? 0.95 : 0.8), interactive: true)
             .overlay(GlassSheen(pressed: configuration.isPressed, shape: Capsule()).allowsHitTesting(false))
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(isEnabled ? 1 : 0.4)

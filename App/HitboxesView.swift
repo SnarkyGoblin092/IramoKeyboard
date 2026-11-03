@@ -126,6 +126,7 @@ private struct HitMapSection: View {
     private var keysLearned: Int { return data.values.filter { ($0.first ?? 0) >= 8 }.count }
 
     var body: some View {
+        Group {
         Section {
             GlassToggle(title: tr("Learn my taps"),
                         subtitle: tr("Notices where you really tap each key and moves its room there."),
@@ -155,6 +156,16 @@ private struct HitMapSection: View {
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 .disabled(!isOn)
                 .opacity(isOn ? 1 : 0.45)
+        } header: {
+            SectionHeader(tr("Hit map"), symbol: "scope", color: .teal)
+        } footer: {
+            Text(data.isEmpty
+                 ? tr("Nothing learned yet. Type on the keyboard and come back.")
+                 : tr("Each highlighted key shows where its room has moved to; a key moves once it has 8 taps."))
+        }
+        .glassRows()
+
+        Section {
             Button(role: .destructive) {
                 Feedback.tap()
                 confirmReset = true
@@ -173,14 +184,10 @@ private struct HitMapSection: View {
             } message: {
                 Text(tr("Everything learned about your taps in %@ is forgotten.", "\(language.localizedName)"))
             }
-        } header: {
-            SectionHeader(tr("Hit map"), symbol: "scope", color: .teal)
-        } footer: {
-            Text(data.isEmpty
-                 ? tr("Nothing learned yet. Type on the keyboard and come back.")
-                 : tr("Each highlighted key shows where its room has moved to; a key moves once it has 8 taps."))
+            .glassOutsideCard()
         }
         .glassRows()
+        }
         .onAppear { reload() }
         .onChange(of: language) { _ in reload() }
         .onChange(of: scenePhase) { phase in if phase == .active { reload() } }

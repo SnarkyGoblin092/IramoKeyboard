@@ -491,6 +491,14 @@ struct EffectsView: View {
                 ForEach(savedByName, id: \.name) { preset in
                     savedRow(preset)
                 }
+            } header: {
+                SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
+            } footer: {
+                Text(tr("Tap a preset to load it; overwrite or delete it from its menu."))
+            }
+            .glassRows()
+
+            Section {
                 Button {
                     newName = ""
                     naming = true
@@ -498,10 +506,7 @@ struct EffectsView: View {
                     Label(tr("Save current effects"), systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(ActionButtonStyle())
-            } header: {
-                SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
-            } footer: {
-                Text(tr("Tap a preset to load it; overwrite or delete it from its menu."))
+                .glassOutsideCard()
             }
             .glassRows()
 
