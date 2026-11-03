@@ -20,7 +20,7 @@ protocol SuggestionBarDelegate: AnyObject {
 /// The strip above the keys: suggestion slots (words and emoji) and a permanent "hide keyboard" button on the
 /// right. Set up by the Suggestions screen of the app:
 ///  - three equal slots like the native bar, slots sized to their words so more fit ("Fit more"), or up to ten
-///    in a strip that scrolls sideways ("Scrollable");
+///    in a strip that scrolls sideways ("Scrollable"; with "Three at a time" a page of three equal slots each);
 ///  - thin separators between the slots (solid, dashed, dotted or none), or each slot on a key-like segment;
 ///  - colours from the theme ("Follow theme") or neutral ones.
 final class SuggestionBar: UIView {
@@ -34,6 +34,8 @@ final class SuggestionBar: UIView {
 
     private enum Layout { case equal, fit, scroll }
     private let layoutMode: Layout
+    /// The scrolling strip shows three equal slots at a time and moves a page of three at once.
+    private let pagesOfThree: Bool
     private let segments: Bool
     private let followTheme: Bool
 
@@ -81,6 +83,7 @@ final class SuggestionBar: UIView {
 
     override init(frame: CGRect) {
         layoutMode = Prefs.suggestionScroll ? .scroll : (Prefs.suggestionFit ? .fit : .equal)
+        pagesOfThree = Prefs.suggestionScroll && Prefs.suggestionScrollThree
         segments = Prefs.suggestionStyle == "segments"
         followTheme = Prefs.suggestionFollowTheme
         super.init(frame: frame)
@@ -98,6 +101,7 @@ final class SuggestionBar: UIView {
         strip.showsHorizontalScrollIndicator = false
         strip.alwaysBounceHorizontal = layoutMode == .scroll
         strip.isScrollEnabled = layoutMode == .scroll
+        strip.isPagingEnabled = pagesOfThree   // the strip is exactly three slots wide
         strip.isUserInteractionEnabled = layoutMode == .scroll
         strip.clipsToBounds = true
         glass.contentView.addSubview(strip)
@@ -353,7 +357,12 @@ final class SuggestionBar: UIView {
             frames.append(CGRect(x: frames.last?.maxX ?? start, y: 0, width: width, height: area.height))
         }
         slotFrames = frames
-        strip.contentSize = CGSize(width: max(contentWidth, frames.last?.maxX ?? 0), height: area.height)
+        var contentEnd = frames.last?.maxX ?? 0
+        if pagesOfThree, contentWidth > 0 {
+            // Whole pages, so paging always stops with three slots in view.
+            contentEnd = (contentEnd / contentWidth - 0.01).rounded(.up) * contentWidth
+        }
+        strip.contentSize = CGSize(width: max(contentWidth, contentEnd), height: area.height)
 
         let segmentRadius = Theme.keyCornerRadius(for: CGSize(width: 60, height: max(0, area.height - 6)))
         let separators = UIBezierPath()
@@ -436,6 +445,10 @@ final class SuggestionBar: UIView {
             natural.append(item.text.isEmpty ? 0 : max(56, ceil(text) + 30))
         }
         let shown = CGFloat(natural.filter { $0 > 0 }.count)
+        if pagesOfThree {
+            // Three to a page: the last page keeps its slots the same width (the rest of it stays empty).
+            return Array(repeating: contentWidth / 3, count: count)
+        }
         if layoutMode == .scroll {
             let total = natural.reduce(0, +)
             guard total < contentWidth, shown > 0 else { return natural }

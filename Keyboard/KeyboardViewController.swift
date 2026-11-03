@@ -73,6 +73,18 @@ final class KeyboardViewController: UIInputViewController {
     private var swipeAlternatives: [String] = []
     /// The last auto-fix (what was typed, what replaced it plus its space), until the next key: backspace undoes it.
     private var lastAutoFix: (typed: String, inserted: String)?
+
+    /// What a delete took away, so sliding back right from backspace can put it back: text removed from the
+    /// document, or what the composing letters or the emoji search were before.
+    private enum DeletedPiece {
+        case text(String)
+        case composing(String)
+        case search(String)
+    }
+    /// What the last single backspace took (the press that starts a word-deleting slide fires one first).
+    private var lastBackspacePiece: DeletedPiece?
+    /// The words deleted by the current slide, oldest first (nil: a step that found nothing to delete).
+    private var wordDeleteStack: [DeletedPiece?] = []
     /// `Settings.personalRevision` when the learned data was last read.
     private var seenPersonalRevision: Int?
     /// The correction the bar shows for the word being typed, so space makes exactly that one.
@@ -95,15 +107,15 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: Lifecycle
 
-    /// True when the root view uses the system keyboard backdrop. The Liquid Glass theme asks for a plain
-    /// (see-through) root instead, so the glass shows what is behind it rather than a flat material.
+    /// True when the root view uses the system keyboard backdrop. The Liquid Glass theme and the transparent
+    /// background ask for a plain (see-through) root instead, so what is behind the keyboard shows through.
     private var rootIsKeyboardStyle = true
 
     /// The root view is an input view: keyboard style (the system's native backdrop) for most themes, default
     /// (no backdrop of its own) for Liquid Glass.
     override func loadView() {
         Theme.reload()
-        rootIsKeyboardStyle = !Theme.isLiquidGlass
+        rootIsKeyboardStyle = !Theme.isLiquidGlass && !Settings.shared.transparentBackground
         let inputView = UIInputView(frame: CGRect(x: 0, y: 0, width: 320, height: 260),
                                     inputViewStyle: rootIsKeyboardStyle ? .keyboard : .default)
         inputView.allowsSelfSizing = true
@@ -305,7 +317,7 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
-            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)",
+            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), "\(s.transparentBackground)",
             "\(s.splitKeyboard)", s.oneHanded,
             s.effectsJSON, s.systemEditsJSON
         ].joined(separator: "|")
@@ -389,7 +401,10 @@ final class KeyboardViewController: UIInputViewController {
         clipboardPanel = nil
         for sub in container.subviews { sub.removeFromSuperview() }
 
-        if let style = Theme.style {
+        if Prefs.transparentBackground {
+            // No backdrop at all: only the keys (and the bar's words) are drawn. A root created with the system
+            // backdrop keeps it until the keyboard is opened again.
+        } else if let style = Theme.style {
             // A designed theme paints its own backdrop (gradient and texture) behind everything.
             let backdrop = ThemeBackdropView(style: style)
             backdrop.translatesAutoresizingMaskIntoConstraints = false
@@ -987,12 +1002,15 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleBackspace() {
+        lastBackspacePiece = nil
         if isSearchingEmoji {
+            if !searchQuery.isEmpty { lastBackspacePiece = .search(searchQuery) }
             if !searchQuery.isEmpty { searchQuery.removeLast() }
             refreshEmojiSearch()
             return
         }
         if !composing.isEmpty {
+            lastBackspacePiece = .composing(composing)
             composing.removeLast()
             showComposing()
             return
@@ -1016,8 +1034,10 @@ final class KeyboardViewController: UIInputViewController {
             for _ in 0..<inserted.count { textDocumentProxy.deleteBackward() }
             noteWordUse(inserted.trimmingCharacters(in: .whitespaces), delta: -1)
             clearSwipeState()
+            lastBackspacePiece = .text(inserted)
         } else {
             clearSwipeState()
+            if let last = before.last { lastBackspacePiece = .text(String(last)) }
             textDocumentProxy.deleteBackward()
         }
         lastSpaceTime = Date.distantPast
@@ -1025,25 +1045,29 @@ final class KeyboardViewController: UIInputViewController {
         scheduleRefresh()
     }
 
-    /// Deletes one word to the left (sliding left from the backspace key).
-    private func deleteWordBackward() {
+    /// Deletes one word to the left (sliding left from the backspace key) and returns what it took.
+    @discardableResult
+    private func deleteWordBackward() -> DeletedPiece? {
         hangul.reset()
         if isSearchingEmoji {
+            guard !searchQuery.isEmpty else { return nil }
+            let previous = searchQuery
             var characters = Array(searchQuery)
             while let last = characters.last, last == " " { characters.removeLast() }
             while let last = characters.last, last != " " { characters.removeLast() }
             searchQuery = String(characters)
             refreshEmojiSearch()
-            return
+            return .search(previous)
         }
         if !composing.isEmpty {
             // The letters typed so far go all at once.
+            let previous = composing
             composing = ""
             showComposing()
-            return
+            return .composing(previous)
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
-        guard !before.isEmpty else { return }
+        guard !before.isEmpty else { return nil }
         var count = 0
         var characters = Array(before)
         while let last = characters.last, last.isWhitespace {
@@ -1063,6 +1087,26 @@ final class KeyboardViewController: UIInputViewController {
         }
         for _ in 0..<max(1, count) { textDocumentProxy.deleteBackward() }
         clearSwipeState()
+        lastSpaceTime = Date.distantPast
+        updateAutoShift()
+        scheduleRefresh()
+        return .text(String(before.suffix(max(1, count))))
+    }
+
+    /// Puts back what a delete took away.
+    private func restore(_ piece: DeletedPiece) {
+        switch piece {
+        case .search(let previous):
+            searchQuery = previous
+            refreshEmojiSearch()
+            return
+        case .composing(let previous):
+            composing = previous
+            showComposing()
+        case .text(let text):
+            textDocumentProxy.insertText(text)
+            clearSwipeState()
+        }
         lastSpaceTime = Date.distantPast
         updateAutoShift()
         scheduleRefresh()
@@ -1677,9 +1721,27 @@ extension KeyboardViewController: KeyboardViewDelegate {
         scheduleRefresh()
     }
 
+    func keyboardViewDidBeginWordDelete(_ view: KeyboardView) {
+        wordDeleteStack = []
+        // The press already deleted a character: put it back, so the slide works in whole words and sliding all
+        // the way back leaves the text as it was.
+        if let piece = lastBackspacePiece {
+            lastBackspacePiece = nil
+            restore(piece)
+        }
+    }
+
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
-        Haptics.shared.tick()
-        deleteWordBackward()
+        wordDeleteStack.append(deleteWordBackward())
+    }
+
+    func keyboardViewDidRequestRestoreWord(_ view: KeyboardView) {
+        guard let last = wordDeleteStack.popLast() else { return }
+        if let piece = last { restore(piece) }
+    }
+
+    func keyboardViewDidEndWordDelete(_ view: KeyboardView) {
+        wordDeleteStack = []
     }
 
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {

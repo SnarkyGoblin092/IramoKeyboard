@@ -6,7 +6,8 @@ struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var enabled = SettingDefault.suggestions
     @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
     @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
-    @AppStorage(SettingKey.suggestionStyle, store: SharedStore.defaults) private var style = SettingDefault.suggestionStyle
+    @AppStorage(SettingKey.suggestionScrollThree, store: SharedStore.defaults) private var scrollThree = SettingDefault.suggestionScrollThree
+    @AppStorage(SettingKey.suggestionStyle,store: SharedStore.defaults) private var style = SettingDefault.suggestionStyle
     @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separator = SettingDefault.separatorStyle
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
@@ -45,6 +46,11 @@ struct SuggestionsView: View {
                     SegmentedChoice(names: [tr("Three"), tr("Fit to words"), tr("Scrolling")], selected: countIndex) { index in
                         fit = index == 1
                         scroll = index == 2
+                    }
+                    if scroll {
+                        GlassToggle(title: tr("Three at a time"),
+                                    subtitle: tr("Three equal places, and a swipe moves on to the next three."),
+                                    isOn: $scrollThree)
                     }
                 } header: {
                     SectionHeader(tr("Words shown"), symbol: "text.line.first.and.arrowtriangle.forward", color: .blue)

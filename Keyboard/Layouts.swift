@@ -452,11 +452,15 @@ enum LayoutBuilder {
         row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: deleteWeight, isFunction: true))
         result.append(row3)
 
+        // The extra symbol keys (the Keys screen) sit between the space bar and the full stop, taking their room
+        // from the space bar (which never gets narrower than about two and a half keys).
+        let extras = Prefs.extraKeys.map { KeySpec(action: .character($0), title: $0, weight: 1.0) }
         result.append([
             KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true),
             KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true),
             KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0, alternates: commaAlternates(language)),
-            KeySpec(action: .space, title: language.displayName, weight: 3.9),
+            KeySpec(action: .space, title: language.displayName, weight: max(2.4, 3.9 - CGFloat(extras.count)))
+        ] + extras + [
             KeySpec(action: .character(language.fullStop), title: language.fullStop, weight: 1.0, alternates: dotAlternates(language)),
             KeySpec(action: .enter, title: returnTitle, symbol: "return.left", weight: 1.8, isFunction: true)
         ])

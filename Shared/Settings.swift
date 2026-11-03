@@ -40,6 +40,10 @@ enum SettingKey {
     // Layout and look
     static let numberRow = "hunkeys.numberRow"
     static let keyHints = "hunkeys.keyHints"
+    /// Symbols that get their own key on the letters page, next to the full stop (e.g. "@").
+    static let extraKeys = "hunkeys.extraKeys"
+    /// No backdrop behind the keys: only the keys themselves are drawn.
+    static let transparentBackground = "hunkeys.transparentBackground"
     static let theme = "hunkeys.theme"
     /// The theme editor's changes to the designed themes (ThemeEdits: JSON by theme id; "" for none).
     static let themeEdits = "hunkeys.themeEdits"
@@ -69,6 +73,7 @@ enum SettingKey {
     static let suggestionHeight = "hunkeys.suggestionHeight"
     static let suggestionFit = "hunkeys.suggestionFit"
     static let suggestionScroll = "hunkeys.suggestionScroll"
+    static let suggestionScrollThree = "hunkeys.suggestionScrollThree"
     static let suggestionDelay = "hunkeys.suggestionDelay"
     static let suggestionTransition = "hunkeys.suggestionTransition"
     static let suggestionTransitionDuration = "hunkeys.suggestionTransitionDuration"
@@ -143,9 +148,9 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, numberRow, keyHints, extraKeys, transparentBackground,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
-        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
         emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay, keyboardTools,
@@ -192,6 +197,8 @@ enum SettingDefault {
     static let hitMapStrength = 0.7
     static let numberRow = false
     static let keyHints = true
+    static let extraKeys = ""
+    static let transparentBackground = false
     static let theme = "native"
     static let themeEdits = ""
     static let appLanguage = "system"
@@ -229,6 +236,8 @@ enum SettingDefault {
     static let suggestionHeight: Double = 44.0
     static let suggestionFit: Bool = false
     static let suggestionScroll: Bool = false
+    /// The scrolling bar shows three words at a time (and scrolls a page of three at a time).
+    static let suggestionScrollThree: Bool = false
     static let suggestionDelay: Double = 0.15
     /// How new words replace the old ones: "instant", "fade", "rise", "slide" or "pop".
     static let suggestionTransition: String = "instant"
@@ -414,6 +423,8 @@ final class Settings {
             SettingKey.hitMapStrength: SettingDefault.hitMapStrength,
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
+            SettingKey.extraKeys: SettingDefault.extraKeys,
+            SettingKey.transparentBackground: SettingDefault.transparentBackground,
             SettingKey.theme: SettingDefault.theme,
             SettingKey.themeEdits: SettingDefault.themeEdits,
             SettingKey.appLanguage: SettingDefault.appLanguage,
@@ -448,6 +459,7 @@ final class Settings {
             SettingKey.suggestionHeight: SettingDefault.suggestionHeight,
             SettingKey.suggestionFit: SettingDefault.suggestionFit,
             SettingKey.suggestionScroll: SettingDefault.suggestionScroll,
+            SettingKey.suggestionScrollThree: SettingDefault.suggestionScrollThree,
             SettingKey.suggestionDelay: SettingDefault.suggestionDelay,
             SettingKey.suggestionTransition: SettingDefault.suggestionTransition,
             SettingKey.suggestionTransitionDuration: SettingDefault.suggestionTransitionDuration,
@@ -615,6 +627,16 @@ final class Settings {
         set { put(newValue, SettingKey.keyHints) }
     }
 
+    /// The extra symbol keys, in order (one character each; at most `Settings.extraKeysLimit`).
+    var extraKeys: [String] {
+        return Array((readString(SettingKey.extraKeys) ?? SettingDefault.extraKeys).map { String($0) }.prefix(Settings.extraKeysLimit))
+    }
+    static let extraKeysLimit = 3
+    /// Symbols offered for the extra keys (the Keys screen).
+    static let extraKeyChoices = ["@", "#", "/", "-", "_", "&", "?", "!", ":", "'", "$", "*"]
+
+    var transparentBackground: Bool { return readBool(SettingKey.transparentBackground) }
+
     /// A theme id from `ThemeCatalog` ("native" by default; unknown ids fall back to native).
     var theme: String {
         get { return ThemeCatalog.theme(id: readString(SettingKey.theme) ?? SettingDefault.theme).id }
@@ -685,6 +707,7 @@ final class Settings {
     var suggestionHeight: Double { return clamp(readDouble(SettingKey.suggestionHeight), Settings.suggestionHeightRange) }
     var suggestionFit: Bool { return readBool(SettingKey.suggestionFit) }
     var suggestionScroll: Bool { return readBool(SettingKey.suggestionScroll) }
+    var suggestionScrollThree: Bool { return readBool(SettingKey.suggestionScrollThree) }
     var suggestionDelay: Double { return clamp(readDouble(SettingKey.suggestionDelay), Settings.suggestionDelayRange) }
     var suggestionTransitionDuration: Double { return clamp(readDouble(SettingKey.suggestionTransitionDuration), Settings.suggestionTransitionDurationRange) }
     var suggestionTransition: String { return readString(SettingKey.suggestionTransition) ?? SettingDefault.suggestionTransition }

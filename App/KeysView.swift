@@ -26,6 +26,7 @@ struct KeysView: View {
     @AppStorage(SettingKey.hintSize, store: SharedStore.defaults) private var hintSize = SettingDefault.hintSize
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
+    @AppStorage(SettingKey.extraKeys, store: SharedStore.defaults) private var extraKeys = SettingDefault.extraKeys
 
     // MARK: Presets
 
@@ -45,6 +46,33 @@ struct KeysView: View {
     private let gaps: [(key: Double, row: Double)] = [(4, 8), (6, 11), (8, 14), (10, 17)]
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
+
+    /// A symbol on (in the order picked) or off; at most `Settings.extraKeysLimit` at once.
+    private func symbolChip(_ symbol: String) -> some View {
+        let isOn = extraKeys.contains(symbol)
+        let isFull = extraKeys.count >= Settings.extraKeysLimit
+        let accent = Color.currentAccent(name: accentName, hex: accentHex)
+        return Button {
+            Feedback.choose()
+            if isOn {
+                extraKeys = extraKeys.replacingOccurrences(of: symbol, with: "")
+            } else if !isFull {
+                extraKeys += symbol
+            }
+        } label: {
+            Text(symbol)
+                .font(.title3.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .foregroundColor(isOn ? .white : .primary)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isOn ? accent : Color.primary.opacity(0.08)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!isOn && isFull)
+        .opacity(!isOn && isFull ? 0.45 : 1)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
 
     private var styleIndex: Int? {
         return styles.firstIndex {
@@ -211,6 +239,20 @@ struct KeysView: View {
                 SectionHeader(tr("Space bar"), symbol: "space", color: .gray)
             } footer: {
                 Text(tr("The space bar shows the language you're typing in."))
+            }
+            .glassRows()
+
+            Section {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
+                    ForEach(Settings.extraKeyChoices, id: \.self) { symbol in
+                        symbolChip(symbol)
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
+            } footer: {
+                Text(tr("Up to three symbols get their own key next to the full stop on the letters page."))
             }
             .glassRows()
         }

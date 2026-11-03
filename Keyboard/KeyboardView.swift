@@ -4,7 +4,13 @@ protocol KeyboardViewDelegate: AnyObject {
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction)
     func keyboardView(_ view: KeyboardView, didSelectAlternate text: String)
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int)
+    /// Sliding left from backspace: the slide began (`DidBeginWordDelete`), went one word further left
+    /// (`DidRequestDeleteWord`) or one word back right (`DidRequestRestoreWord`: the last deleted word comes back),
+    /// and the finger lifted (`DidEndWordDelete`).
+    func keyboardViewDidBeginWordDelete(_ view: KeyboardView)
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView)
+    func keyboardViewDidRequestRestoreWord(_ view: KeyboardView)
+    func keyboardViewDidEndWordDelete(_ view: KeyboardView)
     func keyboardViewDidHoldEmoji(_ view: KeyboardView)
     /// A quick horizontal swipe on the space bar: +1 = next language, -1 = previous.
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int)
@@ -22,7 +28,8 @@ protocol KeyboardViewDelegate: AnyObject {
 ///  - several fingers can type at once,
 ///  - holding a key shows its accents / alternatives (after the user's hold delay),
 ///  - holding the space bar and sliding moves the text cursor,
-///  - sliding left from backspace deletes word by word,
+///  - sliding left from backspace deletes word by word (and sliding back right puts the words back), with the
+///    other keys faded and backspace stretched across its row while the finger is down,
 ///  - dragging across the letter keys is recognised as swipe typing (handed between thumbs, and committed word by
 ///    word when it glides through the space bar),
 ///  - a short flick up on a letter types it in capitals, a flick down its first accent (one that goes on becomes a swipe),
@@ -60,6 +67,8 @@ final class KeyboardView: UIView {
     private let sideButton = UIButton(type: .system)
     /// Where the keys are across the view (the one-handed keyboard leaves one side empty).
     private var keysSpan: ClosedRange<CGFloat>?
+    /// While deleting words, the backspace key that is stretched across its whole row.
+    private var wordDeleteKey: KeyView?
 
     private final class TouchState {
         var key: KeyView?
@@ -356,7 +365,12 @@ final class KeyboardView: UIView {
                 let hit = CGRect(x: x, y: y, width: width, height: rowHeight)
                 rects.append(hit)
                 let key = keyViews[r][c]
-                if key.transform == .identity {
+                if key === wordDeleteKey {
+                    // The whole row (bounds and centre: the key may be scaled by its press effect).
+                    let rowRect = CGRect(x: leftPadding, y: y, width: keysWidth, height: rowHeight).insetBy(dx: keyInset, dy: rowInset)
+                    key.bounds.size = rowRect.size
+                    key.center = CGPoint(x: rowRect.midX, y: rowRect.midY)
+                } else if key.transform == .identity {
                     key.frame = hit.insetBy(dx: keyInset, dy: rowInset)   // drawn size; the touch area is the whole cell
                 }
                 key.syncHalo()
@@ -755,6 +769,11 @@ final class KeyboardView: UIView {
             showPreview(for: otherKey)
         }
 
+        if state.isWordDeleting {
+            setWordDeleteAppearance(nil)
+            delegate?.keyboardViewDidEndWordDelete(self)
+            return
+        }
         if state.isCursorMode {
             setCursorAppearance(false)
             // Held past the hold delay but never slid: it was an ordinary (slow) tap on the space bar.
@@ -833,6 +852,10 @@ final class KeyboardView: UIView {
         commitPendingSwipe()
         let ending = states.filter { $0.value.isSwiping || $0.value.popupActive || $0.value.isCursorMode || $0.value.isWordDeleting }
         for touch in ending.keys { states.removeValue(forKey: touch) }
+        if ending.values.contains(where: { $0.isWordDeleting }) {
+            wordDeleteKey = nil
+            delegate?.keyboardViewDidEndWordDelete(self)
+        }
         for state in ending.values.map({ $0 }) + Array(states.values) {
             state.holdTimer?.invalidate()
             state.holdTimer = nil
@@ -884,22 +907,54 @@ final class KeyboardView: UIView {
 
     // MARK: Delete words (slide left from backspace)
 
+    /// Like the space bar's trackpad: once the slide starts, the other keys fade and backspace stretches across its
+    /// row. Every word's width further left deletes a word; sliding back right puts them back, newest first.
     private func slideFromBackspace(_ state: TouchState, to point: CGPoint) {
         guard Prefs.deleteSwipe else { return }
         let dx = point.x - state.startPoint.x
         let activation: CGFloat = 26
-        guard dx < -activation else { return }
 
         if !state.isWordDeleting {
+            guard dx < -activation else { return }
             state.isWordDeleting = true
             state.holdTimer?.invalidate()
             state.repeatTimer?.invalidate()
+            hidePreview()
+            delegate?.keyboardViewDidBeginWordDelete(self)
+            setWordDeleteAppearance(state.key)
         }
-        let steps = Int((-dx - activation) / 38) + 1
+        let steps = dx < -activation ? Int((-dx - activation) / 38) + 1 : 0
         while state.wordSteps < steps {
             state.wordSteps += 1
             delegate?.keyboardViewDidRequestDeleteWord(self)
             Haptics.shared.tick()
+        }
+        while state.wordSteps > steps {
+            state.wordSteps -= 1
+            delegate?.keyboardViewDidRequestRestoreWord(self)
+            Haptics.shared.tick()
+        }
+    }
+
+    /// Fades every key's glyphs but `key`'s and stretches `key` across its row (nil puts everything back).
+    private func setWordDeleteAppearance(_ key: KeyView?) {
+        let stretched = wordDeleteKey
+        wordDeleteKey = key
+        if let key = key { key.superview?.bringSubviewToFront(key) }
+        UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+            for row in self.keyViews {
+                for other in row {
+                    other.setContentAlpha(key == nil || other === key ? 1.0 : 0.12)
+                }
+            }
+            // Back to its own cell, even while its press effect still scales it (layoutSubviews leaves those alone).
+            if let old = stretched, old !== key, let cell = self.hitRect(of: old) {
+                let drawn = cell.insetBy(dx: CGFloat(Prefs.keyGap) / 2, dy: CGFloat(Prefs.rowGap) / 2)
+                old.bounds.size = drawn.size
+                old.center = CGPoint(x: drawn.midX, y: drawn.midY)
+            }
+            self.setNeedsLayout()
+            self.layoutIfNeeded()
         }
     }
 

@@ -8,6 +8,7 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
+    @AppStorage(SettingKey.transparentBackground, store: SharedStore.defaults) private var transparent = SettingDefault.transparentBackground
     @Environment(\.openScreen) private var openScreen
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
@@ -62,6 +63,12 @@ struct ThemesView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())
+            GlassToggle(title: tr("Transparent background"),
+                        subtitle: tr("No backdrop behind the keys, with every theme: the keys stay as they are."),
+                        isOn: $transparent, tapsAnywhere: true)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.06)))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -71,8 +78,7 @@ struct ThemesView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.headline)
             LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(themes, id: \.id) { base in
-                    let theme = ThemeCatalog.theme(id: base.id, edits: themeEdits)
+                ForEach(ThemeCatalog.themes(themes, edits: themeEdits), id: \.id) { theme in
                     ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
                         guard theme.id != themeID else { return }
                         Feedback.choose()
@@ -120,7 +126,11 @@ private struct ThemeCard: View {
                                 .padding(6)
                         }
                     }
-                    .shadow(color: Color.black.opacity(0.14), radius: 6, x: 0, y: 3)
+                    // The shadow of a plain card shape, not of the whole miniature keyboard (far cheaper to draw).
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.black)
+                            .shadow(color: Color.black.opacity(0.14), radius: 6, x: 0, y: 3))
                 HStack(spacing: 4) {
                     Text(theme.name)
                         .font(.subheadline.weight(isSelected ? .semibold : .regular))

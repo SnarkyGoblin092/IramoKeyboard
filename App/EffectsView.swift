@@ -457,8 +457,12 @@ struct EffectsView: View {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
                     .foregroundColor(.secondary)
-                    .contentShape(Rectangle())
+                    .contentShape(Circle())
             }
+            // The list's glass press highlight (blue, rounded rectangle) lingered after the menu closed; the menu
+            // keeps only the system's own round press.
+            .buttonStyle(.plain)
+            .contentShape(Circle())
         }
     }
 

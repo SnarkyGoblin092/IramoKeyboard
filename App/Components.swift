@@ -358,13 +358,17 @@ private struct GlassHighlight<S: InsettableShape>: View {
     let shape: S
     let pressed: Bool
 
+    // Only there while pressed: an invisible piece of glass under every row still costs a glass pass each frame.
     var body: some View {
-        Color.clear
-            .glassShape(shape, tint: Color.accentColor.opacity(0.22), interactive: true)
-            .overlay(GlassSheen(pressed: pressed, shape: shape))
-            .glassEdge(shape)
-            .scaleEffect(pressed ? 1 : 0.9)
-            .opacity(pressed ? 1 : 0)
+        ZStack {
+            if pressed {
+                Color.clear
+                    .glassShape(shape, tint: Color.accentColor.opacity(0.22), interactive: true)
+                    .overlay(GlassSheen(pressed: pressed, shape: shape))
+                    .glassEdge(shape)
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+        }
     }
 }
 
@@ -384,14 +388,20 @@ struct GlassSheen: View {
         self.shape = AnyInsettableShape(shape)
     }
 
+    // Only there while pressed: a blended layer, even a see-through one, makes everything under it composite
+    // off screen on every frame, which made scrolling past many buttons stutter.
     var body: some View {
         let light = scheme == .dark ? 0.28 : 0.55
-        shape
-            .fill(RadialGradient(colors: [Color.white.opacity(light), Color.accentColor.opacity(0.12), .clear],
-                                 center: .topLeading, startRadius: 0, endRadius: 220))
-            .overlay(shape.strokeBorder(Color.white.opacity(light), lineWidth: 1))
-            .blendMode(.plusLighter)
-            .opacity(pressed ? 1 : 0)
+        ZStack {
+            if pressed {
+                shape
+                    .fill(RadialGradient(colors: [Color.white.opacity(light), Color.accentColor.opacity(0.12), .clear],
+                                         center: .topLeading, startRadius: 0, endRadius: 220))
+                    .overlay(shape.strokeBorder(Color.white.opacity(light), lineWidth: 1))
+                    .blendMode(.plusLighter)
+                    .transition(.opacity)
+            }
+        }
     }
 }
 

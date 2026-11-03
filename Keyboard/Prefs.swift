@@ -20,6 +20,8 @@ final class Prefs {
     static var deleteSwipe = SettingDefault.deleteSwipe
     static var numberRow = SettingDefault.numberRow
     static var keyHints = SettingDefault.keyHints
+    static var extraKeys: [String] = []
+    static var transparentBackground = SettingDefault.transparentBackground
     static var keyHeight = SettingDefault.keyHeight
     static var landscapeSeparate = SettingDefault.landscapeSeparate
     static var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
@@ -41,6 +43,7 @@ final class Prefs {
     static var suggestionHeight = SettingDefault.suggestionHeight
     static var suggestionFit = SettingDefault.suggestionFit
     static var suggestionScroll = SettingDefault.suggestionScroll
+    static var suggestionScrollThree = SettingDefault.suggestionScrollThree
     static var suggestionDelay = SettingDefault.suggestionDelay
     static var suggestionTransition = SettingDefault.suggestionTransition
     static var suggestionTransitionDuration = SettingDefault.suggestionTransitionDuration
@@ -106,6 +109,8 @@ final class Prefs {
         deleteSwipe = s.deleteSwipe
         numberRow = s.numberRow
         keyHints = s.keyHints
+        extraKeys = s.extraKeys
+        transparentBackground = s.transparentBackground
         keyHeight = s.keyHeight
         landscapeSeparate = s.landscapeSeparate
         landscapeKeyHeight = s.landscapeKeyHeight
@@ -127,6 +132,7 @@ final class Prefs {
         suggestionHeight = s.suggestionHeight
         suggestionFit = s.suggestionFit
         suggestionScroll = s.suggestionScroll
+        suggestionScrollThree = s.suggestionScrollThree
         suggestionDelay = s.suggestionDelay
         suggestionTransition = s.suggestionTransition
         suggestionTransitionDuration = s.suggestionTransitionDuration

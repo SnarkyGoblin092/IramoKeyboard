@@ -277,9 +277,12 @@ struct ThemePreview: View {
             let height = proxy.size.height
             // Everything is measured in the keyboard's points and scaled to the preview's width.
             let s = width / 440
+            // Worked out once: each is rebuilt from the settings whenever it is read.
+            let rows = shownRows
+            let hints = self.hints
             let stripHeight = showsStrip ? CGFloat(suggestionHeight) * s : 0
             let verticalPadding = 4 * s
-            let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / CGFloat(max(keyRows.count, 1)))
+            let rowHeight = max(1, (height - stripHeight - verticalPadding * 2) / CGFloat(max(rows.count, 1)))
             let keyHeight = max(1, rowHeight - CGFloat(rowGap) * s)
             // A narrower keyboard (the Width setting) is centred; the one-handed one sits against its side
             // (as KeyboardView.layoutSubviews, 80% of the width).
@@ -292,8 +295,8 @@ struct ThemePreview: View {
                 VStack(spacing: 0) {
                     if showsStrip { strip(height: stripHeight, scale: s) }
                     VStack(spacing: 0) {
-                        ForEach(0..<shownRows.count, id: \.self) { index in
-                            row(shownRows[index], rowIndex: index, rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
+                        ForEach(0..<rows.count, id: \.self) { index in
+                            row(rows[index], hints: hints, rowWidth: rowWidth, rowHeight: rowHeight, keyHeight: keyHeight, scale: s)
                         }
                     }
                     .offset(x: shift)
@@ -315,7 +318,7 @@ struct ThemePreview: View {
 
     /// A row as KeyboardView lays it out: each key's touch cell is its share of the width by weight, and the
     /// key is drawn half the key gap in from each side of its cell and half the row gap from the top and bottom.
-    private func row(_ keys: [PreviewKey], rowIndex: Int, rowWidth: CGFloat, rowHeight: CGFloat, keyHeight: CGFloat,
+    private func row(_ keys: [PreviewKey], hints: [String: String], rowWidth: CGFloat, rowHeight: CGFloat, keyHeight: CGFloat,
                      scale s: CGFloat) -> some View {
         let total = keys.reduce(CGFloat(0)) { $0 + $1.weight }
         let unit = rowWidth / max(total, 1)
@@ -327,7 +330,7 @@ struct ThemePreview: View {
                     if k.spacer {
                         Color.clear
                     } else {
-                        key(k, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s)
+                        key(k, hints: hints, width: max(1, cell - CGFloat(keyGap) * s), height: keyHeight, scale: s)
                     }
                 }
                 .frame(width: cell, height: rowHeight)
@@ -423,7 +426,7 @@ struct ThemePreview: View {
         }
     }
 
-    private func key(_ k: PreviewKey, width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
+    private func key(_ k: PreviewKey, hints: [String: String], width: CGFloat, height: CGFloat, scale s: CGFloat) -> some View {
         // Theme.keyCornerRadius: the roundness share of half the key's shorter side.
         let radius = look.radius(width: width, height: height)
         let tint: Color = k.accent ? onAccent : textColor

@@ -400,16 +400,24 @@ enum ThemeCatalog {
 
     /// The theme with the editor's changes in `edits` (the stored `SettingKey.themeEdits`).
     static func theme(id: String, edits: String) -> ThemeDefinition {
-        var theme = base(id: id)
-        if theme.style != nil, let style = ThemeEdits.decode(edits)[theme.id] {
-            theme.style = style
-            theme.isEdited = true
-        } else if theme.style == nil,
-                  let style = SystemEdits.decode(SharedStore.defaults.string(forKey: SettingKey.systemEdits) ?? "")[theme.id] {
-            theme.systemStyle = style
-            theme.isEdited = true
+        return themes([base(id: id)], edits: edits)[0]
+    }
+
+    /// Several themes with the stored edits, which are decoded once for all of them.
+    static func themes(_ bases: [ThemeDefinition], edits: String) -> [ThemeDefinition] {
+        let designedEdits = ThemeEdits.decode(edits)
+        let systemEdits = SystemEdits.decode(SharedStore.defaults.string(forKey: SettingKey.systemEdits) ?? "")
+        return bases.map { base in
+            var theme = base
+            if theme.style != nil, let style = designedEdits[theme.id] {
+                theme.style = style
+                theme.isEdited = true
+            } else if theme.style == nil, let style = systemEdits[theme.id] {
+                theme.systemStyle = style
+                theme.isEdited = true
+            }
+            return theme
         }
-        return theme
     }
 
     /// The theme with the stored edits.
