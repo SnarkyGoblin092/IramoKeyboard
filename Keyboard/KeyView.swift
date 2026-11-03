@@ -147,10 +147,20 @@ final class KeyView: UIView {
     func reuse(as newSpec: KeySpec) {
         spec = newSpec
         hintLabel.text = newSpec.hint
-        lastGlassState = ""   // a fresh piece of glass with the right tint, not one the container blended
         configureContent()
         refreshAppearance()
         setNeedsLayout()
+    }
+
+    /// What this key's effects are still playing, before it goes (KeyEffectPlayer.Handover).
+    func effectsHandover() -> KeyEffectPlayer.Handover {
+        return effects.handover()
+    }
+
+    /// Goes on with another key's effects, as if it were that key (after this key is laid out).
+    func takeEffects(_ handover: KeyEffectPlayer.Handover) {
+        syncEffects()
+        effects.take(handover)
     }
 
     func setIcon(_ symbolName: String) {

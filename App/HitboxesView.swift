@@ -45,7 +45,7 @@ struct HitboxesView: View {
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
         PinnedPreview(id: "hitboxes", height: 260, fills: true) {
-            LiveKeyboard()
+            LiveKeyboard(showsHitboxes: true)
         } content: {
         GlassList {
             Section {
@@ -88,7 +88,7 @@ struct HitboxesView: View {
             } header: {
                 SectionHeader(tr("Adaptive keys"), symbol: "sparkles", color: .purple)
             } footer: {
-                Text(tr("The middle of a key always types that key, however the room around it shifts."))
+                Text(tr("The middle of a key always types that key, however the room around it shifts. Type a few letters on the keyboard above to see the room change."))
             }
             .glassRows()
 

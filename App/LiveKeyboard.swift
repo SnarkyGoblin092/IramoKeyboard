@@ -10,6 +10,9 @@ import UIKit.UIGestureRecognizerSubclass
 struct LiveKeyboard: View {
     /// The Effects screen's settings as they are being edited (nil: the stored ones).
     var effects: EffectsConfig? = nil
+    /// The Hitboxes screen: the touch areas drawn over the keys (HitboxOverlay), and the letters typed on the
+    /// preview drive adaptive keys as they do while typing.
+    var showsHitboxes = false
 
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
@@ -25,7 +28,7 @@ struct LiveKeyboard: View {
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode))
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
-                LiveKeyboardHost(effects: effects)
+                LiveKeyboardHost(effects: effects, showsHitboxes: showsHitboxes)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(look.backdrop(scale: scale)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -41,16 +44,19 @@ struct LiveKeyboard: View {
 
 private struct LiveKeyboardHost: UIViewRepresentable {
     let effects: EffectsConfig?
+    let showsHitboxes: Bool
 
     func makeUIView(context: Context) -> LiveKeyboardView {
         let view = LiveKeyboardView()
         view.effectsOverride = effects
+        view.showsHitboxes = showsHitboxes
         return view
     }
 
     func updateUIView(_ view: LiveKeyboardView, context: Context) {
         // Read by the keys at every press (KeyView.syncEffects), so a change shows on the next one.
         view.effectsOverride = effects
+        view.showsHitboxes = showsHitboxes
     }
 }
 
@@ -75,6 +81,17 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     var effectsOverride: EffectsConfig? {
         didSet { applyEffects() }
     }
+
+    /// The Hitboxes screen's preview (LiveKeyboard.showsHitboxes).
+    var showsHitboxes = false {
+        didSet { if showsHitboxes != oldValue { updateHitboxes() } }
+    }
+    private let hitboxOverlay = HitboxOverlay()
+    /// The word typed on the preview so far (the Hitboxes screen), which adaptive keys follow.
+    private var typed = ""
+    /// The dictionaries adaptive keys read, loaded once for every preview.
+    private static var stores: [Language: WordStore] = [:]
+    private static var loadingStores = Set<Language>()
 
     /// The keyboard's size (KeyboardViewController.applyHeight, upright): the screen's width, and the bar above its
     /// rows of keys with the gap between them.
@@ -151,9 +168,89 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         stage.overrideUserInterfaceStyle = Theme.interfaceStyle
         stage.addSubview(bar)
         stage.addSubview(keyboard)
+        stage.addSubview(hitboxOverlay)
+        hitboxOverlay.keyboard = keyboard
+        hitboxOverlay.tintColor = UIColor(Color.currentAccent(name: Settings.shared.accentName,
+                                                             hex: SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? ""))
         layoutStage()
         loadRows()
-        bar.update(starters.map { Suggestion(text: $0, kind: .word) })
+        showWords()
+    }
+
+    /// The bar: the word typed on the Hitboxes preview, else the fixed words.
+    private func showWords() {
+        if showsHitboxes && !typed.isEmpty {
+            bar.update([Suggestion(text: typed, kind: .literal)])
+        } else {
+            bar.update(starters.map { Suggestion(text: $0, kind: .word) })
+        }
+    }
+
+    // MARK: Hitboxes
+
+    /// The keyboard's touch areas as they are while typing (KeyboardViewController.applyHitMap and
+    /// updateAdaptiveHitboxes), drawn over the keys. Off the Hitboxes screen the preview keeps the plain areas.
+    private func updateHitboxes() {
+        hitboxOverlay.isHidden = !showsHitboxes
+        guard showsHitboxes else {
+            keyboard.letterBias = [:]
+            keyboard.hitOffsets = [:]
+            return
+        }
+        keyboard.hitOffsets = Prefs.hitMap ? HitMap(language: language).offsets(strength: Prefs.hitMapStrength) : [:]
+        keyboard.letterBias = adaptiveBias()
+        hitboxOverlay.setNeedsDisplay()
+    }
+
+    /// Adaptive keys for the word typed so far: the same sums as the keyboard's (updateAdaptiveHitboxes).
+    private func adaptiveBias() -> [Character: CGFloat] {
+        guard Prefs.adaptiveHitboxes, Prefs.adaptiveStrength > 0, page == .letters, language.supports(.keyLearning),
+              let store = loadedStore() else { return [:] }
+        let weights = (typed.isEmpty && !Prefs.adaptiveWordStart) ? [:] : store.nextLetterWeights(after: typed)
+        guard let top = weights.values.max(), top > 0 else { return [:] }
+        let strength = Prefs.adaptiveStrength
+        var bias: [Character: CGFloat] = [:]
+        for letter in keyboard.letterCenters().keys {
+            let share = ((weights[letter] ?? 0) / top).squareRoot()
+            bias[letter] = CGFloat(1 + strength * (share * Prefs.adaptiveGrow - (1 - share) * Prefs.adaptiveShrink))
+        }
+        return bias
+    }
+
+    /// The language's dictionary, or nil while it loads (in the background; the areas are drawn again after).
+    private func loadedStore() -> WordStore? {
+        let target = language
+        if let store = LiveKeyboardView.stores[target], store.isLoaded { return store }
+        guard !LiveKeyboardView.loadingStores.contains(target) else { return nil }
+        LiveKeyboardView.loadingStores.insert(target)
+        let store = LiveKeyboardView.stores[target] ?? WordStore(language: target)
+        LiveKeyboardView.stores[target] = store
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let parsed = WordStore.parse(language: target, limit: 30_000)
+            DispatchQueue.main.async {
+                store.apply(parsed)
+                LiveKeyboardView.loadingStores.remove(target)
+                self?.updateHitboxes()
+            }
+        }
+        return nil
+    }
+
+    /// A key typed on the Hitboxes preview: letters make the word, anything else ends it.
+    private func noteTyped(_ action: KeyAction) {
+        guard showsHitboxes else { return }
+        switch action {
+        case .character(let text) where text.count == 1 && text.first?.isLetter == true:
+            typed += text.lowercased()
+        case .backspace:
+            if !typed.isEmpty { typed.removeLast() }
+        case .shift, .showLetters, .showNumbers, .showSymbols, .emoji, .spacer:
+            return
+        default:
+            typed = ""
+        }
+        showWords()
+        updateHitboxes()
     }
 
     private func applyEffects() {
@@ -174,6 +271,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         if KeyboardLayoutMode.split { rows = LayoutBuilder.split(rows) }
         keyboard.typingLanguage = language
         keyboard.configure(rows: rows, page: page, shift: shift)
+        updateHitboxes()
     }
 
     @objc private func settingsChanged() {
@@ -192,7 +290,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Settings.shared.refresh()
             Prefs.refresh()
             self.applyEffects()
-            if self.signature() != self.builtSignature { self.rebuild() }
+            if self.signature() != self.builtSignature { self.rebuild() } else { self.updateHitboxes() }
         }
     }
 
@@ -242,6 +340,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         let keysFrame = CGRect(x: 0, y: barHeight, width: size.width, height: size.height - barHeight)
         if bar.frame != barFrame { bar.frame = barFrame }
         if keyboard.frame != keysFrame { keyboard.frame = keysFrame }
+        if hitboxOverlay.frame != keysFrame {
+            hitboxOverlay.frame = keysFrame
+            hitboxOverlay.setNeedsDisplay()
+        }
         let scale = min(bounds.width / size.width, bounds.height / size.height)
         guard scale.isFinite, scale > 0 else { return }
         stage.center = CGPoint(x: bounds.midX, y: bounds.midY)
@@ -251,6 +353,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     // MARK: KeyboardViewDelegate
 
     func keyboardView(_ view: KeyboardView, didTap action: KeyAction) {
+        noteTyped(action)
         switch action {
         case .character:
             if shift == .once {
@@ -289,7 +392,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     func keyboardViewDidHoldEmoji(_ view: KeyboardView) {}
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {}
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {}
-    func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {}
+    func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {
+        noteTyped(.space)   // a swiped word ends the one being typed
+    }
     func keyboardViewDidCancelSwipe(_ view: KeyboardView) {}
 
     /// Swiping draws its trail (the Swipe trail effect) whenever swipe typing is on.

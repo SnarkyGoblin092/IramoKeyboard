@@ -206,18 +206,25 @@ final class KeyboardView: UIView {
         // A page key (123, ABC, #+=) in the place of one on the old page stays the same key with its new title: the
         // press effects it just started play on instead of vanishing with the old page. Rows are matched from the
         // bottom (a number row on the letters page only adds one at the top).
+        // With real Liquid Glass the key is made anew (new glass pieces added to the shared container next to one
+        // that stays all took on the accent tint of the return key), and the new one goes on with the old one's
+        // effects (`handovers`), so it still looks like the same key.
         var kept: [Int: [Int: KeyView]] = [:]
+        var handovers: [Int: [Int: KeyEffectPlayer.Handover]] = [:]
         for (r, row) in newRows.enumerated() {
             let oldR = oldRows.count - (newRows.count - r)
             guard oldR >= 0, oldR < oldRows.count else { continue }
             for (c, spec) in row.enumerated() where spec.action.switchesPage && c < oldRows[oldR].count {
                 let old = oldRows[oldR][c]
-                if old.spec.action.switchesPage { kept[r, default: [:]][c] = old }
+                guard old.spec.action.switchesPage else { continue }
+                if Theme.usesRealGlass {
+                    handovers[r, default: [:]][c] = old.effectsHandover()
+                } else {
+                    kept[r, default: [:]][c] = old
+                }
             }
         }
         let keptIDs = Set(kept.values.flatMap { $0.values }.map { ObjectIdentifier($0) })
-        // The old keys go before the new ones are added: Liquid Glass pieces sharing the container with the old
-        // page's keys took on their tints (every key turned the accent colour of the return key).
         for row in oldRows {
             for key in row where !keptIDs.contains(ObjectIdentifier(key)) {
                 key.detachHalo()
@@ -254,6 +261,11 @@ final class KeyboardView: UIView {
         applyReturnProminence()
         setNeedsLayout()
         layoutIfNeeded()   // hit areas must match the new rows before the next touch
+        for (r, columns) in handovers {
+            for (c, handover) in columns where r < keyViews.count && c < keyViews[r].count {
+                keyViews[r][c].takeEffects(handover)
+            }
+        }
     }
 
     func setShift(_ newShift: ShiftState) {
@@ -476,6 +488,16 @@ final class KeyboardView: UIView {
         let base = (row: bestRow, col: col)
         return shapesHitboxes ? shapedKeyIndex(at: point, base: base) : base
     }
+
+    /// Which key a touch at `point` counts as (with every hitbox setting), for the app's drawing of the touch areas:
+    /// its place in the rows, and the letter it types (nil for the other keys).
+    func touchArea(at point: CGPoint) -> (id: Int, letter: Character?)? {
+        guard let index = keyIndex(at: point), index.row < rows.count, index.col < rows[index.row].count else { return nil }
+        return (index.row * 1000 + index.col, letter(of: rows[index.row][index.col]))
+    }
+
+    /// Whether the touch areas are shaped on this page (they are the drawn cells otherwise).
+    var hitboxesShaped: Bool { return shapesHitboxes }
 
     // MARK: Hitbox shaping
 

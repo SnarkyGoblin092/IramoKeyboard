@@ -85,6 +85,70 @@ final class KeyEffectPlayer {
         fitters.append((layer, fit))
     }
 
+    // MARK: Handing over to another key
+
+    /// What a key is still playing, for the key made in its place (the page key on the next page), so the effects
+    /// go on there as if it were the same key.
+    struct Handover {
+        fileprivate let glowColor: CGColor?
+        fileprivate let glowOpacity: Float
+        fileprivate let glowAnimations: [(String, CAAnimation)]
+        fileprivate let keyMoves: [(String, CAAnimation)]
+        fileprivate let followerMoves: [[(String, CAAnimation)]]
+        fileprivate let labelMoves: [[(String, CAAnimation)]]
+        fileprivate let drawn: [(layer: CALayer, fit: (CGRect, CGFloat) -> Void)]
+    }
+
+    /// A layer's animations (those whose key starts with `prefix`), with the time they began, so added to another
+    /// layer they carry on from where they are.
+    private static func animations(of layer: CALayer?, prefix: String? = nil) -> [(String, CAAnimation)] {
+        guard let layer = layer else { return [] }
+        return (layer.animationKeys() ?? []).compactMap { key in
+            guard prefix.map({ key.hasPrefix($0) }) ?? true, let animation = layer.animation(forKey: key) else { return nil }
+            return (key, animation)
+        }
+    }
+
+    /// Taken before the key goes away.
+    func handover() -> Handover {
+        fitters.removeAll { $0.layer.superlayer == nil }
+        let light = pressGlow?.sublayers?.first
+        return Handover(glowColor: light?.shadowColor,
+                        glowOpacity: pressGlow?.opacity ?? 0,
+                        glowAnimations: KeyEffectPlayer.animations(of: pressGlow),
+                        keyMoves: KeyEffectPlayer.animations(of: keyLayer, prefix: "move"),
+                        followerMoves: followers().map { KeyEffectPlayer.animations(of: $0, prefix: "move") },
+                        labelMoves: labelLayers().map { KeyEffectPlayer.animations(of: $0, prefix: "move") },
+                        drawn: fitters)
+    }
+
+    /// Goes on with what the old key was playing: its glow, its moves and the effects drawn on it (moved over as
+    /// they are, still running). Call after the key is laid out.
+    func take(_ handover: Handover) {
+        if let color = handover.glowColor {
+            let glow = glowLayer()
+            layoutGlow()
+            for light in glow.sublayers ?? [] { light.shadowColor = color }
+            glow.opacity = handover.glowOpacity
+            for (key, animation) in handover.glowAnimations { glow.add(animation, forKey: key) }
+        }
+        if let target = keyLayer {
+            for item in handover.drawn {
+                item.layer.removeFromSuperlayer()
+                target.addSublayer(item.layer)
+                fitters.append(item)
+            }
+            for (key, animation) in handover.keyMoves { target.add(animation, forKey: key) }
+        }
+        for (layer, moves) in zip(followers(), handover.followerMoves) {
+            for (key, animation) in moves { layer.add(animation, forKey: key) }
+        }
+        for (layer, moves) in zip(labelLayers(), handover.labelMoves) {
+            for (key, animation) in moves { layer.add(animation, forKey: key) }
+        }
+        refit()
+    }
+
     /// The key changed size (the stretched backspace): the glow and everything still playing on it follow, so
     /// outlines, flashes, shines and the rest always cover the key as it is now.
     func refit() {
