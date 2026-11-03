@@ -466,6 +466,15 @@ struct EffectsConfig: Hashable, Codable {
 
     // MARK: The catalog's effects
 
+    /// How many effects are on: the built-in ones and the catalog's.
+    var activeCount: Int {
+        let flags = [glow, border, ripple, shine, sparks, pop, echo, wave, shockwave, confetti, bubbles, squish,
+                     flash, jelly, hearts, stars, snow, notes, fireworks, starburst, rain, embers, smoke, lightning,
+                     orbit, spiral, heartbeat, flip, shake, drop, glitch, underline, sweep, trail]
+        let known = Set(EffectCatalog.all.map { $0.id })
+        return flags.filter { $0 }.count + Set(moreOn).filter { known.contains($0) }.count
+    }
+
     func isOn(_ id: String) -> Bool { return moreOn.contains(id) }
 
     mutating func setOn(_ id: String, _ on: Bool) {

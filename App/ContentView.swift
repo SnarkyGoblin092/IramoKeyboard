@@ -285,9 +285,7 @@ private struct LookSection: View {
     @AppStorage(SettingKey.effects, store: SharedStore.defaults) private var effectsJSON = SettingDefault.effects
 
     private var effectsSummary: String {
-        let effects = EffectsConfig.decode(effectsJSON)
-        let on = [effects.glow, effects.border, effects.ripple, effects.shine, effects.sparks, effects.pop,
-                  effects.echo, effects.wave, effects.trail].filter { $0 }.count
+        let on = EffectsConfig.decode(effectsJSON).activeCount
         return on == 0 ? tr("Off") : tr("%@ on", "\(on)")
     }
 

@@ -46,10 +46,14 @@ final class LiveEmojiPickerView: UIView, EmojiPanelDelegate {
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
 
-    /// The picker as the keyboard shows it on this phone, upright (KeyboardViewController.applyHeight).
+    /// The picker as the keyboard shows it on this phone, upright (KeyboardViewController.applyHeight): the
+    /// keyboard's own height, or taller when the picker needs more for its rows.
     static var naturalSize: CGSize {
-        let width = CGFloat(DeviceMetrics.portraitWidth)
-        return CGSize(width: width, height: EmojiPanel.requiredHeight(forWidth: width))
+        let s = Settings.shared
+        let keyboard = LiveKeyboardView.naturalSize(keyHeight: s.keyHeight, rowGap: s.rowGap, numberRow: s.numberRow,
+                                                    barHeight: s.suggestionHeight,
+                                                    language: LiveKeyboardView.openingLanguage(code: s.languageCode))
+        return CGSize(width: keyboard.width, height: max(keyboard.height, EmojiPanel.requiredHeight(forWidth: keyboard.width)))
     }
 
     override init(frame: CGRect) {
