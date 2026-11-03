@@ -110,24 +110,15 @@ struct HitboxesView: View {
 
 // MARK: - Hit map
 
-/// What the keyboard learned about where the user taps: one dot per key, at the average tap position.
+/// What the keyboard learned about where the user taps (one map for every language, see HitMap); the preview's
+/// Hit map view shows where each key's room has moved.
 private struct HitMapSection: View {
     @Binding var isOn: Bool
     @Binding var strength: Double
 
-    @State private var language: Language = HitMapSection.currentLanguage()
     @State private var data: [String: [Double]] = [:]
     @State private var confirmReset = false
     @Environment(\.scenePhase) private var scenePhase
-
-    private static func currentLanguage() -> Language {
-        return Language(rawValue: Settings.shared.languageCode) ?? .english
-    }
-
-    private var languages: [Language] {
-        let enabled = Language.list(from: Settings.shared.enabledLanguages)
-        return enabled.contains(language) ? enabled : [language] + enabled
-    }
 
     private var samples: Int { return Int(data.values.reduce(0) { $0 + ($1.first ?? 0) }) }
     private var keysLearned: Int { return data.values.filter { ($0.first ?? 0) >= 8 }.count }
@@ -138,29 +129,6 @@ private struct HitMapSection: View {
             GlassToggle(title: tr("Learn my taps"),
                         subtitle: tr("Notices where you really tap each key and moves its room there."),
                         isOn: $isOn, feature: .keyLearning)
-            // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
-            // What was learned in that language, under its name.
-            HStack {
-                Label {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(tr("Language"))
-                        Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                    }
-                } icon: {
-                    Image(systemName: "globe")
-                }
-                Spacer()
-                Picker(tr("Language"), selection: $language) {
-                    ForEach(languages, id: \.self) { language in
-                        Text(language.localizedName).tag(language)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-            }
             GlassSlider(title: tr("Strength"), symbol: "dial.medium", value: $strength,
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
                 .disabled(!isOn)
@@ -168,9 +136,15 @@ private struct HitMapSection: View {
         } header: {
             SectionHeader(tr("Hit map"), symbol: "scope", color: .teal)
         } footer: {
-            Text(data.isEmpty
-                 ? tr("Nothing learned yet. Type on the keyboard and come back.")
-                 : tr("Each highlighted key shows where its room has moved to; a key moves once it has 8 taps."))
+            if data.isEmpty {
+                Text(tr("Nothing learned yet. Type on the keyboard and come back."))
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(tr("%1$@ taps learned \u{00B7} %2$@ keys moved", "\(samples)", "\(keysLearned)"))
+                        .monospacedDigit()
+                    Text(tr("Each highlighted key shows where its room has moved to; a key moves once it has 8 taps."))
+                }
+            }
         }
         .glassRows()
 
@@ -185,25 +159,23 @@ private struct HitMapSection: View {
             .disabled(data.isEmpty)
             .confirmationDialog(tr("Forget learned taps?"), isPresented: $confirmReset, titleVisibility: .visible) {
                 Button(tr("Forget"), role: .destructive) {
-                    Settings.shared.setHitMapData([:], for: language.rawValue)
+                    Settings.shared.setHitMapData([:])
                     data = [:]
                     Feedback.delete()
                 }
                 Button(tr("Cancel"), role: .cancel) {}
-            } message: {
-                Text(tr("Everything learned about your taps in %@ is forgotten.", "\(language.localizedName)"))
             }
             .glassOutsideCard()
         }
         .glassRows()
         }
         .onAppear { reload() }
-        .onChange(of: language) { _ in reload() }
         .onChange(of: scenePhase) { phase in if phase == .active { reload() } }
     }
 
     private func reload() {
         Settings.shared.refresh()
-        data = Settings.shared.hitMapData(for: language.rawValue)
+        HitMap.mergeLegacyMaps()
+        data = Settings.shared.hitMapData()
     }
 }

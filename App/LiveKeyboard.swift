@@ -207,7 +207,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             keyboard.hitOffsets = [:]
             return
         }
-        keyboard.hitOffsets = Prefs.hitMap ? HitMap(language: language).offsets(strength: Prefs.hitMapStrength) : [:]
+        keyboard.hitOffsets = Prefs.hitMap
+            ? HitMap().offsets(strength: Prefs.hitMapStrength, positions: keyboard.letterPositions()) : [:]
         keyboard.letterBias = adaptiveBias()
         hitboxOverlay.setNeedsDisplay()
     }

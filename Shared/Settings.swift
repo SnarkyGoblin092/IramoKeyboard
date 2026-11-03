@@ -37,7 +37,9 @@ enum SettingKey {
     static let adaptiveWordStart = "hunkeys.adaptiveWordStart"
     static let hitMap = "hunkeys.hitMap"
     static let hitMapStrength = "hunkeys.hitMapStrength"
-    /// language code -> the learned tap offsets (data written by the keyboard; not a preference).
+    /// The learned tap offsets, shared by every language (data written by the keyboard; not a preference).
+    static let hitMapShared = "hunkeys.hitMapShared"
+    /// language code -> an earlier build's tap offsets of that language (merged into hitMapShared, then removed).
     static let hitMapPrefix = "hunkeys.hitMapData."
     // Layout and look
     static let numberRow = "hunkeys.numberRow"
@@ -616,14 +618,31 @@ final class Settings {
     var hitMap: Bool { return readBool(SettingKey.hitMap) }
     var hitMapStrength: Double { return clamp(readDouble(SettingKey.hitMapStrength), 0...1) }
 
-    /// The hit map of a language: letter -> [taps, mean x offset, mean y offset] (offsets in key widths/heights,
-    /// from the key's centre to where the user actually taps it).
-    func hitMapData(for languageCode: String) -> [String: [Double]] {
-        return value(SettingKey.hitMapPrefix + languageCode) as? [String: [Double]] ?? [:]
+    /// The hit map, shared by every language: key position (HitMap.position) -> [taps, mean x offset, mean y offset]
+    /// (offsets in key widths/heights, from the key's centre to where the user actually taps it).
+    func hitMapData() -> [String: [Double]] {
+        return value(SettingKey.hitMapShared) as? [String: [Double]] ?? [:]
     }
 
-    func setHitMapData(_ data: [String: [Double]], for languageCode: String) {
-        put(data.isEmpty ? nil : data, SettingKey.hitMapPrefix + languageCode)
+    func setHitMapData(_ data: [String: [Double]]) {
+        put(data.isEmpty ? nil : data, SettingKey.hitMapShared)
+    }
+
+    /// Earlier builds' hit maps, one per language: language code -> letter -> [taps, mean x, mean y].
+    func legacyHitMaps() -> [String: [String: [Double]]] {
+        var maps: [String: [String: [Double]]] = [:]
+        for language in Language.allCases {
+            if let map = value(SettingKey.hitMapPrefix + language.rawValue) as? [String: [Double]], !map.isEmpty {
+                maps[language.rawValue] = map
+            }
+        }
+        return maps
+    }
+
+    func removeLegacyHitMaps() {
+        for language in Language.allCases where value(SettingKey.hitMapPrefix + language.rawValue) != nil {
+            put(nil, SettingKey.hitMapPrefix + language.rawValue)
+        }
     }
 
     /// Removes what the old adaptive key areas stored (the feature is gone).

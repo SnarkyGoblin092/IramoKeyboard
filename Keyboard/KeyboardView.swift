@@ -343,6 +343,22 @@ final class KeyboardView: UIView {
         return centers
     }
 
+    /// Where every letter key is, as the hit map learns it (HitMap.position): its letter row, its place among that
+    /// row's letters, and how many letters the row has.
+    func letterPositions() -> [Character: String] {
+        var positions: [Character: String] = [:]
+        var letterRow = 0
+        for row in rows {
+            let letters = row.compactMap { letter(of: $0) }
+            guard !letters.isEmpty else { continue }
+            for (index, letter) in letters.enumerated() where positions[letter] == nil {
+                positions[letter] = HitMap.position(row: letterRow, index: index, count: letters.count)
+            }
+            letterRow += 1
+        }
+        return positions
+    }
+
     func letterKeySize() -> CGSize {
         for (r, row) in rows.enumerated() {
             for (c, spec) in row.enumerated() {

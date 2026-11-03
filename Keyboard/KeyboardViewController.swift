@@ -32,8 +32,8 @@ final class KeyboardViewController: UIInputViewController {
     private var builtSignature = ""
 
     private var stores: [Language: WordStore] = [:]
-    /// Where the user really taps each key, per language (see HitMap).
-    private var hitMaps: [Language: HitMap] = [:]
+    /// Where the user really taps each key, the same for every language (see HitMap).
+    private var hitMapStore: HitMap?
     /// The language and word start the adaptive key areas were last worked out for.
     private var adaptiveFor: String?
     /// Swipes being decoded: key taps that come meanwhile wait, so they land after the swiped word.
@@ -232,7 +232,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         seenPersonalRevision = revision
         // The app may have reset the hit map or changed the hitbox settings.
-        hitMaps = [:]
+        hitMapStore = nil
         adaptiveFor = nil
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
@@ -275,7 +275,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         LearnedWords.shared.saveNow()
         for store in stores.values { store.saveNow() }
-        for map in hitMaps.values { map.saveNow() }
+        hitMapStore?.saveNow()
         var usage: [String: Double] = [:]
         for (language, value) in Decoder.languageUsage { usage[language.rawValue] = value }
         settings.setLanguageUsage(usage)
@@ -568,16 +568,17 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: Hitboxes
 
-    private func hitMap(for target: Language) -> HitMap {
-        if let map = hitMaps[target] { return map }
-        let map = HitMap(language: target)
-        hitMaps[target] = map
+    private func hitMap() -> HitMap {
+        if let map = hitMapStore { return map }
+        let map = HitMap()
+        hitMapStore = map
         return map
     }
 
     /// Moves the letter keys' touch centres to where the user really taps them.
     private func applyHitMap() {
-        keyboardView.hitOffsets = Prefs.hitMap ? hitMap(for: language).offsets(strength: Prefs.hitMapStrength) : [:]
+        keyboardView.hitOffsets = Prefs.hitMap
+            ? hitMap().offsets(strength: Prefs.hitMapStrength, positions: keyboardView.letterPositions()) : [:]
     }
 
     /// Learns from a finished word: each of its taps meant the letter of `word` in the same place (the word as
@@ -587,8 +588,8 @@ final class KeyboardViewController: UIInputViewController {
               language.supports(.keyLearning), word.count == typed.count, wordTaps.count == typed.count else { return }
         let points = wordTaps.compactMap { $0 }
         guard points.count == typed.count else { return }
-        hitMap(for: language).record(word: word, points: points,
-                                      centers: keyboardView.letterCenters(), keySize: keyboardView.letterKeySize())
+        hitMap().record(word: word, points: points, centers: keyboardView.letterCenters(),
+                        positions: keyboardView.letterPositions(), keySize: keyboardView.letterKeySize())
         applyHitMap()
     }
 
