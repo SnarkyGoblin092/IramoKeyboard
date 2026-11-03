@@ -112,8 +112,8 @@ private struct HeaderSection: View {
                             Text(tr("Open Settings"))
                                 .font(.subheadline.weight(.semibold))
                                 .frame(maxWidth: .infinity, minHeight: 40)
-                                .background(Capsule().fill(.tint))
                                 .foregroundColor(.white)
+                                .glassTile(Capsule(), isOn: true)
                         }
                         .buttonStyle(PressableStyle())
                     }

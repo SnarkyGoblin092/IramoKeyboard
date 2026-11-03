@@ -58,7 +58,7 @@ struct ThemesView: View {
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 46)
                     .foregroundColor(.white)
-                    .background(Capsule().fill(accent))
+                    .glassTile(Capsule(), isOn: true)
                     .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())

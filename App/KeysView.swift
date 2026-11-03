@@ -71,7 +71,6 @@ struct KeysView: View {
     private func symbolChip(_ symbol: String) -> some View {
         let isOn = extraKeys.contains(symbol)
         let isFull = extraKeys.count >= Settings.extraKeysLimit
-        let accent = Color.currentAccent(name: accentName, hex: accentHex)
         return Button {
             Feedback.choose()
             if isOn {
@@ -84,8 +83,7 @@ struct KeysView: View {
                 .font(.title3.weight(.medium))
                 .frame(maxWidth: .infinity, minHeight: 40)
                 .foregroundColor(isOn ? .white : .primary)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isOn ? accent : Color.primary.opacity(0.08)))
+                .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: isOn)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())

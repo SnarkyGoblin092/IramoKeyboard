@@ -83,6 +83,18 @@ private struct GlassEdge<S: InsettableShape>: ViewModifier {
     }
 }
 
+/// See `glassTile`: the accent is the user's (the Themes screen), read here so every tile follows it.
+private struct GlassTile<S: Shape>: ViewModifier {
+    let shape: S
+    let isOn: Bool
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    func body(content: Content) -> some View {
+        content.glassShape(shape, tint: isOn ? Color.currentAccent(name: accentName, hex: accentHex) : nil, interactive: true)
+    }
+}
+
 #if compiler(>=6.2)
 @available(iOS 26.0, *)
 private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
@@ -109,6 +121,12 @@ extension View {
         self.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
             .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))
         #endif
+    }
+
+    /// A tile or pill button's surface (the tab bars, option cards, symbol chips...): Liquid Glass that answers
+    /// the finger, tinted with the app's accent when it is the chosen one (`isOn`).
+    func glassTile<S: Shape>(_ shape: S, isOn: Bool) -> some View {
+        return modifier(GlassTile(shape: shape, isOn: isOn))
     }
 
     func glassEdge<S: InsettableShape>(_ shape: S) -> some View {

@@ -284,8 +284,7 @@ private struct EmojiTabBar: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 54)
                     .foregroundColor(isOn ? .white : .primary)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(.tertiarySystemFill))))
+                    .glassTile(RoundedRectangle(cornerRadius: 14, style: .continuous), isOn: isOn)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -318,8 +317,9 @@ struct OptionCard<Picture: View>: View {
                     .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
             }
             .padding(6)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondary.opacity(0.2)), lineWidth: isOn ? 2 : 1))
+            .glassTile(RoundedRectangle(cornerRadius: 14, style: .continuous), isOn: false)
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear), lineWidth: 2))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

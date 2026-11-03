@@ -136,7 +136,7 @@ final class SuggestionBar: UIView {
         dismissIcon.contentMode = .center
         // Drawn smaller than its touch area, which is still the bar's whole right end (`dismissMinX`).
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
         toolsIcon.tintColor = Theme.barIcons
         toolsIcon.contentMode = .center
@@ -156,7 +156,7 @@ final class SuggestionBar: UIView {
 
     private func setToolsImage() {
         toolsIcon.image = UIImage(systemName: toolsOpen ? "keyboard" : "square.grid.2x2",
-                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
         toolsIcon.accessibilityLabel = toolsOpen ? "Back to the keys" : "Functions"
     }
 
@@ -336,8 +336,8 @@ final class SuggestionBar: UIView {
         // not just within the bar.
         glass.frame = bounds.insetBy(dx: 2, dy: 3).offsetBy(dx: 0, dy: 4.5)
         let area = glass.bounds
-        let dismissWidth: CGFloat = 52
-        let toolsWidth: CGFloat = 48
+        let dismissWidth: CGFloat = 62
+        let toolsWidth: CGFloat = 58
         let contentWidth = max(0, area.width - dismissWidth - toolsWidth)
         // The buttons' touch areas reach a little into the words beside them: a thumb aiming at the bar's end
         // often lands just inside it.

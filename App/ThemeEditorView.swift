@@ -147,8 +147,7 @@ private struct EditorTabBar: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 54)
                     .foregroundColor(isOn ? .white : .primary)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(.tertiarySystemFill))))
+                    .glassTile(RoundedRectangle(cornerRadius: 14, style: .continuous), isOn: isOn)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -253,6 +252,8 @@ private struct ThemeColoursTab: View {
                       colour: edit.colour(\.outlineColour, shown: \.outline), opacity: true)
             ColourRow(title: tr("Texture"), subtitle: tr("The backdrop's pattern."),
                       colour: edit.colour(\.textureColour, shown: \.textureInk), opacity: true)
+                .disabled(edit.style.transparentBackdrop)
+                .opacity(edit.style.transparentBackdrop ? 0.45 : 1)
             ColourRow(title: tr("Block shadow"), subtitle: tr("The hard shadow of the Block shadow."),
                       colour: edit.colour(\.blockShadowColour, shown: \.blockShadow))
             ColourRow(title: tr("Glow"), subtitle: tr("The halo of the Glow shadow."),
@@ -421,8 +422,12 @@ private struct ThemeEffectsTab: View {
         } header: {
             SectionHeader(tr("Texture"), symbol: "circle.grid.3x3.fill", color: .teal)
         } footer: {
-            Text(tr("A pattern on the backdrop, in the line colour."))
+            Text(style.transparentBackdrop ? tr("The backdrop is transparent, so there is no texture to show.")
+                 : tr("A pattern on the backdrop, in the texture colour."))
         }
+        // A transparent backdrop draws no texture.
+        .disabled(style.transparentBackdrop)
+        .opacity(style.transparentBackdrop ? 0.45 : 1)
         .glassRows()
     }
 }

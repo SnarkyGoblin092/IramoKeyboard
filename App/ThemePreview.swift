@@ -395,9 +395,9 @@ struct ThemePreview: View {
                     }
             }
             Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: 15 * s))
+                .font(.system(size: 18 * s))
                 .foregroundColor(look.barIcons)
-                .frame(width: 52 * s)
+                .frame(width: 62 * s)
         }
         .padding(.leading, 8 * s)
         .padding(.top, 9 * s)
