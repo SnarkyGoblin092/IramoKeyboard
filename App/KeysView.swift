@@ -27,6 +27,10 @@ struct KeysView: View {
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
     @AppStorage(SettingKey.extraKeys, store: SharedStore.defaults) private var extraKeys = SettingDefault.extraKeys
+    /// The symbol place being typed into (Symbol keys), and what the hidden field took.
+    @State private var editingSlot: Int?
+    @State private var symbolDraft = ""
+    @FocusState private var symbolFocused: Bool
     @AppStorage(SettingKey.commaKey, store: SharedStore.defaults) private var commaKey = SettingDefault.commaKey
     @AppStorage(SettingKey.periodKey, store: SharedStore.defaults) private var periodKey = SettingDefault.periodKey
     @AppStorage(SettingKey.emojiKey, store: SharedStore.defaults) private var emojiKey = SettingDefault.emojiKey
@@ -72,93 +76,103 @@ struct KeysView: View {
         return Array(extraKeys.map { String($0) }.prefix(Settings.extraKeysLimit))
     }
 
-    private func toggleSymbol(_ symbol: String) {
+    /// Puts `symbol` in place `index` (an empty place takes the next free one), or empties the place (nil).
+    private func setSymbol(_ symbol: String?, at index: Int) {
         var picked = pickedSymbols
-        if let index = picked.firstIndex(of: symbol) {
+        if let symbol = symbol {
+            if index < picked.count {
+                picked[index] = symbol
+            } else if picked.count < Settings.extraKeysLimit {
+                picked.append(symbol)
+            }
+            Feedback.choose()
+        } else if index < picked.count {
             picked.remove(at: index)
             Feedback.delete()
-        } else if picked.count < Settings.extraKeysLimit {
-            picked.append(symbol)
-            Feedback.choose()
-        } else {
-            return
         }
         withAnimation(.easeOut(duration: 0.18)) { extraKeys = picked.joined() }
     }
 
-    /// The bottom row as the letters page has it: the space bar, the three places for symbols (a picked symbol
-    /// taps off; an empty place waits for one from below) and the full stop.
+    /// A character typed for the place being edited: the last one that is not a space becomes its key.
+    private func takeTypedSymbol(_ text: String) {
+        guard !text.isEmpty else { return }
+        symbolDraft = ""
+        guard let index = editingSlot,
+              let character = text.last(where: { !$0.isWhitespace && !$0.isNewline }) else { return }
+        setSymbol(String(character), at: index)
+        symbolFocused = false
+    }
+
+    /// The bottom row as the letters page has it: the space bar, the three places for symbols and the full stop.
+    /// A tap on a place opens the keyboard: the character typed becomes that place's key.
     private var symbolSlots: some View {
         let picked = pickedSymbols
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         return HStack(spacing: 6) {
             Text(tr("space"))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: false)
+                .glassTile(shape, isOn: false)
                 .layoutPriority(1)
             ForEach(0..<Settings.extraKeysLimit, id: \.self) { index in
-                if index < picked.count {
-                    let symbol = picked[index]
-                    Button { toggleSymbol(symbol) } label: {
-                        Text(symbol)
-                            .font(.title3.weight(.semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 46, height: 46)
-                            .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: true)
-                            .overlay(alignment: .topTrailing) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 14))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, .black.opacity(0.45))
-                                    .offset(x: 5, y: -5)
-                            }
-                            .contentShape(Rectangle())
+                let symbol = index < picked.count ? picked[index] : nil
+                let isEditing = symbolFocused && editingSlot == index
+                Button {
+                    editingSlot = index
+                    symbolFocused = true
+                    Feedback.tap()
+                } label: {
+                    ZStack {
+                        if let symbol = symbol {
+                            Text(symbol)
+                                .font(.title3.weight(.semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 46, height: 46)
+                                .glassTile(shape, isOn: true)
+                        } else {
+                            shape
+                                .strokeBorder(isEditing ? Color.accentColor : Color.secondary.opacity(0.45),
+                                              style: StrokeStyle(lineWidth: 1.5, dash: isEditing ? [] : [4, 3]))
+                                .frame(width: 46, height: 46)
+                                .overlay(Image(systemName: isEditing ? "keyboard" : "plus")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundColor(isEditing ? .accentColor : .secondary))
+                        }
+                        if isEditing && symbol != nil {
+                            shape.strokeBorder(Color.white, lineWidth: 2).frame(width: 46, height: 46)
+                        }
                     }
-                    .buttonStyle(PressableStyle())
-                    .accessibilityLabel(tr("Remove %@", symbol))
-                } else {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                        .frame(width: 46, height: 46)
-                        .overlay(Image(systemName: "plus").font(.footnote.weight(.semibold)).foregroundColor(.secondary))
-                        .accessibilityHidden(true)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(PressableStyle())
+                .contextMenu {
+                    if symbol != nil {
+                        Button(role: .destructive) { setSymbol(nil, at: index) } label: {
+                            Label(tr("Remove"), systemImage: "trash")
+                        }
+                    }
+                }
+                .accessibilityLabel(symbol.map { tr("Change %@", $0) } ?? tr("Add a symbol key"))
             }
             Text(".")
                 .font(.title3.weight(.medium))
                 .foregroundColor(.secondary)
                 .frame(width: 38, height: 46)
-                .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: false)
+                .glassTile(shape, isOn: false)
         }
         .padding(.vertical, 4)
-    }
-
-    /// A symbol to pick: lit, with its place number, when it is one of the picked ones.
-    private func symbolChip(_ symbol: String) -> some View {
-        let place = pickedSymbols.firstIndex(of: symbol)
-        let isOn = place != nil
-        let isFull = pickedSymbols.count >= Settings.extraKeysLimit
-        return Button { toggleSymbol(symbol) } label: {
-            Text(symbol)
-                .font(.title3.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 42)
-                .foregroundColor(isOn ? .white : .primary)
-                .glassTile(RoundedRectangle(cornerRadius: 10, style: .continuous), isOn: isOn)
-                .overlay(alignment: .topLeading) {
-                    if let place = place {
-                        Text("\(place + 1)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white.opacity(0.9))
-                            .padding(4)
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableStyle())
-        .disabled(!isOn && isFull)
-        .opacity(!isOn && isFull ? 0.4 : 1)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
+        // Takes the character typed for the place being edited; never seen.
+        .background(
+            TextField("", text: $symbolDraft)
+                .focused($symbolFocused)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .accessibilityHidden(true))
+        .onChange(of: symbolDraft) { takeTypedSymbol($0) }
+        .onChange(of: symbolFocused) { focused in if !focused { editingSlot = nil } }
     }
 
     private var styleIndex: Int? {
@@ -331,24 +345,10 @@ struct KeysView: View {
 
             Section {
                 symbolSlots
-                ForEach(Settings.extraKeyGroups.indices, id: \.self) { groupIndex in
-                    let group = Settings.extraKeyGroups[groupIndex]
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(tr(group.name)).font(.subheadline.weight(.semibold)).foregroundColor(.secondary)
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
-                            ForEach(group.symbols, id: \.self) { symbol in
-                                symbolChip(symbol)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
             } header: {
                 SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
             } footer: {
-                Text(pickedSymbols.count >= Settings.extraKeysLimit
-                     ? tr("All three places are taken: tap a symbol in the row above to free its place.")
-                     : tr("Tap up to three symbols to give each its own key between the space bar and the full stop, in the order you pick them."))
+                Text(tr("Tap a place and type a character: it gets its own key between the space bar and the full stop. Touch and hold a key to remove it."))
             }
             .glassRows()
 

@@ -496,9 +496,8 @@ struct EffectsView: View {
                     naming = true
                 } label: {
                     Label(tr("Save current effects"), systemImage: "square.and.arrow.down")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
                 }
+                .buttonStyle(ActionButtonStyle())
             } header: {
                 SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
             } footer: {

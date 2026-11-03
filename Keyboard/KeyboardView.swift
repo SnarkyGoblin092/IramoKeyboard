@@ -50,6 +50,10 @@ final class KeyboardView: UIView {
     private var rows: [[KeySpec]] = []
     private var keyViews: [[KeyView]] = []
     private var hitRects: [[CGRect]] = []
+    /// The cells a key's touch area is measured against when the areas are shaped: its hit cell with the room of a
+    /// spacer beside it (a spacer between two keys is shared by both; one at the row's end goes to its neighbour).
+    /// Without this a key next to a spacer (A and L) lost that room to the rows above and below.
+    private var touchRects: [[CGRect]] = []
     private var page: KeyboardPage = .letters
     private var shift: ShiftState = .off
     private var returnProminent = false
@@ -257,6 +261,7 @@ final class KeyboardView: UIView {
         }
         keyViews = built
         hitRects = []
+        touchRects = []
         applyShift()
         applyReturnProminence()
         setNeedsLayout()
@@ -413,6 +418,7 @@ final class KeyboardView: UIView {
             }
             hitRects.append(rects)
         }
+        touchRects = hitRects.enumerated().map { r, rects in KeyboardView.absorbingSpacers(rects, row: rows[r]) }
         updateHaloMask()
     }
 
@@ -511,12 +517,38 @@ final class KeyboardView: UIView {
         return page == .letters && (Prefs.hitboxSize != 1 || !letterBias.isEmpty || !hitOffsets.isEmpty)
     }
 
+    /// A row's hit cells with each spacer's room given to the keys beside it.
+    private static func absorbingSpacers(_ rects: [CGRect], row: [KeySpec]) -> [CGRect] {
+        var cells = rects
+        for (c, spec) in row.enumerated() where spec.isSpacer && c < rects.count {
+            let left = c > 0 && !row[c - 1].isSpacer ? c - 1 : nil
+            let right = c + 1 < row.count && !row[c + 1].isSpacer ? c + 1 : nil
+            let spacer = rects[c]
+            switch (left, right) {
+            case let (l?, r?):
+                cells[l].size.width += spacer.width / 2
+                cells[r].origin.x -= spacer.width / 2
+                cells[r].size.width += spacer.width / 2
+            case let (l?, nil):
+                cells[l].size.width += spacer.width
+            case let (nil, r?):
+                cells[r].origin.x -= spacer.width
+                cells[r].size.width += spacer.width
+            default:
+                break
+            }
+        }
+        return cells
+    }
+
     /// How far `point` is from a key's touch centre, in units of the key's half size (the edge of its cell is 1),
     /// divided by the key's touch-area factor. With every factor 1 and no shifts this picks exactly the cell
     /// under the point (inside a cell its own score is below 1, every other key's above), so the settings only
     /// move the borders between keys; a key's own centre always picks it.
     private func hitScore(row: Int, col: Int, point: CGPoint) -> CGFloat {
         let rect = hitRects[row][col]
+        // Measured to the edge of the touch cell on the point's side (farther on a side with a spacer's room).
+        let cell = row < touchRects.count && col < touchRects[row].count ? touchRects[row][col] : rect
         var center = CGPoint(x: rect.midX, y: rect.midY)
         var factor: CGFloat = 1
         if let letter = letter(of: rows[row][col]) {
@@ -528,8 +560,10 @@ final class KeyboardView: UIView {
                 center.y += shift.y * drawn.height
             }
         }
-        let dx = abs(point.x - center.x) / max(rect.width / 2, 1)
-        let dy = abs(point.y - center.y) / max(rect.height / 2, 1)
+        let halfWidth = point.x < rect.midX ? rect.midX - cell.minX : cell.maxX - rect.midX
+        let halfHeight = point.y < rect.midY ? rect.midY - cell.minY : cell.maxY - rect.midY
+        let dx = abs(point.x - center.x) / max(halfWidth, 1)
+        let dy = abs(point.y - center.y) / max(halfHeight, 1)
         return max(dx, dy) / max(factor, 0.1)
     }
 
@@ -537,9 +571,9 @@ final class KeyboardView: UIView {
     private func shapedKeyIndex(at point: CGPoint, base: (row: Int, col: Int)) -> (row: Int, col: Int) {
         var best = base
         var bestScore = hitScore(row: base.row, col: base.col, point: point)
-        for r in max(0, base.row - 1)...min(rows.count - 1, base.row + 1) where r < hitRects.count {
-            for c in rows[r].indices where c < hitRects[r].count && !rows[r][c].isSpacer {
-                let rect = hitRects[r][c]
+        for r in max(0, base.row - 1)...min(rows.count - 1, base.row + 1) where r < touchRects.count {
+            for c in rows[r].indices where c < touchRects[r].count && !rows[r][c].isSpacer {
+                let rect = touchRects[r][c]
                 guard rect.insetBy(dx: -rect.width * 0.6, dy: -rect.height * 0.6).contains(point) else { continue }
                 let score = hitScore(row: r, col: c, point: point)
                 if score < bestScore {
