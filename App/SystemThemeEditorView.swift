@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// The editor of a system theme (Native, Transparent, Liquid Glass): its corners and key style, and colours,
-/// solidity, outline and glow. Every change is saved at once as that theme's own style (SystemEdits); Reset puts the
+/// The editor of a theme (Native, Transparent, Liquid Glass): its corners and key style, solidity, outline and glow. Every change is saved at once as that theme's own style (SystemEdits); Reset puts the
 /// theme back as it was. The keyboard (Theme.system) and the previews (ThemeLook.system) read the same style.
 struct SystemThemeSections: View {
     let theme: ThemeDefinition
@@ -34,7 +33,7 @@ struct SystemThemeSections: View {
         })
     }
 
-    /// Real Liquid Glass keys are glass: they have no surface, outline or fill colour of their own to change.
+    /// Real Liquid Glass keys are glass: they have no surface, outline or fill of their own to change.
     private var glassKeys: Bool {
         guard theme.kind == .liquidGlass else { return false }
         if #available(iOS 26, *) { return true }
@@ -50,26 +49,6 @@ struct SystemThemeSections: View {
         }
     }
 
-    /// A colour that replaces the theme's own while it is on.
-    private func optionalColour(_ keyPath: WritableKeyPath<SystemStyle, ThemeRGBA?>, _ title: String,
-                                _ subtitle: String, start: ThemeRGBA) -> some View {
-        let chosen = style[keyPath: keyPath]
-        return VStack(alignment: .leading, spacing: 8) {
-            GlassToggle(title: title, subtitle: subtitle, isOn: Binding(get: { chosen != nil }, set: { on in
-                var next = style
-                next[keyPath: keyPath] = on ? start : nil
-                systemEdits = SystemEdits.setting(next, for: theme.id, in: systemEdits)
-            }))
-            if let current = chosen {
-                ColorPicker(tr("Colour"), selection: Binding(get: { Color(current) }, set: { color in
-                    var next = style
-                    next[keyPath: keyPath] = ThemeRGBA(pickerColor: color)
-                    systemEdits = SystemEdits.setting(next, for: theme.id, in: systemEdits)
-                }), supportsOpacity: true)
-            }
-        }
-    }
-
     var body: some View {
         Section {
             SegmentedChoice(names: [tr("Square"), tr("Slight"), tr("Standard"), tr("Round")],
@@ -81,8 +60,8 @@ struct SystemThemeSections: View {
         }
         .glassRows()
 
-        // Real Liquid Glass keys are glass: no surface, outline, glow, fill or solidity of their own, so none of
-        // that is offered for them.
+        // Real Liquid Glass keys are glass: no surface, outline, glow or solidity of their own, so none of that is
+        // offered for them.
         if !glassKeys {
             Section {
                 SegmentedChoice(title: tr("Surface"), names: [tr("Auto"), tr("Flat"), tr("Sheen"), tr("Raised")],
@@ -123,19 +102,11 @@ struct SystemThemeSections: View {
             }
             GlassSlider(title: tr("Label glow"), symbol: "light.max", value: binding(\.labelGlow),
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-            if !glassKeys {
-                optionalColour(\.letterColor, tr("Own letter key colour"), tr("Letters, numbers and the space bar."),
-                               start: ThemeRGBA(1, 1, 1, 1))
-                optionalColour(\.functionColor, tr("Own function key colour"), tr("Shift, delete, 123 and the emoji key."),
-                               start: ThemeRGBA(0.675, 0.702, 0.745, 1))
-            }
-            optionalColour(\.labelColor, tr("Own label colour"), tr("The keys' letters and symbols."),
-                           start: ThemeRGBA(0, 0, 0, 1))
         } header: {
-            SectionHeader(glassKeys ? tr("Labels") : tr("Colours and fills"), symbol: "paintpalette", color: .orange)
+            SectionHeader(tr("Look"), symbol: "paintpalette", color: .orange)
         } footer: {
             if glassKeys {
-                Text(tr("Liquid Glass keys are real glass: they take their colour from what is behind them, so only the labels can be changed."))
+                Text(tr("Liquid Glass keys are real glass: they take their colour from what is behind them, so only the label glow can be changed."))
             }
         }
         .glassRows()
@@ -154,15 +125,5 @@ struct SystemThemeSections: View {
             Text(tr("Puts the theme back as it came, with the corners and key style set on the old Keys screen."))
         }
         .glassRows()
-    }
-}
-
-private extension ThemeRGBA {
-    /// A colour from the system colour picker, rounded to 8 bits so a colour picked again compares equal.
-    init(pickerColor color: Color) {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
-        func byte(_ value: CGFloat) -> Double { return (Double(min(max(value, 0), 1)) * 255).rounded() / 255 }
-        self.init(byte(r), byte(g), byte(b), byte(a))
     }
 }

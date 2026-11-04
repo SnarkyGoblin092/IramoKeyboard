@@ -1,20 +1,17 @@
 import SwiftUI
 
-/// The theme picker: a big preview of the current theme, a way into its editor, and a grid of all themes: the
-/// system ones and one of each designed look.
+/// The theme picker: a big preview of the current theme, a way into its editor, and a grid of all themes.
 struct ThemesView: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
-    @AppStorage(SettingKey.themeEdits, store: SharedStore.defaults) private var themeEdits = SettingDefault.themeEdits
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.openScreen) private var openScreen
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
-    private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID, edits: themeEdits, dark: scheme == .dark) }
+    private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
@@ -25,8 +22,7 @@ struct ThemesView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 header
 
-                group(tr("System"), themes: ThemeCatalog.system)
-                group(tr("Designed"), themes: ThemeCatalog.designed)
+                grid
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
@@ -36,7 +32,7 @@ struct ThemesView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// The chosen theme's name and what it is, and for a designed theme the way into its editor.
+    /// The chosen theme's name and what it is, and the way into its editor.
     private var header: some View {
         VStack(spacing: 10) {
             VStack(spacing: 2) {
@@ -68,16 +64,13 @@ struct ThemesView: View {
         .padding(.top, 4)
     }
 
-    private func group(_ title: String, themes: [ThemeDefinition]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline)
-            LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(ThemeCatalog.themes(themes, edits: themeEdits, dark: scheme == .dark), id: \.id) { theme in
-                    ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
-                        guard theme.id != themeID else { return }
-                        Feedback.choose()
-                        themeID = theme.id
-                    }
+    private var grid: some View {
+        LazyVGrid(columns: columns, spacing: 18) {
+            ForEach(ThemeCatalog.themes(ThemeCatalog.all), id: \.id) { theme in
+                ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
+                    guard theme.id != themeID else { return }
+                    Feedback.choose()
+                    themeID = theme.id
                 }
             }
         }
@@ -97,8 +90,8 @@ private struct ThemeCard: View {
     let isSelected: Bool
     let action: () -> Void
 
-    /// Glass and frosted keys are system materials, which a flattened layer can't draw.
-    private var flattens: Bool { return theme.kind != .liquidGlass && theme.style?.frosted != true }
+    /// Glass keys are a system material, which a flattened layer can't draw.
+    private var flattens: Bool { return theme.kind != .liquidGlass }
 
     var body: some View {
         Button(action: action) {

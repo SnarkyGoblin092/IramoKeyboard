@@ -310,7 +310,7 @@ private struct LookSection: View {
                     IconTile(symbol: "drop.fill", color: accent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(tr("Accent colour"))
-                        Text(tr("Return key and highlights of the system themes; designed themes set theirs in the theme editor."))
+                        Text(tr("Return key and highlights of the themes."))
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 }

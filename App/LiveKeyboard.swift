@@ -47,7 +47,6 @@ struct LiveKeyboard: View {
                             look.backdrop(scale: scale)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                                .opacity(look.style?.transparentBackdrop == true ? 0 : 1)
                         }
                     })
                     .clipShape(RoundedRectangle(cornerRadius: showsEmoji ? 14 : 0, style: .continuous))
@@ -177,7 +176,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private func signature() -> String {
         let s = Settings.shared
         return [
-            Theme.storedID(), Theme.storedEdits(), s.accentName, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
+            Theme.storedID(), s.accentName, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
@@ -203,9 +202,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         Settings.shared.refresh()
         Prefs.refresh()
         applyEffects()
-        // The app's own mode, which the themes are drawn in (as the keyboard does in the app it is in).
-        let appStyle = traitCollection.userInterfaceStyle
-        Theme.hostDark = (appStyle == .unspecified ? UIScreen.main.traitCollection.userInterfaceStyle : appStyle) == .dark
         Theme.reload()
         builtSignature = signature()
         builtStyle = traitCollection.userInterfaceStyle

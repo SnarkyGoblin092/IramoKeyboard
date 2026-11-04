@@ -59,8 +59,6 @@ enum SettingKey {
     static let commaHold = "hunkeys.commaHold"
     static let periodHold = "hunkeys.periodHold"
     static let theme = "hunkeys.theme"
-    /// The theme editor's changes to the designed themes (ThemeEdits: JSON by theme id; "" for none).
-    static let themeEdits = "hunkeys.themeEdits"
     /// The app's own language: "system" (the phone's) or a Language code (AppLanguage). Kept by "Reset settings".
     static let appLanguage = "hunkeys.appLanguage"
     static let accent = "hunkeys.accent"
@@ -163,7 +161,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
-        theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
+        theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
@@ -221,7 +219,6 @@ enum SettingDefault {
     static let commaHold = ""
     static let periodHold = ""
     static let theme = "native"
-    static let themeEdits = ""
     static let appLanguage = "system"
     static let accent = "blue"
     static let accentHex = ""
@@ -454,7 +451,6 @@ final class Settings {
             SettingKey.commaHold: SettingDefault.commaHold,
             SettingKey.periodHold: SettingDefault.periodHold,
             SettingKey.theme: SettingDefault.theme,
-            SettingKey.themeEdits: SettingDefault.themeEdits,
             SettingKey.appLanguage: SettingDefault.appLanguage,
             SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,

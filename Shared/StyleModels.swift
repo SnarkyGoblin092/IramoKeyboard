@@ -13,7 +13,7 @@ private func value<T: Decodable, K: CodingKey>(_ container: KeyedDecodingContain
 // MARK: - System themes
 
 /// What a system theme's editor changes: the corners and key style (which were global settings before the three
-/// themes each had an editor), and colours, solidity, outline and glow. A theme without one looks as it always did,
+/// themes each had an editor), and solidity, outline and glow. A theme without one looks as it always did,
 /// with the old global settings.
 struct SystemStyle: Hashable, Codable {
     /// 0 square ... 1 capsule (a share of half the key's shorter side).
@@ -32,10 +32,6 @@ struct SystemStyle: Hashable, Codable {
     var sheen = 1.0
     /// A glow around the labels in their own colour (0 none ... 1 neon).
     var labelGlow = 0.0
-    /// Colours that replace the theme's own (nil: its own).
-    var letterColor: ThemeRGBA? = nil
-    var functionColor: ThemeRGBA? = nil
-    var labelColor: ThemeRGBA? = nil
 
     init() {}
 
@@ -49,9 +45,6 @@ struct SystemStyle: Hashable, Codable {
         keyOpacity = value(c, .keyOpacity, keyOpacity)
         sheen = value(c, .sheen, sheen)
         labelGlow = value(c, .labelGlow, labelGlow)
-        letterColor = value(c, .letterColor, letterColor)
-        functionColor = value(c, .functionColor, functionColor)
-        labelColor = value(c, .labelColor, labelColor)
     }
 
     static let roundnessRange: ClosedRange<Double> = 0...1

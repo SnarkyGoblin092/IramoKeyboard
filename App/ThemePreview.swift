@@ -253,8 +253,8 @@ struct ThemePreview: View {
     private var keyFill: Color { return look.keyFill }
     private var accentColor: Color { return look.accentColor }
     private var onAccent: Color { return look.onAccent }
-    /// The keys' roundness: a designed theme's own, else the Keys screen's (Theme.keyCornerRadius).
-    private var keyRoundness: Double { return look.style?.roundness ?? roundness }
+    /// The keys' roundness: the theme's own, else the Keys screen's (Theme.keyCornerRadius).
+    private var keyRoundness: Double { return look.roundness }
 
     // MARK: Body
 
@@ -412,7 +412,7 @@ struct ThemePreview: View {
 
     /// The keyboard's key font (KeyFont) at a size, as Theme.keyFont makes it.
     private func keyFont(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        return KeyFont.named(keyFontID).font(size: size, weight: Font.Weight.stepped(weight, by: look.style?.labelWeight ?? 0))
+        return KeyFont.named(keyFontID).font(size: size, weight: weight)
     }
 
     /// "Follow theme": a faded version of the key labels, else the neutral hairline.
@@ -529,15 +529,13 @@ extension View {
 /// MARK: - Theme look
 
 /// How a theme draws, in light or dark mode, with the user's key style: the colours, the backdrop behind the keys
-/// and a key's shape (fill, sheen, outline, glow or shadow; glass in the Liquid Glass theme). A designed theme
-/// draws from its ThemeStyle instead: its gradient and texture, its keys' fill (frosted if it says so), sheen and
-/// depth, outline and shadow or glow, always in its own light or dark. Mirrors Keyboard/Theme.swift, KeyView and
-/// ThemeBackdropView; used by ThemePreview, the theme editor and the settings screens' previews.
+/// and a key's shape (fill, sheen, outline, glow or shadow; glass in the Liquid Glass theme). Mirrors
+/// Keyboard/Theme.swift and KeyView; used by ThemePreview, the theme editor and the settings screens' previews.
 struct ThemeLook {
     let theme: ThemeDefinition
-    /// The user's accent (designed themes have their own).
+    /// The user's accent.
     let accent: Color
-    /// Dark mode: the phone's, or the designed theme's own.
+    /// Dark mode: the phone's.
     let dark: Bool
     var roundness: Double
     var keySurface: String
@@ -552,7 +550,7 @@ struct ThemeLook {
          keyBorderStyle: String, keyGlow: String, accentHex: String, accentName: String) {
         self.theme = theme
         self.accent = accent
-        self.dark = theme.isDark ?? dark
+        self.dark = dark
         self.system = theme.systemStyle
         self.roundness = theme.systemStyle?.roundness ?? roundness
         self.keySurface = theme.systemStyle?.surface ?? keySurface
@@ -570,75 +568,61 @@ struct ThemeLook {
     /// A key's fill (Theme.returnKey, shiftOn, spaceKey...).
     private func fillColour(_ kind: KeyKind) -> Color {
         switch kind {
-        case .returnKey: return style.map { Color($0.returnKey) } ?? accentColor
-        case .accent: return style.map { Color($0.shiftOn) } ?? accentColor
-        case .space: return style.map { Color($0.spaceFill) } ?? keyFill
+        case .returnKey, .accent: return accentColor
+        case .space, .letter: return keyFill
         case .function: return functionFill
-        case .letter: return keyFill
         }
     }
 
     /// A key's label colour (KeyView.refreshAppearance).
     func labelColor(_ kind: KeyKind) -> Color {
         switch kind {
-        case .returnKey: return style.map { Color($0.returnText) } ?? onAccent
-        case .accent: return style.map { Color($0.shiftText) } ?? onAccent
-        case .function: return style.map { Color($0.functionText) } ?? textColor
-        case .letter, .space: return textColor
+        case .returnKey, .accent: return onAccent
+        case .function, .letter, .space: return textColor
         }
     }
 
-    var hintColor: Color { return style.map { Color($0.hint) } ?? textColor.opacity(0.55) }
-    var pillColor: Color { return style.map { Color($0.pill) } ?? accentColor }
-    var onPill: Color { return style.map { Color($0.pillText) } ?? onAccent }
-    var barIcons: Color { return style.map { Color($0.barIcons) } ?? accentColor }
+    var hintColor: Color { return textColor.opacity(0.55) }
+    var pillColor: Color { return accentColor }
+    var onPill: Color { return onAccent }
+    var barIcons: Color { return accentColor }
     /// The suggestion bar's words (Theme.suggestionText).
     func suggestionText(onSegments: Bool) -> Color {
-        if let style = style { return Color(style.suggestionText) }
         return onSegments ? textColor : stripText
     }
-
-    /// A designed theme's look (nil for the system themes).
-    var style: ThemeStyle? { return theme.style }
 
     func pick(_ light: Color, _ darkColor: Color) -> Color { return dark ? darkColor : light }
     private func pick(_ light: [Color], _ darkColors: [Color]) -> [Color] { return dark ? darkColors : light }
 
-    /// Labels on the keys: a designed theme's own, the system label colour on the others.
-    var textColor: Color {
-        return style.map { Color($0.text) } ?? system?.labelColor.map { Color($0) } ?? pick(.black, .white)
-    }
+    /// Labels on the keys.
+    var textColor: Color { return pick(.black, .white) }
     /// Text on the background (the suggestion bar), not on a key.
-    var stripText: Color { return style.map { Color($0.text) } ?? pick(Color(white: 0.08), .white) }
+    var stripText: Color { return pick(Color(white: 0.08), .white) }
 
-    /// The letter keys' fill with the system theme's own colour and solidity, if it has them.
+    /// The letter keys' fill with the theme's own solidity, if it has one.
     var keyFill: Color {
-        if style != nil { return baseKeyFill }
-        let fill = system?.letterColor.map { Color($0) } ?? baseKeyFill
+        let fill = baseKeyFill
         return (system?.keyOpacity ?? 1) < 0.999 ? fill.opacity(system?.keyOpacity ?? 1) : fill
     }
 
     var functionFill: Color {
-        if style != nil { return baseFunctionFill }
-        let fill = system?.functionColor.map { Color($0) } ?? baseFunctionFill
+        let fill = baseFunctionFill
         return (system?.keyOpacity ?? 1) < 0.999 ? fill.opacity(system?.keyOpacity ?? 1) : fill
     }
 
     private var baseKeyFill: Color {
-        if let style = style { return Color(style.keyFill) }
         switch theme.kind {
         case .native: return pick(.white, Color(white: 0.42))
         case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
-        case .liquidGlass, .designed: return pick(Color.white, Color.white.opacity(0.16))
+        case .liquidGlass: return pick(Color.white, Color.white.opacity(0.16))
         }
     }
 
     private var baseFunctionFill: Color {
-        if let style = style { return Color(style.functionFill) }
         switch theme.kind {
         case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
         case .transparent: return pick(Color.black.opacity(0.12), Color.black.opacity(0.28))
-        case .liquidGlass, .designed: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
+        case .liquidGlass: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
         }
     }
 
@@ -650,32 +634,17 @@ struct ThemeLook {
         }
     }
 
-    var accentColor: Color { return style.map { Color($0.accent) } ?? accent }
-    var onAccent: Color { return style.map { Color($0.onAccent) } ?? .white }
+    var accentColor: Color { return accent }
+    var onAccent: Color { return .white }
 
-    /// Theme.keyCornerRadius: the roundness share of half the key's shorter side (a designed theme's own).
+    /// Theme.keyCornerRadius: the roundness share of half the key's shorter side.
     func radius(width: CGFloat, height: CGFloat) -> CGFloat {
-        return CGFloat(min(1, max(0, style?.roundness ?? roundness))) * min(width, height) / 2
+        return CGFloat(min(1, max(0, roundness))) * min(width, height) / 2
     }
 
-    /// The keyboard's background. `scale`: points of the preview per keyboard point (a designed theme's texture).
+    /// The keyboard's background (what the system draws behind the keys).
     @ViewBuilder func backdrop(scale: CGFloat = 1) -> some View {
-        if style?.transparentBackdrop == true {
-            Color.clear
-        } else if let style = style {
-            ZStack {
-                if style.gradient == .radial {
-                    EllipticalGradient(colors: [Color(style.background), Color(style.backgroundEnd)], center: .center)
-                } else {
-                    LinearGradient(colors: [Color(style.background), Color(style.backgroundEnd)],
-                                   startPoint: UnitPoint(x: style.gradientPoints.start.x, y: style.gradientPoints.start.y),
-                                   endPoint: UnitPoint(x: style.gradientPoints.end.x, y: style.gradientPoints.end.y))
-                }
-                if style.textureMetrics != nil {
-                    ThemeTexture(style: style, scale: scale)
-                }
-            }
-        } else if theme.kind == .native {
+        if theme.kind == .native {
             Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
         } else if theme.kind == .transparent {
             // The keyboard's frosted panel over the app (Theme.panelBackground).
@@ -707,9 +676,7 @@ struct ThemeLook {
     /// Liquid Glass (tinted for function keys and the accent) in that theme. `scale`: points of the preview per
     /// keyboard point.
     @ViewBuilder func keyShape(_ kind: KeyKind, radius: CGFloat, scale s: CGFloat = 1) -> some View {
-        if let style = style {
-            designedKey(style, kind, radius: radius, scale: s)
-        } else if theme.kind == .liquidGlass {
+        if theme.kind == .liquidGlass {
             // The keyboard's tints (KeyView.applyGlass, Theme's Liquid Glass palette).
             GlassKeyShape(radius: radius,
                           tint: isAccentKind(kind) ? accentColor.opacity(0.85)
@@ -731,34 +698,6 @@ struct ThemeLook {
                 }
                 .overlay(shape.strokeBorder(outline, lineWidth: outlineWidth * max(s, 0.6)))
                 .shadow(color: shadow.color, radius: shadow.radius * s, x: 0, y: shadow.y * s)
-        }
-    }
-
-    /// A designed theme's key (KeyView with a ThemeStyle). The shadow is a shape of its own behind the key, as the
-    /// keyboard's layer shadow follows the key's outline rather than its (maybe see-through) fill.
-    @ViewBuilder private func designedKey(_ style: ThemeStyle, _ kind: KeyKind, radius: CGFloat, scale s: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        let alphas = style.sheenAlphas
-        ZStack {
-            if let shadow = style.shadowMetrics(pressed: false) {
-                shape.fill(Color(shadow.color))
-                    .opacity(shadow.opacity)
-                    .blur(radius: CGFloat(shadow.radius) * s)
-                    .offset(x: CGFloat(shadow.x) * s, y: CGFloat(shadow.y) * s)
-            }
-            if style.frosted && !isAccentKind(kind) {
-                shape.fill(.ultraThinMaterial)
-            }
-            shape.fill(fillColour(kind))
-            if style.hasSheen {
-                shape.fill(LinearGradient(stops: [.init(color: Color.white.opacity(alphas.top), location: 0),
-                                                  .init(color: Color.white.opacity(0), location: 0.55),
-                                                  .init(color: Color.black.opacity(alphas.bottom), location: 1)],
-                                          startPoint: .top, endPoint: .bottom))
-            }
-            if style.borderWidth > 0.01 {
-                shape.strokeBorder(Color(style.outline), lineWidth: CGFloat(style.borderWidth) * max(s, 0.6))
-            }
         }
     }
 
@@ -829,69 +768,10 @@ struct ThemeLook {
     }
 }
 
-/// A designed theme's backdrop texture (ThemeBackdropView's), at the preview's scale.
-private struct ThemeTexture: View {
-    let style: ThemeStyle
-    let scale: CGFloat
-
-    var body: some View {
-        Canvas { context, size in
-            guard let texture = style.textureMetrics else { return }
-            let spacing = max(CGFloat(texture.spacing) * scale, 2)
-            let mark = max(CGFloat(texture.size) * scale, 0.5)
-            var path = Path()
-            switch style.texture {
-            case .none:
-                break
-            case .dots:
-                var row = 0
-                var y = spacing / 2
-                while y < size.height {
-                    // Every other row shifted half a step, so the dots sit in a diamond pattern.
-                    var x = row % 2 == 0 ? spacing / 2 : spacing
-                    while x < size.width {
-                        path.addEllipse(in: CGRect(x: x - mark, y: y - mark, width: mark * 2, height: mark * 2))
-                        x += spacing
-                    }
-                    y += spacing
-                    row += 1
-                }
-            case .grid:
-                var x = spacing / 2
-                while x < size.width {
-                    path.addRect(CGRect(x: x, y: 0, width: mark, height: size.height))
-                    x += spacing
-                }
-                var y = spacing / 2
-                while y < size.height {
-                    path.addRect(CGRect(x: 0, y: y, width: size.width, height: mark))
-                    y += spacing
-                }
-            case .lines, .scanlines:
-                var y = spacing - mark
-                while y < size.height {
-                    path.addRect(CGRect(x: 0, y: y, width: size.width, height: mark))
-                    y += spacing
-                }
-            case .diagonal:
-                let stripes = Path(ThemeTexturePath.path(.diagonal, in: size, spacing: spacing, size: mark))
-                context.stroke(stripes, with: .color(Color(texture.color)), lineWidth: mark)
-                return
-            case .checker, .crosses:
-                path = Path(ThemeTexturePath.path(style.texture, in: size, spacing: spacing, size: mark))
-            }
-            context.fill(path, with: .color(Color(texture.color)))
-        }
-        .allowsHitTesting(false)
-    }
-}
-
 extension View {
-    /// A designed theme's glow around a key's label, in the label's colour (KeyView's labelGlow).
+    /// A glow around a key's label, in the label's colour (KeyView's labelGlow).
     @ViewBuilder func keyLabelGlow(_ look: ThemeLook, color: Color, scale: CGFloat = 1) -> some View {
-        if let glow = look.style?.labelGlow {
-            self.shadow(color: color.opacity(glow.opacity), radius: CGFloat(glow.radius) * scale)
-        } else if let amount = look.system?.labelGlow, amount > 0.001 {
+        if let amount = look.system?.labelGlow, amount > 0.001 {
             self.shadow(color: color.opacity(0.35 + 0.65 * amount), radius: CGFloat(2 + 6 * amount) * scale)
         } else {
             self
@@ -904,7 +784,6 @@ extension View {
 struct CurrentThemeLook<Content: View>: View {
     @ViewBuilder let content: (ThemeLook) -> Content
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
-    @AppStorage(SettingKey.themeEdits, store: SharedStore.defaults) private var themeEdits = SettingDefault.themeEdits
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
@@ -919,7 +798,7 @@ struct CurrentThemeLook<Content: View>: View {
     }
 
     var body: some View {
-        content(ThemeLook(theme: ThemeCatalog.theme(id: themeID, edits: themeEdits, dark: scheme == .dark),
+        content(ThemeLook(theme: ThemeCatalog.theme(id: themeID),
                           accent: Color.currentAccent(name: accentName, hex: accentHex),
                           dark: scheme == .dark, roundness: roundness,
                           keySurface: keySurface, keyBorderStyle: keyBorderStyle, keyGlow: keyGlow,
@@ -937,15 +816,5 @@ extension KeyFont {
         case .mono: return .system(size: size, weight: weight, design: .monospaced)
         default: return .system(size: size, weight: weight)
         }
-    }
-}
-
-extension Font.Weight {
-    private static let steps: [Font.Weight] = [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black]
-
-    /// `weight` made `steps` heavier (or lighter, below 0): a designed theme's label weight (Theme.keyFont).
-    static func stepped(_ weight: Font.Weight, by steps: Int) -> Font.Weight {
-        guard steps != 0, let index = Font.Weight.steps.firstIndex(of: weight) else { return weight }
-        return Font.Weight.steps[min(max(index + steps, 0), Font.Weight.steps.count - 1)]
     }
 }
