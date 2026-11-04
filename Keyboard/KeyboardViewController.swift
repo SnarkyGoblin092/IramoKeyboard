@@ -353,12 +353,12 @@ final class KeyboardViewController: UIInputViewController {
         clipboardPanel = nil
         for sub in container.subviews { sub.removeFromSuperview() }
 
-        if Theme.backdrop != nil || (!rootIsKeyboardStyle && !Theme.isLiquidGlass) {
-            // A keycap theme's case colour. Otherwise the root was created see-through (Liquid Glass was active at
-            // load time) but this theme wants a normal keyboard background, so paint one.
+        if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
+            // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
+            // normal keyboard background, so paint one.
             let solid = UIView()
             solid.isUserInteractionEnabled = false
-            solid.backgroundColor = Theme.backdrop ?? UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
+            solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
             solid.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(solid)
             NSLayoutConstraint.activate([

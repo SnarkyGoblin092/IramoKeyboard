@@ -697,10 +697,7 @@ struct ThemeLook {
 
     /// The keyboard's background (what the system draws behind the keys).
     @ViewBuilder func backdrop(scale: CGFloat = 1) -> some View {
-        if let backdrop = tones?.backdrop {
-            // A keycap theme's own case.
-            Rectangle().fill(Color(backdrop))
-        } else if theme.kind == .native || theme.kind == .keycap {
+        if theme.kind == .native || theme.kind == .keycap {
             // The system keyboard backdrop (keycap themes have none of their own).
             Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
         } else if theme.kind == .transparent {
@@ -760,10 +757,24 @@ struct ThemeLook {
         }
     }
 
-    /// How far a key's label sits from the key's middle (up on a keycap's face, above its skirt).
+    /// How far a key's label sits from the key's middle (on a keycap: the middle of its face).
     func labelLift(height: CGFloat, scale s: CGFloat) -> CGFloat {
         guard theme.kind == .keycap else { return 0 }
-        return -Keycap.depth(height: height / max(s, 0.01)) * s / 2
+        let inset = theme.profile.insets(height: height / max(s, 0.01))
+        return (inset.top - inset.bottom) * s / 2
+    }
+
+    /// A top-to-bottom light (KeyView.light): white at a positive strength, black at a negative one.
+    private func light(_ strengths: (top: Double, bottom: Double)) -> LinearGradient {
+        func tone(_ strength: Double) -> Color {
+            return (strength >= 0 ? Color.white : Color.black).opacity(abs(strength))
+        }
+        return LinearGradient(colors: [tone(strengths.top), tone(strengths.bottom)], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// `color` moved toward black by `amount` (toward white when negative), as KeyView.shade.
+    private func shade(_ color: Color, _ amount: Double) -> some View {
+        return color.overlay((amount >= 0 ? Color.black : Color.white).opacity(abs(amount)))
     }
 
     /// The sheen over a key's face, when the surface has one.
@@ -777,26 +788,33 @@ struct ThemeLook {
         }
     }
 
-    /// A 3D keycap as KeyView draws it: the face on its darker skirt, with a soft contact shadow under it.
+    /// A 3D keycap as KeyView draws it (KeycapProfile): the lit shell, the face set into it with its own light and
+    /// outline, and a soft contact shadow under it.
     @ViewBuilder private func keycapShape(_ kind: KeyKind, radius: CGFloat, scale s: CGFloat, letter: String?) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         let fill = fillColour(kind)
         let outline = ring(kind, letter: letter)
+        let profile = theme.profile
         let glows = keyGlow == "soft" || keyGlow == "strong"
         let glow = shadowStyle
         GeometryReader { g in
-            let depth = Keycap.depth(height: g.size.height / max(s, 0.01)) * s
-            let side = Keycap.sideInset * s
-            let faceShape = RoundedRectangle(cornerRadius: max(0, radius - side), style: .continuous)
+            let inset = profile.insets(height: g.size.height / max(s, 0.01))
+            let faceHeight = max(0, g.size.height - (inset.top + inset.bottom) * s)
+            let faceRadius = profile.faceRadius(keyRadius: radius / max(s, 0.01), faceHeight: faceHeight / max(s, 0.01)) * s
+            let faceShape = RoundedRectangle(cornerRadius: faceRadius, style: .continuous)
             ZStack(alignment: .top) {
-                shape.fill(fill).overlay(shape.fill(Color.black.opacity(Keycap.skirtShade(dark: dark))))
+                shade(fill, profile.shellShade(dark: dark))
+                    .overlay(light(profile.shellLight(dark: dark)))
+                    .clipShape(shape)
                 faceShape.fill(fill)
+                    .overlay(faceShape.fill(light(profile.faceLight(dark: dark))))
                     .overlay(sheenOverlay(faceShape))
                     .overlay(faceShape.strokeBorder(outline ?? Color.clear, lineWidth: outline == nil ? 0 : 1.5 * s))
-                    .frame(width: max(0, g.size.width - 2 * side), height: max(0, g.size.height - depth))
+                    .frame(width: max(0, g.size.width - 2 * inset.side * s), height: faceHeight)
+                    .padding(.top, inset.top * s)
             }
         }
-        .shadow(color: glows ? glow.color : Color.black.opacity(dark ? 0.5 : 0.22),
+        .shadow(color: glows ? glow.color : Color.black.opacity(KeycapProfile.contactShadow(dark: dark)),
                 radius: (glows ? glow.radius : 1.2) * s, x: 0, y: (glows ? 0 : 1.2) * s)
     }
 

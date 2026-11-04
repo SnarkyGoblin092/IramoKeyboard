@@ -39,8 +39,6 @@ enum Theme {
         var separator: UIColor
         /// A keycap theme's modifier keys, each in its own colour.
         var roles: [KeyRole: RoleColor] = [:]
-        /// A keycap theme's case behind the keys (nil: the system keyboard backdrop).
-        var backdrop: UIColor? = nil
         /// An outline round the plain keycaps' faces (nil: none).
         var keyRing: UIColor? = nil
     }
@@ -54,9 +52,6 @@ enum Theme {
 
     /// A key's own colour and label colour in a keycap theme (nil: the usual letter or function colours).
     static func roleColor(_ role: KeyRole) -> RoleColor? { return palette.roles[role] }
-
-    /// The keyboard's case colour in a keycap theme that has one.
-    static var backdrop: UIColor? { return palette.backdrop }
 
     /// The outline round the plain keycaps, if the theme draws one.
     static var keyRing: UIColor? { return palette.keyRing }
@@ -131,8 +126,11 @@ enum Theme {
     /// Native keys carry the 1pt shadow line under them.
     static var drawsKeyShadow: Bool { return definition.hasSolidKeys }
 
-    /// 3D keycaps: a face on a darker skirt that sinks when pressed.
+    /// 3D keycaps: a face set into a shell, which drops into it when pressed.
     static var isKeycap: Bool { return kind == .keycap }
+
+    /// How the keycaps are built (KeycapProfile).
+    static var keycapProfile: KeycapProfile { return definition.profile }
     // MARK: Key style (the Surface, Border and Glow of the system themes)
 
     enum KeySurface { case flat, sheen, raised }
@@ -411,11 +409,10 @@ enum Theme {
                 keyShadow: pick(black(0.22), black(0.55)),
                 keyBorder: both({ $0.text }, 0.18),
                 popupFill: both { $0.key },
-                panelBackground: maybeBoth { $0.backdrop } ?? UIColor.clear,   // else the system keyboard backdrop
+                panelBackground: UIColor.clear,   // the keys sit on the system keyboard backdrop
                 stripFill: UIColor.clear,
                 separator: both({ $0.stripText }, 0.15))
             palette.roles = roles
-            palette.backdrop = maybeBoth { $0.backdrop }
             palette.keyRing = maybeBoth { $0.keyRing }
             return palette
         }
