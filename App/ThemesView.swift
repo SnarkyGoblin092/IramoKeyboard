@@ -163,6 +163,7 @@ private struct ThemeThumbnail: View {
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
     @State private var shownKey = ""
+    @State private var wantedKey = ""
 
     /// The width the picture is drawn at (about a card's width); it is scaled to the card.
     private static let renderWidth: CGFloat = 200
@@ -194,6 +195,7 @@ private struct ThemeThumbnail: View {
     private func load() {
         guard theme.kind != .liquidGlass else { return }
         let key = self.key
+        wantedKey = key
         guard key != shownKey || image == nil else { return }
         if let cached = ThumbnailCache.shared.image(for: key) {
             image = cached
@@ -210,6 +212,9 @@ private struct ThemeThumbnail: View {
             renderer.scale = scale
             return renderer.uiImage
         } done: { rendered in
+            // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
+            // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
+            guard wantedKey == key else { return }
             image = rendered
             shownKey = key
         }
