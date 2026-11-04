@@ -377,23 +377,6 @@ final class KeyboardViewController: UIInputViewController {
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.refreshKeyStyle() }
     }
 
-    /// A plain backdrop under everything, in the keyboard's own light or dark mode (its colours follow the mode
-    /// pinned on the view).
-    private func addModeBackdrop(identifier: String = "modeBackdrop") {
-        let solid = UIView()
-        solid.isUserInteractionEnabled = false
-        solid.accessibilityIdentifier = identifier
-        solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
-        solid.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(solid)
-        NSLayoutConstraint.activate([
-            solid.topAnchor.constraint(equalTo: container.topAnchor),
-            solid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            solid.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            solid.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-        ])
-    }
-
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
     private func buildInterface() {
         Prefs.refresh()
@@ -421,11 +404,9 @@ final class KeyboardViewController: UIInputViewController {
                 backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                 backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
             ])
-        } else {
-            // The system draws its keyboard backdrop in the phone's or the app's mode, which the keyboard ignores: it
-            // paints its own, in its own mode.
-            addModeBackdrop()
         }
+        // The system themes (Native, Transparent, Liquid Glass) have no background colour of their own: the
+        // keyboard backdrop is the system's. They only change the colour of the keys and of the letters and symbols.
         totalHeight = nil
         suggestionHeight = nil
 
@@ -1567,10 +1548,21 @@ final class KeyboardViewController: UIInputViewController {
         panel.language = language
         panel.translatesAutoresizingMaskIntoConstraints = false
         // The picker shows only the system keyboard backdrop (like the native emoji picker): hide any theme
-        // backdrop, here drawn by the keyboard itself in its own mode.
+        // backdrop, and supply a native one when the root itself is see-through (Liquid Glass).
         hiddenForEmoji = container.subviews.filter { !$0.isHidden }
         for sub in hiddenForEmoji { sub.isHidden = true }
-        addModeBackdrop(identifier: "emojiModeBackdrop")
+        if !rootIsKeyboardStyle {
+            let native = UIInputView(frame: .zero, inputViewStyle: .keyboard)
+            native.translatesAutoresizingMaskIntoConstraints = false
+            native.accessibilityIdentifier = "emojiNativeBackdrop"
+            container.addSubview(native)
+            NSLayoutConstraint.activate([
+                native.topAnchor.constraint(equalTo: container.topAnchor),
+                native.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                native.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                native.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        }
         container.addSubview(panel)
         NSLayoutConstraint.activate([
             panel.topAnchor.constraint(equalTo: container.topAnchor),
@@ -1590,7 +1582,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func hideEmojiPanel(refresh: Bool = true) {
         if emojiPanel != nil {
-            for sub in container.subviews where sub.accessibilityIdentifier == "emojiModeBackdrop" { sub.removeFromSuperview() }
+            for sub in container.subviews where sub.accessibilityIdentifier == "emojiNativeBackdrop" { sub.removeFromSuperview() }
             for sub in hiddenForEmoji { sub.isHidden = false }
             hiddenForEmoji = []
         }
