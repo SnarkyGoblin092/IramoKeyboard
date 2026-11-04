@@ -173,34 +173,41 @@ final class ToolsPanel: UIScrollView {
         contentSize = CGSize(width: CGFloat(tiles.count) * tileWidth, height: bounds.height)
     }
 
-    /// How far left the tiles must go to be fully behind the toolbox button (the strip clips what leaves its edge):
-    /// the same for all, so they move as one row.
-    private func hiddenShift() -> CGFloat {
-        let lastVisible = tiles.last { $0.center.x - $0.bounds.width / 2 < contentOffset.x + bounds.width }
-        let edge = (lastVisible.map { $0.center.x + $0.bounds.width / 2 } ?? contentOffset.x + bounds.width)
+    /// The tiles in view; only these animate (the ones scrolled out of view just stay where they are, out of sight).
+    private var visibleTiles: [Tile] {
+        let left = contentOffset.x, right = contentOffset.x + bounds.width
+        return tiles.filter { $0.center.x + $0.bounds.width / 2 > left && $0.center.x - $0.bounds.width / 2 < right }
+    }
+
+    /// How far left the tiles in view must go to be fully behind the toolbox button (the strip clips what leaves
+    /// its edge): the same for all, so they move as one row.
+    private func hiddenShift(for shown: [Tile]) -> CGFloat {
+        let edge = shown.map { $0.center.x + $0.bounds.width / 2 }.max() ?? contentOffset.x + bounds.width
         return -(edge - contentOffset.x)
     }
 
     /// The tiles slide back into the toolbox button, then `completion` runs (once the last one is in).
     func slideOut(completion: @escaping () -> Void) {
         isUserInteractionEnabled = false
-        let shift = hiddenShift()
+        let shown = visibleTiles
+        let shift = hiddenShift(for: shown)
         let step = 0.012
-        for (index, tile) in tiles.enumerated() where index < 12 {
+        for (index, tile) in shown.enumerated() {
             UIView.animate(withDuration: 0.3, delay: step * Double(index), options: [.curveEaseIn, .beginFromCurrentState]) {
                 tile.transform = CGAffineTransform(translationX: shift, y: 0)
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + step * Double(min(tiles.count, 12)), execute: completion)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + step * Double(shown.count), execute: completion)
     }
 
     /// The tiles slide out of the toolbox button at the left, one after the other.
     func slideIn(after wait: TimeInterval = 0) {
         layoutIfNeeded()
-        let shift = hiddenShift()
-        for (index, tile) in tiles.enumerated() {
+        let shown = visibleTiles
+        let shift = hiddenShift(for: shown)
+        for (index, tile) in shown.enumerated() {
             tile.transform = CGAffineTransform(translationX: shift, y: 0)
-            UIView.animate(withDuration: 0.3, delay: wait + 0.012 * Double(min(index, 12)), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+            UIView.animate(withDuration: 0.3, delay: wait + 0.012 * Double(index), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
                 tile.transform = .identity
             }
         }
