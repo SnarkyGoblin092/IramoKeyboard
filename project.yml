@@ -35,8 +35,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: true     # portrait only (also on iPad)
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:              # holding the keyboard's emoji key opens the app
           - CFBundleURLName: Iramo

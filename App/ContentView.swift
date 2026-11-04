@@ -254,9 +254,6 @@ private struct TypingSection: View {
             SettingToggle(tr("Auto-correction"), key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: tr("Fixes typos, accents and missing spaces on space"),
                           symbol: "checkmark.seal.fill", color: .green, feature: .autoCorrect)
-            SettingToggle(tr("Emoji suggestions"), key: SettingKey.emojiSuggestions, defaultValue: SettingDefault.emojiSuggestions,
-                          subtitle: tr("An emoji that matches the word you typed"),
-                          symbol: "face.smiling.inverse", color: .yellow)
             SettingToggle(tr("Auto-capitalization"), key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
                           subtitle: tr("A capital at the start of each sentence"),
                           symbol: "textformat", color: .blue, feature: .capitals)

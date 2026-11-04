@@ -21,6 +21,7 @@ final class Prefs {
     static var numberRow = SettingDefault.numberRow
     static var keyHints = SettingDefault.keyHints
     static var extraKeys: [String] = []
+    static var extraKeysLeft: [String] = []
     static var commaKey = SettingDefault.commaKey
     static var periodKey = SettingDefault.periodKey
     static var emojiKey = SettingDefault.emojiKey
@@ -106,7 +107,8 @@ final class Prefs {
         keyPopups = s.keyPopups
         swipe = s.swipeEnabled
         suggestions = s.suggestionsEnabled
-        emojiSuggestions = s.emojiSuggestionsEnabled
+        // Emoji suggestions are words in the bar too: none while word suggestions are off.
+        emojiSuggestions = s.emojiSuggestionsEnabled && s.suggestionsEnabled
         autoCapitalize = s.autoCapitalize
         doubleSpacePeriod = s.doubleSpacePeriod
         autoCorrect = s.autoCorrect
@@ -115,6 +117,7 @@ final class Prefs {
         numberRow = s.numberRow
         keyHints = s.keyHints
         extraKeys = s.extraKeys
+        extraKeysLeft = s.extraKeysLeft
         commaKey = s.commaKey
         periodKey = s.periodKey
         emojiKey = s.emojiKey

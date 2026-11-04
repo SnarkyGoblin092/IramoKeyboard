@@ -4,6 +4,7 @@ import SwiftUI
 /// reads the same settings (Keyboard/SuggestionBar.swift, KeyboardViewController.scheduleRefresh).
 struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var enabled = SettingDefault.suggestions
+    @AppStorage(SettingKey.emojiSuggestions, store: SharedStore.defaults) private var emojiSuggestions = SettingDefault.emojiSuggestions
     @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
     @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
     @AppStorage(SettingKey.suggestionScrollThree, store: SharedStore.defaults) private var scrollThree = SettingDefault.suggestionScrollThree
@@ -38,6 +39,10 @@ struct SuggestionsView: View {
                 GlassToggle(title: tr("Word suggestions"),
                             subtitle: tr("Words to finish or fix what you're typing, above the keys."),
                             isOn: $enabled)
+                GlassToggle(title: tr("Emoji suggestions"),
+                            subtitle: tr("An emoji that matches the word you typed"),
+                            isOn: $emojiSuggestions)
+                    .disabled(!enabled)
             }
             .glassRows()
 

@@ -43,12 +43,29 @@ final class HitboxOverlay: UIView {
                 highlight(path, accent: accent, in: context)
             }
         case .hitMap:
+            var drawn = false
             for outline in keyboard.hitMapOutlines() {
                 if let moved = outline.moved, let path = box(keyboard.convert(moved, to: self)) {
                     highlight(path, accent: accent, in: context)
+                    drawn = true
                 }
             }
+            if !drawn { drawNote(Prefs.hitMap ? tr("Nothing learned yet") : tr("Hit map is off")) }
         }
+    }
+
+    /// A short note in the middle when the hit map has nothing to show, so an empty preview is not mistaken for broken.
+    private func drawNote(_ text: String) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 15, weight: .semibold),
+            .foregroundColor: UIColor.white
+        ]
+        let size = (text as NSString).size(withAttributes: attributes)
+        let pill = CGRect(x: bounds.midX - size.width / 2 - 12, y: bounds.midY - size.height / 2 - 6,
+                          width: size.width + 24, height: size.height + 12)
+        UIColor.black.withAlphaComponent(0.55).setFill()
+        UIBezierPath(roundedRect: pill, cornerRadius: pill.height / 2).fill()
+        (text as NSString).draw(at: CGPoint(x: pill.minX + 12, y: pill.minY + 6), withAttributes: attributes)
     }
 
     private func box(_ frame: CGRect) -> UIBezierPath? {

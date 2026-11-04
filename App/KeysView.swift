@@ -27,8 +27,9 @@ struct KeysView: View {
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
     @AppStorage(SettingKey.extraKeys, store: SharedStore.defaults) private var extraKeys = SettingDefault.extraKeys
+    @AppStorage(SettingKey.extraKeysLeft, store: SharedStore.defaults) private var extraKeysLeft = SettingDefault.extraKeysLeft
     /// The symbol place being typed into (Symbol keys), and what the hidden field took.
-    @State private var editingSlot: Int?
+    @State private var editingSlot: Slot?
     @State private var symbolDraft = ""
     @FocusState private var symbolFocused: Bool
     @AppStorage(SettingKey.commaKey, store: SharedStore.defaults) private var commaKey = SettingDefault.commaKey
@@ -71,95 +72,139 @@ struct KeysView: View {
         }
     }
 
-    /// The extra symbols picked, in order.
-    private var pickedSymbols: [String] {
-        return Array(extraKeys.map { String($0) }.prefix(Settings.extraKeysLimit))
+    /// A place for a symbol key: the side of the space bar and the place's number there.
+    private struct Slot: Equatable {
+        let left: Bool
+        let index: Int
     }
 
-    /// Puts `symbol` in place `index` (an empty place takes the next free one), or empties the place (nil).
-    private func setSymbol(_ symbol: String?, at index: Int) {
-        var picked = pickedSymbols
+    private var pickedRight: [String] {
+        return Array(extraKeys.map { String($0) }.prefix(Settings.extraKeysLimit + 2))
+    }
+    private var pickedLeft: [String] {
+        return Array(extraKeysLeft.map { String($0) }.prefix(Settings.extraKeysLimit + 2))
+    }
+    private var symbolCount: Int { return pickedLeft.count + pickedRight.count }
+
+    /// How many symbol keys the row has room for with the comma and the full stop as they are.
+    private var capacity: Int { return Settings.extraKeysCapacity(comma: commaKey, period: periodKey) }
+
+    /// Turning the comma (or full stop) back on would leave more symbol keys than the row has room for.
+    private func blocksReturn(comma: Bool) -> Bool {
+        let wanted = Settings.extraKeysCapacity(comma: comma ? true : commaKey, period: comma ? periodKey : true)
+        return symbolCount > wanted
+    }
+
+    /// Puts `symbol` in `slot` (an empty place takes the next free one on its side), or empties it (nil).
+    private func setSymbol(_ symbol: String?, at slot: Slot) {
+        var picked = slot.left ? pickedLeft : pickedRight
         if let symbol = symbol {
-            if index < picked.count {
-                picked[index] = symbol
-            } else if picked.count < Settings.extraKeysLimit {
+            if slot.index < picked.count {
+                picked[slot.index] = symbol
+            } else if symbolCount < capacity {
                 picked.append(symbol)
             }
             Feedback.choose()
-        } else if index < picked.count {
-            picked.remove(at: index)
+        } else if slot.index < picked.count {
+            picked.remove(at: slot.index)
             Feedback.delete()
         }
-        withAnimation(.easeOut(duration: 0.18)) { extraKeys = picked.joined() }
+        withAnimation(.easeOut(duration: 0.18)) {
+            if slot.left { extraKeysLeft = picked.joined() } else { extraKeys = picked.joined() }
+        }
     }
 
     /// A character typed for the place being edited: the last one that is not a space becomes its key.
     private func takeTypedSymbol(_ text: String) {
         guard !text.isEmpty else { return }
         symbolDraft = ""
-        guard let index = editingSlot,
+        guard let slot = editingSlot,
               let character = text.last(where: { !$0.isWhitespace && !$0.isNewline }) else { return }
-        setSymbol(String(character), at: index)
+        setSymbol(String(character), at: slot)
         symbolFocused = false
     }
 
-    /// The bottom row as the letters page has it: the space bar, the three places for symbols and the full stop.
-    /// A tap on a place opens the keyboard: the character typed becomes that place's key.
+    /// One place of the row: its key, or a dashed "+" (the next free one on that side).
+    @ViewBuilder private func slotView(_ slot: Slot, symbol: String?) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let isEditing = symbolFocused && editingSlot == slot
+        Button {
+            editingSlot = slot
+            symbolFocused = true
+            Feedback.tap()
+        } label: {
+            ZStack {
+                if let symbol = symbol {
+                    Text(symbol)
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 38, height: 46)
+                        .glassTile(shape, isOn: true)
+                } else {
+                    shape
+                        .strokeBorder(isEditing ? Color.accentColor : Color.secondary.opacity(0.45),
+                                      style: StrokeStyle(lineWidth: 1.5, dash: isEditing ? [] : [4, 3]))
+                        .frame(width: 38, height: 46)
+                        .overlay(Image(systemName: isEditing ? "keyboard" : "plus")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(isEditing ? .accentColor : .secondary))
+                }
+                if isEditing && symbol != nil {
+                    shape.strokeBorder(Color.white, lineWidth: 2).frame(width: 38, height: 46)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .contextMenu {
+            if symbol != nil {
+                Button(role: .destructive) { setSymbol(nil, at: slot) } label: {
+                    Label(tr("Remove"), systemImage: "trash")
+                }
+            }
+        }
+        .accessibilityLabel(symbol.map { tr("Change %@", $0) } ?? tr("Add a symbol key"))
+    }
+
+    /// The places on one side of the space bar: the keys picked, then one free place while the row has room.
+    @ViewBuilder private func sideSlots(left: Bool) -> some View {
+        let picked = left ? pickedLeft : pickedRight
+        ForEach(0..<picked.count, id: \.self) { index in
+            slotView(Slot(left: left, index: index), symbol: picked[index])
+        }
+        if symbolCount < capacity {
+            slotView(Slot(left: left, index: picked.count), symbol: nil)
+        }
+    }
+
+    /// The bottom row as the letters page has it: the comma, places for symbols, the space bar, places for symbols
+    /// and the full stop. The comma or full stop taken off leaves its place free. A tap on a place opens the
+    /// keyboard: the character typed becomes that place's key.
     private var symbolSlots: some View {
-        let picked = pickedSymbols
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         return HStack(spacing: 6) {
+            if commaKey {
+                Text(",")
+                    .font(.title3.weight(.medium))
+                    .foregroundColor(.secondary)
+                    .frame(width: 30, height: 46)
+                    .glassTile(shape, isOn: false)
+            }
+            sideSlots(left: true)
             Text(tr("space"))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 46)
                 .glassTile(shape, isOn: false)
                 .layoutPriority(1)
-            ForEach(0..<Settings.extraKeysLimit, id: \.self) { index in
-                let symbol = index < picked.count ? picked[index] : nil
-                let isEditing = symbolFocused && editingSlot == index
-                Button {
-                    editingSlot = index
-                    symbolFocused = true
-                    Feedback.tap()
-                } label: {
-                    ZStack {
-                        if let symbol = symbol {
-                            Text(symbol)
-                                .font(.title3.weight(.semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 46, height: 46)
-                                .glassTile(shape, isOn: true)
-                        } else {
-                            shape
-                                .strokeBorder(isEditing ? Color.accentColor : Color.secondary.opacity(0.45),
-                                              style: StrokeStyle(lineWidth: 1.5, dash: isEditing ? [] : [4, 3]))
-                                .frame(width: 46, height: 46)
-                                .overlay(Image(systemName: isEditing ? "keyboard" : "plus")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundColor(isEditing ? .accentColor : .secondary))
-                        }
-                        if isEditing && symbol != nil {
-                            shape.strokeBorder(Color.white, lineWidth: 2).frame(width: 46, height: 46)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PressableStyle())
-                .contextMenu {
-                    if symbol != nil {
-                        Button(role: .destructive) { setSymbol(nil, at: index) } label: {
-                            Label(tr("Remove"), systemImage: "trash")
-                        }
-                    }
-                }
-                .accessibilityLabel(symbol.map { tr("Change %@", $0) } ?? tr("Add a symbol key"))
+            sideSlots(left: false)
+            if periodKey {
+                Text(".")
+                    .font(.title3.weight(.medium))
+                    .foregroundColor(.secondary)
+                    .frame(width: 30, height: 46)
+                    .glassTile(shape, isOn: false)
             }
-            Text(".")
-                .font(.title3.weight(.medium))
-                .foregroundColor(.secondary)
-                .frame(width: 38, height: 46)
-                .glassTile(shape, isOn: false)
         }
         .padding(.vertical, 4)
         // Takes the character typed for the place being edited; never seen.
@@ -348,18 +393,26 @@ struct KeysView: View {
             } header: {
                 SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
             } footer: {
-                Text(tr("Tap a place and type a character: it gets its own key between the space bar and the full stop. Touch and hold a key to remove it."))
+                Text(tr("Tap a place and type a character: it gets its own key on either side of the space bar. A comma or full stop taken off leaves its place free. Touch and hold a key to remove it."))
             }
             .glassRows()
 
             Section {
                 GlassToggle(title: tr("Emoji key"), subtitle: tr("Without it, the emoji are in the Functions panel when Emoji is one of its tools."),
                             isOn: $emojiKey)
-                GlassToggle(title: tr("Comma key"), subtitle: tr("The comma left of the space bar."), isOn: $commaKey)
+                GlassToggle(title: tr("Comma key"),
+                            subtitle: !commaKey && blocksReturn(comma: true)
+                                ? tr("Remove a symbol key first: there is no room for the comma.")
+                                : tr("The comma left of the space bar."), isOn: $commaKey)
+                    .disabled(!commaKey && blocksReturn(comma: true))
                 if commaKey {
                     holdField(tr("Hold comma for"), text: $commaHold)
                 }
-                GlassToggle(title: tr("Full stop key"), subtitle: tr("The full stop right of the space bar."), isOn: $periodKey)
+                GlassToggle(title: tr("Full stop key"),
+                            subtitle: !periodKey && blocksReturn(comma: false)
+                                ? tr("Remove a symbol key first: there is no room for the full stop.")
+                                : tr("The full stop right of the space bar."), isOn: $periodKey)
+                    .disabled(!periodKey && blocksReturn(comma: false))
                 if periodKey {
                     holdField(tr("Hold full stop for"), text: $periodHold)
                 }

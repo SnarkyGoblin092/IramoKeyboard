@@ -237,6 +237,7 @@ struct ValueBar: View {
                 Image(systemName: symbol).foregroundStyle(.tint)
             }
             Text(title).font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
+                .foregroundColor(isEnabled ? .primary : .secondary)
             Spacer(minLength: 8)
             Text(format(value))
                 .font(.subheadline.weight(.semibold))
@@ -417,6 +418,7 @@ struct GlassToggle: View {
     /// A tap anywhere on the row flips it (the row itself takes the tap, not only the switch).
     let tapsAnywhere: Bool
     @ObservedObject private var languages = EnabledLanguages.shared
+    @Environment(\.isEnabled) private var isEnabled
 
     init(title: String, subtitle: String, isOn: Binding<Bool>, feature: LanguageFeature? = nil, tapsAnywhere: Bool = false) {
         self.title = title
@@ -457,7 +459,7 @@ struct GlassToggle: View {
         }
         .onChange(of: isOn) { _ in Feedback.tick() }
         .disabled(unavailable)
-        .opacity(unavailable ? 0.45 : 1)
+        .opacity(unavailable || !isEnabled ? 0.45 : 1)
     }
 }
 

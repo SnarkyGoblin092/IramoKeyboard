@@ -80,6 +80,9 @@ final class KeyboardView: UIView {
         var startKey: KeyView?
         let startPoint: CGPoint
         var path: [CGPoint]
+        /// When and in what order the finger went down: plain taps are typed in this order (see `queueTap`).
+        let order: Int
+        let startTime = ProcessInfo.processInfo.systemUptime
         var startedOnLetter = false
         /// Distinct keys the finger has been over (used to tell a sloppy tap from a real swipe).
         var visited = Set<ObjectIdentifier>()
@@ -118,13 +121,71 @@ final class KeyboardView: UIView {
         var holdTimer: Timer?
         var repeatTimer: Timer?
 
-        init(start: CGPoint) {
+        init(start: CGPoint, order: Int) {
             startPoint = start
             path = [start]
+            self.order = order
         }
     }
 
     private var states: [UITouch: TouchState] = [:]
+    private var nextTouchOrder = 0
+
+    // MARK: Tap order
+    //
+    // A key types as its finger lifts. In fast typing a finger often goes down after another and lifts before it
+    // (the next key is hit while the last is still held), which typed the letters swapped. A plain tap that ends
+    // while an earlier finger is still down on a tap (not held, not swiping) waits for that one, so the keys type
+    // in the order they were pressed.
+
+    private struct DeferredTap {
+        let order: Int
+        let action: KeyAction
+        let point: CGPoint?
+    }
+    private var deferredTaps: [DeferredTap] = []
+    private var deferredTimer: Timer?
+    /// How long a finger down on a key still counts as a tap in progress that later taps wait for.
+    private let tapWindow: TimeInterval = 0.3
+
+    private func blocksTaps(_ other: TouchState, before order: Int) -> Bool {
+        return other.order < order && !other.isSwiping && !other.popupActive && !other.isCursorMode
+            && !other.isWordDeleting && !other.handedOff && !other.handledByHold && other.flick == 0
+            && ProcessInfo.processInfo.systemUptime - other.startTime < tapWindow
+    }
+
+    private func emitTap(_ action: KeyAction, at point: CGPoint?) {
+        if let point = point { lastTapPoint = point }
+        delegate?.keyboardView(self, didTap: action)
+    }
+
+    /// Types a plain tap now, or after the earlier finger that is still down.
+    private func queueTap(_ state: TouchState, _ action: KeyAction, at point: CGPoint?) {
+        if states.values.contains(where: { blocksTaps($0, before: state.order) }) {
+            deferredTaps.append(DeferredTap(order: state.order, action: action, point: point))
+            deferredTaps.sort { $0.order < $1.order }
+            deferredTimer?.invalidate()
+            deferredTimer = makeTimer(after: tapWindow, repeats: false) { [weak self] in self?.flushDeferredTaps() }
+        } else {
+            emitTap(action, at: point)
+            flushDeferredTaps()
+        }
+    }
+
+    /// Types the waiting taps whose earlier fingers are done, in order.
+    private func flushDeferredTaps() {
+        while let first = deferredTaps.first, !states.values.contains(where: { blocksTaps($0, before: first.order) }) {
+            deferredTaps.removeFirst()
+            emitTap(first.action, at: first.point)
+        }
+        if deferredTaps.isEmpty {
+            deferredTimer?.invalidate()
+            deferredTimer = nil
+        } else {
+            deferredTimer?.invalidate()
+            deferredTimer = makeTimer(after: 0.05, repeats: false) { [weak self] in self?.flushDeferredTaps() }
+        }
+    }
 
     /// Every key's shadow and glow, drawn on one layer under all the keys so that light never falls over a key.
     private let haloLayer = CALayer()
@@ -542,10 +603,17 @@ final class KeyboardView: UIView {
             for (c, spec) in row.enumerated() where !spec.isSpacer && c < keyViews[r].count && c < hitRects[r].count {
                 let key = keyViews[r][c]
                 let drawn = key.bounds.size
-                let shape = shapesHitboxes ? touchShape(row: r, col: c) : (center: CGPoint(x: hitRects[r][c].midX, y: hitRects[r][c].midY), factor: 1)
-                let size = CGSize(width: drawn.width * shape.factor, height: drawn.height * shape.factor)
-                let rect = CGRect(x: shape.center.x - size.width / 2, y: shape.center.y - size.height / 2,
-                                  width: size.width, height: size.height)
+                let cell = hitRects[r][c]
+                let shape = shapesHitboxes ? touchShape(row: r, col: c) : (center: CGPoint(x: cell.midX, y: cell.midY), factor: 1)
+                // The area the touch logic claims (hitScore): the factor times the distance from the touch centre to
+                // the edge of the touch cell on each side (a spacer's room included), not the drawn key's size.
+                let room = r < touchRects.count && c < touchRects[r].count ? touchRects[r][c] : cell
+                let f = max(shape.factor, 0)
+                let minX = shape.center.x - f * (cell.midX - room.minX)
+                let maxX = shape.center.x + f * (room.maxX - cell.midX)
+                let minY = shape.center.y - f * (cell.midY - room.minY)
+                let maxY = shape.center.y + f * (room.maxY - cell.midY)
+                let rect = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
                 outlines.append((rect, Theme.keyCornerRadius(for: drawn) * shape.factor, shape.factor, letter(of: spec)))
             }
         }
@@ -662,7 +730,8 @@ final class KeyboardView: UIView {
         }
         for touch in touches {
             let point = touch.location(in: self)
-            let state = TouchState(start: point)
+            let state = TouchState(start: point, order: nextTouchOrder)
+            nextTouchOrder += 1
             states[touch] = state
             guard let index = keyIndex(at: point) else { continue }
             let key = keyViews[index.row][index.col]
@@ -898,6 +967,8 @@ final class KeyboardView: UIView {
     }
 
     private func finish(_ state: TouchState, cancelled: Bool) {
+        // Whatever this finger did, taps that waited for it can go now.
+        defer { flushDeferredTaps() }
         state.holdTimer?.invalidate()
         state.repeatTimer?.invalidate()
         state.key?.isPressed = false
@@ -980,10 +1051,9 @@ final class KeyboardView: UIView {
         }
         if key.spec.action == .backspace {
             // A tap deletes as it lifts (so a slide can start without deleting); a hold has been deleting already.
-            if !state.backspaceRepeated { delegate?.keyboardView(self, didTap: .backspace) }
+            if !state.backspaceRepeated { queueTap(state, .backspace, at: nil) }
         } else {
-            lastTapPoint = state.startPoint
-            delegate?.keyboardView(self, didTap: key.spec.action)
+            queueTap(state, key.spec.action, at: state.startPoint)
         }
     }
 
@@ -1317,7 +1387,9 @@ final class KeyboardView: UIView {
         let dx = point.x - state.startPoint.x
         let dy = point.y - state.startPoint.y
         let height = max(letterKeySize().height, 1)
-        guard abs(dy) > height * 0.45, abs(dy) > abs(dx) * 1.6 else { return false }
+        // Up or down by a good part of a key, within about 40 degrees of straight (a thumb rarely flicks dead
+        // straight, and a flick that missed these limits turned into a swipe).
+        guard abs(dy) > height * 0.4, abs(dy) > abs(dx) * 1.2 else { return false }
         if dy < 0 {
             guard Prefs.flickUpCapital else { return false }
             state.flick = 1
@@ -1336,11 +1408,16 @@ final class KeyboardView: UIView {
     /// swiped word: it types no capital or accent, and swiping takes over.
     private func flickBecomesSwipe(_ state: TouchState) -> Bool {
         guard swipeAllowed, states.count == 1 else { return false }
-        return travel(of: state) > max(letterKeySize().height, 1) * KeyboardView.flickSwipeLimit
+        let size = letterKeySize()
+        // A flick that overshoots (a fast thumb goes well past the key) stays a flick; it becomes a swipe only when
+        // it goes on much further, or turns sideways by more than a key.
+        if travel(of: state) > max(size.height, 1) * KeyboardView.flickSwipeLimit { return true }
+        guard let last = state.path.last else { return false }
+        return abs(last.x - state.startPoint.x) > max(size.width, 1) * 1.1
     }
 
     /// How far (in key heights) a flick may travel before it counts as a swipe.
-    private static let flickSwipeLimit: CGFloat = 1.3
+    private static let flickSwipeLimit: CGFloat = 2.4
 
     private func updateTrail(_ points: [CGPoint]) {
         guard var newest = points.last else { return }

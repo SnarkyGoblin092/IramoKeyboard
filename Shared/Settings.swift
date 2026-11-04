@@ -46,6 +46,7 @@ enum SettingKey {
     static let keyHints = "hunkeys.keyHints"
     /// Symbols that get their own key on the letters page, next to the full stop (e.g. "@").
     static let extraKeys = "hunkeys.extraKeys"
+    static let extraKeysLeft = "hunkeys.extraKeysLeft"
     /// The letters page's comma, full stop and emoji keys can be taken off (their room goes to the space bar).
     static let commaKey = "hunkeys.commaKey"
     static let periodKey = "hunkeys.periodKey"
@@ -157,7 +158,7 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, commaKey, periodKey, emojiKey, commaHold, periodHold,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
@@ -208,6 +209,7 @@ enum SettingDefault {
     static let numberRow = false
     static let keyHints = true
     static let extraKeys = ""
+    static let extraKeysLeft = ""
     static let commaKey = true
     static let periodKey = true
     static let emojiKey = true
@@ -439,6 +441,7 @@ final class Settings {
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
             SettingKey.extraKeys: SettingDefault.extraKeys,
+            SettingKey.extraKeysLeft: SettingDefault.extraKeysLeft,
             SettingKey.commaKey: SettingDefault.commaKey,
             SettingKey.periodKey: SettingDefault.periodKey,
             SettingKey.emojiKey: SettingDefault.emojiKey,
@@ -667,7 +670,16 @@ final class Settings {
 
     /// The extra symbol keys, in order (one character each; at most `Settings.extraKeysLimit`).
     var extraKeys: [String] {
-        return Array((readString(SettingKey.extraKeys) ?? SettingDefault.extraKeys).map { String($0) }.prefix(Settings.extraKeysLimit))
+        return Array((readString(SettingKey.extraKeys) ?? SettingDefault.extraKeys).map { String($0) }.prefix(Settings.extraKeysLimit + 2))
+    }
+    /// The extra symbol keys left of the space bar, in order (the same limit, shared with the right side).
+    var extraKeysLeft: [String] {
+        return Array((readString(SettingKey.extraKeysLeft) ?? SettingDefault.extraKeysLeft).map { String($0) }.prefix(Settings.extraKeysLimit + 2))
+    }
+    /// The extra keys the row has room for, both sides together: three, and one more for each of the comma and the
+    /// full stop that is taken off (their place is free for a symbol).
+    static func extraKeysCapacity(comma: Bool, period: Bool) -> Int {
+        return extraKeysLimit + (comma ? 0 : 1) + (period ? 0 : 1)
     }
     static let extraKeysLimit = 3
 

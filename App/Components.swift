@@ -171,6 +171,7 @@ struct SettingToggle: View {
     private let feature: LanguageFeature?
     @AppStorage private var isOn: Bool
     @ObservedObject private var languages = EnabledLanguages.shared
+    @Environment(\.isEnabled) private var isEnabled
 
     /// `symbol`: an icon tile in front of the title (as on the main screen). `feature`: one some languages can't
     /// use (greyed out when none of the enabled languages can, with a note naming the ones that can't).
@@ -201,7 +202,7 @@ struct SettingToggle: View {
         }
         .onChange(of: isOn) { _ in Feedback.tick() }
         .disabled(unavailable)
-        .opacity(unavailable ? 0.45 : 1)
+        .opacity(unavailable || !isEnabled ? 0.45 : 1)
     }
 }
 

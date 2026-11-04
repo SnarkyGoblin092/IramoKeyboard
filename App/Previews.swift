@@ -38,21 +38,17 @@ struct PreviewCard<Content: View>: View {
 
 /// A settings screen with its preview pinned at the top: the preview stays in view while the settings below it
 /// scroll. A card preview keeps its natural height (caption included); the keyboard, which sizes itself to the
-/// pane, gets the height it starts at. Only a `resizable` pane (the theme picker's) has a bar under it that drags
-/// to make it smaller and back (remembered per screen), never past the height it starts at nor below a size where
-/// the keyboard stays readable.
+/// pane, gets the height it starts at (or, with `aspect`, the height that keeps that width : height ratio).
 struct PinnedPreview<Preview: View, Content: View>: View {
     @ViewBuilder let preview: () -> Preview
     @ViewBuilder let content: () -> Content
     /// The preview sizes itself to the pane (the keyboard) instead of keeping its own height.
     let fills: Bool
-    let resizable: Bool
-    /// The height the pane starts at, and a resizable pane's largest.
+    /// The preview's width over its height: the pane is as tall as that ratio makes it at the full width.
+    let aspect: CGFloat?
+    /// The height the pane has.
     let startHeight: CGFloat
 
-    @AppStorage private var storedHeight: Double
-    @State private var dragStartHeight: CGFloat?
-    @State private var liveHeight: CGFloat?
     /// The card preview's own height, measured (0 until it has been laid out once).
     @State private var naturalHeight: CGFloat = 0
 
@@ -62,15 +58,14 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private static var keyboardMinimum: CGFloat { return 150 }
 
     /// `id` names the screen (its height is remembered under it); `height` is where it starts.
-    init(id: String, height: CGFloat, fills: Bool = false, resizable: Bool = false,
+    init(id: String, height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
         self.preview = preview
         self.content = content
         self.fills = fills
-        self.resizable = resizable
+        self.aspect = aspect
         self.startHeight = height
-        _storedHeight = AppStorage(wrappedValue: Double(height), "previewHeight." + id)
     }
 
     /// The smallest pane that still shows the whole preview.
@@ -80,15 +75,14 @@ struct PinnedPreview<Preview: View, Content: View>: View {
         return content + PinnedPreview.topPadding + PinnedPreview.bottomPadding
     }
 
-    private func clamped(_ height: CGFloat, maximum: CGFloat) -> CGFloat {
-        return min(max(height, minimum), maximum)
-    }
-
     var body: some View {
         GeometryReader { geometry in
-            let maximum = max(minimum, min(startHeight, geometry.size.height * 0.62))
-            let height = resizable ? clamped(liveHeight ?? CGFloat(storedHeight), maximum: maximum)
-                : (fills ? maximum : minimum)
+            var wanted = startHeight
+            if let aspect = aspect, aspect > 0 {
+                wanted = (geometry.size.width - 32) / aspect + PinnedPreview.topPadding + PinnedPreview.bottomPadding
+            }
+            let maximum = max(minimum, min(wanted, geometry.size.height * 0.62))
+            let height = fills ? maximum : minimum
             VStack(spacing: 0) {
                 Group {
                     if fills {
@@ -112,11 +106,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                 .frame(height: height)
                 .clipped()
                 .zIndex(1)
-                if resizable {
-                    handle(height: height, maximum: maximum)
-                } else {
-                    Divider().opacity(0.6)
-                }
+                Divider().opacity(0.6)
                 // The list scrolls under the preview, never over it (also while a menu is still closing).
                 content()
                     .frame(maxHeight: .infinity)
@@ -127,34 +117,6 @@ struct PinnedPreview<Preview: View, Content: View>: View {
         .onPreferenceChange(NaturalHeightKey.self) { value in
             if abs(value - naturalHeight) > 0.5 { naturalHeight = value }
         }
-    }
-
-    /// The grip under the preview: drag it to resize (never below what the preview needs).
-    private func handle(height: CGFloat, maximum: CGFloat) -> some View {
-        Capsule()
-            .fill(Color.secondary.opacity(0.45))
-            .frame(width: 40, height: 5)
-            .frame(maxWidth: .infinity, minHeight: 26)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                .onChanged { value in
-                    if dragStartHeight == nil { dragStartHeight = height }
-                    liveHeight = clamped((dragStartHeight ?? height) + value.translation.height, maximum: maximum)
-                }
-                .onEnded { _ in
-                    if let final = liveHeight { storedHeight = Double(final) }
-                    liveHeight = nil
-                    dragStartHeight = nil
-                    Feedback.tick()
-                })
-            .overlay(alignment: .bottom) { Divider().opacity(0.6) }
-            .accessibilityElement()
-            .accessibilityLabel(tr("Preview size"))
-            .accessibilityValue(tr("%@ points", "\(Int(height))"))
-            .accessibilityAdjustableAction { direction in
-                let step: CGFloat = direction == .increment ? 30 : -30
-                storedHeight = Double(clamped(height + step, maximum: maximum))
-            }
     }
 }
 

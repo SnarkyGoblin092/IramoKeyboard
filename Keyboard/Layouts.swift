@@ -460,7 +460,12 @@ enum LayoutBuilder {
         // The extra symbol keys (the Keys screen) sit between the space bar and the full stop, taking their room
         // from the space bar (which never gets narrower than about two and a half keys); the emoji, comma and full
         // stop keys taken off give theirs to it.
-        let extras = Prefs.extraKeys.map { KeySpec(action: .character($0), title: $0, weight: 1.0) }
+        // Both sides together fit the row's capacity (three, one more for each comma or full stop taken off).
+        let capacity = Settings.extraKeysCapacity(comma: Prefs.commaKey, period: Prefs.periodKey)
+        let leftKeys = Array(Prefs.extraKeysLeft.prefix(capacity))
+        let rightKeys = Array(Prefs.extraKeys.prefix(max(0, capacity - leftKeys.count)))
+        let leftExtras = leftKeys.map { KeySpec(action: .character($0), title: $0, weight: 1.0) }
+        let extras = rightKeys.map { KeySpec(action: .character($0), title: $0, weight: 1.0) }
         let removed = [Prefs.emojiKey, Prefs.commaKey, Prefs.periodKey].filter { !$0 }.count
         var bottom = [KeySpec(action: .showNumbers, title: "123", weight: 1.3, isFunction: true)]
         if Prefs.emojiKey { bottom.append(KeySpec(action: .emoji, symbol: "face.smiling", weight: 1.0, isFunction: true)) }
@@ -468,8 +473,9 @@ enum LayoutBuilder {
             bottom.append(KeySpec(action: .character(language.comma), title: language.comma, weight: 1.0,
                                   alternates: Prefs.commaHold.isEmpty ? commaAlternates(language) : Prefs.commaHold))
         }
+        bottom += leftExtras
         bottom.append(KeySpec(action: .space, title: language.displayName,
-                              weight: max(2.4, 3.9 - CGFloat(extras.count)) + CGFloat(removed)))
+                              weight: max(2.4, 3.9 + CGFloat(removed) - CGFloat(extras.count + leftExtras.count))))
         bottom += extras
         if Prefs.periodKey {
             bottom.append(KeySpec(action: .character(language.fullStop), title: language.fullStop, weight: 1.0,
