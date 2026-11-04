@@ -24,12 +24,22 @@ struct ThemeRGBA: Hashable, Codable {
         self.b = Double(hex & 0xFF) / 255
         self.a = alpha
     }
+
+    /// This colour moved `amount` (0...1) of the way toward `other`.
+    func mixed(with other: ThemeRGBA, _ amount: Double) -> ThemeRGBA {
+        return ThemeRGBA(r + (other.r - r) * amount, g + (other.g - g) * amount, b + (other.b - b) * amount, a)
+    }
+
+    var luminance: Double { return 0.299 * r + 0.587 * g + 0.114 * b }
+
+    static let black = ThemeRGBA(0, 0, 0)
+    static let white = ThemeRGBA(1, 1, 1)
 }
 
 // MARK: - Theme definition
 
 /// One keyboard theme. The keyboard (Keyboard/Theme.swift) and the app's theme picker both read this,
-/// so previews always match the real thing. All three follow the system's light and dark mode.
+/// so previews always match the real thing. All of them follow the system's light and dark mode.
 struct ThemeDefinition: Hashable {
 
     enum Kind: String {
@@ -39,8 +49,8 @@ struct ThemeDefinition: Hashable {
         case transparent
         /// iOS 26 Liquid Glass keys/popups/strip (real `UIGlassEffect`); older iOS falls back to a blur.
         case liquidGlass
-        /// Solid keys on a backdrop of the theme's own colours (`colors`), one set for light and one for dark.
-        case colored
+        /// 3D keycaps in the theme's own colours (`colors`) on the system keyboard backdrop.
+        case keycap
     }
 
     /// Stored in `Settings.theme`. Never change an id once shipped.
@@ -52,41 +62,96 @@ struct ThemeDefinition: Hashable {
     let summary: String
     /// True when the user changed this theme in its editor.
     var isEdited = false
-    /// The theme's own style from its editor (nil: not edited, so the old global key settings apply).
+    /// The theme's own style from its editor (nil: not edited, so the old global key settings apply). A keycap
+    /// theme comes with one of its own.
     var systemStyle: SystemStyle? = nil
-    /// A colour theme's own colours (nil for the others).
+    /// A keycap theme's colours (nil for the others).
     var colors: ThemeColors? = nil
+    /// The picker section a keycap theme is listed under (its family of colourways).
+    var family: String? = nil
+    /// A keycap theme's own font (a KeyFont id), used while the Keys screen's font is System.
+    var font: String? = nil
 
-    /// Solid keys like the iOS keyboard's: no outline by default, and the 1pt shadow line under them.
-    var hasSolidKeys: Bool { return kind == .native || kind == .colored }
+    /// Solid keys like the iOS keyboard's: no outline by default.
+    var hasSolidKeys: Bool { return kind == .native || kind == .keycap }
+
+    /// The font the keys use: the Keys screen's, or this theme's own while that is System.
+    func fontID(chosen: String) -> String {
+        return chosen == KeyFont.system.rawValue ? (font ?? chosen) : chosen
+    }
 }
 
-/// A colour theme's colours in one appearance.
+/// The keys a keycap theme can colour on their own.
+enum KeyRole: Hashable {
+    case letter, function, shift, delete, numbers, space, ret
+}
+
+/// The 3D keycap's shape: how deep its skirt is and how far its face sits in from the sides.
+enum Keycap {
+    /// The skirt under the face, for a key of this height.
+    static func depth(height: CGFloat) -> CGFloat { return min(4.5, max(2, height * 0.1)) }
+    /// The skirt showing at each side of the face.
+    static let sideInset: CGFloat = 1
+    /// How far the skirt is shaded under the face's colour (light and dark mode).
+    static func skirtShade(dark: Bool) -> Double { return dark ? 0.45 : 0.24 }
+}
+
+/// A keycap theme's colours in one appearance (light or dark).
 struct ThemeTones: Hashable {
-    /// Behind the keys (and the suggestion bar).
-    let panel: ThemeRGBA
     let key: ThemeRGBA
-    let function: ThemeRGBA
-    /// Labels and the suggestion bar's words.
     let text: ThemeRGBA
-    /// Return, shift when on, the suggestion pill and the bar's icons.
-    let accent: ThemeRGBA
+    let function: ThemeRGBA
+    let shift: ThemeRGBA
+    let delete: ThemeRGBA
+    let numbers: ThemeRGBA
+    let space: ThemeRGBA
+    let ret: ThemeRGBA
 
-    init(_ panel: UInt32, _ key: UInt32, _ function: UInt32, _ text: UInt32, _ accent: UInt32) {
-        self.panel = ThemeRGBA(hex: panel)
-        self.key = ThemeRGBA(hex: key)
-        self.function = ThemeRGBA(hex: function)
+    /// `key`/`text`: the letter keys. The modifiers left out of `mods` take the plain function key colour (the
+    /// letter colour, a shade darker in light mode and lighter in dark mode).
+    init(key: UInt32, text: UInt32, dark: Bool, mods: KeyMods) {
+        let key = ThemeRGBA(hex: key)
+        let function = dark ? key.mixed(with: .white, 0.08) : key.mixed(with: .black, 0.1)
+        self.key = key
         self.text = ThemeRGBA(hex: text)
-        self.accent = ThemeRGBA(hex: accent)
+        self.function = function
+        self.shift = mods.shift.map { ThemeRGBA(hex: $0) } ?? function
+        self.delete = mods.delete.map { ThemeRGBA(hex: $0) } ?? function
+        self.numbers = mods.numbers.map { ThemeRGBA(hex: $0) } ?? function
+        self.space = mods.space.map { ThemeRGBA(hex: $0) } ?? key
+        self.ret = ThemeRGBA(hex: mods.ret)
     }
 
-    /// Near-black on light accents (yellow, mint...), white on dark ones.
-    var accentIsLight: Bool {
-        return 0.299 * accent.r + 0.587 * accent.g + 0.114 * accent.b > 0.62
+    func fill(_ role: KeyRole) -> ThemeRGBA {
+        switch role {
+        case .letter: return key
+        case .function: return function
+        case .shift: return shift
+        case .delete: return delete
+        case .numbers: return numbers
+        case .space: return space
+        case .ret: return ret
+        }
+    }
+
+    /// The label on a key: the theme's text on the plain keys, else dark or white by how light the key is.
+    func label(_ role: KeyRole) -> ThemeRGBA {
+        let color = fill(role)
+        if color == key || color == function { return text }
+        return color.luminance > 0.6 ? ThemeRGBA(hex: 0x1E1E1E) : .white
     }
 }
 
-/// A colour theme's colours: one set for light apps, one for dark apps.
+/// The modifier colours of a colourway (nil: the plain function key colour; space: the letter colour).
+struct KeyMods {
+    var shift: UInt32? = nil
+    var delete: UInt32? = nil
+    var numbers: UInt32? = nil
+    var space: UInt32? = nil
+    var ret: UInt32
+}
+
+/// A keycap theme's colours: one set for light apps, one for dark apps.
 struct ThemeColors: Hashable {
     let light: ThemeTones
     let dark: ThemeTones
@@ -101,10 +166,12 @@ enum ThemeCatalog {
     static let defaultID = "native"
 
     /// The themes, in picker order.
-    static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + colorThemes
+    static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + keycapThemes
 
-    /// The theme as it comes, without the user's edits. Unknown ids (including the removed designed and key-colour
-    /// themes) fall back to Native.
+    /// The keycap families, in picker order.
+    static let families = ["Arcade", "Studio", "Solo", "Café", "Tide"]
+
+    /// The theme as it comes, without the user's edits. Unknown ids (including removed themes) fall back to Native.
     static func base(id: String) -> ThemeDefinition {
         for theme in all where theme.id == id { return theme }
         return native
@@ -140,74 +207,92 @@ enum ThemeCatalog {
     static let liquidGlass = ThemeDefinition(id: "liquidglass", name: "Liquid Glass", kind: .liquidGlass,
                                              summary: "Real Liquid Glass keys over the app")
 
-    private static func colored(_ id: String, _ name: String, _ summary: String,
-                                light: ThemeTones, dark: ThemeTones) -> ThemeDefinition {
-        return ThemeDefinition(id: id, name: name, kind: .colored, summary: summary,
-                               colors: ThemeColors(light: light, dark: dark))
+    // MARK: Keycap themes
+
+    /// One colourway of a family. `light`/`dark`: the letter keys and their labels in each mode (0xKEY, 0xTEXT).
+    private static func colourway(_ family: String, _ variant: String, font: String?, roundness: Double,
+                                  light: (UInt32, UInt32), dark: (UInt32, UInt32), mods: KeyMods) -> ThemeDefinition {
+        var style = SystemStyle()
+        style.roundness = roundness
+        style.surface = "sheen"   // the face catches the light at the top
+        style.border = "none"
+        let id = "\(family)-\(variant)".lowercased().folding(options: .diacriticInsensitive, locale: nil)
+        return ThemeDefinition(id: id, name: "\(family) \(variant)", kind: .keycap,
+                               summary: "\(variant) 3D keycaps", systemStyle: style,
+                               colors: ThemeColors(light: ThemeTones(key: light.0, text: light.1, dark: false, mods: mods),
+                                                   dark: ThemeTones(key: dark.0, text: dark.1, dark: true, mods: mods)),
+                               family: family, font: font)
     }
 
-    // Tones: panel, key, function key, text, accent. Each theme has a light set for light apps and a dark set
-    // for dark apps.
-    static let colorThemes: [ThemeDefinition] = [
-        colored("ocean", "Ocean", "Deep sea blues",
-                light: ThemeTones(0xD3E4F1, 0xFFFFFF, 0xA7C4DC, 0x0B2A40, 0x1677C9),
-                dark: ThemeTones(0x0A1B2A, 0x1F3B55, 0x14293D, 0xE3F1FC, 0x4AA8F0)),
-        colored("forest", "Forest", "Moss and pine greens",
-                light: ThemeTones(0xD5E3D3, 0xFFFFFF, 0xACC6A9, 0x1C3320, 0x2E7D32),
-                dark: ThemeTones(0x0E1C11, 0x25402A, 0x182C1C, 0xE2F1E2, 0x66BB6A)),
-        colored("sunset", "Sunset", "Warm orange glow",
-                light: ThemeTones(0xF5DACA, 0xFFF8F3, 0xE6B498, 0x4A2316, 0xE8603C),
-                dark: ThemeTones(0x23110F, 0x4A2A22, 0x331B16, 0xFBE6DC, 0xFF8A5C)),
-        colored("lavender", "Lavender", "Soft violet",
-                light: ThemeTones(0xE4DBF1, 0xFFFFFF, 0xC7B5E2, 0x2E2142, 0x7E57C2),
-                dark: ThemeTones(0x191325, 0x382C4D, 0x271F37, 0xEEE6FA, 0xB39DDB)),
-        colored("sakura", "Sakura", "Cherry blossom pinks",
-                light: ThemeTones(0xF8E1EA, 0xFFFFFF, 0xEDBDD0, 0x4A2434, 0xD94F84),
-                dark: ThemeTones(0x22151B, 0x46303B, 0x31222A, 0xFBEAF0, 0xF48FB1)),
-        colored("mint", "Mint", "Fresh and cool",
-                light: ThemeTones(0xD7EFE6, 0xFFFFFF, 0xA6DAC6, 0x103B2E, 0x0F9C78),
-                dark: ThemeTones(0x0B201A, 0x1F4A3C, 0x15342A, 0xDDF6EE, 0x4FD1A5)),
-        colored("sand", "Sand", "Warm beige and gold",
-                light: ThemeTones(0xECE1CE, 0xFFFCF5, 0xD5C09C, 0x3D3122, 0xA87A22),
-                dark: ThemeTones(0x1D1811, 0x3F3527, 0x2C251B, 0xF4EBDB, 0xD9A84E)),
-        colored("slate", "Slate", "Quiet blue-grey",
-                light: ThemeTones(0xD3D8DF, 0xF7F9FB, 0xACB5C1, 0x1F2933, 0x3E5C76),
-                dark: ThemeTones(0x14181D, 0x2E353D, 0x21262C, 0xE4E9EE, 0x8AA4BC)),
-        colored("cherry", "Cherry", "Bold reds",
-                light: ThemeTones(0xF2D4D4, 0xFFFFFF, 0xDEA2A2, 0x3F1010, 0xC62828),
-                dark: ThemeTones(0x1E0A0A, 0x451C1C, 0x301313, 0xFADCDC, 0xEF5350)),
-        colored("citrus", "Citrus", "Lemon and lime",
-                light: ThemeTones(0xF2EBC3, 0xFFFFF5, 0xDFD086, 0x3A3410, 0xE0A800),
-                dark: ThemeTones(0x1D1A09, 0x3F3A17, 0x2C2810, 0xF7F1CF, 0xFFD54F)),
-        colored("midnight", "Midnight", "Indigo night sky",
-                light: ThemeTones(0xD8DBEF, 0xFFFFFF, 0xB2B7DE, 0x1A1F4A, 0x3949AB),
-                dark: ThemeTones(0x090C1E, 0x1E2447, 0x141933, 0xE1E5FF, 0x7986CB)),
-        colored("lagoon", "Lagoon", "Tropical teal",
-                light: ThemeTones(0xD2ECEF, 0xFFFFFF, 0xA3D6DC, 0x0F3438, 0x00909E),
-                dark: ThemeTones(0x091D20, 0x1B4247, 0x132F33, 0xDAF5F7, 0x26C6DA)),
-        colored("mocha", "Mocha", "Coffee and cream",
-                light: ThemeTones(0xE6DAD0, 0xFBF7F3, 0xCBB5A4, 0x3B2A20, 0x8D5B3E),
-                dark: ThemeTones(0x1B1410, 0x3B2E26, 0x2A201A, 0xF1E6DE, 0xC49A7A)),
-        colored("graphite", "Graphite", "Pure black and white",
-                light: ThemeTones(0xE0E0E0, 0xFFFFFF, 0xBBBBBB, 0x111111, 0x2B2B2B),
-                dark: ThemeTones(0x0D0D0D, 0x2A2A2A, 0x1C1C1C, 0xF2F2F2, 0xE6E6E6)),
-        colored("neon", "Neon", "Electric magenta",
-                light: ThemeTones(0xECE6F7, 0xFFFFFF, 0xD3C5ED, 0x1B1033, 0xD81B8C),
-                dark: ThemeTones(0x09060F, 0x1E1530, 0x140E22, 0xF3EDFF, 0xFF3EC8)),
-        colored("olive", "Olive", "Earthy green-gold",
-                light: ThemeTones(0xDADDC6, 0xFDFDF6, 0xBCC199, 0x2A2E14, 0x6B7A1E),
-                dark: ThemeTones(0x16180F, 0x33382A, 0x24281C, 0xEEF0E0, 0xAABB55)),
-        colored("plum", "Plum", "Rich purple-red",
-                light: ThemeTones(0xE8D6E5, 0xFFFFFF, 0xCFACCA, 0x3A1435, 0x8E2C82),
-                dark: ThemeTones(0x1B0E1A, 0x3E2639, 0x2B1A28, 0xF6E5F3, 0xCE6FC2)),
-        colored("terminal", "Terminal", "Retro green screen",
-                light: ThemeTones(0xE0EBE0, 0xFFFFFF, 0xBCD1BC, 0x0F2A12, 0x1B8F3A),
-                dark: ThemeTones(0x040804, 0x0F1F11, 0x0A150B, 0x8CFF9C, 0x33D35A)),
-        colored("frost", "Frost", "Icy pale blues",
-                light: ThemeTones(0xE3E8EF, 0xFFFFFF, 0xC5CEDC, 0x26303D, 0x4C7BB0),
-                dark: ThemeTones(0x1C222B, 0x343E4C, 0x28303B, 0xEAF0F6, 0x8CC4D8)),
-        colored("copper", "Copper", "Burnished metal",
-                light: ThemeTones(0xE8D7CB, 0xFFF9F5, 0xD3AF98, 0x3C2416, 0xB0601A),
-                dark: ThemeTones(0x1A110C, 0x3D2A1F, 0x2B1D15, 0xF4E4D8, 0xE08E4F)),
+    /// Cream caps with candy-coloured modifiers.
+    private static func arcade(_ variant: String, light: (UInt32, UInt32), dark: (UInt32, UInt32),
+                               _ mods: KeyMods) -> ThemeDefinition {
+        return colourway("Arcade", variant, font: "mono", roundness: 0.28, light: light, dark: dark, mods: mods)
+    }
+
+    /// Neutral caps with one or two bright accents.
+    private static func studio(_ variant: String, light: (UInt32, UInt32), dark: (UInt32, UInt32),
+                               _ mods: KeyMods) -> ThemeDefinition {
+        return colourway("Studio", variant, font: nil, roundness: 0.34, light: light, dark: dark, mods: mods)
+    }
+
+    /// Plain caps; shift, 123 and return in a single colour.
+    private static func solo(_ variant: String, _ accent: UInt32) -> ThemeDefinition {
+        return colourway("Solo", variant, font: "rounded", roundness: 0.3,
+                         light: (0xFAFAFA, 0x2C2C2E), dark: (0x3A3A3D, 0xF2F2F4),
+                         mods: KeyMods(shift: accent, numbers: accent, ret: accent))
+    }
+
+    /// Warm cream caps with softly rounded edges.
+    private static func cafe(_ variant: String, light: (UInt32, UInt32), dark: (UInt32, UInt32),
+                             _ mods: KeyMods) -> ThemeDefinition {
+        return colourway("Café", variant, font: "rounded", roundness: 0.42, light: light, dark: dark, mods: mods)
+    }
+
+    /// Caps tinted through in one colour.
+    private static func tide(_ variant: String, light: (UInt32, UInt32), dark: (UInt32, UInt32),
+                             _ mods: KeyMods) -> ThemeDefinition {
+        return colourway("Tide", variant, font: nil, roundness: 0.36, light: light, dark: dark, mods: mods)
+    }
+
+    static let keycapThemes: [ThemeDefinition] = [
+        arcade("Classic", light: (0xF4EFDD, 0x2B2A27), dark: (0x3B3936, 0xEEEAE0),
+               KeyMods(shift: 0xD6454A, delete: 0xDE7A36, numbers: 0xE2C445, ret: 0x4D93D9)),
+        arcade("Pastel", light: (0xFBF6F0, 0x3A3340), dark: (0x3E3946, 0xF3EEF6),
+               KeyMods(shift: 0xEF8AA6, delete: 0xF3B26B, numbers: 0x9FD8B0, ret: 0x94B3EE)),
+        arcade("Dusk", light: (0xF2ECE6, 0x2E2733), dark: (0x2F2A36, 0xEDE6F2),
+               KeyMods(shift: 0xA84BC8, delete: 0xE2577C, numbers: 0xEFA23E, ret: 0x3CB1AD)),
+        arcade("Citrus", light: (0xF6F3E4, 0x2C2B22), dark: (0x34342C, 0xEEEDE2),
+               KeyMods(shift: 0x7DBB42, delete: 0xF2A93B, numbers: 0xF4D35E, ret: 0xE4573D)),
+
+        studio("Aurora", light: (0xE9EAEE, 0x2B2D33), dark: (0x35373C, 0xE6E7EB),
+               KeyMods(shift: 0x5EC3A6, delete: 0xE6C342, numbers: 0x5EC3A6, ret: 0xE2694E)),
+        studio("Volt", light: (0xEEF1E6, 0x2C3122), dark: (0x2E3128, 0xD9EE9A),
+               KeyMods(shift: 0xB6DB4C, numbers: 0xB6DB4C, ret: 0xB6DB4C)),
+        studio("Violet", light: (0xECEAF3, 0x2A2740), dark: (0x2B2A3A, 0xE3DFFF),
+               KeyMods(shift: 0x6B4BDD, numbers: 0x6B4BDD, ret: 0x6B4BDD)),
+        studio("Blossom", light: (0xF6EDEE, 0x3A2B30), dark: (0x3A3034, 0xF4E6E9),
+               KeyMods(shift: 0xE57F8E, delete: 0x2D3352, numbers: 0xE57F8E, space: 0xE9A3AE, ret: 0xE57F8E)),
+
+        solo("Ember", 0xE87538),
+        solo("Cobalt", 0x4870D8),
+        solo("Fern", 0x5B8A52),
+        solo("Crimson", 0xCF453A),
+
+        cafe("Mocha", light: (0xF5EFE4, 0x5B4F45), dark: (0x4A4139, 0xF2EADF),
+             KeyMods(shift: 0x5B3F31, numbers: 0x5B3F31, ret: 0x5B3F31)),
+        cafe("Latte", light: (0xF7F1E7, 0x5E5045), dark: (0x4B4037, 0xF3EBE0),
+             KeyMods(shift: 0xC59D78, delete: 0x8A6A51, numbers: 0xC59D78, ret: 0x6A4935)),
+        cafe("Matcha", light: (0xF1F4EA, 0x40503A), dark: (0x3A4434, 0xE9F0E1),
+             KeyMods(shift: 0x5D8A4D, delete: 0xA8C698, numbers: 0xA8C698, ret: 0x5D8A4D)),
+        cafe("Rosé", light: (0xF8F0EE, 0x5A4447), dark: (0x4A3B3E, 0xF6E9EA),
+             KeyMods(shift: 0xD77B89, delete: 0x2E3452, numbers: 0xD77B89, space: 0xE6A6B0, ret: 0xD77B89)),
+
+        tide("Indigo", light: (0xDDE5F7, 0x1E3159), dark: (0x232F58, 0xDCE5FF),
+             KeyMods(shift: 0x4B6CDA, numbers: 0x4B6CDA, ret: 0x4B6CDA)),
+        tide("Lagoon", light: (0xD6EDF3, 0x0F3D49), dark: (0x1B4752, 0xD8F2F8),
+             KeyMods(shift: 0x23A0B6, numbers: 0x23A0B6, ret: 0x23A0B6)),
+        tide("Glacier", light: (0xEEF3F9, 0x2A3B4F), dark: (0x2C3644, 0xE6EEF7),
+             KeyMods(shift: 0x9DBEE6, numbers: 0x9DBEE6, ret: 0x6C9BD6)),
     ]
 }

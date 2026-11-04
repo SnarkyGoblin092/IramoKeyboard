@@ -16,6 +16,8 @@ struct SystemThemeSections: View {
     /// The style being edited: the theme's own, or (before the first change) what the old global settings give.
     private var style: SystemStyle {
         if let own = SystemEdits.decode(systemEdits)[theme.id] { return own }
+        // A colour theme starts from its own style.
+        if let preset = ThemeCatalog.base(id: theme.id).systemStyle { return preset }
         let defaults = SharedStore.defaults
         var start = SystemStyle()
         start.roundness = defaults.object(forKey: SettingKey.keyRoundness) as? Double ?? SettingDefault.keyRoundness

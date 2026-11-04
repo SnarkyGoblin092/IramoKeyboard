@@ -37,7 +37,17 @@ enum Theme {
         var panelBackground: UIColor
         var stripFill: UIColor
         var separator: UIColor
+        /// A keycap theme's modifier keys, each in its own colour.
+        var roles: [KeyRole: RoleColor] = [:]
     }
+
+    struct RoleColor {
+        let fill: UIColor
+        let text: UIColor
+    }
+
+    /// A key's own colour and label colour in a keycap theme (nil: the usual letter or function colours).
+    static func roleColor(_ role: KeyRole) -> RoleColor? { return palette.roles[role] }
 
     private(set) static var definition: ThemeDefinition = ThemeCatalog.native
     private(set) static var palette: Palette = makePalette(for: ThemeCatalog.native)
@@ -101,6 +111,9 @@ enum Theme {
 
     /// Native keys carry the 1pt shadow line under them.
     static var drawsKeyShadow: Bool { return definition.hasSolidKeys }
+
+    /// 3D keycaps: a face on a darker skirt that sinks when pressed.
+    static var isKeycap: Bool { return kind == .keycap }
     // MARK: Key style (the Surface, Border and Glow of the system themes)
 
     enum KeySurface { case flat, sheen, raised }
@@ -145,7 +158,7 @@ enum Theme {
     /// one weight; the system designs keep the weight asked for.
     static func keyFont(ofSize size: CGFloat, weight asked: UIFont.Weight = .regular) -> UIFont {
         let weight = asked
-        let choice = KeyFont.named(Prefs.keyFont)
+        let choice = KeyFont.named(definition.fontID(chosen: Prefs.keyFont))
         if let name = choice.postScriptName, let font = UIFont(name: name, size: size) { return font }
         let system = UIFont.systemFont(ofSize: size, weight: weight)
         let design: UIFontDescriptor.SystemDesign
@@ -345,34 +358,41 @@ enum Theme {
                 stripFill: UIColor.clear,
                 separator: pick(black(0.12), white(0.20)))
 
-        case .colored:
-            let colors = theme.colors ?? ThemeColors(light: ThemeTones(0xD1D5DB, 0xFFFFFF, 0xACB3BE, 0x000000, 0x007AFF),
-                                                     dark: ThemeTones(0x2B2B2B, 0x6B6B6B, 0x454545, 0xFFFFFF, 0x0A84FF))
+        case .keycap:
+            let colors = theme.colors ?? ThemeColors(
+                light: ThemeTones(key: 0xFFFFFF, text: 0x000000, dark: false, mods: KeyMods(ret: 0x007AFF)),
+                dark: ThemeTones(key: 0x6B6B6B, text: 0xFFFFFF, dark: true, mods: KeyMods(ret: 0x0A84FF)))
             // Each colour follows the app's light or dark mode.
-            func tone(_ part: KeyPath<ThemeTones, ThemeRGBA>, _ alpha: CGFloat = 1) -> UIColor {
-                let light = colors.light[keyPath: part].uiColor.withAlphaComponent(alpha)
-                let dark = colors.dark[keyPath: part].uiColor.withAlphaComponent(alpha)
-                return pick(light, dark)
+            func both(_ make: (ThemeTones) -> ThemeRGBA, _ alpha: CGFloat = 1) -> UIColor {
+                return pick(make(colors.light).uiColor.withAlphaComponent(alpha),
+                            make(colors.dark).uiColor.withAlphaComponent(alpha))
             }
-            let onAccentLight = colors.light.accentIsLight ? UIColor(white: 0.08, alpha: 1) : UIColor.white
-            let onAccentDark = colors.dark.accentIsLight ? UIColor(white: 0.08, alpha: 1) : UIColor.white
-            return Palette(
-                accent: tone(\.accent),
-                onAccent: pick(onAccentLight, onAccentDark),
-                text: tone(\.text),
-                keyText: tone(\.text),
-                secondaryText: tone(\.text, 0.6),
-                keySecondaryText: tone(\.text, 0.6),
-                letterKey: tone(\.key),
-                functionKey: tone(\.function),
-                letterKeyPressed: tone(\.function),
-                functionKeyPressed: tone(\.key),
+            var roles: [KeyRole: RoleColor] = [:]
+            for role in [KeyRole.shift, .delete, .numbers, .space, .ret] {
+                // Only the keys with a colour of their own (the others keep the usual colours and states).
+                let plain = role == .space ? colors.light.key : colors.light.function
+                guard role == .ret || colors.light.fill(role) != plain else { continue }
+                roles[role] = RoleColor(fill: both { $0.fill(role) }, text: both { $0.label(role) })
+            }
+            var palette = Palette(
+                accent: both { $0.ret },
+                onAccent: both { $0.label(.ret) },
+                text: both { $0.text },
+                keyText: both { $0.text },
+                secondaryText: both({ $0.text }, 0.6),
+                keySecondaryText: both({ $0.text }, 0.6),
+                letterKey: both { $0.key },
+                functionKey: both { $0.function },
+                letterKeyPressed: both { $0.function },
+                functionKeyPressed: both { $0.key },
                 keyShadow: pick(black(0.22), black(0.55)),
-                keyBorder: tone(\.text, 0.18),
-                popupFill: tone(\.key),
-                panelBackground: tone(\.panel),
+                keyBorder: both({ $0.text }, 0.18),
+                popupFill: both { $0.key },
+                panelBackground: UIColor.clear,   // the keys sit on the system keyboard backdrop
                 stripFill: UIColor.clear,
-                separator: tone(\.text, 0.15))
+                separator: both({ $0.text }, 0.15))
+            palette.roles = roles
+            return palette
         }
     }
 }

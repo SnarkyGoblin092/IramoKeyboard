@@ -64,13 +64,29 @@ struct ThemesView: View {
         .padding(.top, 4)
     }
 
+    /// The system themes, then each keycap family under its own heading.
     private var grid: some View {
-        LazyVGrid(columns: columns, spacing: 18) {
-            ForEach(ThemeCatalog.themes(ThemeCatalog.all), id: \.id) { theme in
-                ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
-                    guard theme.id != themeID else { return }
-                    Feedback.choose()
-                    themeID = theme.id
+        let themes = ThemeCatalog.themes(ThemeCatalog.all)
+        let sections: [(title: String, themes: [ThemeDefinition])] =
+            [(tr("System"), themes.filter { $0.family == nil })]
+            + ThemeCatalog.families.map { family in (tr("%@ 3D", family), themes.filter { $0.family == family }) }
+        return VStack(alignment: .leading, spacing: 22) {
+            ForEach(sections, id: \.title) { section in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Text(section.title).font(.title3.weight(.semibold)).foregroundColor(.secondary)
+                        Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 1)
+                        Text("\(section.themes.count)").font(.subheadline).foregroundColor(.secondary)
+                    }
+                    LazyVGrid(columns: columns, spacing: 18) {
+                        ForEach(section.themes, id: \.id) { theme in
+                            ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
+                                guard theme.id != themeID else { return }
+                                Feedback.choose()
+                                themeID = theme.id
+                            }
+                        }
+                    }
                 }
             }
         }

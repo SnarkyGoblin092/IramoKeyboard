@@ -6,6 +6,7 @@ import UIKit
 /// Looks (see `Theme`):
 ///  * native       - the iOS key cap (opaque, 5pt corners, 1pt shadow line)
 ///  * transparent / gradient - translucent fills with a thin outline, no shadow
+///  * keycap       - 3D keycaps: a face on a darker skirt that sinks when pressed; modifiers in their own colours
 ///  * liquid glass - a real `UIGlassEffect` piece (iOS 26) inside the keyboard's shared glass container,
 ///                   tinted a little for function keys, with a springy press
 final class KeyView: UIView {
@@ -27,10 +28,19 @@ final class KeyView: UIView {
     /// A glow around the labels.
     private let labelGlow: (radius: CGFloat, opacity: Float)?
 
+    /// 3D keycap themes: the key's own layer is the darker skirt and this is the face on it.
+    private let isKeycap: Bool
+    private let face = CALayer()
+
     var isPressed = false {
         didSet {
             guard oldValue != isPressed else { return }
             refreshAppearance()
+            if isKeycap {
+                // The face sinks into its skirt, labels with it.
+                setNeedsLayout()
+                layoutIfNeeded()
+            }
             playPressEffects(pressed: isPressed)
         }
     }
@@ -45,6 +55,7 @@ final class KeyView: UIView {
         self.glow = Theme.keyGlow
         self.glassView = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
         self.labelGlow = Theme.labelGlow
+        self.isKeycap = Theme.isKeycap && !Theme.usesRealGlass
         super.init(frame: .zero)
         isUserInteractionEnabled = false
 
@@ -57,6 +68,10 @@ final class KeyView: UIView {
             layer.cornerCurve = .continuous
             if drawsBorder {
                 layer.borderWidth = Theme.keyBorderWidth
+            }
+            if isKeycap {
+                face.cornerCurve = .continuous
+                layer.addSublayer(face)
             }
             if surface != .flat {
                 sheen.locations = [0, 0.55, 1]
@@ -175,9 +190,25 @@ final class KeyView: UIView {
         return false
     }
 
+    /// The key's part in a keycap theme's colours.
+    private var role: KeyRole? {
+        switch spec.action {
+        case .shift: return .shift
+        case .backspace: return .delete
+        case .showNumbers, .showSymbols, .showLetters: return .numbers
+        case .space: return .space
+        case .enter: return .ret
+        default: return nil
+        }
+    }
+
     private func refreshAppearance() {
+        // A keycap theme's modifier in its own colour (shift keeps it when on; its symbol shows the state).
+        let own = role.flatMap { Theme.roleColor($0) }
         let textColor: UIColor
-        if spec.action == .enter {
+        if let own = own {
+            textColor = own.text
+        } else if spec.action == .enter {
             textColor = Theme.onReturnKey
         } else if usesAccent {
             textColor = Theme.onShiftOn
@@ -194,7 +225,9 @@ final class KeyView: UIView {
 
         let fill: UIColor
         // A press does not change the key's colour: lighting it up is the Flash effect's job.
-        if spec.action == .enter {
+        if let own = own {
+            fill = own.fill
+        } else if spec.action == .enter {
             fill = Theme.returnKey
         } else if usesAccent {
             fill = Theme.shiftOn
@@ -206,9 +239,32 @@ final class KeyView: UIView {
         if let glassView = glassView {
             applyGlass(glassView, fill: fill)
         } else {
-            backgroundColor = fill
+            applyCapColors(fill: fill)
             applyShadow()
         }
+    }
+
+    /// The key's fill in this appearance: a keycap's face on its darker skirt.
+    private func applyCapColors(fill: UIColor) {
+        let fill = fill.resolvedColor(with: traitCollection)
+        guard isKeycap else {
+            backgroundColor = fill
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let dark = traitCollection.userInterfaceStyle == .dark
+        backgroundColor = KeyView.shade(fill, by: CGFloat(Keycap.skirtShade(dark: dark)))
+        face.backgroundColor = fill.cgColor
+        CATransaction.commit()
+    }
+
+    /// `color` darkened toward black by `amount` (0...1).
+    private static func shade(_ color: UIColor, by amount: CGFloat) -> UIColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard color.getRed(&r, green: &g, blue: &b, alpha: &a) else { return color }
+        let keep = 1 - amount
+        return UIColor(red: r * keep, green: g * keep, blue: b * keep, alpha: a)
     }
 
     /// The shadow under or around the key: the accent glow, the raised key's drop shadow (flattened while pressed),
@@ -220,6 +276,12 @@ final class KeyView: UIView {
             target.shadowOpacity = isPressed ? glow.opacity * 0.6 : glow.opacity
             target.shadowRadius = glow.radius
             target.shadowOffset = .zero
+        } else if isKeycap {
+            // A soft contact shadow, so the keycap stands off the backdrop (less while pressed).
+            target.shadowColor = UIColor.black.cgColor
+            target.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.5 : 0.22
+            target.shadowRadius = isPressed ? 0.5 : 1.2
+            target.shadowOffset = CGSize(width: 0, height: isPressed ? 0.5 : 1.2)
         } else if surface == .raised {
             let dark = traitCollection.userInterfaceStyle == .dark
             target.shadowColor = UIColor.black.cgColor
@@ -318,18 +380,39 @@ final class KeyView: UIView {
             shadowTarget.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
             applyShadow()
             syncHalo()
+            let content = layoutCap(radius: radius)
             if surface != .flat {
                 let dark = traitCollection.userInterfaceStyle == .dark
-                sheen.frame = bounds
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                sheen.frame = content
                 sheen.cornerRadius = radius
                 sheen.colors = Theme.sheenColors(dark: dark)
+                CATransaction.commit()
             }
         }
         layoutEffects(radius: radius)
-        label.frame = bounds.insetBy(dx: 2, dy: 0)
+        let content = isKeycap ? face.frame : bounds
+        label.frame = content.insetBy(dx: 2, dy: 0)
         layoutHint(radius: radius)
+        if isKeycap { hintLabel.frame.origin.y += content.minY }
         let side: CGFloat = 26
-        iconView.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        iconView.frame = CGRect(x: content.midX - side / 2, y: content.midY - side / 2, width: side, height: side)
+    }
+
+    /// Lays out the keycap's face; returns it (the whole key for the other themes).
+    @discardableResult private func layoutCap(radius: CGFloat) -> CGRect {
+        guard isKeycap else { return bounds }
+        let size = bounds.size
+        let depth = Keycap.depth(height: size.height)
+        let side = Keycap.sideInset
+        let content = CGRect(x: side, y: isPressed ? depth - 1 : 0, width: size.width - 2 * side, height: size.height - depth)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        face.frame = content
+        face.cornerRadius = max(0, radius - side)
+        CATransaction.commit()
+        return content
     }
 
     // MARK: Press effects (the Effects screen)
