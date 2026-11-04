@@ -2179,6 +2179,11 @@ extension KeyboardViewController: EmojiPanelDelegate {
     func emojiPanelDidClose(_ panel: EmojiPanel) {
         hideEmojiPanel()
     }
+
+    func emojiPanelDidTapHide(_ panel: EmojiPanel) {
+        hideEmojiPanel(refresh: false)
+        dismissKeyboard()
+    }
 }
 
 // MARK: - EmojiSearchBarDelegate
@@ -2191,5 +2196,10 @@ extension KeyboardViewController: EmojiSearchBarDelegate {
 
     func emojiSearchBarDidTapBack(_ bar: EmojiSearchBar) {
         endEmojiSearch(returnToPicker: true)
+    }
+
+    func emojiSearchBarDidTapHide(_ bar: EmojiSearchBar) {
+        endEmojiSearch(returnToPicker: false)
+        dismissKeyboard()
     }
 }

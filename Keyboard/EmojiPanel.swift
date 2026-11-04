@@ -18,6 +18,7 @@ protocol EmojiPanelDelegate: AnyObject {
     func emojiPanelDidTapBackspace(_ panel: EmojiPanel)
     func emojiPanelDidTapSearch(_ panel: EmojiPanel)
     func emojiPanelDidClose(_ panel: EmojiPanel)
+    func emojiPanelDidTapHide(_ panel: EmojiPanel)
 }
 
 /// A button that fires once on touch-down and then repeats while held (used for backspace).
@@ -264,6 +265,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
+    /// Puts the keyboard away: always there, beside the search field (in the corner when there is no field).
+    private let hideButton = HitButton(type: .system)
 
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
@@ -318,6 +321,9 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         return (337 * scale(forWidth: width)).rounded()
     }
 
+    /// The room the hide button takes at the right of the search field.
+    private let hideWidth: CGFloat = 38
+
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
     private var searchHeight: CGFloat = 36
 
@@ -342,6 +348,14 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchGlass.contentView.addSubview(searchLabel)
         searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
         searchGlass.contentView.addSubview(searchButton)
+
+        hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
+                            for: .normal)
+        hideButton.tintColor = EmojiLook.text
+        hideButton.accessibilityLabel = "Hide keyboard"
+        hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
+        addSubview(hideButton)
 
         // Section title
         titleLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
@@ -685,7 +699,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // The pill hugs the keyboard's rounded top corners: small insets, fully rounded ends, a little taller.
         let pillTop: CGFloat = compact ? 5 * f : 6 * f
         searchHeight = wide ? 44 : (compact ? 44 : 46) * f
-        searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf, height: searchHeight)
+        searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf - hideWidth, height: searchHeight)
+        hideButton.frame = CGRect(x: searchGlass.frame.maxX, y: pillTop, width: hideWidth + 6 * xf, height: searchHeight)
         searchButton.frame = searchGlass.bounds
         let ix = wide ? f : xf      // the icon and placeholder keep their spacing on iPad
         // iPad: the same icon and text size as the active search field (EmojiSearchBar).
@@ -760,7 +775,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
         func placeSearch(y: CGFloat) {
             searchHeight = pill
-            searchGlass.frame = CGRect(x: 6 * xf, y: y, width: width - 12 * xf, height: pill)
+            searchGlass.frame = CGRect(x: 6 * xf, y: y, width: width - 12 * xf - hideWidth, height: pill)
+            hideButton.frame = CGRect(x: searchGlass.frame.maxX, y: y, width: hideWidth + 6 * xf, height: pill)
             searchButton.frame = searchGlass.bounds
             let ix = wide ? f : xf
             let iconSide = wide ? 16 : 17 * f
@@ -770,6 +786,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             searchLabel.frame = CGRect(x: labelX, y: 0, width: max(0, searchGlass.bounds.width - labelX - 13 * ix), height: pill)
         }
 
+        if !searchShown {
+            // No search field to sit beside: the button floats in the top corner.
+            hideButton.frame = CGRect(x: width - hideWidth - 2, y: 2, width: hideWidth, height: 34)
+        }
         if Prefs.emojiSearchPosition == "top" {
             placeSearch(y: top)
             top += pill + 3 * f
@@ -847,6 +867,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             return super.hitTest(point, with: event)
         }
         let f = EmojiPanel.scale(forWidth: bounds.width)
+        if hideButton.frame.insetBy(dx: -4, dy: -4).contains(point) { return hideButton }
         if searchShown {
             if stockLayout {
                 if point.y < searchGlass.frame.maxY + 4 { return searchButton }
@@ -879,6 +900,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     @objc private func closeTapped() {
         Haptics.shared.keyPress()
         delegate?.emojiPanelDidClose(self)
+    }
+
+    @objc private func hideTapped() {
+        Haptics.shared.keyPress()
+        delegate?.emojiPanelDidTapHide(self)
     }
 
     @objc private func searchTapped() {

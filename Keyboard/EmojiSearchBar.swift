@@ -3,6 +3,7 @@ import UIKit
 protocol EmojiSearchBarDelegate: AnyObject {
     func emojiSearchBar(_ bar: EmojiSearchBar, didSelect emoji: String)
     func emojiSearchBarDidTapBack(_ bar: EmojiSearchBar)
+    func emojiSearchBarDidTapHide(_ bar: EmojiSearchBar)
 }
 
 /// Replaces the suggestion bar while searching for emoji: a back button, the text typed so far
@@ -13,6 +14,7 @@ final class EmojiSearchBar: UIView {
     private let look = Theme.searchLook(besideKeys: true)
     private lazy var glass = FlatPanel(background: look.fill, allowGlass: look.glass)
     private let backButton = HitButton(type: .system)
+    private let hideButton = HitButton(type: .system)
     private let iconView = UIImageView()
     private let queryLabel = UILabel()
     private let divider = UIView()
@@ -34,6 +36,14 @@ final class EmojiSearchBar: UIView {
         backButton.tintColor = look.text
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         glass.contentView.addSubview(backButton)
+
+        hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)),
+                            for: .normal)
+        hideButton.tintColor = look.text
+        hideButton.accessibilityLabel = "Hide keyboard"
+        hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
+        glass.contentView.addSubview(hideButton)
 
         iconView.image = UIImage(systemName: "magnifyingglass")
         iconView.tintColor = look.secondaryText
@@ -98,6 +108,7 @@ final class EmojiSearchBar: UIView {
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
+        hideButton.frame = CGRect(x: area.width - 46, y: 0, width: 46, height: area.height)
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
         // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).
@@ -113,7 +124,7 @@ final class EmojiSearchBar: UIView {
         let dividerX = 44 + queryWidth + 8
         divider.frame = CGRect(x: dividerX, y: area.height * 0.25, width: 1, height: area.height * 0.5)
 
-        scroll.frame = CGRect(x: dividerX + 4, y: 0, width: max(0, area.width - dividerX - 10), height: area.height)
+        scroll.frame = CGRect(x: dividerX + 4, y: 0, width: max(0, area.width - dividerX - 50), height: area.height)
         let itemWidth: CGFloat = 40
         for (index, button) in resultButtons.enumerated() {
             button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 0, width: itemWidth, height: area.height)
@@ -126,6 +137,7 @@ final class EmojiSearchBar: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
         if point.x < 58 { return backButton }
+        if point.x > glass.frame.maxX - 50 { return hideButton }
         let local = convert(point, to: scroll)
         if scroll.bounds.insetBy(dx: -6, dy: -20).contains(local) {
             let nearest = HitTesting.nearestByX(local.x, in: resultButtons, relativeTo: scroll)
@@ -137,6 +149,11 @@ final class EmojiSearchBar: UIView {
     @objc private func backTapped() {
         Haptics.shared.keyPress()
         delegate?.emojiSearchBarDidTapBack(self)
+    }
+
+    @objc private func hideTapped() {
+        Haptics.shared.keyPress()
+        delegate?.emojiSearchBarDidTapHide(self)
     }
 
     @objc private func resultTapped(_ sender: UIButton) {

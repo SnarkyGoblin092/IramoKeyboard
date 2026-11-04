@@ -467,6 +467,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     func emojiPanelDidTapBackspace(_ panel: EmojiPanel) {}
     func emojiPanelDidTapSearch(_ panel: EmojiPanel) {}
     func emojiPanelDidClose(_ panel: EmojiPanel) {}
+    func emojiPanelDidTapHide(_ panel: EmojiPanel) {}
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {}
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {}
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {
