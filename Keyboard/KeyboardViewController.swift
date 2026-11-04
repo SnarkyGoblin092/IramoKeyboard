@@ -14,6 +14,8 @@ final class KeyboardViewController: UIInputViewController {
     private var hiddenForEmoji: [UIView] = []
     /// The Functions panel, shown in place of the keys (the suggestion bar's left button).
     private var toolsPanel: ToolsPanel?
+    /// What the case tool last wrote (it cannot re-select it, so it finds it again before the caret).
+    private var lastCased: String?
     /// The Functions panel's Clipboard: the last copied texts, in place of the keys.
     private var clipboardPanel: ClipboardPanel?
     /// The system clipboard's change count when it was last read (it is only read again once it changed).
@@ -309,7 +311,13 @@ final class KeyboardViewController: UIInputViewController {
         ensureStores()
     }
 
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        refreshToolsSoon()   // copy, cut and the case tool follow the selection while the functions stay open
+    }
+
     override func textDidChange(_ textInput: UITextInput?) {
+        refreshToolsSoon()
         updateReturnTitle()
         scheduleRefresh()   // auto-shift and suggestions are refreshed off the typing path
     }
@@ -1991,8 +1999,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
             seenPasteboardChange = UIPasteboard.general.changeCount
             settings.rememberClipboard(selected)
             if tool == .cut { textDocumentProxy.deleteBackward() }
-            refreshToolsSoon()
-            scheduleRefresh()
+            refreshToolsSoon()   // copying touches nothing in the field, so the selection stays
         case .paste:
             guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
             textDocumentProxy.insertText(text)
@@ -2016,17 +2023,27 @@ extension KeyboardViewController: ToolsPanelDelegate {
             hideTools()
             openApp()
         case .changeCase:
-            guard let selected = textDocumentProxy.selectedText, !selected.isEmpty else { return }
+            // The text proxy cannot select, so the result is remembered: while the caret is still right after it,
+            // the next press cycles it again.
+            var source = textDocumentProxy.selectedText ?? ""
+            var again = false
+            if source.isEmpty, let last = lastCased, (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) {
+                source = last
+                again = true
+            }
+            guard !source.isEmpty else { return }
             // UPPERCASE, then lowercase, then Capitalized, then round again.
             let next: String
-            if selected == selected.uppercased() && selected != selected.lowercased() {
-                next = selected.lowercased()
-            } else if selected == selected.lowercased() {
-                next = selected.capitalized
+            if source == source.uppercased() && source != source.lowercased() {
+                next = source.lowercased()
+            } else if source == source.lowercased() {
+                next = source.capitalized
             } else {
-                next = selected.uppercased()
+                next = source.uppercased()
             }
+            if again { for _ in 0..<source.count { textDocumentProxy.deleteBackward() } }
             textDocumentProxy.insertText(next)
+            lastCased = next
             refreshToolsSoon()
             scheduleRefresh()
         case .deleteWord:
@@ -2161,7 +2178,10 @@ extension KeyboardViewController: ToolsPanelDelegate {
         switch tool {
         case .copy, .cut: return hasFullAccess && !(textDocumentProxy.selectedText ?? "").isEmpty
         case .paste, .clipboard: return hasFullAccess
-        case .changeCase: return !(textDocumentProxy.selectedText ?? "").isEmpty
+        case .changeCase:
+            if !(textDocumentProxy.selectedText ?? "").isEmpty { return true }
+            if let last = lastCased { return (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) }
+            return false
         case .vibration: return hasFullAccess
         default: return true
         }

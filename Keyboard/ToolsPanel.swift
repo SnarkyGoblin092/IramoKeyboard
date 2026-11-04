@@ -33,7 +33,7 @@ final class ToolsPanel: UIScrollView {
             addSubview(base)
             onFill.backgroundColor = Theme.accent.withAlphaComponent(0.22)
             onFill.layer.cornerCurve = .continuous
-            onFill.isHidden = true
+            onFill.alpha = 0
             addSubview(onFill)
             icon.image = UIImage(systemName: tool.symbol,
                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular))
@@ -55,10 +55,20 @@ final class ToolsPanel: UIScrollView {
 
         func show(on: Bool?, detail text: String?, available: Bool) {
             let lit = on == true
-            onFill.isHidden = !lit
-            icon.tintColor = lit ? Theme.accent : Theme.barIcons
             isAvailable = available
-            alpha = available ? 1 : 0.35
+            let changes = {
+                self.onFill.alpha = lit ? 1 : 0
+                self.onFill.transform = lit ? .identity : CGAffineTransform(scaleX: 0.85, y: 0.85)
+                self.icon.tintColor = lit ? Theme.accent : Theme.barIcons
+                self.alpha = available ? 1 : 0.35
+            }
+            if window != nil {
+                // The wash grows in behind the icon (and shrinks out) rather than switching.
+                UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0,
+                               options: [.beginFromCurrentState, .allowUserInteraction], animations: changes)
+            } else {
+                changes()
+            }
             accessibilityValue = text ?? (on.map { $0 ? "On" : "Off" })
         }
 
@@ -90,9 +100,6 @@ final class ToolsPanel: UIScrollView {
         showsHorizontalScrollIndicator = false
         alwaysBounceHorizontal = true
         delaysContentTouches = false
-        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
-        tap.cancelsTouchesInView = false
-        addGestureRecognizer(tap)
         panGestureRecognizer.delaysTouchesBegan = false
         for tool in tools {
             let tile = Tile(tool: tool)
@@ -123,8 +130,29 @@ final class ToolsPanel: UIScrollView {
         }
     }
 
-    @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
-        let x = recognizer.location(in: self).x
+    // A tap is read from the raw touches rather than a tap recogniser, which would hold the scrolling back: a flick
+    // that starts anywhere on the strip scrolls at once, and a touch that stays put is a tap.
+    private var touchStart: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        touchStart = touches.first?.location(in: self)
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        defer { touchStart = nil }
+        guard let start = touchStart, let end = touches.first?.location(in: self),
+              hypot(end.x - start.x, end.y - start.y) < 10, !isDragging, !isDecelerating else { return }
+        picked(atX: end.x)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        touchStart = nil
+        super.touchesCancelled(touches, with: event)
+    }
+
+    private func picked(atX x: CGFloat) {
         guard let tile = tiles.first(where: { x >= $0.frame.minX && x < $0.frame.maxX }), tile.enabled else { return }
         tile.flash()
         Haptics.shared.keyPress()
