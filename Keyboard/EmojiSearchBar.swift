@@ -44,7 +44,7 @@ final class EmojiSearchBar: UIView {
         hideIcon.contentMode = .center
         hideIcon.tintColor = Theme.barIcons
         hideIcon.isUserInteractionEnabled = false
-        hideIcon.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hideIcon.tag = 77
         hideButton.addSubview(hideIcon)
         hideButton.accessibilityLabel = "Hide keyboard"
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
@@ -115,6 +115,7 @@ final class EmojiSearchBar: UIView {
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
         let hideWidth = 66 - 2 * side   // the icon sits 33pt from the right edge, as in the suggestion bar
         hideButton.frame = CGRect(x: area.width - hideWidth, y: 0, width: hideWidth, height: area.height)
+        hideButton.viewWithTag(77)?.frame = hideButton.bounds
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
         // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).

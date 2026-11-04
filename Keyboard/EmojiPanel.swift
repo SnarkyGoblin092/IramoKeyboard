@@ -356,7 +356,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         hideIcon.contentMode = .center
         hideIcon.tintColor = Theme.barIcons
         hideIcon.isUserInteractionEnabled = false
-        hideIcon.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hideIcon.tag = 77
         hideButton.addSubview(hideIcon)
         hideButton.accessibilityLabel = "Hide keyboard"
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
@@ -684,6 +684,12 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     // MARK: Layout
 
+    /// Puts the hide button in `frame` with its icon centred in it (the middle of the gap beside the search pill).
+    private func placeHide(_ frame: CGRect) {
+        hideButton.frame = frame
+        hideButton.viewWithTag(77)?.frame = hideButton.bounds
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         let width = bounds.width
@@ -705,7 +711,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let pillTop: CGFloat = compact ? 5 * f : 6 * f
         searchHeight = wide ? 44 : (compact ? 44 : 46) * f
         searchGlass.frame = CGRect(x: 6 * xf, y: pillTop, width: width - 12 * xf - hideWidth, height: searchHeight)
-        hideButton.frame = CGRect(x: searchGlass.frame.maxX, y: pillTop, width: hideWidth + 6 * xf, height: searchHeight)
+        placeHide(CGRect(x: searchGlass.frame.maxX, y: pillTop, width: hideWidth + 6 * xf, height: searchHeight))
         searchButton.frame = searchGlass.bounds
         let ix = wide ? f : xf      // the icon and placeholder keep their spacing on iPad
         // iPad: the same icon and text size as the active search field (EmojiSearchBar).
@@ -781,7 +787,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         func placeSearch(y: CGFloat) {
             searchHeight = pill
             searchGlass.frame = CGRect(x: 6 * xf, y: y, width: width - 12 * xf - hideWidth, height: pill)
-            hideButton.frame = CGRect(x: searchGlass.frame.maxX, y: y, width: hideWidth + 6 * xf, height: pill)
+            placeHide(CGRect(x: searchGlass.frame.maxX, y: y, width: hideWidth + 6 * xf, height: pill))
             searchButton.frame = searchGlass.bounds
             let ix = wide ? f : xf
             let iconSide = wide ? 16 : 17 * f
@@ -793,7 +799,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
         if !searchShown {
             // No search field to sit beside: the button floats in the top corner.
-            hideButton.frame = CGRect(x: width - hideWidth - 2, y: 2, width: hideWidth, height: 34)
+            placeHide(CGRect(x: width - hideWidth - 2, y: 2, width: hideWidth, height: 34))
         }
         if Prefs.emojiSearchPosition == "top" {
             placeSearch(y: top)
