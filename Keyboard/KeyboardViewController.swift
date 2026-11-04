@@ -1940,8 +1940,8 @@ extension KeyboardViewController: ToolsPanelDelegate {
         let panel = ToolsPanel(tools: tools)
         panel.toolsDelegate = self
         toolsPanel = panel
+        panel.refresh()   // before it slides in, so the dimmed ones animate to their dimmed alpha
         suggestionBar.setTools(panel)
-        panel.refresh()
     }
 
     private func hideTools() {
@@ -1963,11 +1963,23 @@ extension KeyboardViewController: ToolsPanelDelegate {
         }
     }
 
+    /// The text proxy updates a moment after an edit, so the tiles (greyed without a selection) read it a beat later.
+    private func refreshToolsSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in self?.toolsPanel?.refresh() }
+    }
+
     func toolsPanel(_ panel: ToolsPanel, didPick tool: KeyboardTool) {
         switch tool {
         case .oneHanded:
-            // Off, then left hand, then right hand.
-            let next = Prefs.oneHanded == "off" ? "left" : (Prefs.oneHanded == "left" ? "right" : "off")
+            // On or off; the arrow beside the keys switches sides, and the side last used comes back.
+            let sideKey = "oneHandedLastSide"
+            let next: String
+            if Prefs.oneHanded == "off" {
+                next = SharedStore.defaults.string(forKey: sideKey) ?? "right"
+            } else {
+                SharedStore.defaults.set(Prefs.oneHanded, forKey: sideKey)
+                next = "off"
+            }
             saveTool(next, forKey: SettingKey.oneHanded, rebuild: false)
             keyboardView.setNeedsLayout()
         case .emoji:
@@ -1979,12 +1991,12 @@ extension KeyboardViewController: ToolsPanelDelegate {
             seenPasteboardChange = UIPasteboard.general.changeCount
             settings.rememberClipboard(selected)
             if tool == .cut { textDocumentProxy.deleteBackward() }
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .paste:
             guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
             textDocumentProxy.insertText(text)
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .clipboard:
             guard hasFullAccess else { return }
@@ -2015,7 +2027,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
                 next = selected.uppercased()
             }
             textDocumentProxy.insertText(next)
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .deleteWord:
             let before = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -2024,31 +2036,31 @@ extension KeyboardViewController: ToolsPanelDelegate {
             while let last = rest.last, last.isWhitespace { rest = rest.dropLast(); count += 1 }
             while let last = rest.last, !last.isWhitespace { rest = rest.dropLast(); count += 1 }
             for _ in 0..<max(count, 1) { textDocumentProxy.deleteBackward() }
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .lineStart:
             let line = (textDocumentProxy.documentContextBeforeInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: -line.count)
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .lineEnd:
             let line = (textDocumentProxy.documentContextAfterInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).first ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: line.count)
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .clearAll:
             let after = textDocumentProxy.documentContextAfterInput ?? ""
             let before = textDocumentProxy.documentContextBeforeInput ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: after.count)
             for _ in 0..<(before.count + after.count) { textDocumentProxy.deleteBackward() }
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         case .insertDate, .insertTime:
             let formatter = DateFormatter()
             formatter.dateStyle = tool == .insertDate ? .medium : .none
             formatter.timeStyle = tool == .insertTime ? .short : .none
             textDocumentProxy.insertText(formatter.string(from: Date()))
-            hideTools()
+            refreshToolsSoon()
             scheduleRefresh()
         }
     }
@@ -2142,12 +2154,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
     }
 
     func toolsPanel(_ panel: ToolsPanel, detailOf tool: KeyboardTool) -> String? {
-        switch tool {
-        case .oneHanded:
-            return Prefs.oneHanded == "left" ? "Left hand" : (Prefs.oneHanded == "right" ? "Right hand" : nil)
-        default:
-            return nil
-        }
+        return nil
     }
 
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {

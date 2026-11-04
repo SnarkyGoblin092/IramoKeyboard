@@ -129,11 +129,26 @@ final class ToolsPanel: UIScrollView {
         super.layoutSubviews()
         emptyLabel.frame = bounds
         guard !tiles.isEmpty else { return }
+        // The tiles touch, so a finger anywhere along the strip is on one of them (and a swipe never starts in a gap).
         let tileWidth: CGFloat = 64
-        let gap: CGFloat = 2
         for (index, tile) in tiles.enumerated() {
-            tile.frame = CGRect(x: CGFloat(index) * (tileWidth + gap), y: 0, width: tileWidth, height: bounds.height)
+            tile.frame = CGRect(x: CGFloat(index) * tileWidth, y: 0, width: tileWidth, height: bounds.height)
         }
-        contentSize = CGSize(width: CGFloat(tiles.count) * (tileWidth + gap) - gap, height: bounds.height)
+        contentSize = CGSize(width: CGFloat(tiles.count) * tileWidth, height: bounds.height)
+    }
+
+    /// The tiles slide out of the toolbox button at the left, one after the other.
+    func slideIn() {
+        layoutIfNeeded()
+        for (index, tile) in tiles.enumerated() {
+            tile.transform = CGAffineTransform(translationX: -tile.frame.minX - 24, y: 0).scaledBy(x: 0.5, y: 0.5)
+            let alpha = tile.alpha
+            tile.alpha = 0
+            UIView.animate(withDuration: 0.42, delay: 0.025 * Double(min(index, 8)), usingSpringWithDamping: 0.78,
+                           initialSpringVelocity: 0.4, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                tile.transform = .identity
+                tile.alpha = alpha
+            }
+        }
     }
 }

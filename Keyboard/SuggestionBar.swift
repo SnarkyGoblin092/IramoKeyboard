@@ -168,8 +168,21 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
 
     private func setToolsImage() {
         let name = toolsOpen ? "xmark" : (clipboardOpen ? "keyboard" : "square.grid.2x2")
-        toolsIcon.image = UIImage(systemName: name,
-                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+        let image = UIImage(systemName: name,
+                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+        if window != nil {
+            // The icon turns over into the next one: a quarter turn and a small pop, the old one fading into the new.
+            UIView.transition(with: toolsIcon, duration: 0.22, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                self.toolsIcon.image = image
+            }
+            toolsIcon.transform = CGAffineTransform(rotationAngle: toolsOpen ? -.pi / 2 : .pi / 2).scaledBy(x: 0.55, y: 0.55)
+            UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.5,
+                           options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.toolsIcon.transform = .identity
+            }
+        } else {
+            toolsIcon.image = image
+        }
         toolsIcon.accessibilityLabel = toolsOpen ? "Close the functions" : (clipboardOpen ? "Back to the keys" : "Functions")
     }
 
@@ -187,6 +200,10 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         strip.isHidden = panel != nil
         refreshVisibility()
         setNeedsLayout()
+        if let panel = panel, window != nil {
+            layoutIfNeeded()
+            panel.slideIn()
+        }
     }
 
     // MARK: Colours
@@ -554,7 +571,14 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     private func highlight(_ index: Int, on: Bool) {
         if index == dismissIndex || index == toolsIndex {
             // No background behind the icon: it just dims while held, like a system button.
-            (index == dismissIndex ? dismissIcon : toolsIcon).alpha = on ? 0.35 : 1
+            let icon = index == dismissIndex ? dismissIcon : toolsIcon
+            icon.alpha = on ? 0.35 : 1
+            if index == toolsIndex {
+                // The toolbox button also shrinks a little under the finger.
+                UIView.animate(withDuration: 0.15, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                    icon.transform = on ? CGAffineTransform(scaleX: 0.8, y: 0.8) : .identity
+                }
+            }
             return
         }
         guard index < highlights.count else { return }

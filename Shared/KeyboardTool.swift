@@ -59,7 +59,7 @@ enum KeyboardTool: String, CaseIterable {
     /// What it does, for the app's Functions screen.
     var subtitle: String {
         switch self {
-        case .oneHanded: return "Off, left hand or right hand, in turn"
+        case .oneHanded: return "One-handed keyboard on or off; the arrow beside the keys switches sides"
         case .emoji: return "Opens the emoji picker"
         case .copy: return "Copies the selected text"
         case .cut: return "Cuts the selected text"
