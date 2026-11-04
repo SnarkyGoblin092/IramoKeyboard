@@ -218,9 +218,13 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         if let panel = panel {
             panel.tileFill = segmentColor
             glass.contentView.addSubview(panel)
+            // The glass itself takes no touches normally; with the strip in it, it must, or UIKit leaves the strip's
+            // scroll gesture out when a touch lands between the buttons.
+            glass.isUserInteractionEnabled = true
             glass.contentView.isUserInteractionEnabled = true
-        } else if layoutMode != .scroll {
-            glass.contentView.isUserInteractionEnabled = false
+        } else {
+            glass.isUserInteractionEnabled = false
+            if layoutMode != .scroll { glass.contentView.isUserInteractionEnabled = false }
         }
         if panel != nil, old == nil, window != nil, !strip.isHidden {
             // Opening: the suggestions shrink and fade away as the tiles slide out.
@@ -240,7 +244,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         setNeedsLayout()
         if let panel = panel, window != nil {
             layoutIfNeeded()
-            panel.slideIn()
+            // The tiles wait until the suggestions are gone.
+            panel.slideIn(after: strip.isHidden ? 0 : 0.2)
         }
     }
 

@@ -181,8 +181,7 @@ final class ToolsPanel: UIScrollView {
         return -(edge - contentOffset.x)
     }
 
-    /// The tiles slide back into the toolbox button, then `completion` runs (a little before the last one is in, so
-    /// the suggestions can start coming back).
+    /// The tiles slide back into the toolbox button, then `completion` runs (once the last one is in).
     func slideOut(completion: @escaping () -> Void) {
         isUserInteractionEnabled = false
         let shift = hiddenShift()
@@ -192,16 +191,16 @@ final class ToolsPanel: UIScrollView {
                 tile.transform = CGAffineTransform(translationX: shift, y: 0)
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + step * Double(min(tiles.count, 12)) * 0.6, execute: completion)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + step * Double(min(tiles.count, 12)), execute: completion)
     }
 
     /// The tiles slide out of the toolbox button at the left, one after the other.
-    func slideIn() {
+    func slideIn(after wait: TimeInterval = 0) {
         layoutIfNeeded()
         let shift = hiddenShift()
         for (index, tile) in tiles.enumerated() {
             tile.transform = CGAffineTransform(translationX: shift, y: 0)
-            UIView.animate(withDuration: 0.3, delay: 0.012 * Double(min(index, 12)), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+            UIView.animate(withDuration: 0.3, delay: wait + 0.012 * Double(min(index, 12)), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
                 tile.transform = .identity
             }
         }

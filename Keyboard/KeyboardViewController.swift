@@ -1990,33 +1990,12 @@ extension KeyboardViewController: ToolsPanelDelegate {
             }
             saveTool(next, forKey: SettingKey.oneHanded, rebuild: false)
             keyboardView.setNeedsLayout()
-        case .emoji:
-            hideTools()
-            showEmojiPanel()
-        case .copy, .cut:
-            guard hasFullAccess, let selected = textDocumentProxy.selectedText, !selected.isEmpty else { return }
-            UIPasteboard.general.string = selected
-            seenPasteboardChange = UIPasteboard.general.changeCount
-            settings.rememberClipboard(selected)
-            if tool == .cut { textDocumentProxy.deleteBackward() }
-            refreshToolsSoon()   // copying touches nothing in the field, so the selection stays
-        case .paste:
-            guard hasFullAccess, let text = UIPasteboard.general.string, !text.isEmpty else { return }
-            textDocumentProxy.insertText(text)
-            refreshToolsSoon()
-            scheduleRefresh()
         case .clipboard:
             guard hasFullAccess else { return }
             hideTools()
             showClipboard()
         case .numberRow:
             saveTool(!Prefs.numberRow, forKey: SettingKey.numberRow, rebuild: true)
-        case .swipeTyping:
-            saveTool(!Prefs.swipe, forKey: SettingKey.swipe, rebuild: false)
-        case .autoCorrect:
-            saveTool(!Prefs.autoCorrect, forKey: SettingKey.autoCorrect, rebuild: false)
-        case .vibration:
-            saveTool(Prefs.vibration > 0 ? 0.0 : SettingDefault.vibration, forKey: SettingKey.vibration, rebuild: false)
         case .split:
             saveTool(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard, rebuild: true)
         case .openApp:
@@ -2046,15 +2025,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
             lastCased = next
             refreshToolsSoon()
             scheduleRefresh()
-        case .deleteWord:
-            let before = textDocumentProxy.documentContextBeforeInput ?? ""
-            var count = 0
-            var rest = Substring(before)
-            while let last = rest.last, last.isWhitespace { rest = rest.dropLast(); count += 1 }
-            while let last = rest.last, !last.isWhitespace { rest = rest.dropLast(); count += 1 }
-            for _ in 0..<max(count, 1) { textDocumentProxy.deleteBackward() }
-            refreshToolsSoon()
-            scheduleRefresh()
         case .lineStart:
             let line = (textDocumentProxy.documentContextBeforeInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: -line.count)
@@ -2065,11 +2035,13 @@ extension KeyboardViewController: ToolsPanelDelegate {
             textDocumentProxy.adjustTextPosition(byCharacterOffset: line.count)
             refreshToolsSoon()
             scheduleRefresh()
-        case .clearAll:
-            let after = textDocumentProxy.documentContextAfterInput ?? ""
-            let before = textDocumentProxy.documentContextBeforeInput ?? ""
-            textDocumentProxy.adjustTextPosition(byCharacterOffset: after.count)
-            for _ in 0..<(before.count + after.count) { textDocumentProxy.deleteBackward() }
+        case .quotes:
+            if let selected = textDocumentProxy.selectedText, !selected.isEmpty {
+                textDocumentProxy.insertText("\"" + selected + "\"")
+            } else {
+                textDocumentProxy.insertText("\"\"")
+                textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
+            }
             refreshToolsSoon()
             scheduleRefresh()
         case .insertDate, .insertTime:
@@ -2162,9 +2134,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
         switch tool {
         case .oneHanded: return Prefs.oneHanded != "off"
         case .numberRow: return Prefs.numberRow
-        case .swipeTyping: return Prefs.swipe
-        case .autoCorrect: return Prefs.autoCorrect
-        case .vibration: return Prefs.vibration > 0
         case .split: return Prefs.splitKeyboard
         default: return nil
         }
@@ -2176,13 +2145,11 @@ extension KeyboardViewController: ToolsPanelDelegate {
 
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {
         switch tool {
-        case .copy, .cut: return hasFullAccess && !(textDocumentProxy.selectedText ?? "").isEmpty
-        case .paste, .clipboard: return hasFullAccess
+        case .clipboard: return hasFullAccess
         case .changeCase:
             if !(textDocumentProxy.selectedText ?? "").isEmpty { return true }
             if let last = lastCased { return (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) }
             return false
-        case .vibration: return hasFullAccess
         default: return true
         }
     }
