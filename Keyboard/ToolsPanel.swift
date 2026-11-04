@@ -13,7 +13,7 @@ protocol ToolsPanelDelegate: AnyObject {
 /// scrolls sideways. It takes the place of the suggestions in the suggestion bar (SuggestionBar.setTools). Tools
 /// that are on light up in the accent.
 final class ToolsPanel: UIScrollView {
-    weak var delegate: ToolsPanelDelegate?
+    weak var toolsDelegate: ToolsPanelDelegate?
 
     private final class Tile: UIControl {
         let tool: KeyboardTool
@@ -114,15 +114,15 @@ final class ToolsPanel: UIScrollView {
     /// Reads every tile's state again (after a tool changed one).
     func refresh() {
         for tile in tiles {
-            tile.show(on: delegate?.toolsPanel(self, stateOf: tile.tool),
-                      detail: delegate?.toolsPanel(self, detailOf: tile.tool),
-                      available: delegate?.toolsPanel(self, isAvailable: tile.tool) ?? true)
+            tile.show(on: toolsDelegate?.toolsPanel(self, stateOf: tile.tool),
+                      detail: toolsDelegate?.toolsPanel(self, detailOf: tile.tool),
+                      available: toolsDelegate?.toolsPanel(self, isAvailable: tile.tool) ?? true)
         }
     }
 
     @objc private func tapped(_ tile: Tile) {
         Haptics.shared.keyPress()
-        delegate?.toolsPanel(self, didPick: tile.tool)
+        toolsDelegate?.toolsPanel(self, didPick: tile.tool)
     }
 
     override func layoutSubviews() {

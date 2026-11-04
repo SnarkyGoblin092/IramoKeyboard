@@ -1938,7 +1938,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
         let isPad = traitCollection.userInterfaceIdiom == .pad
         let tools = settings.keyboardTools.filter { $0 != .split || isPad }
         let panel = ToolsPanel(tools: tools)
-        panel.delegate = self
+        panel.toolsDelegate = self
         toolsPanel = panel
         suggestionBar.setTools(panel)
         panel.refresh()
