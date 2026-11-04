@@ -14,9 +14,14 @@ protocol ToolsPanelDelegate: AnyObject {
 /// that are on light up in the accent.
 final class ToolsPanel: UIScrollView {
     weak var toolsDelegate: ToolsPanelDelegate?
+    /// The wash behind each tile (the suggestion bar's segment colour).
+    var tileFill: UIColor = UIColor(white: 0.5, alpha: 0.15) {
+        didSet { for tile in tiles { tile.base.backgroundColor = tileFill } }
+    }
 
     private final class Tile: UIControl {
         let tool: KeyboardTool
+        let base = UIView()
         private let onFill = UIView()
         private let icon = UIImageView()
         private let title = UILabel()
@@ -24,16 +29,19 @@ final class ToolsPanel: UIScrollView {
         init(tool: KeyboardTool) {
             self.tool = tool
             super.init(frame: .zero)
+            base.layer.cornerCurve = .continuous
+            base.isUserInteractionEnabled = false
+            addSubview(base)
             onFill.backgroundColor = Theme.accent
             onFill.layer.cornerCurve = .continuous
             onFill.isUserInteractionEnabled = false
             onFill.isHidden = true
             addSubview(onFill)
             icon.image = UIImage(systemName: tool.symbol,
-                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular))
+                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
             icon.contentMode = .center
             title.text = tool.title
-            title.font = Theme.keyFont(ofSize: 10, weight: .medium)
+            title.font = Theme.keyFont(ofSize: 10, weight: .semibold)
             title.textAlignment = .center
             title.adjustsFontSizeToFitWidth = true
             title.minimumScaleFactor = 0.6
@@ -69,8 +77,11 @@ final class ToolsPanel: UIScrollView {
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            onFill.frame = bounds.insetBy(dx: 1, dy: 1)
-            onFill.layer.cornerRadius = min(10, onFill.bounds.height / 2.6)
+            // The tiles touch, but each is drawn a little smaller, so they read as separate rounded buttons.
+            base.frame = bounds.insetBy(dx: 3, dy: 3)
+            onFill.frame = base.frame
+            base.layer.cornerRadius = min(12, base.bounds.height / 2.8)
+            onFill.layer.cornerRadius = base.layer.cornerRadius
             let block: CGFloat = 22 + 1 + 12
             let top = max(1, (bounds.height - block) / 2)
             icon.frame = CGRect(x: 0, y: top, width: bounds.width, height: 22)
@@ -90,6 +101,7 @@ final class ToolsPanel: UIScrollView {
             let tile = Tile(tool: tool)
             tile.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
             addSubview(tile)
+            tile.base.backgroundColor = tileFill
             tiles.append(tile)
         }
         emptyLabel.text = "Add functions in the Iramo app"

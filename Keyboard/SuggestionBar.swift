@@ -143,7 +143,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         dismissIcon.contentMode = .center
         // Drawn smaller than its touch area, which is still the bar's whole right end (`dismissMinX`).
         dismissIcon.image = UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular))
         glass.contentView.addSubview(dismissIcon)
         toolsIcon.tintColor = Theme.barIcons
         toolsIcon.contentMode = .center
@@ -171,7 +171,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     private func setToolsImage() {
         let name = toolsOpen ? "xmark" : (clipboardOpen ? "keyboard" : "square.grid.2x2")
         let image = UIImage(systemName: name,
-                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+                            withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular))
         if window != nil {
             // The icon turns over into the next one: a quarter turn and a small pop, the old one fading into the new.
             UIView.transition(with: toolsIcon, duration: 0.22, options: [.transitionCrossDissolve, .allowUserInteraction]) {
@@ -196,26 +196,32 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         toolsStrip = panel
         toolsOpen = panel != nil
         if panel == nil, let old = old, window != nil {
-            // Closing: the tiles slide back into the button while the suggestions fade in behind them.
+            // Closing: the tiles slide back into the button; the suggestions come back only once they are gone.
             leavingTools = old
             old.slideOut { [weak self, weak old] in
                 old?.removeFromSuperview()
-                if self?.leavingTools === old { self?.leavingTools = nil }
-            }
-            strip.alpha = 0
-            UIView.animate(withDuration: 0.25, delay: 0.1, options: [.beginFromCurrentState, .allowUserInteraction]) {
-                self.strip.alpha = 1
+                guard let self = self, self.leavingTools === old else { return }
+                self.leavingTools = nil
+                guard !self.toolsOpen else { return }
+                self.strip.isHidden = false
+                self.strip.alpha = 0
+                self.refreshVisibility()
+                UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                    self.strip.alpha = 1
+                }
             }
         } else {
             old?.removeFromSuperview()
         }
         if let panel = panel {
+            panel.tileFill = segmentColor
             glass.contentView.addSubview(panel)
             glass.contentView.isUserInteractionEnabled = true
         } else if layoutMode != .scroll {
             glass.contentView.isUserInteractionEnabled = false
         }
-        strip.isHidden = panel != nil
+        strip.isHidden = panel != nil || leavingTools != nil
+        strip.alpha = 1
         refreshVisibility()
         setNeedsLayout()
         if let panel = panel, window != nil {
@@ -389,7 +395,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         let hasSuggestions = suggestions.contains { !$0.text.isEmpty }
         separatorLayer.opacity = hasSuggestions ? 1 : 0
         hintLabel.text = emptyHint
-        hintLabel.isHidden = hasSuggestions || emptyHint == nil || toolsOpen
+        hintLabel.isHidden = hasSuggestions || emptyHint == nil || toolsOpen || leavingTools != nil
     }
 
     // MARK: Layout
@@ -632,6 +638,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // The swipe down that hides the keyboard stays out of the Functions strip, which scrolls sideways.
+        if toolsStrip != nil && gestureRecognizer is UIPanGestureRecognizer && gestureRecognizer.view === self { return false }
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
         let move = pan.translation(in: self)
         return move.y > 0 && move.y > abs(move.x) * 1.5

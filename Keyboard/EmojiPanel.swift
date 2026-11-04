@@ -350,7 +350,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchGlass.contentView.addSubview(searchButton)
 
         hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)),
                             for: .normal)
         hideButton.tintColor = Theme.barIcons
         hideButton.accessibilityLabel = "Hide keyboard"

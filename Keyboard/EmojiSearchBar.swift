@@ -38,7 +38,7 @@ final class EmojiSearchBar: UIView {
         glass.contentView.addSubview(backButton)
 
         hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)),
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)),
                             for: .normal)
         hideButton.tintColor = Theme.barIcons
         hideButton.accessibilityLabel = "Hide keyboard"
