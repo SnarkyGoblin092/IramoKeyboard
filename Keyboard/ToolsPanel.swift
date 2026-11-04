@@ -91,7 +91,9 @@ final class ToolsPanel: UIScrollView {
         alwaysBounceHorizontal = true
         delaysContentTouches = false
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        tap.cancelsTouchesInView = false
         addGestureRecognizer(tap)
+        panGestureRecognizer.delaysTouchesBegan = false
         for tool in tools {
             let tile = Tile(tool: tool)
             addSubview(tile)
@@ -136,35 +138,42 @@ final class ToolsPanel: UIScrollView {
         // The tiles touch, so a finger anywhere along the strip is on one of them (and a swipe never starts in a gap).
         let tileWidth: CGFloat = 64
         for (index, tile) in tiles.enumerated() {
-            tile.frame = CGRect(x: CGFloat(index) * tileWidth, y: 0, width: tileWidth, height: bounds.height)
+            // Bounds and centre rather than frame: a tile may be mid-slide with a transform.
+            tile.bounds = CGRect(x: 0, y: 0, width: tileWidth, height: bounds.height)
+            tile.center = CGPoint(x: (CGFloat(index) + 0.5) * tileWidth, y: bounds.height / 2)
         }
         contentSize = CGSize(width: CGFloat(tiles.count) * tileWidth, height: bounds.height)
     }
 
-    /// How far left a tile must go to be fully behind the toolbox button (the strip clips what leaves its edge).
-    private func hiddenShift(_ tile: Tile) -> CGFloat {
-        return -(tile.frame.maxX - contentOffset.x)
+    /// How far left the tiles must go to be fully behind the toolbox button (the strip clips what leaves its edge):
+    /// the same for all, so they move as one row.
+    private func hiddenShift() -> CGFloat {
+        let lastVisible = tiles.last { $0.center.x - $0.bounds.width / 2 < contentOffset.x + bounds.width }
+        let edge = (lastVisible.map { $0.center.x + $0.bounds.width / 2 } ?? contentOffset.x + bounds.width)
+        return -(edge - contentOffset.x)
     }
 
-    /// The tiles slide back into the toolbox button, then `completion` runs.
+    /// The tiles slide back into the toolbox button, then `completion` runs (a little before the last one is in, so
+    /// the suggestions can start coming back).
     func slideOut(completion: @escaping () -> Void) {
         isUserInteractionEnabled = false
-        let visible = tiles.filter { $0.frame.maxX > contentOffset.x && $0.frame.minX < contentOffset.x + bounds.width }
-        for (index, tile) in visible.enumerated() {
-            UIView.animate(withDuration: 0.24, delay: 0.02 * Double(min(index, 6)), options: [.curveEaseIn, .beginFromCurrentState]) {
-                tile.transform = CGAffineTransform(translationX: self.hiddenShift(tile), y: 0)
+        let shift = hiddenShift()
+        let step = 0.012
+        for (index, tile) in tiles.enumerated() where index < 12 {
+            UIView.animate(withDuration: 0.3, delay: step * Double(index), options: [.curveEaseIn, .beginFromCurrentState]) {
+                tile.transform = CGAffineTransform(translationX: shift, y: 0)
             }
         }
-        let total = 0.24 + 0.02 * Double(min(max(visible.count - 1, 0), 6))
-        DispatchQueue.main.asyncAfter(deadline: .now() + total + 0.02, execute: completion)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + step * Double(min(tiles.count, 12)) * 0.6, execute: completion)
     }
 
     /// The tiles slide out of the toolbox button at the left, one after the other.
     func slideIn() {
         layoutIfNeeded()
+        let shift = hiddenShift()
         for (index, tile) in tiles.enumerated() {
-            tile.transform = CGAffineTransform(translationX: hiddenShift(tile), y: 0)
-            UIView.animate(withDuration: 0.3, delay: 0.025 * Double(min(index, 8)), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+            tile.transform = CGAffineTransform(translationX: shift, y: 0)
+            UIView.animate(withDuration: 0.3, delay: 0.012 * Double(min(index, 12)), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
                 tile.transform = .identity
             }
         }
