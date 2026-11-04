@@ -48,7 +48,7 @@ final class EmojiSearchBar: UIView {
         hideButton.addSubview(hideIcon)
         hideButton.accessibilityLabel = "Hide keyboard"
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
-        glass.contentView.addSubview(hideButton)
+        addSubview(hideButton)
 
         iconView.image = UIImage(systemName: "magnifyingglass")
         iconView.tintColor = look.secondaryText
@@ -109,12 +109,13 @@ final class EmojiSearchBar: UIView {
         // Same thickness and curve as the picker's search pill.
         let topInset = min(bounds.height - 30, EmojiSearchBar.topInset)
         let side = 6 * bounds.width / 440      // the picker's side inset
-        glass.frame = CGRect(x: side, y: topInset, width: max(0, bounds.width - 2 * side), height: bounds.height - topInset)
+        // The pill ends where the picker's does; the hide button stays outside it, in the gap beside it.
+        let hideWidth = 60 + side
+        glass.frame = CGRect(x: side, y: topInset, width: max(0, bounds.width - 2 * side - 60), height: bounds.height - topInset)
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
-        let hideWidth = 66 - 2 * side   // the icon sits 33pt from the right edge, as in the suggestion bar
-        hideButton.frame = CGRect(x: area.width - hideWidth, y: 0, width: hideWidth, height: area.height)
+        hideButton.frame = CGRect(x: glass.frame.maxX, y: glass.frame.minY, width: hideWidth, height: glass.frame.height)
         hideButton.viewWithTag(77)?.frame = hideButton.bounds
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
@@ -131,7 +132,7 @@ final class EmojiSearchBar: UIView {
         let dividerX = 44 + queryWidth + 8
         divider.frame = CGRect(x: dividerX, y: area.height * 0.25, width: 1, height: area.height * 0.5)
 
-        scroll.frame = CGRect(x: dividerX + 4, y: 0, width: max(0, area.width - dividerX - 50), height: area.height)
+        scroll.frame = CGRect(x: dividerX + 4, y: 0, width: max(0, area.width - dividerX - 14), height: area.height)
         let itemWidth: CGFloat = 40
         for (index, button) in resultButtons.enumerated() {
             button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 0, width: itemWidth, height: area.height)
@@ -144,7 +145,7 @@ final class EmojiSearchBar: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
         if point.x < 58 { return backButton }
-        if point.x > glass.frame.maxX - 50 { return hideButton }
+        if point.x > glass.frame.maxX { return hideButton }
         let local = convert(point, to: scroll)
         if scroll.bounds.insetBy(dx: -6, dy: -20).contains(local) {
             let nearest = HitTesting.nearestByX(local.x, in: resultButtons, relativeTo: scroll)
