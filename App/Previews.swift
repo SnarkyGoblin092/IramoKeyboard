@@ -57,8 +57,8 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     /// The keyboard preview's smallest pane.
     private static var keyboardMinimum: CGFloat { return 150 }
 
-    /// `id` names the screen (its height is remembered under it); `height` is where it starts.
-    init(id: String, height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil,
+    /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
+    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
         self.preview = preview

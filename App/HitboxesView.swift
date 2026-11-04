@@ -47,7 +47,7 @@ struct HitboxesView: View {
 
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(id: "hitboxes", height: 260, fills: true) {
+        PinnedPreview(height: 260, fills: true) {
             VStack(spacing: 8) {
                 SegmentedChoice(names: [tr("Hitboxes"), tr("Hit map")], selected: previewMode) { previewMode = $0 }
                     .padding(.horizontal)

@@ -39,7 +39,7 @@ struct EmojiView: View {
 
     // The picker as it will look stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(id: "emoji", height: 230, fills: true, aspect: pickerAspect(keyHeight, rowGap, numberRow, barHeight, languageCode)) {
+        PinnedPreview(height: 230, fills: true, aspect: pickerAspect(keyHeight, rowGap, numberRow, barHeight, languageCode)) {
             LiveEmojiPicker()
         } content: {
         GlassList {

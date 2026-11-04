@@ -559,8 +559,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         }
     }
 
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
         let move = pan.translation(in: self)
         return move.y > 0 && move.y > abs(move.x) * 1.5
     }

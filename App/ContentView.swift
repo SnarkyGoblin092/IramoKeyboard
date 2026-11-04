@@ -610,7 +610,7 @@ struct ShortcutsView: View {
     // A Liquid Glass list like the main screen's (the shortcuts swipe to delete); the example of the shortcut being
     // typed stays pinned above it (PinnedPreview).
     var body: some View {
-        PinnedPreview(id: "shortcuts", height: 110) {
+        PinnedPreview(height: 110) {
             ShortcutPreview(trigger: trigger, phrase: phrase)
         } content: {
         GlassList {

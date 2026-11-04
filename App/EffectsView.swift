@@ -469,7 +469,7 @@ struct EffectsView: View {
     // MARK: Body
 
     var body: some View {
-        PinnedPreview(id: "effects", height: 260, fills: true) {
+        PinnedPreview(height: 260, fills: true) {
             LiveKeyboard(effects: config)
         } content: {
         GlassList {
