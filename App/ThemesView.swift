@@ -64,38 +64,39 @@ struct ThemesView: View {
         .padding(.top, 4)
     }
 
-    /// The system themes, then each keycap family under its own heading.
+    /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
     private var grid: some View {
-        let themes = ThemeCatalog.themes(ThemeCatalog.all)
-        let sections: [(title: String, themes: [ThemeDefinition])] =
-            [(tr("System"), themes.filter { $0.family == nil })]
-            + ThemeCatalog.families.map { family in (tr("%@ 3D", family), themes.filter { $0.family == family }) }
-        return VStack(alignment: .leading, spacing: 22) {
-            ForEach(sections, id: \.title) { section in
-                VStack(alignment: .leading, spacing: 10) {
+        let edits = SystemEdits.decode(systemEdits)
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+            ForEach(ThemeCatalog.pickerSections, id: \.title) { section in
+                Section {
+                    ForEach(section.themes, id: \.id) { base in
+                        let theme = edited(base, edits)
+                        ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
+                            guard theme.id != themeID else { return }
+                            Feedback.choose()
+                            themeID = theme.id
+                        }
+                    }
+                } header: {
                     HStack(spacing: 10) {
-                        Text(section.title).font(.title3.weight(.semibold)).foregroundColor(.secondary)
+                        Text(tr(section.title)).font(.title3.weight(.semibold)).foregroundColor(.secondary)
                         Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 1)
                         Text("\(section.themes.count)").font(.subheadline).foregroundColor(.secondary)
                     }
-                    LazyVGrid(columns: columns, spacing: 18) {
-                        ForEach(section.themes, id: \.id) { theme in
-                            ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
-                                guard theme.id != themeID else { return }
-                                Feedback.choose()
-                                themeID = theme.id
-                            }
-                        }
-                    }
+                    .padding(.top, 8)
                 }
             }
         }
     }
-}
 
-private extension View {
-    @ViewBuilder func drawingGroup(isActive: Bool) -> some View {
-        if isActive { drawingGroup() } else { self }
+    /// The theme with its stored edits (as ThemeCatalog.themes, from edits decoded once for the grid).
+    private func edited(_ base: ThemeDefinition, _ edits: [String: SystemStyle]) -> ThemeDefinition {
+        guard let style = edits[base.id] else { return base }
+        var theme = base
+        theme.systemStyle = style
+        theme.isEdited = true
+        return theme
     }
 }
 
@@ -106,16 +107,11 @@ private struct ThemeCard: View {
     let isSelected: Bool
     let action: () -> Void
 
-    /// Glass keys are a system material, which a flattened layer can't draw.
-    private var flattens: Bool { return theme.kind != .liquidGlass }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                    .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
-                    // One flattened layer instead of every key's own shadow.
-                    .drawingGroup(isActive: flattens)
+                ThemeThumbnail(theme: theme, accent: accent)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(isSelected ? accent : Color.primary.opacity(0.12),
@@ -153,5 +149,117 @@ private struct ThemeCard: View {
         .buttonStyle(PressableStyle())
         .accessibilityLabel(theme.isEdited ? tr("%@, edited", "\(theme.name)") : theme.name)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// A card's miniature keyboard as a picture, drawn once when the card first comes into view and kept
+/// (ThumbnailCache) until the theme, the look settings or light/dark mode change. Liquid Glass is a live system
+/// material that can't be drawn into a picture, so that card stays live.
+@MainActor
+private struct ThemeThumbnail: View {
+    let theme: ThemeDefinition
+    let accent: Color
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: UIImage?
+    @State private var shownKey = ""
+
+    /// The width the picture is drawn at (about a card's width); it is scaled to the card.
+    private static let renderWidth: CGFloat = 200
+
+    var body: some View {
+        Group {
+            if theme.kind == .liquidGlass {
+                ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+            } else if let image = image {
+                Image(uiImage: image).resizable().interpolation(.high)
+            } else {
+                // Until it is drawn: the keyboard's backdrop.
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+            }
+        }
+        .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onAppear(perform: load)
+        .onChange(of: scheme) { _ in load() }
+        .onChange(of: theme) { _ in load() }
+    }
+
+    /// What the picture depends on: the theme with its edits, light or dark, and every setting the preview reads.
+    private var key: String {
+        return "\(theme.id)|\(theme.hashValue)|\(scheme == .dark)|\(ThumbnailCache.settingsSignature())"
+    }
+
+    private func load() {
+        guard theme.kind != .liquidGlass else { return }
+        let key = self.key
+        guard key != shownKey || image == nil else { return }
+        if let cached = ThumbnailCache.shared.image(for: key) {
+            image = cached
+            shownKey = key
+            return
+        }
+        let theme = self.theme, accent = self.accent, dark = scheme == .dark, scale = displayScale
+        ThumbnailCache.shared.render(key: key) {
+            let width = ThemeThumbnail.renderWidth
+            let preview = ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                .frame(width: width, height: width / ThemePreview.aspectKeysOnly)
+                .environment(\.colorScheme, dark ? .dark : .light)
+            let renderer = ImageRenderer(content: preview)
+            renderer.scale = scale
+            return renderer.uiImage
+        } done: { rendered in
+            image = rendered
+            shownKey = key
+        }
+    }
+}
+
+/// The theme cards' pictures, and a queue that draws them one per run-loop turn so that a screenful of new cards
+/// never stalls a scroll.
+@MainActor
+final class ThumbnailCache {
+    static let shared = ThumbnailCache()
+
+    private let images = NSCache<NSString, UIImage>()
+    private var queue: [(key: String, make: () -> UIImage?, done: (UIImage?) -> Void)] = []
+    private var draining = false
+
+    init() {
+        images.countLimit = 120
+    }
+
+    func image(for key: String) -> UIImage? { return images.object(forKey: key as NSString) }
+
+    func render(key: String, make: @escaping () -> UIImage?, done: @escaping (UIImage?) -> Void) {
+        queue.append((key, make, done))
+        drain()
+    }
+
+    private func drain() {
+        guard !draining, !queue.isEmpty else { return }
+        draining = true
+        Task { @MainActor in
+            await Task.yield()   // let the scroll draw a frame between pictures
+            let job = self.queue.removeFirst()
+            let image = self.image(for: job.key) ?? job.make()
+            if let image = image { self.images.setObject(image, forKey: job.key as NSString) }
+            job.done(image)
+            self.draining = false
+            self.drain()
+        }
+    }
+
+    /// Every setting the previews draw with (ThemePreview's), so a change made on another screen redraws them.
+    static func settingsSignature() -> String {
+        let keys = [SettingKey.keyRoundness, SettingKey.keySurface, SettingKey.keyBorderStyle, SettingKey.keyGlow,
+                    SettingKey.keyHints, SettingKey.keyGap, SettingKey.rowGap, SettingKey.keyboardWidth,
+                    SettingKey.splitKeyboard, SettingKey.oneHanded, SettingKey.letterSize, SettingKey.hintPosition,
+                    SettingKey.hintSize, SettingKey.spaceTextSize, SettingKey.spaceLanguageCode,
+                    SettingKey.numberRow, SettingKey.autoCapitalize, SettingKey.alwaysCapitals, SettingKey.keyFont,
+                    SettingKey.accent, SettingKey.accentHex, SettingKey.enabledLanguages, SettingKey.language]
+        let defaults = SharedStore.defaults
+        return keys.map { "\(defaults.object(forKey: $0) ?? "")" }.joined(separator: "|")
     }
 }

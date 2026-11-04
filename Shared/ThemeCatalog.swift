@@ -32,6 +32,17 @@ struct ThemeRGBA: Hashable, Codable {
 
     var luminance: Double { return 0.299 * r + 0.587 * g + 0.114 * b }
 
+    /// Hue (0..<1) and saturation (0...1), for ordering colours.
+    var hueAndSaturation: (hue: Double, saturation: Double) {
+        let high = max(r, g, b), low = min(r, g, b), range = high - low
+        guard range > 0.0001 else { return (0, 0) }
+        var hue: Double
+        if high == r { hue = (g - b) / range } else if high == g { hue = 2 + (b - r) / range } else { hue = 4 + (r - g) / range }
+        hue /= 6
+        if hue < 0 { hue += 1 }
+        return (hue, range / high)
+    }
+
     static let black = ThemeRGBA(0, 0, 0)
     static let white = ThemeRGBA(1, 1, 1)
 }
@@ -291,8 +302,31 @@ enum ThemeCatalog {
     /// The themes, in picker order.
     static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + signatureThemes + keycapThemes
 
-    /// The keycap families, in picker order.
-    static let families = ["Signature", "Arcade", "Studio", "Solo", "Café", "Tide"]
+
+    /// The picker's sections: the system themes, then the keycaps by how they are built (and light or dark caps),
+    /// each ordered round the colour wheel by its accent, with the greys last.
+    static let pickerSections: [(title: String, themes: [ThemeDefinition])] = {
+        func isLightCap(_ theme: ThemeDefinition) -> Bool {
+            return (theme.colors?.light.key.luminance ?? 1) >= 0.5
+        }
+        func byColour(_ themes: [ThemeDefinition]) -> [ThemeDefinition] {
+            func order(_ theme: ThemeDefinition) -> (Double, String) {
+                guard let accent = theme.colors?.light.ret else { return (2, theme.name) }
+                let colour = accent.hueAndSaturation
+                return (colour.saturation < 0.15 ? 1.5 : colour.hue, theme.name)   // greys after every hue
+            }
+            return themes.sorted { order($0) < order($1) }
+        }
+        let caps = all.filter { $0.kind == .keycap }
+        let sections: [(String, [ThemeDefinition])] = [
+            ("System", all.filter { $0.kind != .keycap }),
+            ("Sculpted keycaps", byColour(caps.filter { $0.profile == .sculpted })),
+            ("Soft keycaps", byColour(caps.filter { $0.profile == .dished && isLightCap($0) })),
+            ("Graphite keycaps", byColour(caps.filter { $0.profile == .dished && !isLightCap($0) })),
+            ("Outlined keycaps", byColour(caps.filter { $0.profile == .ringed })),
+        ]
+        return sections.filter { !$0.1.isEmpty }.map { (title: $0.0, themes: $0.1) }
+    }()
 
     /// The theme as it comes, without the user's edits. Unknown ids (including removed themes) fall back to Native.
     static func base(id: String) -> ThemeDefinition {
