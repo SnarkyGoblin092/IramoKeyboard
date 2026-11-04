@@ -153,7 +153,10 @@ struct KeysView: View {
                     shape.strokeBorder(Color.white, lineWidth: 2).frame(width: 38, height: 46)
                 }
             }
+            .frame(width: 38, height: 46)
             .contentShape(Rectangle())
+            // The lifted preview and its outline follow the key's own rounded shape and size, not the touch area.
+            .contentShape(.contextMenuPreview, shape)
         }
         .buttonStyle(PressableStyle())
         .contextMenu {

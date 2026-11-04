@@ -265,21 +265,8 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
-        recordEmojiSize()
         // Catches a style read wrongly earlier; rebuilding is left until after this layout pass.
         DispatchQueue.main.async { [weak self] in self?.refreshKeyStyle() }
-    }
-
-    /// The picker's real size, kept for the app's Emoji preview (upright only: a landscape keyboard is not recorded).
-    private func recordEmojiSize() {
-        guard emojiPanel != nil else { return }
-        let size = view.bounds.size
-        let screen = UIScreen.main.bounds.size
-        guard size.width > 100, size.height > 100, size.width <= min(screen.width, screen.height) + 1 else { return }
-        let text = "\(Int(size.width.rounded())),\(Int(size.height.rounded()))"
-        if SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) != text {
-            SharedStore.defaults.set(text, forKey: SettingKey.lastEmojiSize)
-        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {

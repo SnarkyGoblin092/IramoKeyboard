@@ -3,8 +3,6 @@ import Foundation
 // MARK: - Keys and defaults (shared by the app's SwiftUI bindings and the keyboard)
 
 enum SettingKey {
-    /// The size ("width,height") the keyboard last showed its emoji picker at, upright: the app's preview uses it.
-    static let lastEmojiSize = "hunkeys.lastEmojiSize"
     // Feel
     static let holdDelay = "hunkeys.holdDelay"
     static let vibration = "hunkeys.vibrationStrength"

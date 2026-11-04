@@ -30,7 +30,7 @@ struct EmojiView: View {
 
     @State private var tab: Tab = .general
 
-    // The picker's proportions are the keyboard's (LiveEmojiPickerView.naturalSize): read here so a change resizes it.
+    // The picker's proportions are the keyboard's (LiveKeyboardView.naturalSize): read here so a change resizes it.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
@@ -40,7 +40,7 @@ struct EmojiView: View {
     // The picker as it will look stays pinned above the settings (PinnedPreview).
     var body: some View {
         PinnedPreview(height: 230, fills: true, aspect: pickerAspect(keyHeight, rowGap, numberRow, barHeight, languageCode)) {
-            LiveEmojiPicker()
+            LiveKeyboard(showsEmoji: true)
         } content: {
         GlassList {
             Section {
@@ -61,11 +61,12 @@ struct EmojiView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// The keyboard's width over its height with the picker open (LiveKeyboardView.naturalSize).
     private func pickerAspect(_ keyHeight: Double, _ rowGap: Double, _ numberRow: Bool, _ barHeight: Double,
                               _ code: String) -> CGFloat {
-        // The keyboard's real picker size (LiveEmojiPickerView.naturalSize): the settings above only make this
-        // redraw when one changes.
-        let size = LiveEmojiPickerView.naturalSize
+        let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
+                                                barHeight: barHeight,
+                                                language: LiveKeyboardView.openingLanguage(code: code), emoji: true)
         return size.width / size.height
     }
 }
