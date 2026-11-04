@@ -56,7 +56,7 @@ enum Theme {
 
     /// Re-reads the theme (with the editor's changes) and accent from the settings.
     static func reload() {
-        let theme = ThemeCatalog.theme(id: storedID(), edits: storedEdits())
+        let theme = ThemeCatalog.theme(id: storedID(), edits: storedEdits(), dark: hostDark)
         definition = theme
         palette = applying(theme.systemStyle, to: makePalette(for: theme))
         contrastPalette = applying(theme.systemStyle, to: makeContrastPalette(from: palette, kind: theme.kind))
@@ -115,11 +115,10 @@ enum Theme {
     /// A system theme's own style from its editor (nil: not edited, the old global key settings apply).
     static var system: SystemStyle? { return definition.systemStyle }
 
-    /// The keyboard's own mode (the Themes screen's Dark mode): never the phone's or the app's. A designed theme
-    /// is already drawn in that mode (ThemeCatalog), so its backdrop and colours agree with it.
-    static var interfaceStyle: UIUserInterfaceStyle {
-        return KeyboardAppearance.isDark(Prefs.appearance) ? .dark : .light
-    }
+    /// Whether the app the keyboard is in is in dark mode: designed themes are drawn in that mode (ThemeCatalog), and
+    /// the system themes follow it through the views' own traits. Set by the keyboard (and the app's previews) before
+    /// the theme is read.
+    static var hostDark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
 
     /// Corner radius of a key of this size: the roundness (0...1) times half the shorter side; a designed theme's
     /// own, else the user's (the Keys screen). 0.26 gives about the native 5.5pt on a phone-sized key; 1 is a

@@ -331,24 +331,32 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
-            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.appearance, s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
+            "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             "\(s.splitKeyboard)", s.oneHanded,
             s.effectsJSON, s.systemEditsJSON
         ].joined(separator: "|")
     }
 
-    /// Light or dark: the keyboard's own setting (Theme.interfaceStyle) sets the whole keyboard, every theme and
-    /// every part of it. The phone's and the app's mode are never looked at.
-    /// Returns true when contrastKeys changed (the keys must then be rebuilt); it is never on now.
+    /// Light or dark follows the app the keyboard is in: nothing is pinned, so every view (and the system's own
+    /// backdrop) takes the host's traits, and the theme is drawn in the same mode (Theme.hostDark).
+    /// Returns true when the host's mode changed since the theme was read (the keyboard must then be rebuilt).
     private func updateKeyStyle() -> Bool {
         // Only assigned on a change: this runs after every layout pass, and each assignment re-resolves the traits.
-        let style = Theme.interfaceStyle
-        if view.overrideUserInterfaceStyle != style { view.overrideUserInterfaceStyle = style }
+        if view.overrideUserInterfaceStyle != .unspecified { view.overrideUserInterfaceStyle = .unspecified }
         if keyboardView.overrideUserInterfaceStyle != .unspecified { keyboardView.overrideUserInterfaceStyle = .unspecified }
         matchSearchBarToKeys()
-        guard Theme.contrastKeys else { return false }
-        Theme.contrastKeys = false
+        let app = view.traitCollection.userInterfaceStyle
+        guard app != .unspecified else { return false }   // not known yet (e.g. mid-rotation): keep what we have
+        let dark = app == .dark
+        guard dark != Theme.hostDark else { return false }
+        Theme.hostDark = dark
         return true
+    }
+
+    /// The host's mode as far as it is known now (the view's own traits, else the screen's).
+    private var hostIsDark: Bool {
+        let app = view.traitCollection.userInterfaceStyle
+        return (app == .unspecified ? UIScreen.main.traitCollection.userInterfaceStyle : app) == .dark
     }
 
     /// The emoji search bar over the keys is drawn like a key, so it takes the keys' light/dark
@@ -365,8 +373,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        // The keyboard's mode is pinned on the view, so the phone's or the app's changing moves nothing; this only
-        // keeps the pin in place.
+        // Done here, inside the system's own light/dark change, so the keyboard changes along with it.
         refreshKeyStyle()
     }
 
@@ -380,6 +387,7 @@ final class KeyboardViewController: UIInputViewController {
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
     private func buildInterface() {
         Prefs.refresh()
+        Theme.hostDark = hostIsDark
         Theme.reload()
         _ = updateKeyStyle()
         validateLanguage()
@@ -404,9 +412,21 @@ final class KeyboardViewController: UIInputViewController {
                 backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                 backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
             ])
+        } else if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
+            // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
+            // normal keyboard background, so paint one.
+            let solid = UIView()
+            solid.isUserInteractionEnabled = false
+            solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
+            solid.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(solid)
+            NSLayoutConstraint.activate([
+                solid.topAnchor.constraint(equalTo: container.topAnchor),
+                solid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                solid.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                solid.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
         }
-        // The system themes (Native, Transparent, Liquid Glass) have no background colour of their own: the
-        // keyboard backdrop is the system's. They only change the colour of the keys and of the letters and symbols.
         totalHeight = nil
         suggestionHeight = nil
 
@@ -2063,9 +2083,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
             toolsPanel?.refresh()
         case .split:
             saveTool(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard, rebuild: true)
-        case .darkMode:
-            // The keyboard's own mode (the Themes screen's Dark mode); the whole look is built again in it.
-            saveTool(KeyboardAppearance.isDark(Prefs.appearance) ? "light" : "dark", forKey: SettingKey.appearance, rebuild: true)
         case .hideKeyboard:
             hideTools()
             dismissKeyboard()
@@ -2160,7 +2177,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
         case .autoCorrect: return Prefs.autoCorrect
         case .vibration: return Prefs.vibration > 0
         case .split: return Prefs.splitKeyboard
-        case .darkMode: return KeyboardAppearance.isDark(Prefs.appearance)
         default: return nil
         }
     }

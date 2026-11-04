@@ -17,7 +17,7 @@ struct LiveKeyboard: View {
     var hitboxMode: HitboxOverlay.Mode = .hitboxes
     /// The Emoji screen: the keyboard as it is with its emoji picker open (nothing in it leaves the picker).
     var showsEmoji = false
-    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
+    @Environment(\.colorScheme) private var scheme
 
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
@@ -41,7 +41,7 @@ struct LiveKeyboard: View {
                     .background(Group {
                         if showsEmoji {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(KeyboardAppearance.isDark(appearance) ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+                                .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
                                 .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
                         } else {
                             look.backdrop(scale: scale)
@@ -183,7 +183,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
-            "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.appearance, s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
+            "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             s.systemEditsJSON, "\(showsEmoji)"
         ].joined(separator: "|") + (showsEmoji ? "|" + emojiSettingsSignature() : "")
     }
@@ -203,6 +203,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         Settings.shared.refresh()
         Prefs.refresh()
         applyEffects()
+        // The app's own mode, which the themes are drawn in (as the keyboard does in the app it is in).
+        let appStyle = traitCollection.userInterfaceStyle
+        Theme.hostDark = (appStyle == .unspecified ? UIScreen.main.traitCollection.userInterfaceStyle : appStyle) == .dark
         Theme.reload()
         builtSignature = signature()
         builtStyle = traitCollection.userInterfaceStyle
@@ -214,7 +217,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         keyboard = KeyboardView()
         keyboard.delegate = self
         keyboard.popupHost = stage
-        stage.overrideUserInterfaceStyle = Theme.interfaceStyle
         stage.addSubview(bar)
         stage.addSubview(keyboard)
         stage.addSubview(hitboxOverlay)

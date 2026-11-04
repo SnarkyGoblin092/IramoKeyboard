@@ -4,7 +4,7 @@ import Foundation
 /// Functions screen picks which ones the panel shows and in what order (Settings.keyboardTools).
 enum KeyboardTool: String, CaseIterable {
     case oneHanded, emoji, copy, cut, paste, clipboard, numberRow, swipeTyping, autoCorrect, vibration, nextLanguage
-    case split, hideKeyboard, openApp, darkMode
+    case split, hideKeyboard, openApp
 
     var title: String {
         switch self {
@@ -22,7 +22,6 @@ enum KeyboardTool: String, CaseIterable {
         case .split: return "Split keyboard"
         case .hideKeyboard: return "Hide keyboard"
         case .openApp: return "Settings"
-        case .darkMode: return "Dark mode"
         }
     }
 
@@ -42,7 +41,6 @@ enum KeyboardTool: String, CaseIterable {
         case .split: return "rectangle.split.2x1"
         case .hideKeyboard: return "keyboard.chevron.compact.down"
         case .openApp: return "gearshape"
-        case .darkMode: return "moon"
         }
     }
 
@@ -63,7 +61,6 @@ enum KeyboardTool: String, CaseIterable {
         case .split: return "iPad: the keys in two halves, on or off"
         case .hideKeyboard: return "Puts the keyboard away"
         case .openApp: return "Opens the Iramo app"
-        case .darkMode: return "The keyboard in dark or light mode"
         }
     }
 

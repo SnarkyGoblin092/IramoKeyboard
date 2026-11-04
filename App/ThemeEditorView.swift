@@ -27,10 +27,11 @@ struct ThemeEditorView: View {
     }
 
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
+    @Environment(\.colorScheme) private var scheme
     @AppStorage(SettingKey.themeEdits, store: SharedStore.defaults) private var themeEdits = SettingDefault.themeEdits
     @State private var tab: Tab = .colours
 
-    private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID, edits: themeEdits) }
+    private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID, edits: themeEdits, dark: scheme == .dark) }
 
     var body: some View {
         PinnedPreview(height: 240, fills: true) {

@@ -487,15 +487,15 @@ enum ThemeCatalog {
     }
 
     /// The theme with the editor's changes in `edits` (the stored `SettingKey.themeEdits`).
-    static func theme(id: String, edits: String) -> ThemeDefinition {
-        return themes([base(id: id)], edits: edits)[0]
+    /// With `dark` given, a designed theme in that mode (the host app's: ThemeStyle.adapted).
+    static func theme(id: String, edits: String, dark: Bool? = nil) -> ThemeDefinition {
+        return themes([base(id: id)], edits: edits, dark: dark)[0]
     }
 
     /// Several themes with the stored edits, which are decoded once for all of them.
-    static func themes(_ bases: [ThemeDefinition], edits: String) -> [ThemeDefinition] {
+    static func themes(_ bases: [ThemeDefinition], edits: String, dark: Bool? = nil) -> [ThemeDefinition] {
         let designedEdits = ThemeEdits.decode(edits)
         let systemEdits = SystemEdits.decode(SharedStore.defaults.string(forKey: SettingKey.systemEdits) ?? "")
-        let dark = KeyboardAppearance.isDark(SharedStore.defaults.string(forKey: SettingKey.appearance) ?? SettingDefault.appearance)
         return bases.map { base in
             var theme = base
             if theme.style != nil, let style = designedEdits[theme.id] {
@@ -505,8 +505,8 @@ enum ThemeCatalog {
                 theme.systemStyle = style
                 theme.isEdited = true
             }
-            // Every designed theme in the keyboard's own mode (the Themes screen's Dark mode).
-            theme.style = theme.style?.adapted(toDark: dark)
+            // Every designed theme in the mode of the app the keyboard is in, so each looks right in light and in dark.
+            if let dark = dark { theme.style = theme.style?.adapted(toDark: dark) }
             return theme
         }
     }

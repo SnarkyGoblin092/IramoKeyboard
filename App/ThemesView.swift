@@ -8,13 +8,13 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
-    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.openScreen) private var openScreen
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
-    private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID, edits: themeEdits) }
+    private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID, edits: themeEdits, dark: scheme == .dark) }
 
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
@@ -34,12 +34,6 @@ struct ThemesView: View {
         }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    /// The keyboard's own mode, whatever the phone or the app uses.
-    private var darkMode: Binding<Bool> {
-        return Binding(get: { KeyboardAppearance.isDark(appearance) },
-                       set: { appearance = $0 ? "dark" : "light" })
     }
 
     /// The chosen theme's name and what it is, and for a designed theme the way into its editor.
@@ -69,12 +63,6 @@ struct ThemesView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())
-            GlassToggle(title: tr("Dark mode"),
-                        subtitle: tr("The keyboard stays in this mode, whatever the phone or the app uses. Every theme has a light and a dark look."),
-                        isOn: darkMode)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .glassShape(RoundedRectangle(cornerRadius: GlassMetrics.cardRadius, style: .continuous))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -84,7 +72,7 @@ struct ThemesView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.headline)
             LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(ThemeCatalog.themes(themes, edits: themeEdits), id: \.id) { theme in
+                ForEach(ThemeCatalog.themes(themes, edits: themeEdits, dark: scheme == .dark), id: \.id) { theme in
                     ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
                         guard theme.id != themeID else { return }
                         Feedback.choose()

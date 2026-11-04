@@ -6,8 +6,6 @@ enum SettingKey {
     /// The size ("width,height" in points) the keyboard last had with its emoji picker open, upright: the app's
     /// Emoji preview is drawn at exactly this size.
     static let lastEmojiSize = "hunkeys.lastEmojiSize"
-    /// The keyboard's own light or dark mode: "light" or "dark". Nothing else decides it (not the phone, not the app).
-    static let appearance = "hunkeys.appearance"
     // Feel
     static let holdDelay = "hunkeys.holdDelay"
     static let vibration = "hunkeys.vibrationStrength"
@@ -164,7 +162,7 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, appearance, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
@@ -192,7 +190,6 @@ enum SettingDefault {
     static let autoCorrect = true
     static let cursorControl = true
     static let swipeDownHide = true
-    static let appearance = "dark"
     static let deleteSwipe = true
     static let deleteSwipedWord = true
     static let deleteRepeatDelay = 0.5
@@ -429,7 +426,6 @@ final class Settings {
             SettingKey.autoCorrect: SettingDefault.autoCorrect,
             SettingKey.cursorControl: SettingDefault.cursorControl,
             SettingKey.swipeDownHide: SettingDefault.swipeDownHide,
-            SettingKey.appearance: SettingDefault.appearance,
             SettingKey.deleteSwipe: SettingDefault.deleteSwipe,
             SettingKey.deleteSwipedWord: SettingDefault.deleteSwipedWord,
             SettingKey.deleteRepeatDelay: SettingDefault.deleteRepeatDelay,
@@ -582,12 +578,6 @@ final class Settings {
     var autoCorrect: Bool {
         get { return readBool(SettingKey.autoCorrect) }
         set { put(newValue, SettingKey.autoCorrect) }
-    }
-
-    /// "light" or "dark" (SettingKey.appearance).
-    var appearance: String {
-        get { return readString(SettingKey.appearance) ?? SettingDefault.appearance }
-        set { put(newValue, SettingKey.appearance) }
     }
 
     /// A swipe down from the suggestion bar hides the keyboard.
@@ -1119,13 +1109,5 @@ enum KeySound: String, CaseIterable {
         case .toneLow: return "Low tone"
         case .toneHigh: return "High tone"
         }
-    }
-}
-
-/// The keyboard's own light or dark mode, for what the app draws to look like it.
-enum KeyboardAppearance {
-    /// Whether the keyboard is dark: only the stored choice says.
-    static func isDark(_ stored: String) -> Bool {
-        return stored != "light"
     }
 }
