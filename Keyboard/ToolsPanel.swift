@@ -137,11 +137,25 @@ final class ToolsPanel: UIScrollView {
         contentSize = CGSize(width: CGFloat(tiles.count) * tileWidth, height: bounds.height)
     }
 
+    /// The tiles slide back into the toolbox button, then `completion` runs.
+    func slideOut(completion: @escaping () -> Void) {
+        isUserInteractionEnabled = false
+        let visible = tiles.filter { $0.frame.maxX > contentOffset.x && $0.frame.minX < contentOffset.x + bounds.width }
+        for (index, tile) in visible.enumerated() {
+            UIView.animate(withDuration: 0.22, delay: 0.02 * Double(min(index, 6)), options: [.curveEaseIn, .beginFromCurrentState]) {
+                tile.transform = CGAffineTransform(translationX: -tile.frame.minX + self.contentOffset.x - 24, y: 0).scaledBy(x: 0.5, y: 0.5)
+                tile.alpha = 0
+            }
+        }
+        let total = 0.22 + 0.02 * Double(min(max(visible.count - 1, 0), 6))
+        DispatchQueue.main.asyncAfter(deadline: .now() + total + 0.02, execute: completion)
+    }
+
     /// The tiles slide out of the toolbox button at the left, one after the other.
     func slideIn() {
         layoutIfNeeded()
         for (index, tile) in tiles.enumerated() {
-            tile.transform = CGAffineTransform(translationX: -tile.frame.minX - 24, y: 0).scaledBy(x: 0.5, y: 0.5)
+            tile.transform = CGAffineTransform(translationX: -tile.frame.minX + contentOffset.x - 24, y: 0).scaledBy(x: 0.5, y: 0.5)
             let alpha = tile.alpha
             tile.alpha = 0
             UIView.animate(withDuration: 0.42, delay: 0.025 * Double(min(index, 8)), usingSpringWithDamping: 0.78,

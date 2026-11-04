@@ -56,6 +56,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         didSet { if clipboardOpen != oldValue { setToolsImage() } }
     }
     private var toolsStrip: ToolsPanel?
+    /// The strip that is sliding away.
+    private weak var leavingTools: ToolsPanel?
     private let hintLabel = UILabel()
     /// The accent pill behind the word space will write (the auto-correction).
     private let bestPill = UIView()
@@ -188,9 +190,25 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
 
     /// Puts the Functions strip in the bar in place of the suggestions (nil takes it out again).
     func setTools(_ panel: ToolsPanel?) {
-        toolsStrip?.removeFromSuperview()
+        leavingTools?.removeFromSuperview()
+        leavingTools = nil
+        let old = toolsStrip
         toolsStrip = panel
         toolsOpen = panel != nil
+        if panel == nil, let old = old, window != nil {
+            // Closing: the tiles slide back into the button while the suggestions fade in behind them.
+            leavingTools = old
+            old.slideOut { [weak self, weak old] in
+                old?.removeFromSuperview()
+                if self?.leavingTools === old { self?.leavingTools = nil }
+            }
+            strip.alpha = 0
+            UIView.animate(withDuration: 0.25, delay: 0.1, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.strip.alpha = 1
+            }
+        } else {
+            old?.removeFromSuperview()
+        }
         if let panel = panel {
             glass.contentView.addSubview(panel)
             glass.contentView.isUserInteractionEnabled = true
@@ -529,7 +547,10 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
         let x = point.x - glass.frame.minX
         if let tools = toolsStrip, x > toolsMaxX && x < dismissMinX {
-            return tools.hitTest(convert(point, to: tools), with: event) ?? self
+            // Anywhere along the bar's height counts (the bar is taller than the strip), so a swipe always scrolls it.
+            var local = convert(point, to: tools)
+            local.y = min(max(local.y, 1), tools.bounds.height - 1)
+            return tools.hitTest(local, with: event) ?? tools
         }
         if layoutMode == .scroll && x > toolsMaxX && x < dismissMinX { return strip }
         return self
