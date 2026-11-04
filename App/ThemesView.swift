@@ -8,6 +8,8 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.openScreen) private var openScreen
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
@@ -33,6 +35,12 @@ struct ThemesView: View {
         }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The keyboard's mode: on until chosen, it is the phone's own; then it stays as chosen.
+    private var darkMode: Binding<Bool> {
+        return Binding(get: { KeyboardAppearance.isDark(stored: appearance, system: scheme == .dark) },
+                       set: { appearance = $0 ? "dark" : "light" })
     }
 
     /// The chosen theme's name and what it is, and for a designed theme the way into its editor.
@@ -62,6 +70,12 @@ struct ThemesView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())
+            GlassToggle(title: tr("Dark mode"),
+                        subtitle: tr("The keyboard stays in this mode, whatever the phone or the app uses. Some designed themes have a mode of their own."),
+                        isOn: darkMode)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .glassShape(RoundedRectangle(cornerRadius: GlassMetrics.cardRadius, style: .continuous))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)

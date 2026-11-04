@@ -36,6 +36,7 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFontID = SettingDefault.keyFont
 
     @Environment(\.colorScheme) private var systemScheme
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
 
     /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
     var language: Language? = nil
@@ -241,7 +242,7 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
 
     private var look: ThemeLook {
-        return ThemeLook(theme: theme, accent: accent, dark: systemScheme == .dark, roundness: roundness,
+        return ThemeLook(theme: theme, accent: accent, dark: KeyboardAppearance.isDark(stored: appearance, system: systemScheme == .dark), roundness: roundness,
                          keySurface: keySurface, keyBorderStyle: keyBorderStyle, keyGlow: keyGlow,
                          accentHex: accentHex, accentName: accentName)
     }
@@ -912,6 +913,7 @@ struct CurrentThemeLook<Content: View>: View {
     @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
     @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
     @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var keyGlow = SettingDefault.keyGlow
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     @Environment(\.colorScheme) private var scheme
 
     init(@ViewBuilder content: @escaping (ThemeLook) -> Content) {
@@ -921,7 +923,7 @@ struct CurrentThemeLook<Content: View>: View {
     var body: some View {
         content(ThemeLook(theme: ThemeCatalog.theme(id: themeID, edits: themeEdits),
                           accent: Color.currentAccent(name: accentName, hex: accentHex),
-                          dark: scheme == .dark, roundness: roundness,
+                          dark: KeyboardAppearance.isDark(stored: appearance, system: scheme == .dark), roundness: roundness,
                           keySurface: keySurface, keyBorderStyle: keyBorderStyle, keyGlow: keyGlow,
                           accentHex: accentHex, accentName: accentName))
     }
