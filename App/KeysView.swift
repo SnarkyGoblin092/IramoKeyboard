@@ -155,7 +155,7 @@ struct KeysView: View {
             // The lifted preview and its outline follow the key's own rounded shape and size, not the touch area.
             .contentShape(.contextMenuPreview, shape)
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(SlotPressStyle())
         .contextMenu {
             if symbol != nil {
                 Button(role: .destructive) { setSymbol(nil, at: slot) } label: {
@@ -463,5 +463,14 @@ private struct KeyFontChoice: View {
         .glassScreen()
         .navigationTitle(tr("Font"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The press of a symbol place: it only dips a little, with no glass sheen or outline over it.
+private struct SlotPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
     }
 }
