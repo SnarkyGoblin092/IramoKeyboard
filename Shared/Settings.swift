@@ -3,6 +3,8 @@ import Foundation
 // MARK: - Keys and defaults (shared by the app's SwiftUI bindings and the keyboard)
 
 enum SettingKey {
+    /// The size ("width,height") the keyboard last showed its emoji picker at, upright: the app's preview uses it.
+    static let lastEmojiSize = "hunkeys.lastEmojiSize"
     // Feel
     static let holdDelay = "hunkeys.holdDelay"
     static let vibration = "hunkeys.vibrationStrength"
@@ -17,6 +19,7 @@ enum SettingKey {
     static let doubleSpacePeriod = "hunkeys.doubleSpacePeriod"
     static let autoCorrect = "hunkeys.autoCorrect"
     static let cursorControl = "hunkeys.cursorControl"
+    static let swipeDownHide = "hunkeys.swipeDownHide"
     static let deleteSwipe = "hunkeys.deleteSwipe"
     static let deleteSwipedWord = "hunkeys.deleteSwipedWord"
     /// How long delete is held before it starts repeating (a slide left before then deletes words instead).
@@ -158,7 +161,7 @@ enum SettingKey {
     /// Everything "Reset settings" puts back to its default (data like shortcuts is left alone).
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
-        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
+        autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, themeEdits, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
@@ -185,6 +188,7 @@ enum SettingDefault {
     static let doubleSpacePeriod = true
     static let autoCorrect = true
     static let cursorControl = true
+    static let swipeDownHide = true
     static let deleteSwipe = true
     static let deleteSwipedWord = true
     static let deleteRepeatDelay = 0.5
@@ -420,6 +424,7 @@ final class Settings {
             SettingKey.doubleSpacePeriod: SettingDefault.doubleSpacePeriod,
             SettingKey.autoCorrect: SettingDefault.autoCorrect,
             SettingKey.cursorControl: SettingDefault.cursorControl,
+            SettingKey.swipeDownHide: SettingDefault.swipeDownHide,
             SettingKey.deleteSwipe: SettingDefault.deleteSwipe,
             SettingKey.deleteSwipedWord: SettingDefault.deleteSwipedWord,
             SettingKey.deleteRepeatDelay: SettingDefault.deleteRepeatDelay,
@@ -572,6 +577,12 @@ final class Settings {
     var autoCorrect: Bool {
         get { return readBool(SettingKey.autoCorrect) }
         set { put(newValue, SettingKey.autoCorrect) }
+    }
+
+    /// A swipe down from the suggestion bar hides the keyboard.
+    var swipeDownHide: Bool {
+        get { return readBool(SettingKey.swipeDownHide) }
+        set { put(newValue, SettingKey.swipeDownHide) }
     }
 
     var cursorControl: Bool {

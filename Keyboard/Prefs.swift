@@ -17,6 +17,7 @@ final class Prefs {
     static var doubleSpacePeriod = SettingDefault.doubleSpacePeriod
     static var autoCorrect = SettingDefault.autoCorrect
     static var cursorControl = SettingDefault.cursorControl
+    static var swipeDownHide = SettingDefault.swipeDownHide
     static var deleteSwipe = SettingDefault.deleteSwipe
     static var numberRow = SettingDefault.numberRow
     static var keyHints = SettingDefault.keyHints
@@ -113,6 +114,7 @@ final class Prefs {
         doubleSpacePeriod = s.doubleSpacePeriod
         autoCorrect = s.autoCorrect
         cursorControl = s.cursorControl
+        swipeDownHide = s.swipeDownHide
         deleteSwipe = s.deleteSwipe
         numberRow = s.numberRow
         keyHints = s.keyHints

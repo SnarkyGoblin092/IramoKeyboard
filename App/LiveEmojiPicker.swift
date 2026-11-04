@@ -53,7 +53,11 @@ final class LiveEmojiPickerView: UIView, EmojiPanelDelegate {
         let keyboard = LiveKeyboardView.naturalSize(keyHeight: s.keyHeight, rowGap: s.rowGap, numberRow: s.numberRow,
                                                     barHeight: s.suggestionHeight,
                                                     language: LiveKeyboardView.openingLanguage(code: s.languageCode))
-        return CGSize(width: keyboard.width, height: max(keyboard.height, EmojiPanel.requiredHeight(forWidth: keyboard.width)))
+        // The width the keyboard really showed its picker at, when it has (its window need not be the screen's width,
+        // and the layout and the picker's height both follow the width).
+        let parts = (SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) ?? "").split(separator: ",").compactMap { Double($0) }
+        let width = parts.count == 2 && parts[0] > 100 ? CGFloat(parts[0]) : keyboard.width
+        return CGSize(width: width, height: max(keyboard.height, EmojiPanel.requiredHeight(forWidth: width)))
     }
 
     override init(frame: CGRect) {

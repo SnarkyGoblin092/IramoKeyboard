@@ -9,6 +9,7 @@ struct GesturesView: View {
     @AppStorage(SettingKey.deleteSwipedWord, store: SharedStore.defaults) private var deleteSwiped = SettingDefault.deleteSwipedWord
     @AppStorage(SettingKey.deleteSwipe, store: SharedStore.defaults) private var deleteWords = SettingDefault.deleteSwipe
     @AppStorage(SettingKey.cursorControl, store: SharedStore.defaults) private var cursor = SettingDefault.cursorControl
+    @AppStorage(SettingKey.swipeDownHide, store: SharedStore.defaults) private var swipeDownHide = SettingDefault.swipeDownHide
     @AppStorage(SettingKey.flickUpCapital, store: SharedStore.defaults) private var flickUp = SettingDefault.flickUpCapital
     @AppStorage(SettingKey.flickDownAccent, store: SharedStore.defaults) private var flickDown = SettingDefault.flickDownAccent
     @AppStorage(SettingKey.swipeTrailLength, store: SharedStore.defaults) private var trailLength = SettingDefault.swipeTrailLength
@@ -63,6 +64,15 @@ struct GesturesView: View {
                 SectionHeader(tr("Accents and capitals"), symbol: "textformat.abc.dottedunderline", color: .orange)
             } footer: {
                 Text(tr("Flicks are short and straight; a longer slide is still swipe typing."))
+            }
+            .glassRows()
+
+            Section {
+                GlassToggle(title: tr("Swipe down to hide"),
+                            subtitle: tr("Swipe down from the suggestion bar to hide the keyboard."),
+                            isOn: $swipeDownHide)
+            } header: {
+                SectionHeader(tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo)
             }
             .glassRows()
 

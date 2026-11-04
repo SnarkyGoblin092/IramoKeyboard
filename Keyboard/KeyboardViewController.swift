@@ -18,6 +18,7 @@ final class KeyboardViewController: UIInputViewController {
     private var clipboardPanel: ClipboardPanel?
     /// The system clipboard's change count when it was last read (it is only read again once it changed).
     private var seenPasteboardChange = -1
+    private var clipboardTimer: Timer?
 
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
@@ -215,6 +216,7 @@ final class KeyboardViewController: UIInputViewController {
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
         settings.markKeyboardSeen(hasFullAccess: hasFullAccess)
+        startClipboardWatch()
         var usage: [Language: Double] = [:]
         for (code, value) in settings.languageUsage() {
             if let language = Language(rawValue: code) { usage[language] = value }
@@ -263,12 +265,26 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
+        recordEmojiSize()
         // Catches a style read wrongly earlier; rebuilding is left until after this layout pass.
         DispatchQueue.main.async { [weak self] in self?.refreshKeyStyle() }
     }
 
+    /// The picker's real size, kept for the app's Emoji preview (upright only: a landscape keyboard is not recorded).
+    private func recordEmojiSize() {
+        guard emojiPanel != nil else { return }
+        let size = view.bounds.size
+        let screen = UIScreen.main.bounds.size
+        guard size.width > 100, size.height > 100, size.width <= min(screen.width, screen.height) + 1 else { return }
+        let text = "\(Int(size.width.rounded())),\(Int(size.height.rounded()))"
+        if SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) != text {
+            SharedStore.defaults.set(text, forKey: SettingKey.lastEmojiSize)
+        }
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        stopClipboardWatch()
         finishComposing()
         for language in Language.allCases where language.usesPhoneticInput {
             PhoneticInput.shared(for: language).saveNow()
@@ -2104,6 +2120,32 @@ extension KeyboardViewController: ToolsPanelDelegate {
         seenPasteboardChange = pasteboard.changeCount
         guard pasteboard.hasStrings, let text = pasteboard.string else { return }
         settings.rememberClipboard(text)
+    }
+
+    // The history keeps whatever is copied while the keyboard is up, without the Clipboard panel being opened:
+    // the pasteboard's change count (cheap, and no paste notice) is watched, and the text read once it moved.
+
+    private func startClipboardWatch() {
+        guard clipboardTimer == nil else { return }
+        clipboardTimer = Timer(timeInterval: 0.6, repeats: true) { [weak self] _ in self?.noteClipboardIfChanged() }
+        if let timer = clipboardTimer { RunLoop.main.add(timer, forMode: .common) }
+        NotificationCenter.default.addObserver(self, selector: #selector(pasteboardChanged),
+                                               name: UIPasteboard.changedNotification, object: nil)
+    }
+
+    private func stopClipboardWatch() {
+        clipboardTimer?.invalidate()
+        clipboardTimer = nil
+        NotificationCenter.default.removeObserver(self, name: UIPasteboard.changedNotification, object: nil)
+    }
+
+    @objc private func pasteboardChanged() {
+        noteClipboardIfChanged()
+    }
+
+    private func noteClipboardIfChanged() {
+        guard hasFullAccess, UIPasteboard.general.changeCount != seenPasteboardChange else { return }
+        noteClipboard()
     }
 
     private func showClipboard() {

@@ -63,11 +63,10 @@ struct EmojiView: View {
 
     private func pickerAspect(_ keyHeight: Double, _ rowGap: Double, _ numberRow: Bool, _ barHeight: Double,
                               _ code: String) -> CGFloat {
-        let keyboard = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
-                                                    barHeight: barHeight,
-                                                    language: LiveKeyboardView.openingLanguage(code: code))
-        let height = max(keyboard.height, EmojiPanel.requiredHeight(forWidth: keyboard.width))
-        return keyboard.width / height
+        // The keyboard's real picker size (LiveEmojiPickerView.naturalSize): the settings above only make this
+        // redraw when one changes.
+        let size = LiveEmojiPickerView.naturalSize
+        return size.width / size.height
     }
 }
 

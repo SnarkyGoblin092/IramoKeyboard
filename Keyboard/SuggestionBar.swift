@@ -23,7 +23,7 @@ protocol SuggestionBarDelegate: AnyObject {
 ///    in a strip that scrolls sideways ("Scrollable"; with "Three at a time" a page of three equal slots each);
 ///  - thin separators between the slots (solid, dashed, dotted or none), or each slot on a key-like segment;
 ///  - colours from the theme ("Follow theme") or neutral ones.
-final class SuggestionBar: UIView {
+final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     weak var delegate: SuggestionBarDelegate?
 
     /// How many suggestions the bar can show with the current settings (the controller asks for this many).
@@ -146,6 +146,13 @@ final class SuggestionBar: UIView {
         // Nothing but the strip takes touches itself: the bar decides from the x position.
         for view in [glass as UIView, hintLabel, dismissIcon, toolsIcon, bestPill] { view.isUserInteractionEnabled = false }
         if layoutMode != .scroll { glass.contentView.isUserInteractionEnabled = false }
+
+        if Prefs.swipeDownHide {
+            // A swipe down from the bar hides the keyboard (a sideways drag still scrolls a scrolling strip).
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(swipedDown(_:)))
+            pan.delegate = self
+            addGestureRecognizer(pan)
+        }
 
         refreshVisibility()
     }
@@ -535,6 +542,32 @@ final class SuggestionBar: UIView {
         UIView.animate(withDuration: 0.25, animations: { self.highlights[index].alpha = 0 },
                        completion: { _ in self.styleLabel(index, onPill: index == self.highlightedIndex) })
         delegate?.suggestionBar(self, didSelect: picked)
+    }
+
+    private var swipeDownFired = false
+
+    @objc private func swipedDown(_ recognizer: UIPanGestureRecognizer) {
+        switch recognizer.state {
+        case .began, .changed:
+            guard !swipeDownFired, recognizer.translation(in: self).y > 14 else { return }
+            swipeDownFired = true
+            setPressed(nil)
+            Haptics.shared.keyPress()
+            delegate?.suggestionBarDidTapDismiss(self)
+        default:
+            swipeDownFired = false
+        }
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+        let move = pan.translation(in: self)
+        return move.y > 0 && move.y > abs(move.x) * 1.5
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        return true
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
