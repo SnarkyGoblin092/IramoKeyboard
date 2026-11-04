@@ -47,10 +47,15 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     private let toolsIcon = UIImageView()
     private var toolsMaxX: CGFloat = 0
     private let toolsIndex = -2
-    /// The Functions panel is open: the button shows the keyboard, which takes the user back to the keys.
-    var toolsOpen = false {
+    /// The Functions strip is in the bar: the button shows a cross, which closes it.
+    private(set) var toolsOpen = false {
         didSet { if toolsOpen != oldValue { setToolsImage() } }
     }
+    /// The Clipboard panel covers the keys: the button shows the keyboard, which takes the user back to them.
+    var clipboardOpen = false {
+        didSet { if clipboardOpen != oldValue { setToolsImage() } }
+    }
+    private var toolsStrip: ToolsPanel?
     private let hintLabel = UILabel()
     /// The accent pill behind the word space will write (the auto-correction).
     private let bestPill = UIView()
@@ -162,9 +167,26 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private func setToolsImage() {
-        toolsIcon.image = UIImage(systemName: toolsOpen ? "keyboard" : "square.grid.2x2",
+        let name = toolsOpen ? "xmark" : (clipboardOpen ? "keyboard" : "square.grid.2x2")
+        toolsIcon.image = UIImage(systemName: name,
                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
-        toolsIcon.accessibilityLabel = toolsOpen ? "Back to the keys" : "Functions"
+        toolsIcon.accessibilityLabel = toolsOpen ? "Close the functions" : (clipboardOpen ? "Back to the keys" : "Functions")
+    }
+
+    /// Puts the Functions strip in the bar in place of the suggestions (nil takes it out again).
+    func setTools(_ panel: ToolsPanel?) {
+        toolsStrip?.removeFromSuperview()
+        toolsStrip = panel
+        toolsOpen = panel != nil
+        if let panel = panel {
+            glass.contentView.addSubview(panel)
+            glass.contentView.isUserInteractionEnabled = true
+        } else if layoutMode != .scroll {
+            glass.contentView.isUserInteractionEnabled = false
+        }
+        strip.isHidden = panel != nil
+        refreshVisibility()
+        setNeedsLayout()
     }
 
     // MARK: Colours
@@ -332,7 +354,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         let hasSuggestions = suggestions.contains { !$0.text.isEmpty }
         separatorLayer.opacity = hasSuggestions ? 1 : 0
         hintLabel.text = emptyHint
-        hintLabel.isHidden = hasSuggestions || emptyHint == nil
+        hintLabel.isHidden = hasSuggestions || emptyHint == nil || toolsOpen
     }
 
     // MARK: Layout
@@ -357,6 +379,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         // Bounds and centre rather than frame: the strip may be mid-switch with a transform.
         strip.bounds.size = CGSize(width: contentWidth, height: area.height)
         strip.center = CGPoint(x: toolsWidth + contentWidth / 2, y: area.height / 2)
+        toolsStrip?.frame = CGRect(x: toolsWidth, y: 0, width: contentWidth, height: area.height)
 
         var frames: [CGRect] = []
         let widths = slotWidths(contentWidth: contentWidth)
@@ -488,6 +511,9 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, bounds.insetBy(dx: -4, dy: -4).contains(point) else { return nil }
         let x = point.x - glass.frame.minX
+        if let tools = toolsStrip, x > toolsMaxX && x < dismissMinX {
+            return tools.hitTest(convert(point, to: tools), with: event) ?? self
+        }
         if layoutMode == .scroll && x > toolsMaxX && x < dismissMinX { return strip }
         return self
     }
@@ -514,6 +540,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         let x = point.x - glass.frame.minX
         if x >= dismissMinX { return dismissIndex }
         if x < toolsMaxX { return toolsIndex }
+        if toolsStrip != nil { return nil }
         return slot(atContentX: x - stripRect.minX + strip.contentOffset.x)
     }
 

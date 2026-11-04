@@ -1930,7 +1930,8 @@ extension KeyboardViewController: SuggestionBarDelegate {
 // MARK: - Functions panel
 
 extension KeyboardViewController: ToolsPanelDelegate {
-    /// The tools the app's Functions screen picked (split only on an iPad), in place of the keys.
+    /// The tools the app's Functions screen picked (split only on an iPad), in the suggestion bar in place of the
+    /// suggestions; the keys stay where they are.
     private func showTools() {
         guard toolsPanel == nil else { return }
         finishComposing()
@@ -1938,25 +1939,14 @@ extension KeyboardViewController: ToolsPanelDelegate {
         let tools = settings.keyboardTools.filter { $0 != .split || isPad }
         let panel = ToolsPanel(tools: tools)
         panel.delegate = self
-        panel.translatesAutoresizingMaskIntoConstraints = false
-        stage.addSubview(panel)
-        NSLayoutConstraint.activate([
-            panel.topAnchor.constraint(equalTo: keyboardView.topAnchor),
-            panel.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor),
-            panel.leadingAnchor.constraint(equalTo: keyboardView.leadingAnchor),
-            panel.trailingAnchor.constraint(equalTo: keyboardView.trailingAnchor)
-        ])
         toolsPanel = panel
-        keyboardView.isHidden = true
-        suggestionBar.toolsOpen = true
+        suggestionBar.setTools(panel)
         panel.refresh()
     }
 
     private func hideTools() {
-        toolsPanel?.removeFromSuperview()
         toolsPanel = nil
-        keyboardView.isHidden = false
-        suggestionBar.toolsOpen = false
+        suggestionBar.setTools(nil)
     }
 
     /// Saves a setting changed from the panel. A change to the keys' layout rebuilds the keyboard (the panel
@@ -2008,17 +1998,58 @@ extension KeyboardViewController: ToolsPanelDelegate {
             saveTool(!Prefs.autoCorrect, forKey: SettingKey.autoCorrect, rebuild: false)
         case .vibration:
             saveTool(Prefs.vibration > 0 ? 0.0 : SettingDefault.vibration, forKey: SettingKey.vibration, rebuild: false)
-        case .nextLanguage:
-            switchLanguage(by: 1)
-            toolsPanel?.refresh()
         case .split:
             saveTool(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard, rebuild: true)
-        case .hideKeyboard:
-            hideTools()
-            dismissKeyboard()
         case .openApp:
             hideTools()
             openApp()
+        case .changeCase:
+            guard let selected = textDocumentProxy.selectedText, !selected.isEmpty else { return }
+            // UPPERCASE, then lowercase, then Capitalized, then round again.
+            let next: String
+            if selected == selected.uppercased() && selected != selected.lowercased() {
+                next = selected.lowercased()
+            } else if selected == selected.lowercased() {
+                next = selected.capitalized
+            } else {
+                next = selected.uppercased()
+            }
+            textDocumentProxy.insertText(next)
+            hideTools()
+            scheduleRefresh()
+        case .deleteWord:
+            let before = textDocumentProxy.documentContextBeforeInput ?? ""
+            var count = 0
+            var rest = Substring(before)
+            while let last = rest.last, last.isWhitespace { rest = rest.dropLast(); count += 1 }
+            while let last = rest.last, !last.isWhitespace { rest = rest.dropLast(); count += 1 }
+            for _ in 0..<max(count, 1) { textDocumentProxy.deleteBackward() }
+            hideTools()
+            scheduleRefresh()
+        case .lineStart:
+            let line = (textDocumentProxy.documentContextBeforeInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: -line.count)
+            hideTools()
+            scheduleRefresh()
+        case .lineEnd:
+            let line = (textDocumentProxy.documentContextAfterInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).first ?? ""
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: line.count)
+            hideTools()
+            scheduleRefresh()
+        case .clearAll:
+            let after = textDocumentProxy.documentContextAfterInput ?? ""
+            let before = textDocumentProxy.documentContextBeforeInput ?? ""
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: after.count)
+            for _ in 0..<(before.count + after.count) { textDocumentProxy.deleteBackward() }
+            hideTools()
+            scheduleRefresh()
+        case .insertDate, .insertTime:
+            let formatter = DateFormatter()
+            formatter.dateStyle = tool == .insertDate ? .medium : .none
+            formatter.timeStyle = tool == .insertTime ? .short : .none
+            textDocumentProxy.insertText(formatter.string(from: Date()))
+            hideTools()
+            scheduleRefresh()
         }
     }
 
@@ -2088,14 +2119,14 @@ extension KeyboardViewController: ToolsPanelDelegate {
         ])
         clipboardPanel = panel
         keyboardView.isHidden = true
-        suggestionBar.toolsOpen = true
+        suggestionBar.clipboardOpen = true
     }
 
     private func hideClipboard() {
         clipboardPanel?.removeFromSuperview()
         clipboardPanel = nil
         keyboardView.isHidden = false
-        suggestionBar.toolsOpen = false
+        suggestionBar.clipboardOpen = false
     }
 
     func toolsPanel(_ panel: ToolsPanel, stateOf tool: KeyboardTool) -> Bool? {
@@ -2113,12 +2144,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
     func toolsPanel(_ panel: ToolsPanel, detailOf tool: KeyboardTool) -> String? {
         switch tool {
         case .oneHanded:
-            return Prefs.oneHanded == "left" ? "Left hand" : (Prefs.oneHanded == "right" ? "Right hand" : "Off")
-        case .nextLanguage:
-            let enabled = enabledLanguages
-            guard enabled.count > 1 else { return nil }
-            let index = enabled.firstIndex(of: language) ?? 0
-            return enabled[(index + 1) % enabled.count].displayName
+            return Prefs.oneHanded == "left" ? "Left hand" : (Prefs.oneHanded == "right" ? "Right hand" : nil)
         default:
             return nil
         }
@@ -2126,8 +2152,9 @@ extension KeyboardViewController: ToolsPanelDelegate {
 
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {
         switch tool {
-        case .copy, .cut, .paste, .clipboard: return hasFullAccess
-        case .nextLanguage: return enabledLanguages.count > 1
+        case .copy, .cut: return hasFullAccess && !(textDocumentProxy.selectedText ?? "").isEmpty
+        case .paste, .clipboard: return hasFullAccess
+        case .changeCase: return !(textDocumentProxy.selectedText ?? "").isEmpty
         case .vibration: return hasFullAccess
         default: return true
         }

@@ -4,45 +4,40 @@ protocol ToolsPanelDelegate: AnyObject {
     func toolsPanel(_ panel: ToolsPanel, didPick tool: KeyboardTool)
     /// On for a tool that is switched on (number row, swipe typing...), nil for one that is an action.
     func toolsPanel(_ panel: ToolsPanel, stateOf tool: KeyboardTool) -> Bool?
-    /// What a tool's tile says under its name (the one-handed side), if anything.
+    /// What a tool's tile says in place of its name (the one-handed side), if anything.
     func toolsPanel(_ panel: ToolsPanel, detailOf tool: KeyboardTool) -> String?
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool
 }
 
-/// The Functions panel: the tools the app's Functions screen picked, as key-like tiles in a grid where the keys
-/// were. Tiles of tools that are on light up in the accent.
-final class ToolsPanel: UIView {
+/// The Functions strip: the tools the app's Functions screen picked, as small icon-and-name buttons in a row that
+/// scrolls sideways. It takes the place of the suggestions in the suggestion bar (SuggestionBar.setTools). Tools
+/// that are on light up in the accent.
+final class ToolsPanel: UIScrollView {
     weak var delegate: ToolsPanelDelegate?
 
     private final class Tile: UIControl {
         let tool: KeyboardTool
-        private let background = FlatPanel(background: Theme.letterKey, allowGlass: true, followsKeyRoundness: true, keyLike: true)
         private let onFill = UIView()
         private let icon = UIImageView()
         private let title = UILabel()
-        private let detail = UILabel()
 
         init(tool: KeyboardTool) {
             self.tool = tool
             super.init(frame: .zero)
-            background.isUserInteractionEnabled = false
-            addSubview(background)
             onFill.backgroundColor = Theme.accent
             onFill.layer.cornerCurve = .continuous
             onFill.isUserInteractionEnabled = false
             onFill.isHidden = true
             addSubview(onFill)
             icon.image = UIImage(systemName: tool.symbol,
-                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .regular))
+                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular))
             icon.contentMode = .center
             title.text = tool.title
-            title.font = Theme.keyFont(ofSize: 12, weight: .medium)
+            title.font = Theme.keyFont(ofSize: 10, weight: .medium)
             title.textAlignment = .center
             title.adjustsFontSizeToFitWidth = true
-            title.minimumScaleFactor = 0.7
-            detail.font = Theme.keyFont(ofSize: 10)
-            detail.textAlignment = .center
-            for view in [icon, title, detail] as [UIView] {
+            title.minimumScaleFactor = 0.6
+            for view in [icon, title] as [UIView] {
                 view.isUserInteractionEnabled = false
                 addSubview(view)
             }
@@ -58,33 +53,28 @@ final class ToolsPanel: UIView {
         func show(on: Bool?, detail text: String?, available: Bool) {
             let lit = on == true
             onFill.isHidden = !lit
-            let colour = lit ? Theme.onAccent : Theme.keyText
+            let colour = lit ? Theme.onAccent : Theme.barIcons
             icon.tintColor = colour
             title.textColor = colour
-            detail.textColor = lit ? Theme.onAccent.withAlphaComponent(0.8) : Theme.keySecondaryText
-            detail.text = text
-            detail.isHidden = text == nil
-            alpha = available ? 1 : 0.4
+            // A tool with something to say about its state (the one-handed side) says it in place of its name.
+            title.text = text ?? tool.title
+            alpha = available ? 1 : 0.35
             isEnabled = available
             accessibilityValue = text ?? (on.map { $0 ? "On" : "Off" })
         }
 
         override var isHighlighted: Bool {
-            didSet { background.alpha = isHighlighted ? 0.55 : 1 }
+            didSet { alpha = isEnabled ? (isHighlighted ? 0.45 : 1) : 0.35 }
         }
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            background.frame = bounds
-            onFill.frame = bounds
-            onFill.layer.cornerRadius = Theme.keyCornerRadius(for: bounds.size)
-            let hasDetail = !detail.isHidden
-            let iconHeight: CGFloat = 24
-            let block = iconHeight + 4 + 15 + (hasDetail ? 13 : 0)
-            let top = max(2, (bounds.height - block) / 2)
-            icon.frame = CGRect(x: 0, y: top, width: bounds.width, height: iconHeight)
-            title.frame = CGRect(x: 4, y: icon.frame.maxY + 4, width: bounds.width - 8, height: 15)
-            detail.frame = CGRect(x: 4, y: title.frame.maxY, width: bounds.width - 8, height: 13)
+            onFill.frame = bounds.insetBy(dx: 1, dy: 1)
+            onFill.layer.cornerRadius = min(10, onFill.bounds.height / 2.6)
+            let block: CGFloat = 22 + 1 + 12
+            let top = max(1, (bounds.height - block) / 2)
+            icon.frame = CGRect(x: 0, y: top, width: bounds.width, height: 22)
+            title.frame = CGRect(x: 3, y: icon.frame.maxY + 1, width: bounds.width - 6, height: 12)
         }
     }
 
@@ -93,19 +83,21 @@ final class ToolsPanel: UIView {
 
     init(tools: [KeyboardTool]) {
         super.init(frame: .zero)
-        // Not fully clear: the system drops touches on pixels of a keyboard that draw nothing.
-        backgroundColor = UIColor(white: 0.5, alpha: 0.01)
+        showsHorizontalScrollIndicator = false
+        alwaysBounceHorizontal = true
+        delaysContentTouches = false
         for tool in tools {
             let tile = Tile(tool: tool)
             tile.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
             addSubview(tile)
             tiles.append(tile)
         }
-        emptyLabel.text = "Add functions in the Iramo app: Functions panel"
-        emptyLabel.textColor = Theme.keySecondaryText
-        emptyLabel.font = UIFont.systemFont(ofSize: 15)
+        emptyLabel.text = "Add functions in the Iramo app"
+        emptyLabel.textColor = Theme.secondaryText
+        emptyLabel.font = UIFont.systemFont(ofSize: 13)
         emptyLabel.textAlignment = .center
-        emptyLabel.numberOfLines = 0
+        emptyLabel.adjustsFontSizeToFitWidth = true
+        emptyLabel.minimumScaleFactor = 0.7
         emptyLabel.isHidden = !tools.isEmpty
         addSubview(emptyLabel)
     }
@@ -114,13 +106,17 @@ final class ToolsPanel: UIView {
         fatalError("init(coder:) is not supported")
     }
 
+    // The tiles are controls: a drag on one still scrolls the strip.
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        return true
+    }
+
     /// Reads every tile's state again (after a tool changed one).
     func refresh() {
         for tile in tiles {
             tile.show(on: delegate?.toolsPanel(self, stateOf: tile.tool),
                       detail: delegate?.toolsPanel(self, detailOf: tile.tool),
                       available: delegate?.toolsPanel(self, isAvailable: tile.tool) ?? true)
-            tile.setNeedsLayout()
         }
     }
 
@@ -131,19 +127,13 @@ final class ToolsPanel: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        emptyLabel.frame = bounds.insetBy(dx: 30, dy: 10)
+        emptyLabel.frame = bounds
         guard !tiles.isEmpty else { return }
-        let gap = CGFloat(max(4, Prefs.keyGap))
-        let inset: CGFloat = 6
-        let columns = bounds.width > 600 ? 6 : 4
-        let rows = (tiles.count + columns - 1) / columns
-        let width = (bounds.width - inset * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns)
-        let available = bounds.height - inset * 2 - gap * CGFloat(rows - 1)
-        let height = min(max(36, available / CGFloat(max(rows, 2))), 76)
+        let tileWidth: CGFloat = 64
+        let gap: CGFloat = 2
         for (index, tile) in tiles.enumerated() {
-            let column = CGFloat(index % columns), row = CGFloat(index / columns)
-            tile.frame = CGRect(x: inset + column * (width + gap), y: inset + row * (height + gap),
-                                width: width, height: height)
+            tile.frame = CGRect(x: CGFloat(index) * (tileWidth + gap), y: 0, width: tileWidth, height: bounds.height)
         }
+        contentSize = CGSize(width: CGFloat(tiles.count) * (tileWidth + gap) - gap, height: bounds.height)
     }
 }
