@@ -75,12 +75,15 @@ struct PinnedPreview<Preview: View, Content: View>: View {
         return content + PinnedPreview.topPadding + PinnedPreview.bottomPadding
     }
 
+    /// The pane's height: the one it starts at, or what `aspect` makes of the full width.
+    private func wantedHeight(width: CGFloat) -> CGFloat {
+        guard let aspect = aspect, aspect > 0 else { return startHeight }
+        return (width - 32) / aspect + PinnedPreview.topPadding + PinnedPreview.bottomPadding
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            var wanted = startHeight
-            if let aspect = aspect, aspect > 0 {
-                wanted = (geometry.size.width - 32) / aspect + PinnedPreview.topPadding + PinnedPreview.bottomPadding
-            }
+            let wanted = wantedHeight(width: geometry.size.width)
             let maximum = max(minimum, min(wanted, geometry.size.height * 0.62))
             let height = fills ? maximum : minimum
             VStack(spacing: 0) {
