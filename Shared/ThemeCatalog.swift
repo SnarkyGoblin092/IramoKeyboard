@@ -96,49 +96,111 @@ enum Keycap {
     static func skirtShade(dark: Bool) -> Double { return dark ? 0.45 : 0.24 }
 }
 
+/// One modifier's own look in a keycap theme: its fill, its label (nil: dark or white by the fill) and an outline
+/// ring round its face (nil: none).
+struct RoleTone: Hashable {
+    let fill: ThemeRGBA
+    let label: ThemeRGBA?
+    let ring: ThemeRGBA?
+
+    init(_ fill: UInt32, label: UInt32? = nil, ring: UInt32? = nil) {
+        self.fill = ThemeRGBA(hex: fill)
+        self.label = label.map { ThemeRGBA(hex: $0) }
+        self.ring = ring.map { ThemeRGBA(hex: $0) }
+    }
+}
+
 /// A keycap theme's colours in one appearance (light or dark).
 struct ThemeTones: Hashable {
+    /// The letter keys and their labels.
     let key: ThemeRGBA
     let text: ThemeRGBA
+    /// The plain function keys (emoji, and the modifiers without a colour of their own).
     let function: ThemeRGBA
-    let shift: ThemeRGBA
-    let delete: ThemeRGBA
-    let numbers: ThemeRGBA
-    let space: ThemeRGBA
-    let ret: ThemeRGBA
+    /// The keyboard's case behind the keys (nil: the system keyboard backdrop).
+    let backdrop: ThemeRGBA?
+    /// The modifiers with a look of their own.
+    let roles: [KeyRole: RoleTone]
+    /// Letter labels and rings coloured by where the key sits (left to right), when not empty.
+    let letterTints: [ThemeRGBA]
+    /// An outline round the plain keys' faces (nil: none).
+    let keyRing: ThemeRGBA?
 
     /// `key`/`text`: the letter keys. The modifiers left out of `mods` take the plain function key colour (the
     /// letter colour, a shade darker in light mode and lighter in dark mode).
     init(key: UInt32, text: UInt32, dark: Bool, mods: KeyMods) {
         let key = ThemeRGBA(hex: key)
-        let function = dark ? key.mixed(with: .white, 0.08) : key.mixed(with: .black, 0.1)
         self.key = key
         self.text = ThemeRGBA(hex: text)
-        self.function = function
-        self.shift = mods.shift.map { ThemeRGBA(hex: $0) } ?? function
-        self.delete = mods.delete.map { ThemeRGBA(hex: $0) } ?? function
-        self.numbers = mods.numbers.map { ThemeRGBA(hex: $0) } ?? function
-        self.space = mods.space.map { ThemeRGBA(hex: $0) } ?? key
-        self.ret = ThemeRGBA(hex: mods.ret)
+        self.function = dark ? key.mixed(with: .white, 0.08) : key.mixed(with: .black, 0.1)
+        self.backdrop = nil
+        var roles: [KeyRole: RoleTone] = [.ret: RoleTone(mods.ret)]
+        if let shift = mods.shift { roles[.shift] = RoleTone(shift) }
+        if let delete = mods.delete { roles[.delete] = RoleTone(delete) }
+        if let numbers = mods.numbers { roles[.numbers] = RoleTone(numbers) }
+        if let space = mods.space { roles[.space] = RoleTone(space) }
+        self.roles = roles
+        self.letterTints = []
+        self.keyRing = nil
     }
+
+    /// Every colour given (the Signature themes). `function` nil: the letter colour.
+    init(backdrop: UInt32, key: UInt32, text: UInt32, function: UInt32? = nil, roles: [KeyRole: RoleTone],
+         letterTints: [UInt32] = [], keyRing: UInt32? = nil) {
+        self.key = ThemeRGBA(hex: key)
+        self.text = ThemeRGBA(hex: text)
+        self.function = ThemeRGBA(hex: function ?? key)
+        self.backdrop = ThemeRGBA(hex: backdrop)
+        self.roles = roles
+        self.letterTints = letterTints.map { ThemeRGBA(hex: $0) }
+        self.keyRing = keyRing.map { ThemeRGBA(hex: $0) }
+    }
+
+    /// The return key's colour (the theme's accent).
+    var ret: ThemeRGBA { return fill(.ret) }
 
     func fill(_ role: KeyRole) -> ThemeRGBA {
         switch role {
         case .letter: return key
         case .function: return function
-        case .shift: return shift
-        case .delete: return delete
-        case .numbers: return numbers
-        case .space: return space
-        case .ret: return ret
+        default: return roles[role]?.fill ?? (role == .space ? key : function)
         }
     }
 
-    /// The label on a key: the theme's text on the plain keys, else dark or white by how light the key is.
+    /// The label on a key: its own, the theme's text on the plain keys, else dark or white by how light the key is.
     func label(_ role: KeyRole) -> ThemeRGBA {
-        let color = fill(role)
-        if color == key || color == function { return text }
-        return color.luminance > 0.6 ? ThemeRGBA(hex: 0x1E1E1E) : .white
+        guard let own = roles[role] else { return text }
+        if let label = own.label { return label }
+        return own.fill.luminance > 0.6 ? ThemeRGBA(hex: 0x1E1E1E) : .white
+    }
+
+    /// The outline round a key's face, if it has one.
+    func ring(_ role: KeyRole) -> ThemeRGBA? {
+        if let own = roles[role] { return own.ring }
+        return keyRing
+    }
+
+    /// Words drawn on the case (the suggestion bar): the letters' colour, or dark or light by the case.
+    var stripText: ThemeRGBA {
+        guard let backdrop = backdrop else { return text }
+        return backdrop.luminance > 0.55 ? ThemeRGBA(hex: 0x1E1E1E) : ThemeRGBA(hex: 0xF2F2F2)
+    }
+
+    /// Which tint a letter takes: the columns of the QWERTY rows, two at a time.
+    private static let tintColumns: [Character: Int] = {
+        var map: [Character: Int] = [:]
+        for (index, letters) in ["qwaszx", "erdfc", "tyghvb", "uijkn", "oplm"].enumerated() {
+            for letter in letters { map[letter] = index }
+        }
+        return map
+    }()
+
+    /// A letter key's own colour (its label, and its ring at a lighter strength), if the theme tints letters.
+    func letterTint(_ title: String) -> ThemeRGBA? {
+        // Punctuation (and letters outside the QWERTY columns) stays in the plain colour.
+        guard !letterTints.isEmpty, title.count == 1, let first = title.lowercased().first,
+              let index = ThemeTones.tintColumns[first] else { return nil }
+        return letterTints[index % letterTints.count]
     }
 }
 
@@ -166,10 +228,10 @@ enum ThemeCatalog {
     static let defaultID = "native"
 
     /// The themes, in picker order.
-    static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + keycapThemes
+    static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + signatureThemes + keycapThemes
 
     /// The keycap families, in picker order.
-    static let families = ["Arcade", "Studio", "Solo", "Café", "Tide"]
+    static let families = ["Signature", "Arcade", "Studio", "Solo", "Café", "Tide"]
 
     /// The theme as it comes, without the user's edits. Unknown ids (including removed themes) fall back to Native.
     static func base(id: String) -> ThemeDefinition {
@@ -254,6 +316,115 @@ enum ThemeCatalog {
                              _ mods: KeyMods) -> ThemeDefinition {
         return colourway("Tide", variant, font: nil, roundness: 0.36, light: light, dark: dark, mods: mods)
     }
+
+    /// A Signature theme: keycaps in a case of their own colour, every key's colour given for both modes.
+    private static func signature(_ id: String, _ name: String, _ summary: String, font: String? = nil,
+                                  roundness: Double, light: ThemeTones, dark: ThemeTones) -> ThemeDefinition {
+        var style = SystemStyle()
+        style.roundness = roundness
+        style.surface = "sheen"
+        style.border = "none"
+        return ThemeDefinition(id: "signature-\(id)", name: name, kind: .keycap, summary: summary, systemStyle: style,
+                               colors: ThemeColors(light: light, dark: dark), family: "Signature", font: font)
+    }
+
+    static let signatureThemes: [ThemeDefinition] = [
+        signature("typist", "Typist", "Cream caps with candy modifiers in a tan case", font: "mono", roundness: 0.24,
+                  light: ThemeTones(backdrop: 0xA99D8C, key: 0xF2EEDB, text: 0x1F1F1F, roles: [
+                    .shift: RoleTone(0xD3434A, label: 0x1A1A1A), .delete: RoleTone(0xDA7637, label: 0x2A1A10),
+                    .numbers: RoleTone(0xE2CD5E, label: 0x2A2A1A), .ret: RoleTone(0x4F9BE2, label: 0x10243A)]),
+                  dark: ThemeTones(backdrop: 0x2A2623, key: 0x3E3C3A, text: 0xECE8DE, roles: [
+                    .shift: RoleTone(0xD3434A, label: 0xFFFFFF), .delete: RoleTone(0xC96F36, label: 0x1E1E1E),
+                    .numbers: RoleTone(0xC9B550, label: 0x1E1E1E), .ret: RoleTone(0x4A90D6, label: 0x101820)])),
+        signature("nebula", "Nebula", "Teal, mustard and coral on soft caps", roundness: 0.32,
+                  light: ThemeTones(backdrop: 0xCDCDCF, key: 0xF3F3F1, text: 0x46464A, roles: [
+                    .shift: RoleTone(0x6DBFA0, label: 0x17362B), .numbers: RoleTone(0x6DBFA0, label: 0x1E4A3A),
+                    .delete: RoleTone(0xD4B649, label: 0x3A3216), .ret: RoleTone(0xD25E3E, label: 0xFFFFFF)]),
+                  dark: ThemeTones(backdrop: 0x1E1E20, key: 0x3A3A3D, text: 0xD6D6D8, roles: [
+                    .shift: RoleTone(0x6FCBA8, label: 0x1D3B30), .numbers: RoleTone(0x6FCBA8, label: 0x1D3B30),
+                    .delete: RoleTone(0xD9C04B, label: 0x3A3216), .ret: RoleTone(0xD9654A, label: 0x3A1A12)])),
+        signature("amethyst", "Amethyst", "Graphite caps with violet modifiers", roundness: 0.3,
+                  light: ThemeTones(backdrop: 0xC2C3C7, key: 0x4B4C51, text: 0xEEEEEE, roles: [
+                    .shift: RoleTone(0x5B42D8), .delete: RoleTone(0x5B42D8),
+                    .numbers: RoleTone(0x5B42D8), .ret: RoleTone(0x5B42D8)]),
+                  dark: ThemeTones(backdrop: 0x1C1C1F, key: 0x3A3B40, text: 0xE6E6E8, roles: [
+                    .shift: RoleTone(0x5B42D8), .delete: RoleTone(0x5B42D8),
+                    .numbers: RoleTone(0x5B42D8), .ret: RoleTone(0x5B42D8)])),
+        signature("orchid", "Orchid", "Teal legends with violet modifiers", roundness: 0.3,
+                  light: ThemeTones(backdrop: 0xD8D6E2, key: 0xF3F2F7, text: 0x2E8F7C, roles: [
+                    .shift: RoleTone(0x7B60DC, label: 0xD9FFF5), .numbers: RoleTone(0x7B60DC, label: 0xD9FFF5),
+                    .ret: RoleTone(0x7B60DC, label: 0xD9FFF5)]),
+                  dark: ThemeTones(backdrop: 0x1B1A21, key: 0x2D2C34, text: 0x86D9C5, roles: [
+                    .shift: RoleTone(0x6B50D0, label: 0x9BE6D3), .numbers: RoleTone(0x6B50D0, label: 0x9BE6D3),
+                    .ret: RoleTone(0x6B50D0, label: 0x9BE6D3)])),
+        signature("blaze", "Blaze", "Graphite caps with orange modifiers", roundness: 0.3,
+                  light: ThemeTones(backdrop: 0xC5C6CA, key: 0x45474D, text: 0xF0F0F0, roles: [
+                    .shift: RoleTone(0xE5703A), .numbers: RoleTone(0xE5703A), .ret: RoleTone(0xE5703A),
+                    .delete: RoleTone(0xF3F3F3, label: 0x4A4A4A)]),
+                  dark: ThemeTones(backdrop: 0x1D1D20, key: 0x3A3B3F, text: 0xEDEDED, roles: [
+                    .shift: RoleTone(0xE5703A), .numbers: RoleTone(0xE5703A), .ret: RoleTone(0xE5703A),
+                    .delete: RoleTone(0xE8E8E8, label: 0x3A3A3A)])),
+        signature("rosewood", "Rosewood", "Blush caps with a navy delete", roundness: 0.3,
+                  light: ThemeTones(backdrop: 0xE7D8D8, key: 0xF6F0EF, text: 0x3A3A4A, roles: [
+                    .shift: RoleTone(0xE2808D, label: 0x2E3452), .numbers: RoleTone(0xE2808D, label: 0x7A2836),
+                    .space: RoleTone(0xE2808D), .ret: RoleTone(0xE2808D, label: 0x2E3452),
+                    .delete: RoleTone(0x2E3452, label: 0xFFFFFF)]),
+                  dark: ThemeTones(backdrop: 0x2A2326, key: 0x47393E, text: 0xF3E7E9, roles: [
+                    .shift: RoleTone(0xD9707E, label: 0x1E2238), .numbers: RoleTone(0xD9707E, label: 0x3A1018),
+                    .space: RoleTone(0xC96877), .ret: RoleTone(0xD9707E, label: 0x1E2238),
+                    .delete: RoleTone(0x2B3150, label: 0xFFFFFF)])),
+        signature("cocoa", "Cocoa", "Cream caps with chocolate modifiers", roundness: 0.32,
+                  light: ThemeTones(backdrop: 0xCCC2B5, key: 0xF2EDE2, text: 0x7B7166, roles: [
+                    .shift: RoleTone(0x5C3F30), .numbers: RoleTone(0x5C3F30), .ret: RoleTone(0x5C3F30)]),
+                  dark: ThemeTones(backdrop: 0x29241F, key: 0x4A403A, text: 0xE8DFD3, roles: [
+                    .shift: RoleTone(0x7A5442), .numbers: RoleTone(0x7A5442), .ret: RoleTone(0x7A5442)])),
+        signature("mojito", "Mojito", "Cream caps in a lime-green case", roundness: 0.32,
+                  light: ThemeTones(backdrop: 0xB8D5A1, key: 0xF3F3E9, text: 0x576C4C, roles: [
+                    .shift: RoleTone(0x5D8D4C), .numbers: RoleTone(0xA4C791, label: 0x4C6640),
+                    .delete: RoleTone(0xA4C791, label: 0x3E5534), .ret: RoleTone(0xA4C791, label: 0x3E5534)]),
+                  dark: ThemeTones(backdrop: 0x1D2919, key: 0x36422F, text: 0xDCE9CE, roles: [
+                    .shift: RoleTone(0x6E9F5B), .numbers: RoleTone(0x59744C, label: 0xE3EFD9),
+                    .delete: RoleTone(0x59744C, label: 0xE3EFD9), .ret: RoleTone(0x59744C, label: 0xE3EFD9)])),
+        signature("rally", "Rally", "Teal, a yellow space bar and a red return", roundness: 0.32,
+                  light: ThemeTones(backdrop: 0xCFD0D3, key: 0xF3F3F3, text: 0x3A3A3C, roles: [
+                    .shift: RoleTone(0x5FC0A4, label: 0xFFFFFF), .numbers: RoleTone(0x5FC0A4, label: 0x17362D),
+                    .space: RoleTone(0xE8C552), .ret: RoleTone(0xDF5646, label: 0xFFFFFF)]),
+                  dark: ThemeTones(backdrop: 0x1D1D1F, key: 0x38383B, text: 0xE2E2E2, roles: [
+                    .shift: RoleTone(0x6ECDB2, label: 0xFFFFFF), .numbers: RoleTone(0x6ECDB2, label: 0x1E3D35),
+                    .space: RoleTone(0xE6C24F), .ret: RoleTone(0xE2594A, label: 0xFFFFFF)])),
+        signature("electro", "Electro", "Lime legends and lime modifiers", roundness: 0.3,
+                  light: ThemeTones(backdrop: 0xD7DBCA, key: 0xF4F6EC, text: 0x5E7B1F, roles: [
+                    .shift: RoleTone(0xB4D94E, label: 0x1E2416), .numbers: RoleTone(0xB4D94E, label: 0x1E2416),
+                    .ret: RoleTone(0xB4D94E, label: 0x1E2416), .delete: RoleTone(0xB9BCB5, label: 0x2E2E2E)]),
+                  dark: ThemeTones(backdrop: 0x222320, key: 0x33352F, text: 0xCBEA6C, roles: [
+                    .shift: RoleTone(0xC0E15B, label: 0x1E2416), .numbers: RoleTone(0xC0E15B, label: 0x1E2416),
+                    .ret: RoleTone(0xC0E15B, label: 0x1E2416), .delete: RoleTone(0x9C9E9A, label: 0x2E2E2E)])),
+        signature("starlit", "Starlit", "Dark caps in an indigo case", roundness: 0.3,
+                  light: ThemeTones(backdrop: 0xB7C6EA, key: 0xF3F5FB, text: 0x2C3B66, roles: [
+                    .shift: RoleTone(0x4A78E6), .numbers: RoleTone(0x4A78E6), .ret: RoleTone(0x4A78E6)]),
+                  dark: ThemeTones(backdrop: 0x33509A, key: 0x2F3035, text: 0xE8E8E8, roles: [
+                    .shift: RoleTone(0x3E6EE0), .numbers: RoleTone(0x3E6EE0), .ret: RoleTone(0x3E6EE0)])),
+        signature("riptide", "Riptide", "Blue on blue with ice-blue modifiers", roundness: 0.32,
+                  light: ThemeTones(backdrop: 0x92B5EB, key: 0xEAF1FC, text: 0x1F407B, roles: [
+                    .shift: RoleTone(0x2F64C3), .numbers: RoleTone(0x7FA8DA, label: 0xFFFFFF),
+                    .delete: RoleTone(0x7FA8DA, label: 0xFFFFFF), .ret: RoleTone(0x7FA8DA, label: 0xFFFFFF)]),
+                  dark: ThemeTones(backdrop: 0x2F64C3, key: 0x2A4E95, text: 0xD5E2F8, roles: [
+                    .shift: RoleTone(0xA9CCF1, label: 0x1D3A6A), .numbers: RoleTone(0x80A9DB, label: 0xE2ECFA),
+                    .delete: RoleTone(0x80A9DB, label: 0xE2ECFA), .ret: RoleTone(0x80A9DB, label: 0xE2ECFA)])),
+        signature("prism", "Prism", "Outlined pill keys in rainbow pastels", roundness: 0.6,
+                  light: ThemeTones(backdrop: 0xE9EAEE, key: 0xEBECEF, text: 0x6B6B70, roles: [
+                    .shift: RoleTone(0x4D7BC4, label: 0xFFFFFF),
+                    .delete: RoleTone(0xEBECEF, label: 0xC0565E, ring: 0xD9878C),
+                    .numbers: RoleTone(0xEBECEF, label: 0x8E7A3E, ring: 0xD7C17E),
+                    .ret: RoleTone(0xEBECEF, label: 0x4F8058, ring: 0x9CC3A1)],
+                    letterTints: [0xC8708A, 0xBFA046, 0x5E9A63, 0x5B87C2, 0x9A72B5], keyRing: 0xC9CACF),
+                  dark: ThemeTones(backdrop: 0x1E1F23, key: 0x2F3035, text: 0xC9C9CF, roles: [
+                    .shift: RoleTone(0x5B88D4, label: 0xFFFFFF),
+                    .delete: RoleTone(0x2F3035, label: 0xE8787F, ring: 0xB85C63),
+                    .numbers: RoleTone(0x2F3035, label: 0xD9BC62, ring: 0x9C8743),
+                    .ret: RoleTone(0x2F3035, label: 0x7DBE84, ring: 0x5F9566)],
+                    letterTints: [0xE58FA8, 0xD9BC62, 0x7DBE84, 0x7FA7E0, 0xB996D1], keyRing: 0x4A4B51)),
+    ]
 
     static let keycapThemes: [ThemeDefinition] = [
         arcade("Classic", light: (0xF4EFDD, 0x2B2A27), dark: (0x3B3936, 0xEEEAE0),

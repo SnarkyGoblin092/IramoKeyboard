@@ -39,15 +39,34 @@ enum Theme {
         var separator: UIColor
         /// A keycap theme's modifier keys, each in its own colour.
         var roles: [KeyRole: RoleColor] = [:]
+        /// A keycap theme's case behind the keys (nil: the system keyboard backdrop).
+        var backdrop: UIColor? = nil
+        /// An outline round the plain keycaps' faces (nil: none).
+        var keyRing: UIColor? = nil
     }
 
     struct RoleColor {
         let fill: UIColor
         let text: UIColor
+        /// An outline round the key's face (nil: none).
+        let ring: UIColor?
     }
 
     /// A key's own colour and label colour in a keycap theme (nil: the usual letter or function colours).
     static func roleColor(_ role: KeyRole) -> RoleColor? { return palette.roles[role] }
+
+    /// The keyboard's case colour in a keycap theme that has one.
+    static var backdrop: UIColor? { return palette.backdrop }
+
+    /// The outline round the plain keycaps, if the theme draws one.
+    static var keyRing: UIColor? { return palette.keyRing }
+
+    /// A letter key's own label colour in a theme that tints its letters (its ring is the same, lighter).
+    static func letterTint(_ title: String) -> UIColor? {
+        guard let colors = definition.colors,
+              let light = colors.light.letterTint(title), let dark = colors.dark.letterTint(title) else { return nil }
+        return pick(light.uiColor, dark.uiColor)
+    }
 
     private(set) static var definition: ThemeDefinition = ThemeCatalog.native
     private(set) static var palette: Palette = makePalette(for: ThemeCatalog.native)
@@ -367,19 +386,23 @@ enum Theme {
                 return pick(make(colors.light).uiColor.withAlphaComponent(alpha),
                             make(colors.dark).uiColor.withAlphaComponent(alpha))
             }
+            func maybeBoth(_ make: (ThemeTones) -> ThemeRGBA?) -> UIColor? {
+                guard let light = make(colors.light), let dark = make(colors.dark) else { return nil }
+                return pick(light.uiColor, dark.uiColor)
+            }
             var roles: [KeyRole: RoleColor] = [:]
             for role in [KeyRole.shift, .delete, .numbers, .space, .ret] {
-                // Only the keys with a colour of their own (the others keep the usual colours and states).
-                let plain = role == .space ? colors.light.key : colors.light.function
-                guard role == .ret || colors.light.fill(role) != plain else { continue }
-                roles[role] = RoleColor(fill: both { $0.fill(role) }, text: both { $0.label(role) })
+                // Only the keys with a look of their own (the others keep the usual colours and states).
+                guard colors.light.roles[role] != nil || colors.dark.roles[role] != nil else { continue }
+                roles[role] = RoleColor(fill: both { $0.fill(role) }, text: both { $0.label(role) },
+                                        ring: maybeBoth { $0.roles[role]?.ring })
             }
             var palette = Palette(
                 accent: both { $0.ret },
                 onAccent: both { $0.label(.ret) },
-                text: both { $0.text },
+                text: both { $0.stripText },
                 keyText: both { $0.text },
-                secondaryText: both({ $0.text }, 0.6),
+                secondaryText: both({ $0.stripText }, 0.6),
                 keySecondaryText: both({ $0.text }, 0.6),
                 letterKey: both { $0.key },
                 functionKey: both { $0.function },
@@ -388,10 +411,12 @@ enum Theme {
                 keyShadow: pick(black(0.22), black(0.55)),
                 keyBorder: both({ $0.text }, 0.18),
                 popupFill: both { $0.key },
-                panelBackground: UIColor.clear,   // the keys sit on the system keyboard backdrop
+                panelBackground: maybeBoth { $0.backdrop } ?? UIColor.clear,   // else the system keyboard backdrop
                 stripFill: UIColor.clear,
-                separator: both({ $0.text }, 0.15))
+                separator: both({ $0.stripText }, 0.15))
             palette.roles = roles
+            palette.backdrop = maybeBoth { $0.backdrop }
+            palette.keyRing = maybeBoth { $0.keyRing }
             return palette
         }
     }

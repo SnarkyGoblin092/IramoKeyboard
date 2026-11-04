@@ -205,9 +205,14 @@ final class KeyView: UIView {
     private func refreshAppearance() {
         // A keycap theme's modifier in its own colour (shift keeps it when on; its symbol shows the state).
         let own = role.flatMap { Theme.roleColor($0) }
+        // A theme that tints its letters by column (label and ring).
+        var tint: UIColor?
+        if isKeycap, case .character = spec.action { tint = Theme.letterTint(spec.title) }
         let textColor: UIColor
         if let own = own {
             textColor = own.text
+        } else if let tint = tint {
+            textColor = tint
         } else if spec.action == .enter {
             textColor = Theme.onReturnKey
         } else if usesAccent {
@@ -239,13 +244,15 @@ final class KeyView: UIView {
         if let glassView = glassView {
             applyGlass(glassView, fill: fill)
         } else {
-            applyCapColors(fill: fill)
+            let ring = own.map { $0.ring } ?? tint.map { $0.withAlphaComponent(0.6) } ?? Theme.keyRing
+            applyCapColors(fill: fill, ring: ring)
             applyShadow()
         }
     }
 
-    /// The key's fill in this appearance: a keycap's face on its darker skirt.
-    private func applyCapColors(fill: UIColor) {
+    /// The key's fill in this appearance: a keycap's face on its darker skirt, with the theme's outline round
+    /// the face if it has one.
+    private func applyCapColors(fill: UIColor, ring: UIColor?) {
         let fill = fill.resolvedColor(with: traitCollection)
         guard isKeycap else {
             backgroundColor = fill
@@ -256,6 +263,8 @@ final class KeyView: UIView {
         let dark = traitCollection.userInterfaceStyle == .dark
         backgroundColor = KeyView.shade(fill, by: CGFloat(Keycap.skirtShade(dark: dark)))
         face.backgroundColor = fill.cgColor
+        face.borderWidth = ring == nil ? 0 : 1.5
+        face.borderColor = ring?.resolvedColor(with: traitCollection).cgColor
         CATransaction.commit()
     }
 
@@ -303,7 +312,16 @@ final class KeyView: UIView {
     /// The key's shadows and glows are drawn by this layer, which lives in a layer under all the keys
     /// (KeyboardView.haloLayer) and not in the key itself: a key's light then never lands on top of another key,
     /// whichever side of it that key is on.
-    private let halo = CALayer()
+    private let halo: CALayer = {
+        // A standalone layer animates every change by default, so a new page's keys would fade their shadows in
+        // after the keys themselves; the light changes with the key instead (effects animate it explicitly).
+        let layer = CALayer()
+        let none = NSNull()
+        layer.actions = ["shadowPath": none, "shadowOpacity": none, "shadowColor": none, "shadowOffset": none,
+                         "shadowRadius": none, "position": none, "bounds": none, "frame": none, "opacity": none,
+                         "sublayers": none, "onOrderIn": none, "onOrderOut": none, "hidden": none]
+        return layer
+    }()
     private var haloAttached = false
 
     private var shadowTarget: CALayer { return haloAttached ? halo : layer }
