@@ -17,7 +17,7 @@ struct LiveKeyboard: View {
     var hitboxMode: HitboxOverlay.Mode = .hitboxes
     /// The Emoji screen: the keyboard as it is with its emoji picker open (nothing in it leaves the picker).
     var showsEmoji = false
-    @Environment(\.colorScheme) private var scheme
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
 
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
@@ -41,7 +41,7 @@ struct LiveKeyboard: View {
                     .background(Group {
                         if showsEmoji {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+                                .fill(KeyboardAppearance.isDark(appearance) ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
                                 .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
                         } else {
                             look.backdrop(scale: scale)
@@ -135,6 +135,12 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
         let width = CGFloat(DeviceMetrics.portraitWidth)
         let total = CGFloat(barHeight) + 8 + rows * (height + CGFloat(rowGap))
+        // With the picker open: the size the keyboard really had then, once it has been opened on this phone.
+        if emoji {
+            let parts = (SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) ?? "")
+                .split(separator: ",").compactMap { Double($0) }
+            if parts.count == 2, parts[0] > 100, parts[1] > 100 { return CGSize(width: parts[0], height: parts[1]) }
+        }
         return CGSize(width: width, height: emoji ? max(total, EmojiPanel.requiredHeight(forWidth: width)) : total)
     }
 

@@ -3,7 +3,10 @@ import Foundation
 // MARK: - Keys and defaults (shared by the app's SwiftUI bindings and the keyboard)
 
 enum SettingKey {
-    /// The keyboard's light or dark mode: "system" (follows the phone and the app), "light" or "dark" (always that).
+    /// The size ("width,height" in points) the keyboard last had with its emoji picker open, upright: the app's
+    /// Emoji preview is drawn at exactly this size.
+    static let lastEmojiSize = "hunkeys.lastEmojiSize"
+    /// The keyboard's own light or dark mode: "light" or "dark". Nothing else decides it (not the phone, not the app).
     static let appearance = "hunkeys.appearance"
     // Feel
     static let holdDelay = "hunkeys.holdDelay"
@@ -189,7 +192,7 @@ enum SettingDefault {
     static let autoCorrect = true
     static let cursorControl = true
     static let swipeDownHide = true
-    static let appearance = "system"
+    static let appearance = "dark"
     static let deleteSwipe = true
     static let deleteSwipedWord = true
     static let deleteRepeatDelay = 0.5
@@ -581,7 +584,7 @@ final class Settings {
         set { put(newValue, SettingKey.autoCorrect) }
     }
 
-    /// "system", "light" or "dark" (SettingKey.appearance).
+    /// "light" or "dark" (SettingKey.appearance).
     var appearance: String {
         get { return readString(SettingKey.appearance) ?? SettingDefault.appearance }
         set { put(newValue, SettingKey.appearance) }
@@ -1121,12 +1124,8 @@ enum KeySound: String, CaseIterable {
 
 /// The keyboard's own light or dark mode, for what the app draws to look like it.
 enum KeyboardAppearance {
-    /// Whether the keyboard is dark: the stored choice, else the given system mode.
-    static func isDark(stored: String, system: Bool) -> Bool {
-        switch stored {
-        case "dark": return true
-        case "light": return false
-        default: return system
-        }
+    /// Whether the keyboard is dark: only the stored choice says.
+    static func isDark(_ stored: String) -> Bool {
+        return stored != "light"
     }
 }

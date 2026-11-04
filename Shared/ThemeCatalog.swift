@@ -495,6 +495,7 @@ enum ThemeCatalog {
     static func themes(_ bases: [ThemeDefinition], edits: String) -> [ThemeDefinition] {
         let designedEdits = ThemeEdits.decode(edits)
         let systemEdits = SystemEdits.decode(SharedStore.defaults.string(forKey: SettingKey.systemEdits) ?? "")
+        let dark = KeyboardAppearance.isDark(SharedStore.defaults.string(forKey: SettingKey.appearance) ?? SettingDefault.appearance)
         return bases.map { base in
             var theme = base
             if theme.style != nil, let style = designedEdits[theme.id] {
@@ -504,6 +505,8 @@ enum ThemeCatalog {
                 theme.systemStyle = style
                 theme.isEdited = true
             }
+            // Every designed theme in the keyboard's own mode (the Themes screen's Dark mode).
+            theme.style = theme.style?.adapted(toDark: dark)
             return theme
         }
     }
@@ -661,4 +664,70 @@ enum ThemeCatalog {
         roundness: 0.3, keyOpacity: 1, frosted: false, depth: 0.35, sheen: 0.2, borderWidth: 0,
         shadow: .lift, shadowStrength: 0.6, textGlow: 0, texture: .none, textureStrength: 0,
         gradient: .diagonal))
+}
+
+// MARK: - The other mode
+
+extension ThemeRGBA {
+    /// The same colour with its lightness turned over (hue and saturation kept): a light theme's colours become
+    /// the dark ones and the other way round, so a theme has both a light and a dark mode.
+    var lightnessInverted: ThemeRGBA {
+        let high = max(r, g, b), low = min(r, g, b)
+        let l = (high + low) / 2
+        let delta = high - low
+        var h = 0.0, s = 0.0
+        if delta > 0.0001 {
+            s = delta / (1 - abs(2 * l - 1))
+            if high == r { h = ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
+            else if high == g { h = (b - r) / delta + 2 }
+            else { h = (r - g) / delta + 4 }
+            h /= 6
+            if h < 0 { h += 1 }
+        }
+        // Never pure black or white, so the result keeps some of the colour.
+        let newL = 0.05 + 0.9 * (1 - l)
+        let c = (1 - abs(2 * newL - 1)) * min(max(s, 0), 1)
+        let x = c * (1 - abs((h * 6).truncatingRemainder(dividingBy: 2) - 1))
+        let m = newL - c / 2
+        let (r1, g1, b1): (Double, Double, Double)
+        switch Int(h * 6) % 6 {
+        case 0: (r1, g1, b1) = (c, x, 0)
+        case 1: (r1, g1, b1) = (x, c, 0)
+        case 2: (r1, g1, b1) = (0, c, x)
+        case 3: (r1, g1, b1) = (0, x, c)
+        case 4: (r1, g1, b1) = (x, 0, c)
+        default: (r1, g1, b1) = (c, 0, x)
+        }
+        return ThemeRGBA(r1 + m, g1 + m, b1 + m, a)
+    }
+}
+
+extension ThemeStyle {
+    /// The style in light or dark mode: as it is when it already is that mode, else with its colours turned over
+    /// (the accent, the return key and the swipe trail keep theirs). Every designed theme works in both modes.
+    func adapted(toDark dark: Bool) -> ThemeStyle {
+        guard isDark != dark else { return self }
+        var s = self
+        s.background = background.lightnessInverted
+        s.backgroundEnd = backgroundEnd.lightnessInverted
+        s.key = key.lightnessInverted
+        s.function = function.lightnessInverted
+        s.text = text.lightnessInverted
+        s.line = line.lightnessInverted
+        s.spaceColour = spaceColour?.lightnessInverted
+        s.shiftColour = shiftColour?.lightnessInverted
+        s.functionTextColour = functionTextColour?.lightnessInverted
+        s.returnTextColour = returnTextColour?.lightnessInverted
+        s.shiftTextColour = shiftTextColour?.lightnessInverted
+        s.hintColour = hintColour?.lightnessInverted
+        s.suggestionTextColour = suggestionTextColour?.lightnessInverted
+        s.pillColour = pillColour?.lightnessInverted
+        s.pillTextColour = pillTextColour?.lightnessInverted
+        s.barIconColour = barIconColour?.lightnessInverted
+        s.outlineColour = outlineColour?.lightnessInverted
+        s.textureColour = textureColour?.lightnessInverted
+        s.blockShadowColour = blockShadowColour?.lightnessInverted
+        s.glowColour = glowColour?.lightnessInverted
+        return s
+    }
 }

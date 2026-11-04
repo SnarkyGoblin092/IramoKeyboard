@@ -9,7 +9,6 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.openScreen) private var openScreen
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
@@ -37,9 +36,9 @@ struct ThemesView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// The keyboard's mode: on until chosen, it is the phone's own; then it stays as chosen.
+    /// The keyboard's own mode, whatever the phone or the app uses.
     private var darkMode: Binding<Bool> {
-        return Binding(get: { KeyboardAppearance.isDark(stored: appearance, system: scheme == .dark) },
+        return Binding(get: { KeyboardAppearance.isDark(appearance) },
                        set: { appearance = $0 ? "dark" : "light" })
     }
 
@@ -71,7 +70,7 @@ struct ThemesView: View {
             }
             .buttonStyle(PressableStyle())
             GlassToggle(title: tr("Dark mode"),
-                        subtitle: tr("The keyboard stays in this mode, whatever the phone or the app uses. Some designed themes have a mode of their own."),
+                        subtitle: tr("The keyboard stays in this mode, whatever the phone or the app uses. Every theme has a light and a dark look."),
                         isOn: darkMode)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

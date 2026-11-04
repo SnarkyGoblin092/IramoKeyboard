@@ -211,7 +211,6 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        phoneStyleHint = nil
         refreshKeyStyle()
         Haptics.shared.hasFullAccess = hasFullAccess
         Haptics.shared.prepare()
@@ -265,8 +264,22 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyHeight()
+        recordEmojiSize()
         // Catches a style read wrongly earlier; rebuilding is left until after this layout pass.
         DispatchQueue.main.async { [weak self] in self?.refreshKeyStyle() }
+    }
+
+    /// The keyboard's real size while the emoji picker is open, kept for the app's Emoji preview (upright only: a
+    /// landscape keyboard is not recorded).
+    private func recordEmojiSize() {
+        guard emojiPanel != nil else { return }
+        let size = view.bounds.size
+        let screen = UIScreen.main.bounds.size
+        guard size.width > 100, size.height > 100, size.width <= min(screen.width, screen.height) + 1 else { return }
+        let text = "\(Int(size.width.rounded())),\(Int(size.height.rounded()))"
+        if SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) != text {
+            SharedStore.defaults.set(text, forKey: SettingKey.lastEmojiSize)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -324,38 +337,17 @@ final class KeyboardViewController: UIInputViewController {
         ].joined(separator: "|")
     }
 
-    /// Light or dark. A theme that forces one sets the whole keyboard. Otherwise the keys are dark when the phone
-    /// or the app is in dark mode (so a dark mode phone keeps dark keys in an app that stays light), while the
-    /// rest (suggestions, emoji picker) keeps the app's style, which the system-drawn keyboard backdrop follows.
-    /// Dark keys on that light backdrop get lighter fills (Theme.contrastKeys) so they stand out.
-    /// The keys' style for updateKeyStyle: dark when the phone is dark but the app light, else the app's.
-    private var keyInterfaceStyle: UIUserInterfaceStyle {
-        guard Theme.interfaceStyle == .unspecified else { return .unspecified }
-        var phone = UIScreen.main.traitCollection.userInterfaceStyle
-        if let hint = phoneStyleHint {
-            if phone == hint { phoneStyleHint = nil } else { phone = hint }
-        }
-        // Only the dark-phone-in-a-light-app case needs forcing; otherwise the keys inherit the app's style, so
-        // they change together with the system (forcing dark kept them dark until we noticed the switch).
-        return phone == .dark && view.traitCollection.userInterfaceStyle == .light ? .dark : .unspecified
-    }
-
-    /// The phone's style taken from the app when the app's style just changed: the screen's own style catches
-    /// up a moment later, and reading it early kept the keys dark (and briefly in the contrast colours) for a
-    /// second after switching to light mode, then snapped them. Cleared once the screen agrees, or on appear.
-    private var phoneStyleHint: UIUserInterfaceStyle?
-
-    /// Returns true when contrastKeys changed (the keys must then be rebuilt).
+    /// Light or dark: the keyboard's own setting (Theme.interfaceStyle) sets the whole keyboard, every theme and
+    /// every part of it. The phone's and the app's mode are never looked at.
+    /// Returns true when contrastKeys changed (the keys must then be rebuilt); it is never on now.
     private func updateKeyStyle() -> Bool {
         // Only assigned on a change: this runs after every layout pass, and each assignment re-resolves the traits.
-        if view.overrideUserInterfaceStyle != Theme.interfaceStyle { view.overrideUserInterfaceStyle = Theme.interfaceStyle }
-        let keys = keyInterfaceStyle
-        if keyboardView.overrideUserInterfaceStyle != keys { keyboardView.overrideUserInterfaceStyle = keys }
-        let app = view.traitCollection.userInterfaceStyle
-        guard app != .unspecified else { return false }   // not known yet (e.g. mid-rotation): keep what we have
-        let differs = keys != .unspecified && keys != app
-        guard differs != Theme.contrastKeys else { matchSearchBarToKeys(); return false }
-        Theme.contrastKeys = differs
+        let style = Theme.interfaceStyle
+        if view.overrideUserInterfaceStyle != style { view.overrideUserInterfaceStyle = style }
+        if keyboardView.overrideUserInterfaceStyle != .unspecified { keyboardView.overrideUserInterfaceStyle = .unspecified }
+        matchSearchBarToKeys()
+        guard Theme.contrastKeys else { return false }
+        Theme.contrastKeys = false
         return true
     }
 
@@ -373,12 +365,8 @@ final class KeyboardViewController: UIInputViewController {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        let app = view.traitCollection.userInterfaceStyle
-        if let previous = previousTraitCollection?.userInterfaceStyle, previous != .unspecified,
-           app != .unspecified, app != previous {
-            phoneStyleHint = app   // the phone was switched (an app rarely changes its own style while typing)
-        }
-        // Done here, inside the system's own light/dark change, so the keys fade along with it.
+        // The keyboard's mode is pinned on the view, so the phone's or the app's changing moves nothing; this only
+        // keeps the pin in place.
         refreshKeyStyle()
     }
 
@@ -387,6 +375,23 @@ final class KeyboardViewController: UIInputViewController {
         // The app's style can read wrong while rotating, and no trait change follows to correct it: check again
         // once the rotation is done.
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.refreshKeyStyle() }
+    }
+
+    /// A plain backdrop under everything, in the keyboard's own light or dark mode (its colours follow the mode
+    /// pinned on the view).
+    private func addModeBackdrop(identifier: String = "modeBackdrop") {
+        let solid = UIView()
+        solid.isUserInteractionEnabled = false
+        solid.accessibilityIdentifier = identifier
+        solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
+        solid.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(solid)
+        NSLayoutConstraint.activate([
+            solid.topAnchor.constraint(equalTo: container.topAnchor),
+            solid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            solid.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            solid.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+        ])
     }
 
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.
@@ -416,20 +421,10 @@ final class KeyboardViewController: UIInputViewController {
                 backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                 backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor)
             ])
-        } else if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
-            // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
-            // normal keyboard background, so paint one.
-            let solid = UIView()
-            solid.isUserInteractionEnabled = false
-            solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
-            solid.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(solid)
-            NSLayoutConstraint.activate([
-                solid.topAnchor.constraint(equalTo: container.topAnchor),
-                solid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-                solid.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                solid.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-            ])
+        } else {
+            // The system draws its keyboard backdrop in the phone's or the app's mode, which the keyboard ignores: it
+            // paints its own, in its own mode.
+            addModeBackdrop()
         }
         totalHeight = nil
         suggestionHeight = nil
@@ -438,7 +433,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar = SuggestionBar()
         searchBar = EmojiSearchBar()
         keyboardView = KeyboardView()
-        keyboardView.overrideUserInterfaceStyle = keyInterfaceStyle
+        keyboardView.overrideUserInterfaceStyle = .unspecified
         matchSearchBarToKeys()
 
         suggestionBar.delegate = self
@@ -1572,21 +1567,10 @@ final class KeyboardViewController: UIInputViewController {
         panel.language = language
         panel.translatesAutoresizingMaskIntoConstraints = false
         // The picker shows only the system keyboard backdrop (like the native emoji picker): hide any theme
-        // backdrop, and supply a native one when the root itself is see-through (Liquid Glass).
+        // backdrop, here drawn by the keyboard itself in its own mode.
         hiddenForEmoji = container.subviews.filter { !$0.isHidden }
         for sub in hiddenForEmoji { sub.isHidden = true }
-        if !rootIsKeyboardStyle {
-            let native = UIInputView(frame: .zero, inputViewStyle: .keyboard)
-            native.translatesAutoresizingMaskIntoConstraints = false
-            native.accessibilityIdentifier = "emojiNativeBackdrop"
-            container.addSubview(native)
-            NSLayoutConstraint.activate([
-                native.topAnchor.constraint(equalTo: container.topAnchor),
-                native.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-                native.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                native.trailingAnchor.constraint(equalTo: container.trailingAnchor)
-            ])
-        }
+        addModeBackdrop(identifier: "emojiModeBackdrop")
         container.addSubview(panel)
         NSLayoutConstraint.activate([
             panel.topAnchor.constraint(equalTo: container.topAnchor),
@@ -1606,7 +1590,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func hideEmojiPanel(refresh: Bool = true) {
         if emojiPanel != nil {
-            for sub in container.subviews where sub.accessibilityIdentifier == "emojiNativeBackdrop" { sub.removeFromSuperview() }
+            for sub in container.subviews where sub.accessibilityIdentifier == "emojiModeBackdrop" { sub.removeFromSuperview() }
             for sub in hiddenForEmoji { sub.isHidden = false }
             hiddenForEmoji = []
         }
@@ -2087,6 +2071,9 @@ extension KeyboardViewController: ToolsPanelDelegate {
             toolsPanel?.refresh()
         case .split:
             saveTool(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard, rebuild: true)
+        case .darkMode:
+            // The keyboard's own mode (the Themes screen's Dark mode); the whole look is built again in it.
+            saveTool(KeyboardAppearance.isDark(Prefs.appearance) ? "light" : "dark", forKey: SettingKey.appearance, rebuild: true)
         case .hideKeyboard:
             hideTools()
             dismissKeyboard()
@@ -2181,6 +2168,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
         case .autoCorrect: return Prefs.autoCorrect
         case .vibration: return Prefs.vibration > 0
         case .split: return Prefs.splitKeyboard
+        case .darkMode: return KeyboardAppearance.isDark(Prefs.appearance)
         default: return nil
         }
     }

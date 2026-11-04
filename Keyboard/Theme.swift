@@ -115,15 +115,10 @@ enum Theme {
     /// A system theme's own style from its editor (nil: not edited, the old global key settings apply).
     static var system: SystemStyle? { return definition.systemStyle }
 
-    /// Dark/light forced by the theme (designed themes, by their backdrop), else the user's own choice (the Themes
-    /// screen's Dark mode), or `.unspecified` to follow the system and the app.
+    /// The keyboard's own mode (the Themes screen's Dark mode): never the phone's or the app's. A designed theme
+    /// is already drawn in that mode (ThemeCatalog), so its backdrop and colours agree with it.
     static var interfaceStyle: UIUserInterfaceStyle {
-        if let dark = definition.isDark { return dark ? .dark : .light }
-        switch Prefs.appearance {
-        case "dark": return .dark
-        case "light": return .light
-        default: return .unspecified
-        }
+        return KeyboardAppearance.isDark(Prefs.appearance) ? .dark : .light
     }
 
     /// Corner radius of a key of this size: the roundness (0...1) times half the shorter side; a designed theme's
