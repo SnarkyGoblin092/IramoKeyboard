@@ -149,9 +149,6 @@ struct KeysView: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(isEditing ? .accentColor : .secondary))
                 }
-                if isEditing && symbol != nil {
-                    shape.strokeBorder(Color.white, lineWidth: 2).frame(width: 38, height: 46)
-                }
             }
             .frame(width: 38, height: 46)
             .contentShape(Rectangle())
