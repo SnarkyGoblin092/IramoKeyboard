@@ -914,7 +914,7 @@ final class KeyboardViewController: UIInputViewController {
         if isSearchingEmoji {
             // Enter picks the first match, like pressing search in the system keyboard.
             if let first = EmojiStore.shared.search(searchQuery, limit: 1).first {
-                pickEmoji(first)
+                pickEmoji(EmojiStore.shared.toned(first, tone: Prefs.emojiSkinTone).base)
             }
             return
         }
@@ -1589,9 +1589,12 @@ final class KeyboardViewController: UIInputViewController {
         let placeholder = language.strings.searchEmoji
         searchBar.setQuery(searchQuery, placeholder: placeholder)
         if searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-            searchBar.setResults(settings.orderedRecentEmoji())
+            // Recent ones as they were picked (each still offers its other skin tones when held).
+            searchBar.setResults(settings.orderedRecentEmoji().map { EmojiStore.shared.toned($0, tone: 0) })
         } else {
-            searchBar.setResults(EmojiStore.shared.search(searchQuery, limit: 60))
+            // In the skin tone chosen in the app, like the picker.
+            let tone = Prefs.emojiSkinTone
+            searchBar.setResults(EmojiStore.shared.search(searchQuery, limit: 60).map { EmojiStore.shared.toned($0, tone: tone) })
         }
     }
 

@@ -20,7 +20,9 @@ final class EmojiSearchBar: UIView {
     private let divider = UIView()
     private let scroll = UIScrollView()
     private var resultButtons: [HitButton] = []
-    private var results: [String] = []
+    private var results: [EmojiItem] = []
+    /// The skin tones of a held result: a layer over the keyboard that a tap anywhere else closes.
+    private var variantOverlay: UIControl?
     private var placeholder = "Search Emoji"
     private var query = ""
 
@@ -65,7 +67,13 @@ final class EmojiSearchBar: UIView {
         glass.contentView.addSubview(divider)
 
         scroll.showsHorizontalScrollIndicator = false
+        scroll.delegate = self
         glass.contentView.addSubview(scroll)
+
+        // Holding a result offers its other skin tones, as in the picker.
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPress.minimumPressDuration = Prefs.emojiHoldDelay
+        scroll.addGestureRecognizer(longPress)
     }
 
     required init?(coder: NSCoder) {
@@ -84,14 +92,16 @@ final class EmojiSearchBar: UIView {
         }
     }
 
-    func setResults(_ emojis: [String]) {
-        results = emojis
+    /// The matching emoji, each in the form to show (the chosen skin tone) with its other forms to hold for.
+    func setResults(_ items: [EmojiItem]) {
+        dismissVariants()
+        results = items
         for button in resultButtons { button.removeFromSuperview() }
         resultButtons = []
-        for (index, emoji) in emojis.enumerated() {
+        for (index, item) in items.enumerated() {
             let button = HitButton(type: .custom)
             button.tag = index
-            button.setTitle(emoji, for: .normal)
+            button.setTitle(item.base, for: .normal)
             button.titleLabel?.font = UIFont.systemFont(ofSize: 28)
             button.addTarget(self, action: #selector(resultTapped(_:)), for: .touchUpInside)
             scroll.addSubview(button)
@@ -155,18 +165,100 @@ final class EmojiSearchBar: UIView {
     }
 
     @objc private func backTapped() {
+        dismissVariants()
         Haptics.shared.keyPress()
         delegate?.emojiSearchBarDidTapBack(self)
     }
 
     @objc private func hideTapped() {
+        dismissVariants()
         Haptics.shared.keyPress()
         delegate?.emojiSearchBarDidTapHide(self)
     }
 
     @objc private func resultTapped(_ sender: UIButton) {
         guard sender.tag < results.count else { return }
+        dismissVariants()
         Haptics.shared.keyPress()
-        delegate?.emojiSearchBar(self, didSelect: results[sender.tag])
+        delegate?.emojiSearchBar(self, didSelect: results[sender.tag].base)
+    }
+
+    // MARK: Skin tones
+
+    @objc private func handleLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        let point = recognizer.location(in: scroll)
+        guard let button = HitTesting.nearestByX(point.x, in: resultButtons, relativeTo: scroll) as? HitButton,
+              button.tag < results.count else { return }
+        let item = results[button.tag]
+        guard !item.variants.isEmpty else { return }
+        Haptics.shared.keyPress()
+        showVariants([item.base] + item.variants, under: button)
+    }
+
+    /// The forms of a held result in a row like the picker's, just under the bar (the keyboard can't draw above
+    /// its top edge), over the keys: a tap on one types it, a tap anywhere else closes the row.
+    private func showVariants(_ options: [String], under button: UIView) {
+        dismissVariants()
+        guard let host = superview else { return }
+        let overlay = UIControl(frame: host.bounds)
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.addAction(UIAction { [weak self] _ in self?.dismissVariants() }, for: .touchDown)
+
+        let itemWidth: CGFloat = 44
+        let height: CGFloat = 54
+        let fitting = max(1, Int((host.bounds.width - 16) / itemWidth))
+        let width = CGFloat(min(options.count, fitting)) * itemWidth + 12
+        let anchor = button.convert(button.bounds, to: host)
+        let x = max(4, min(anchor.midX - width / 2, host.bounds.width - width - 4))
+        let y = frame.maxY + 4
+
+        let container = FlatPanel(background: EmojiLook.popup, cornerRadius: 10)
+        container.layer.shadowColor = UIColor.black.cgColor
+        container.layer.shadowOpacity = 0.3
+        container.layer.shadowRadius = 3
+        container.layer.shadowOffset = CGSize(width: 0, height: 1)
+        container.frame = CGRect(x: x, y: y, width: width, height: height)
+
+        let strip = UIScrollView(frame: CGRect(x: 6, y: 0, width: width - 12, height: height))
+        strip.showsHorizontalScrollIndicator = false
+        strip.contentSize = CGSize(width: itemWidth * CGFloat(options.count), height: height)
+        for (index, emoji) in options.enumerated() {
+            let option = HitButton(type: .custom)
+            option.frame = CGRect(x: CGFloat(index) * itemWidth, y: 4, width: itemWidth, height: height - 8)
+            option.titleLabel?.font = UIFont.systemFont(ofSize: 30)
+            option.setTitle(emoji, for: .normal)
+            option.addAction(UIAction { [weak self] _ in
+                guard let self = self else { return }
+                self.dismissVariants()
+                Haptics.shared.keyPress()
+                self.delegate?.emojiSearchBar(self, didSelect: emoji)
+            }, for: .touchUpInside)
+            strip.addSubview(option)
+        }
+        container.contentView.addSubview(strip)
+        overlay.addSubview(container)
+        host.addSubview(overlay)
+        variantOverlay = overlay
+    }
+
+    func dismissVariants() {
+        variantOverlay?.removeFromSuperview()
+        variantOverlay = nil
+    }
+
+    override func removeFromSuperview() {
+        dismissVariants()
+        super.removeFromSuperview()
+    }
+
+    override var isHidden: Bool {
+        didSet { if isHidden { dismissVariants() } }
+    }
+}
+
+extension EmojiSearchBar: UIScrollViewDelegate {
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        dismissVariants()
     }
 }

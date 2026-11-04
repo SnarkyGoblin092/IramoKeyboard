@@ -544,7 +544,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     /// The emoji in the default skin tone (1 light ... 5 dark) when it has one with that tone alone; holding it
     /// still offers the yellow one and the others.
-    private static func toned(_ item: EmojiItem, _ tone: Int) -> EmojiItem {
+    static func toned(_ item: EmojiItem, _ tone: Int) -> EmojiItem {
         guard tone >= 1, tone <= toneModifiers.count, !item.variants.isEmpty else { return item }
         let wanted = toneModifiers[tone - 1]
         guard let match = item.variants.first(where: { variant in
