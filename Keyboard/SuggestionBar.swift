@@ -205,9 +205,11 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
                 guard !self.toolsOpen else { return }
                 self.strip.isHidden = false
                 self.strip.alpha = 0
+                self.strip.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
                 self.refreshVisibility()
-                UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
                     self.strip.alpha = 1
+                    self.strip.transform = .identity
                 }
             }
         } else {
@@ -220,8 +222,20 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         } else if layoutMode != .scroll {
             glass.contentView.isUserInteractionEnabled = false
         }
-        strip.isHidden = panel != nil || leavingTools != nil
-        strip.alpha = 1
+        if panel != nil, old == nil, window != nil, !strip.isHidden {
+            // Opening: the suggestions shrink and fade away as the tiles slide out.
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseIn]) {
+                self.strip.alpha = 0
+                self.strip.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
+            } completion: { [weak self] _ in
+                guard let self = self, self.toolsOpen else { return }
+                self.strip.isHidden = true
+            }
+        } else {
+            strip.isHidden = panel != nil || leavingTools != nil
+            strip.alpha = 1
+            strip.transform = .identity
+        }
         refreshVisibility()
         setNeedsLayout()
         if let panel = panel, window != nil {

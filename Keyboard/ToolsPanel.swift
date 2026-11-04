@@ -9,7 +9,7 @@ protocol ToolsPanelDelegate: AnyObject {
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool
 }
 
-/// The Functions strip: the tools the app's Functions screen picked, as small icon-and-name buttons in a row that
+/// The Functions strip: the tools the app's Functions screen picked, as icon buttons in a row that
 /// scrolls sideways. It takes the place of the suggestions in the suggestion bar (SuggestionBar.setTools). Tools
 /// that are on light up in the accent.
 final class ToolsPanel: UIScrollView {
@@ -19,36 +19,29 @@ final class ToolsPanel: UIScrollView {
         didSet { for tile in tiles { tile.base.backgroundColor = tileFill } }
     }
 
-    private final class Tile: UIControl {
+    private final class Tile: UIView {
         let tool: KeyboardTool
         let base = UIView()
         private let onFill = UIView()
         private let icon = UIImageView()
-        private let title = UILabel()
+        private var isAvailable = true
 
         init(tool: KeyboardTool) {
             self.tool = tool
             super.init(frame: .zero)
             base.layer.cornerCurve = .continuous
-            base.isUserInteractionEnabled = false
             addSubview(base)
-            onFill.backgroundColor = Theme.accent
+            onFill.backgroundColor = Theme.accent.withAlphaComponent(0.22)
             onFill.layer.cornerCurve = .continuous
-            onFill.isUserInteractionEnabled = false
             onFill.isHidden = true
             addSubview(onFill)
             icon.image = UIImage(systemName: tool.symbol,
-                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular))
             icon.contentMode = .center
-            title.text = tool.title
-            title.font = Theme.keyFont(ofSize: 10, weight: .semibold)
-            title.textAlignment = .center
-            title.adjustsFontSizeToFitWidth = true
-            title.minimumScaleFactor = 0.6
-            for view in [icon, title] as [UIView] {
-                view.isUserInteractionEnabled = false
-                addSubview(view)
-            }
+            addSubview(icon)
+            // The panel takes every touch itself, so a swipe can start anywhere and a tap is told apart from it.
+            for view in [base, onFill, icon] as [UIView] { view.isUserInteractionEnabled = false }
+            isUserInteractionEnabled = false
             accessibilityLabel = tool.title
             isAccessibilityElement = true
             accessibilityTraits = .button
@@ -58,21 +51,24 @@ final class ToolsPanel: UIScrollView {
             fatalError("init(coder:) is not supported")
         }
 
+        var enabled: Bool { return isAvailable }
+
         func show(on: Bool?, detail text: String?, available: Bool) {
             let lit = on == true
             onFill.isHidden = !lit
-            let colour = lit ? Theme.onAccent : Theme.barIcons
-            icon.tintColor = colour
-            title.textColor = colour
-            // A tool with something to say about its state (the one-handed side) says it in place of its name.
-            title.text = text ?? tool.title
+            icon.tintColor = lit ? Theme.accent : Theme.barIcons
+            isAvailable = available
             alpha = available ? 1 : 0.35
-            isEnabled = available
             accessibilityValue = text ?? (on.map { $0 ? "On" : "Off" })
         }
 
-        override var isHighlighted: Bool {
-            didSet { alpha = isEnabled ? (isHighlighted ? 0.45 : 1) : 0.35 }
+        /// A quick dip when tapped.
+        func flash() {
+            UIView.animate(withDuration: 0.08, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.base.alpha = 0.4
+            } completion: { _ in
+                UIView.animate(withDuration: 0.2) { self.base.alpha = 1 }
+            }
         }
 
         override func layoutSubviews() {
@@ -80,12 +76,9 @@ final class ToolsPanel: UIScrollView {
             // The tiles touch, but each is drawn a little smaller, so they read as separate rounded buttons.
             base.frame = bounds.insetBy(dx: 3, dy: 3)
             onFill.frame = base.frame
-            base.layer.cornerRadius = min(12, base.bounds.height / 2.8)
+            base.layer.cornerRadius = min(14, base.bounds.height / 2.5)
             onFill.layer.cornerRadius = base.layer.cornerRadius
-            let block: CGFloat = 22 + 1 + 12
-            let top = max(1, (bounds.height - block) / 2)
-            icon.frame = CGRect(x: 0, y: top, width: bounds.width, height: 22)
-            title.frame = CGRect(x: 3, y: icon.frame.maxY + 1, width: bounds.width - 6, height: 12)
+            icon.frame = bounds
         }
     }
 
@@ -97,9 +90,10 @@ final class ToolsPanel: UIScrollView {
         showsHorizontalScrollIndicator = false
         alwaysBounceHorizontal = true
         delaysContentTouches = false
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        addGestureRecognizer(tap)
         for tool in tools {
             let tile = Tile(tool: tool)
-            tile.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
             addSubview(tile)
             tile.base.backgroundColor = tileFill
             tiles.append(tile)
@@ -118,11 +112,6 @@ final class ToolsPanel: UIScrollView {
         fatalError("init(coder:) is not supported")
     }
 
-    // The tiles are controls: a drag on one still scrolls the strip.
-    override func touchesShouldCancel(in view: UIView) -> Bool {
-        return true
-    }
-
     /// Reads every tile's state again (after a tool changed one).
     func refresh() {
         for tile in tiles {
@@ -132,7 +121,10 @@ final class ToolsPanel: UIScrollView {
         }
     }
 
-    @objc private func tapped(_ tile: Tile) {
+    @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
+        let x = recognizer.location(in: self).x
+        guard let tile = tiles.first(where: { x >= $0.frame.minX && x < $0.frame.maxX }), tile.enabled else { return }
+        tile.flash()
         Haptics.shared.keyPress()
         toolsDelegate?.toolsPanel(self, didPick: tile.tool)
     }
@@ -149,17 +141,21 @@ final class ToolsPanel: UIScrollView {
         contentSize = CGSize(width: CGFloat(tiles.count) * tileWidth, height: bounds.height)
     }
 
+    /// How far left a tile must go to be fully behind the toolbox button (the strip clips what leaves its edge).
+    private func hiddenShift(_ tile: Tile) -> CGFloat {
+        return -(tile.frame.maxX - contentOffset.x)
+    }
+
     /// The tiles slide back into the toolbox button, then `completion` runs.
     func slideOut(completion: @escaping () -> Void) {
         isUserInteractionEnabled = false
         let visible = tiles.filter { $0.frame.maxX > contentOffset.x && $0.frame.minX < contentOffset.x + bounds.width }
         for (index, tile) in visible.enumerated() {
-            UIView.animate(withDuration: 0.22, delay: 0.02 * Double(min(index, 6)), options: [.curveEaseIn, .beginFromCurrentState]) {
-                tile.transform = CGAffineTransform(translationX: -tile.frame.minX + self.contentOffset.x - 24, y: 0).scaledBy(x: 0.5, y: 0.5)
-                tile.alpha = 0
+            UIView.animate(withDuration: 0.24, delay: 0.02 * Double(min(index, 6)), options: [.curveEaseIn, .beginFromCurrentState]) {
+                tile.transform = CGAffineTransform(translationX: self.hiddenShift(tile), y: 0)
             }
         }
-        let total = 0.22 + 0.02 * Double(min(max(visible.count - 1, 0), 6))
+        let total = 0.24 + 0.02 * Double(min(max(visible.count - 1, 0), 6))
         DispatchQueue.main.asyncAfter(deadline: .now() + total + 0.02, execute: completion)
     }
 
@@ -167,13 +163,9 @@ final class ToolsPanel: UIScrollView {
     func slideIn() {
         layoutIfNeeded()
         for (index, tile) in tiles.enumerated() {
-            tile.transform = CGAffineTransform(translationX: -tile.frame.minX + contentOffset.x - 24, y: 0).scaledBy(x: 0.5, y: 0.5)
-            let alpha = tile.alpha
-            tile.alpha = 0
-            UIView.animate(withDuration: 0.42, delay: 0.025 * Double(min(index, 8)), usingSpringWithDamping: 0.78,
-                           initialSpringVelocity: 0.4, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            tile.transform = CGAffineTransform(translationX: hiddenShift(tile), y: 0)
+            UIView.animate(withDuration: 0.3, delay: 0.025 * Double(min(index, 8)), options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
                 tile.transform = .identity
-                tile.alpha = alpha
             }
         }
     }
