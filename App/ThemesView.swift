@@ -182,19 +182,21 @@ private struct ThemeThumbnail: View {
         }
         .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onAppear(perform: load)
-        .onChange(of: scheme) { _ in load() }
-        .onChange(of: theme) { _ in load() }
+        .onAppear { load(theme: theme, dark: scheme == .dark) }
+        // onChange's closure sees the view as it was before the change, so the new value is passed in rather
+        // than read from `scheme` / `theme` (which would still be the old ones and draw the wrong look).
+        .onChange(of: scheme) { newScheme in load(theme: theme, dark: newScheme == .dark) }
+        .onChange(of: theme) { newTheme in load(theme: newTheme, dark: scheme == .dark) }
     }
 
     /// What the picture depends on: the theme with its edits, light or dark, and every setting the preview reads.
-    private var key: String {
-        return "\(theme.id)|\(theme.hashValue)|\(scheme == .dark)|\(ThumbnailCache.settingsSignature())"
+    private static func key(theme: ThemeDefinition, dark: Bool) -> String {
+        return "\(theme.id)|\(theme.hashValue)|\(dark)|\(ThumbnailCache.settingsSignature())"
     }
 
-    private func load() {
+    private func load(theme: ThemeDefinition, dark: Bool) {
         guard theme.kind != .liquidGlass else { return }
-        let key = self.key
+        let key = ThemeThumbnail.key(theme: theme, dark: dark)
         wantedKey = key
         guard key != shownKey || image == nil else { return }
         if let cached = ThumbnailCache.shared.image(for: key) {
@@ -202,7 +204,7 @@ private struct ThemeThumbnail: View {
             shownKey = key
             return
         }
-        let theme = self.theme, accent = self.accent, dark = scheme == .dark, scale = displayScale
+        let accent = self.accent, scale = displayScale
         ThumbnailCache.shared.render(key: key) {
             let width = ThemeThumbnail.renderWidth
             let preview = ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
@@ -213,8 +215,7 @@ private struct ThemeThumbnail: View {
             return renderer.uiImage
         } done: { rendered in
             // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
-            // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
-            guard wantedKey == key else { return }
+            // flipped look may finish after the card has switched back, so drop it unless it is still wanted.            guard wantedKey == key else { return }
             image = rendered
             shownKey = key
         }
