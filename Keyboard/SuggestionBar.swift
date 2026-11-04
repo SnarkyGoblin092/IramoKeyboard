@@ -49,12 +49,18 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     private let toolsIndex = -2
     /// The Functions strip is in the bar: the button shows a cross, which closes it.
     private(set) var toolsOpen = false {
-        didSet { if toolsOpen != oldValue { setToolsImage() } }
+        didSet { if toolsOpen != oldValue { setToolsImage(); setNeedsLayout() } }
     }
     /// The Clipboard panel covers the keys: the button shows the keyboard, which takes the user back to them.
     var clipboardOpen = false {
-        didSet { if clipboardOpen != oldValue { setToolsImage() } }
+        didSet { if clipboardOpen != oldValue { setToolsImage(); setNeedsLayout() } }
     }
+    /// Off when the Functions screen picked no tools: the button leaves the bar (it still shows while a panel it
+    /// closes is open).
+    var showsToolsButton = true {
+        didSet { if showsToolsButton != oldValue { setNeedsLayout() } }
+    }
+    private var toolsButtonVisible: Bool { return showsToolsButton || toolsOpen || clipboardOpen }
     private var toolsStrip: ToolsPanel?
     /// The strip that is sliding away.
     private weak var leavingTools: ToolsPanel?
@@ -426,12 +432,14 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         glass.frame = bounds.insetBy(dx: 2, dy: 3).offsetBy(dx: 0, dy: 4.5)
         let area = glass.bounds
         let dismissWidth: CGFloat = 62
-        let toolsWidth: CGFloat = 58
+        let showsTools = toolsButtonVisible
+        let toolsWidth: CGFloat = showsTools ? 58 : 8
         let contentWidth = max(0, area.width - dismissWidth - toolsWidth)
         // The buttons' touch areas reach a little into the words beside them: a thumb aiming at the bar's end
         // often lands just inside it.
         dismissMinX = area.width - dismissWidth - 12
-        toolsMaxX = toolsWidth + 16
+        toolsMaxX = showsTools ? toolsWidth + 16 : -.greatestFiniteMagnitude
+        toolsIcon.isHidden = !showsTools
 
         dismissIcon.frame = CGRect(x: area.width - dismissWidth, y: 0, width: dismissWidth, height: area.height)
         toolsIcon.frame = CGRect(x: 0, y: 0, width: toolsWidth, height: area.height)

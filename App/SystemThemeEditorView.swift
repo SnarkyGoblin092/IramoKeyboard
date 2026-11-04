@@ -44,7 +44,7 @@ struct SystemThemeSections: View {
     private var hasBorder: Bool {
         switch style.border {
         case "none": return false
-        case "auto": return theme.kind != .native || style.borderWidth != nil
+        case "auto": return !theme.hasSolidKeys || style.borderWidth != nil
         default: return true
         }
     }

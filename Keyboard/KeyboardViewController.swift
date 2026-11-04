@@ -336,7 +336,7 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
-            "\(s.splitKeyboard)", s.oneHanded,
+            "\(s.splitKeyboard)", s.oneHanded, s.keyboardTools.map { $0.rawValue }.joined(separator: ","),
             s.effectsJSON, s.systemEditsJSON
         ].joined(separator: "|")
     }
@@ -353,12 +353,13 @@ final class KeyboardViewController: UIInputViewController {
         clipboardPanel = nil
         for sub in container.subviews { sub.removeFromSuperview() }
 
-        if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
-            // The root was created see-through (Liquid Glass was active at load time) but this theme wants a
-            // normal keyboard background, so paint one.
+        if Theme.kind == .colored || (!rootIsKeyboardStyle && !Theme.isLiquidGlass) {
+            // A colour theme paints its own backdrop. Otherwise the root was created see-through (Liquid Glass was
+            // active at load time) but this theme wants a normal keyboard background, so paint one.
             let solid = UIView()
             solid.isUserInteractionEnabled = false
-            solid.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
+            solid.backgroundColor = Theme.kind == .colored ? Theme.panelBackground
+                : UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.1, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1) }
             solid.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(solid)
             NSLayoutConstraint.activate([
@@ -377,6 +378,7 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView = KeyboardView()
 
         suggestionBar.delegate = self
+        suggestionBar.showsToolsButton = !availableTools().isEmpty
         searchBar.delegate = self
         keyboardView.delegate = self
         keyboardView.popupHost = container
@@ -1943,13 +1945,18 @@ extension KeyboardViewController: ToolsPanelDelegate {
     private func showTools() {
         guard toolsPanel == nil else { return }
         finishComposing()
-        let isPad = traitCollection.userInterfaceIdiom == .pad
-        let tools = settings.keyboardTools.filter { $0 != .split || isPad }
+        let tools = availableTools()
         let panel = ToolsPanel(tools: tools)
         panel.toolsDelegate = self
         toolsPanel = panel
         panel.refresh()   // before it slides in, so the dimmed ones animate to their dimmed alpha
         suggestionBar.setTools(panel)
+    }
+
+    /// The picked tools this device can use (split only on an iPad).
+    func availableTools() -> [KeyboardTool] {
+        let isPad = traitCollection.userInterfaceIdiom == .pad
+        return settings.keyboardTools.filter { $0 != .split || isPad }
     }
 
     private func hideTools() {

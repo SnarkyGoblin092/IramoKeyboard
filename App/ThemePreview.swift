@@ -594,10 +594,13 @@ struct ThemeLook {
     func pick(_ light: Color, _ darkColor: Color) -> Color { return dark ? darkColor : light }
     private func pick(_ light: [Color], _ darkColors: [Color]) -> [Color] { return dark ? darkColors : light }
 
+    /// A colour theme's colours in this appearance.
+    private var tones: ThemeTones? { return theme.colors?.tones(dark: dark) }
+
     /// Labels on the keys.
-    var textColor: Color { return pick(.black, .white) }
+    var textColor: Color { return tones.map { Color($0.text) } ?? pick(.black, .white) }
     /// Text on the background (the suggestion bar), not on a key.
-    var stripText: Color { return pick(Color(white: 0.08), .white) }
+    var stripText: Color { return tones.map { Color($0.text) } ?? pick(Color(white: 0.08), .white) }
 
     /// The letter keys' fill with the theme's own solidity, if it has one.
     var keyFill: Color {
@@ -615,6 +618,7 @@ struct ThemeLook {
         case .native: return pick(.white, Color(white: 0.42))
         case .transparent: return pick(Color.white.opacity(0.34), Color.white.opacity(0.16))
         case .liquidGlass: return pick(Color.white, Color.white.opacity(0.16))
+        case .colored: return tones.map { Color($0.key) } ?? pick(.white, Color(white: 0.42))
         }
     }
 
@@ -623,19 +627,22 @@ struct ThemeLook {
         case .native: return pick(Color(red: 0.675, green: 0.702, blue: 0.745), Color(white: 0.27))
         case .transparent: return pick(Color.black.opacity(0.12), Color.black.opacity(0.28))
         case .liquidGlass: return pick(Color.black.opacity(0.08), Color.white.opacity(0.10))
+        case .colored: return tones.map { Color($0.function) } ?? pick(Color(white: 0.7), Color(white: 0.27))
         }
     }
 
     private var borderColor: Color {
         switch theme.kind {
         case .native: return .clear
+        case .colored: return textColor.opacity(0.18)
         case .liquidGlass: return pick(Color.white.opacity(0.60), Color.white.opacity(0.25))
         default: return pick(Color.white.opacity(0.70), Color.white.opacity(0.28))
         }
     }
 
-    var accentColor: Color { return accent }
-    var onAccent: Color { return .white }
+    /// The user's accent; a colour theme's own.
+    var accentColor: Color { return tones.map { Color($0.accent) } ?? accent }
+    var onAccent: Color { return tones?.accentIsLight == true ? Color(white: 0.08) : .white }
 
     /// Theme.keyCornerRadius: the roundness share of half the key's shorter side.
     func radius(width: CGFloat, height: CGFloat) -> CGFloat {
@@ -646,6 +653,8 @@ struct ThemeLook {
     @ViewBuilder func backdrop(scale: CGFloat = 1) -> some View {
         if theme.kind == .native {
             Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
+        } else if let tones = tones {
+            Rectangle().fill(Color(tones.panel))
         } else if theme.kind == .transparent {
             // The keyboard's frosted panel over the app (Theme.panelBackground).
             Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
@@ -722,7 +731,7 @@ struct ThemeLook {
             if #available(iOS 26, *) { return "none" }   // real glass keys have no outline
         }
         if keyBorderStyle != "auto" { return keyBorderStyle }
-        return theme.kind == .native ? "none" : "thin"
+        return theme.hasSolidKeys ? "none" : "thin"
     }
 
     /// The outline style; a width of its own (the theme's editor) draws one even where the style has none.
@@ -753,6 +762,7 @@ struct ThemeLook {
     }
 
     private var nativeShadow: Color {
+        if theme.kind == .colored { return pick(Color.black.opacity(0.22), Color.black.opacity(0.55)) }
         return theme.kind == .native ? pick(Color(red: 0.53, green: 0.55, blue: 0.58), Color.black.opacity(0.55)) : .clear
     }
 

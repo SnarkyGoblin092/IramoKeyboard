@@ -100,7 +100,7 @@ enum Theme {
     }
 
     /// Native keys carry the 1pt shadow line under them.
-    static var drawsKeyShadow: Bool { return kind == .native }
+    static var drawsKeyShadow: Bool { return definition.hasSolidKeys }
     // MARK: Key style (the Surface, Border and Glow of the system themes)
 
     enum KeySurface { case flat, sheen, raised }
@@ -132,7 +132,7 @@ enum Theme {
         case "thin": chosen = .thin
         case "bold": chosen = .bold
         case "accent": chosen = .accent
-        default: chosen = kind == .native ? .none : .thin
+        default: chosen = definition.hasSolidKeys ? .none : .thin
         }
         // An outline width of its own (the theme's editor) draws an outline even where the style has none.
         if let width = system?.borderWidth { return width > 0.01 ? (chosen == .none ? .thin : chosen) : .none }
@@ -345,6 +345,34 @@ enum Theme {
                 stripFill: UIColor.clear,
                 separator: pick(black(0.12), white(0.20)))
 
+        case .colored:
+            let colors = theme.colors ?? ThemeColors(light: ThemeTones(0xD1D5DB, 0xFFFFFF, 0xACB3BE, 0x000000, 0x007AFF),
+                                                     dark: ThemeTones(0x2B2B2B, 0x6B6B6B, 0x454545, 0xFFFFFF, 0x0A84FF))
+            // Each colour follows the app's light or dark mode.
+            func tone(_ part: KeyPath<ThemeTones, ThemeRGBA>, _ alpha: CGFloat = 1) -> UIColor {
+                let light = colors.light[keyPath: part].uiColor.withAlphaComponent(alpha)
+                let dark = colors.dark[keyPath: part].uiColor.withAlphaComponent(alpha)
+                return pick(light, dark)
+            }
+            let onAccentLight = colors.light.accentIsLight ? UIColor(white: 0.08, alpha: 1) : UIColor.white
+            let onAccentDark = colors.dark.accentIsLight ? UIColor(white: 0.08, alpha: 1) : UIColor.white
+            return Palette(
+                accent: tone(\.accent),
+                onAccent: pick(onAccentLight, onAccentDark),
+                text: tone(\.text),
+                keyText: tone(\.text),
+                secondaryText: tone(\.text, 0.6),
+                keySecondaryText: tone(\.text, 0.6),
+                letterKey: tone(\.key),
+                functionKey: tone(\.function),
+                letterKeyPressed: tone(\.function),
+                functionKeyPressed: tone(\.key),
+                keyShadow: pick(black(0.22), black(0.55)),
+                keyBorder: tone(\.text, 0.18),
+                popupFill: tone(\.key),
+                panelBackground: tone(\.panel),
+                stripFill: UIColor.clear,
+                separator: tone(\.text, 0.15))
         }
     }
 }
