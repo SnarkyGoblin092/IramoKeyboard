@@ -322,7 +322,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     }
 
     /// The room the hide button takes at the right of the search field.
-    private let hideWidth: CGFloat = 38
+    private let hideWidth: CGFloat = 60   // the icon sits 33pt from the right edge, as in the suggestion bar
 
     // These shrink on short keyboards (landscape, small height scale) so the panel always fits exactly.
     private var searchHeight: CGFloat = 36
@@ -349,11 +349,15 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchButton.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
         searchGlass.contentView.addSubview(searchButton)
 
-        hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)),
-                            for: .normal)
         hideButton.tintColor = Theme.barIcons
-        hideButton.imageView?.contentMode = .center   // drawn at its own 22pt size, never stretched to the button
+        // The same drawing as the suggestion bar's hide button: a plain image view, never scaled by the button.
+        let hideIcon = UIImageView(image: UIImage(systemName: "keyboard.chevron.compact.down",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)))
+        hideIcon.contentMode = .center
+        hideIcon.tintColor = Theme.barIcons
+        hideIcon.isUserInteractionEnabled = false
+        hideIcon.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hideButton.addSubview(hideIcon)
         hideButton.accessibilityLabel = "Hide keyboard"
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
         addSubview(hideButton)

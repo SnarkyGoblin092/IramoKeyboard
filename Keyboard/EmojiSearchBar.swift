@@ -37,11 +37,15 @@ final class EmojiSearchBar: UIView {
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         glass.contentView.addSubview(backButton)
 
-        hideButton.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
-                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)),
-                            for: .normal)
         hideButton.tintColor = Theme.barIcons
-        hideButton.imageView?.contentMode = .center   // drawn at its own 22pt size, never stretched to the button
+        // The same drawing as the suggestion bar's hide button: a plain image view, never scaled by the button.
+        let hideIcon = UIImageView(image: UIImage(systemName: "keyboard.chevron.compact.down",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)))
+        hideIcon.contentMode = .center
+        hideIcon.tintColor = Theme.barIcons
+        hideIcon.isUserInteractionEnabled = false
+        hideIcon.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hideButton.addSubview(hideIcon)
         hideButton.accessibilityLabel = "Hide keyboard"
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
         glass.contentView.addSubview(hideButton)
@@ -109,7 +113,8 @@ final class EmojiSearchBar: UIView {
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
-        hideButton.frame = CGRect(x: area.width - 46, y: 0, width: 46, height: area.height)
+        let hideWidth = 66 - 2 * side   // the icon sits 33pt from the right edge, as in the suggestion bar
+        hideButton.frame = CGRect(x: area.width - hideWidth, y: 0, width: hideWidth, height: area.height)
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
         // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).
