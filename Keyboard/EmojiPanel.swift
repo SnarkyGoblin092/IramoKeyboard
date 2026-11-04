@@ -353,6 +353,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)),
                             for: .normal)
         hideButton.tintColor = Theme.barIcons
+        hideButton.imageView?.contentMode = .center   // drawn at its own 22pt size, never stretched to the button
         hideButton.accessibilityLabel = "Hide keyboard"
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
         addSubview(hideButton)
