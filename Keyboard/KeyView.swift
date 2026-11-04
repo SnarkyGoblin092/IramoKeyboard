@@ -33,6 +33,8 @@ final class KeyView: UIView {
     /// its own light) is set into it.
     private let isKeycap: Bool
     private let profile: KeycapProfile
+    /// The theme's Push down setting: the face drops while the key is held.
+    private let pressesDown: Bool
     private let shellLight = CAGradientLayer()
     private let face = CALayer()
     private let faceLight = CAGradientLayer()
@@ -41,7 +43,7 @@ final class KeyView: UIView {
         didSet {
             guard oldValue != isPressed else { return }
             refreshAppearance()
-            if isKeycap {
+            if isKeycap && pressesDown {
                 // The face drops into its shell, labels with it.
                 setNeedsLayout()
                 layoutIfNeeded()
@@ -62,6 +64,7 @@ final class KeyView: UIView {
         self.labelGlow = Theme.labelGlow
         self.isKeycap = Theme.isKeycap && !Theme.usesRealGlass
         self.profile = Theme.keycapProfile
+        self.pressesDown = Theme.system?.pressDown ?? true
         super.init(frame: .zero)
         isUserInteractionEnabled = false
 
@@ -315,8 +318,9 @@ final class KeyView: UIView {
             // A soft contact shadow, so the keycap stands off the backdrop (less while pressed).
             target.shadowColor = UIColor.black.cgColor
             target.shadowOpacity = Float(KeycapProfile.contactShadow(dark: traitCollection.userInterfaceStyle == .dark))
-            target.shadowRadius = isPressed ? 0.5 : 1.2
-            target.shadowOffset = CGSize(width: 0, height: isPressed ? 0.5 : 1.2)
+            let down = isPressed && pressesDown
+            target.shadowRadius = down ? 0.5 : 1.2
+            target.shadowOffset = CGSize(width: 0, height: down ? 0.5 : 1.2)
         } else if surface == .raised {
             let dark = traitCollection.userInterfaceStyle == .dark
             target.shadowColor = UIColor.black.cgColor
@@ -449,7 +453,7 @@ final class KeyView: UIView {
         guard isKeycap else { return bounds }
         let size = bounds.size
         let inset = profile.insets(height: size.height)
-        let drop = isPressed ? min(KeycapProfile.pressDrop(height: size.height), inset.bottom - inset.top) : 0
+        let drop = isPressed && pressesDown ? min(KeycapProfile.pressDrop(height: size.height), inset.bottom - inset.top) : 0
         let content = CGRect(x: inset.side, y: inset.top + drop, width: max(0, size.width - 2 * inset.side),
                              height: max(0, size.height - inset.top - inset.bottom))
         CATransaction.begin()

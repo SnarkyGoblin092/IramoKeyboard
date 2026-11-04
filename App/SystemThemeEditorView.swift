@@ -104,6 +104,11 @@ struct SystemThemeSections: View {
             }
             GlassSlider(title: tr("Label glow"), symbol: "light.max", value: binding(\.labelGlow),
                         range: 0...1, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+            if theme.kind == .keycap {
+                GlassToggle(title: tr("Push down"),
+                            subtitle: tr("Keys sink into their keycap while you hold them."),
+                            isOn: binding(\.pressDown))
+            }
         } header: {
             SectionHeader(tr("Look"), symbol: "paintpalette", color: .orange)
         } footer: {

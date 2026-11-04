@@ -32,6 +32,8 @@ struct SystemStyle: Hashable, Codable {
     var sheen = 1.0
     /// A glow around the labels in their own colour (0 none ... 1 neon).
     var labelGlow = 0.0
+    /// 3D keycap themes: the face drops into its shell while a key is held.
+    var pressDown = true
 
     init() {}
 
@@ -45,6 +47,7 @@ struct SystemStyle: Hashable, Codable {
         keyOpacity = value(c, .keyOpacity, keyOpacity)
         sheen = value(c, .sheen, sheen)
         labelGlow = value(c, .labelGlow, labelGlow)
+        pressDown = value(c, .pressDown, pressDown)
     }
 
     static let roundnessRange: ClosedRange<Double> = 0...1
