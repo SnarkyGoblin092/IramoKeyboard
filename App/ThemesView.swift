@@ -107,7 +107,6 @@ private struct ThemeCard: View {
     let isSelected: Bool
     let action: () -> Void
 
-
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {

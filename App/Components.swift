@@ -320,7 +320,6 @@ struct SettingSlider: View {
     }
 }
 
-
 // MARK: - Styling helpers
 
 /// Slight shrink while pressed, so every card and swatch answers the finger at once, with a bloom of light over it.

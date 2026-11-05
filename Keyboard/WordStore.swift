@@ -682,14 +682,6 @@ final class WordStore {
         return map
     }
 
-    /// Best completions for what the user has typed so far, most likely first (this language only).
-    func completions(for typed: String, limit: Int) -> [String] {
-        let normalized = TextFolding.normalizeApostrophes(typed)
-        return completionCandidates(forKey: TextFolding.key(normalized),
-                                    typedLower: normalized.lowercased(),
-                                    limit: limit).map { $0.word }
-    }
-
     /// word -> 0...1: how much this user writes each learned word (more and more recent = higher). A plain value
     /// copy that is safe to hand to another thread.
     func personalStrengths() -> [String: Double] {

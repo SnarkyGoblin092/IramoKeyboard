@@ -302,7 +302,6 @@ enum ThemeCatalog {
     /// The themes, in picker order.
     static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + signatureThemes + keycapThemes
 
-
     /// The picker's sections: the system themes, then the keycaps by how they are built (and light or dark caps),
     /// each ordered round the colour wheel by its accent, with the greys last.
     static let pickerSections: [(title: String, themes: [ThemeDefinition])] = {

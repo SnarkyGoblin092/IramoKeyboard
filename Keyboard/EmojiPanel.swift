@@ -384,7 +384,6 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         collectionView.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiCell.reuseID)
         addSubview(collectionView)
 
-
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         longPress.minimumPressDuration = Prefs.emojiHoldDelay
         collectionView.addGestureRecognizer(longPress)
