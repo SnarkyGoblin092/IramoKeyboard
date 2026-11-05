@@ -388,6 +388,12 @@ final class KeyView: UIView {
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
+        // During rotation, isProminent/isActive can be stale (old orientation values).
+        // Reset them before refreshing appearance so keys don't incorrectly show accent colours.
+        if previousTraitCollection?.userInterfaceIdiom != traitCollection.userInterfaceIdiom {
+            isProminent = false
+            isActive = false
+        }
         refreshAppearance()   // the shadow and sheen colours follow light and dark
         setNeedsLayout()
     }

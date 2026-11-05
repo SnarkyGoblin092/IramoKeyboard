@@ -34,14 +34,17 @@ struct LiveKeyboard: View {
         GeometryReader { geometry in
             // naturalSize reads these itself: read here too, so a change resizes the preview at once.
             let _ = (landscape, landscapeSeparate, landscapeKeyHeight)
-            let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
-                                                    barHeight: barHeight,
-                                                    language: LiveKeyboardView.openingLanguage(code: languageCode),
-                                                    emoji: showsEmoji)
+            // Detect landscape from bounds (matches KeyboardViewController's `view.bounds.width > 500`).
+            let isLandscape = geometry.size.width > geometry.size.height && UIDevice.current.userInterfaceIdiom != .pad
+            // Use the instance method with our detected landscape state for consistent sizing.
+            let size = LiveKeyboardView.instanceNaturalSize(keyHeight: keyHeight, rowGap: rowGap,
+                                                            numberRow: numberRow, barHeight: barHeight,
+                                                            language: LiveKeyboardView.openingLanguage(code: languageCode),
+                                                            emoji: showsEmoji, landscape: isLandscape)
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardHost(effects: effects, showsHitboxes: showsHitboxes, hitboxMode: hitboxMode,
-                                 showsEmoji: showsEmoji)
+                                 showsEmoji: showsEmoji, isLandscape: isLandscape)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them. The emoji
                     // picker shows the system's own backdrop (as it does in the keyboard).
                     .background(Group {
@@ -73,6 +76,8 @@ private struct LiveKeyboardHost: UIViewRepresentable {
     let showsHitboxes: Bool
     let hitboxMode: HitboxOverlay.Mode
     let showsEmoji: Bool
+    /// Whether the preview is in landscape (passed from SwiftUI GeometryReader).
+    var isLandscape: Bool = false
 
     func makeUIView(context: Context) -> LiveKeyboardView {
         let view = LiveKeyboardView()
@@ -88,6 +93,7 @@ private struct LiveKeyboardHost: UIViewRepresentable {
         view.effectsOverride = effects
         view.showsHitboxes = showsHitboxes
         view.hitboxMode = hitboxMode
+        view.isLandscapeOverride = isLandscape
     }
 }
 
@@ -134,21 +140,29 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private static var stores: [Language: WordStore] = [:]
     private static var loadingStores = Set<Language>()
 
+    /// Whether the preview's own bounds indicate landscape (width > height) on a phone.
+    /// Matches how KeyboardViewController detects landscape (`view.bounds.width > 500`).
+    private var isPhoneLandscape: Bool {
+        return bounds.width > bounds.height && UIDevice.current.userInterfaceIdiom != .pad
+    }
+
+    /// Override from SwiftUI: whether the preview's GeometryReader indicates landscape.
+    var isLandscapeOverride: Bool = false
+
     /// An iPhone keyboard in landscape (the previews' landscape switch on an iPhone).
+    /// Legacy: uses the toggle switch, not bounds-based detection. See `isPhoneLandscape` for actual orientation.
     private static var phoneLandscape: Bool {
         return PreviewOrientation.landscape && UIDevice.current.userInterfaceIdiom != .pad
     }
 
     /// The suggestion bar's height (KeyboardViewController.applyHeight: lower on an iPhone in landscape).
+    /// Legacy: uses the toggle switch via `phoneLandscape`. See `barHeightMultiplier(for:)` for bounds-based.
     static func barHeight(_ stored: Double) -> CGFloat {
         return CGFloat(stored) * (phoneLandscape ? 36.0 / 44.0 : 1.0)
     }
 
-    /// The keyboard's size (KeyboardViewController.applyHeight), upright or in landscape (PreviewOrientation): the
-    /// screen's width, and the bar above its rows of keys with the gap between them. An iPad's keys are as tall
-    /// either way; an iPhone's are two thirds as tall in landscape (or their own landscape height), and the keyboard
-    /// is always as tall as the emoji picker there. With `emoji` (the picker open) it is as tall as the picker
-    /// needs, at least.
+    /// The keyboard's size (KeyboardViewController.applyHeight), upright or in landscape (PreviewOrientation).
+    /// Legacy: uses the toggle switch via `phoneLandscape`. See `instanceNaturalSize(...landscape:)` for bounds-based.
     static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
                             language: Language, emoji: Bool = false) -> CGSize {
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
@@ -181,6 +195,37 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         let enabled = Language.list(from: Settings.shared.enabledLanguages)
         let stored = Language(rawValue: code) ?? .english
         return enabled.contains(stored) ? stored : (enabled.first ?? stored)
+    }
+
+    /// Static helper for SwiftUI previews: calculates size with the given landscape state.
+    static func instanceNaturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
+                                    language: Language, emoji: Bool = false, landscape: Bool) -> CGSize {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let height: CGFloat
+        if isPad {
+            height = CGFloat(keyHeight) * 61 / 45
+        } else if landscape {
+            let defaults = SharedStore.defaults
+            height = defaults.bool(forKey: SettingKey.landscapeSeparate)
+                ? CGFloat(defaults.double(forKey: SettingKey.landscapeKeyHeight)) : CGFloat(keyHeight) * 30 / 45
+        } else {
+            height = CGFloat(keyHeight)
+        }
+        let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
+        let width = CGFloat(DeviceMetrics.keyboardWidth)
+        let total = LiveKeyboardView.barHeightMultiplier(for: landscape) * barHeight + 8 + rows * (height + CGFloat(rowGap))
+        if emoji && !landscape {
+            let parts = (SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) ?? "")
+                .split(separator: ",").compactMap { Double($0) }
+            if parts.count == 2, parts[0] > 100, parts[1] > 100 { return CGSize(width: parts[0], height: parts[1]) }
+        }
+        let fitsPicker = emoji || landscape
+        return CGSize(width: width, height: fitsPicker ? max(total, EmojiPanel.requiredHeight(forWidth: width)) : total)
+    }
+
+    /// Bar height multiplier for the given landscape state.
+    static func barHeightMultiplier(for landscape: Bool) -> CGFloat {
+        return landscape ? 36.0 / 44.0 : 1.0
     }
 
     override init(frame: CGRect) {
@@ -231,9 +276,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 
     /// A new bar and KeyboardView, as the controller makes them in buildInterface (they read the theme as they are
     /// made).
-    /// The split keyboard follows the previews' landscape switch on an iPhone (KeyboardLayoutMode.split).
+    /// The split keyboard follows the actual device orientation (not the toggle switch) on an iPhone.
     private func syncOrientation() {
-        KeyboardLayoutMode.phoneLandscape = LiveKeyboardView.phoneLandscape
+        // Use SwiftUI override or bounds-based detection; matches layoutStage()'s logic.
+        KeyboardLayoutMode.phoneLandscape = isLandscapeOverride || isPhoneLandscape
     }
 
     private func rebuild() {
@@ -437,13 +483,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     }
 
     private func layoutStage() {
-        let size = LiveKeyboardView.naturalSize(keyHeight: Prefs.keyHeight, rowGap: Prefs.rowGap,
-                                                numberRow: Prefs.numberRow, barHeight: Prefs.suggestionHeight,
-                                                language: language, emoji: showsEmoji)
+        // Use the override from SwiftUI (GeometryReader) or detect from bounds; matches KeyboardViewController.
+        let isLand = isLandscapeOverride || isPhoneLandscape
+        let size = LiveKeyboardView.instanceNaturalSize(keyHeight: Prefs.keyHeight, rowGap: Prefs.rowGap,
+                                                        numberRow: Prefs.numberRow, barHeight: Prefs.suggestionHeight,
+                                                        language: language, emoji: showsEmoji, landscape: isLand)
         // The bar and the keys are always laid out at the keyboard's size, also before this view has one (it is
         // built in init): at 0×0 every key's frame would come out null and Core Animation would throw.
         stage.bounds = CGRect(origin: .zero, size: size)
-        let barHeight = LiveKeyboardView.barHeight(Prefs.suggestionHeight)
+        let barHeight = LiveKeyboardView.barHeightMultiplier(for: isLand) * Prefs.suggestionHeight
         let barFrame = CGRect(x: 0, y: 0, width: size.width, height: barHeight)
         let keysFrame = CGRect(x: 0, y: barHeight, width: size.width, height: size.height - barHeight)
         if let panel = emojiPanel, panel.frame != stage.bounds { panel.frame = stage.bounds }

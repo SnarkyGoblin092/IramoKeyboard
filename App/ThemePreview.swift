@@ -17,10 +17,6 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
-    @AppStorage(SettingKey.splitKeyboard, store: SharedStore.defaults) private var splitKeyboard = SettingDefault.splitKeyboard
-    @AppStorage(SettingKey.splitGap, store: SharedStore.defaults) private var splitGap = SettingDefault.splitGap
-    @AppStorage(SettingKey.splitSidePadding, store: SharedStore.defaults) private var splitSidePadding = SettingDefault.splitSidePadding
-    @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
     @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize
     @AppStorage(SettingKey.hintPosition, store: SharedStore.defaults) private var hintPosition = SettingDefault.hintPosition
     @AppStorage(SettingKey.hintSize, store: SharedStore.defaults) private var hintSize = SettingDefault.hintSize
@@ -151,9 +147,8 @@ struct ThemePreview: View {
         return spaceLanguageCode ? shownLanguage.rawValue.uppercased() : shownLanguage.displayName
     }
 
-    /// As KeyboardLayoutMode.split, for the theme cards (drawn upright): mirrors the real keyboard's split
-    /// behaviour — always when the setting is on, so the preview shows the same layout the keyboard draws.
-    private var split: Bool { return splitKeyboard }
+    /// For the theme cards (drawn upright): always non-split, so previews are consistent.
+    private var split: Bool { return false }
 
     /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
     private var shownRows: [[PreviewKey]] {
