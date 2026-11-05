@@ -215,7 +215,8 @@ private struct ThemeThumbnail: View {
             return renderer.uiImage
         } done: { rendered in
             // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
-            // flipped look may finish after the card has switched back, so drop it unless it is still wanted.            guard wantedKey == key else { return }
+            // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
+            guard wantedKey == key else { return }
             image = rendered
             shownKey = key
         }
