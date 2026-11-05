@@ -186,8 +186,29 @@ struct ThemePreview: View {
             }
             let leftWeight = left.reduce(CGFloat(0)) { $0 + $1.weight }
             let rightWeight = right.reduce(CGFloat(0)) { $0 + $1.weight }
-            if leftWeight < rightWeight { left.append(PreviewKey(weight: rightWeight - leftWeight, spacer: true)) }
-            if rightWeight < leftWeight { right.insert(PreviewKey(weight: leftWeight - rightWeight, spacer: true), at: 0) }
+            // As the keyboard: the lighter half fills its inner side with copies of the other half's keys there.
+            func copies(of keys: [PreviewKey], room: CGFloat) -> ([PreviewKey], CGFloat) {
+                var rest = room
+                var result: [PreviewKey] = []
+                for key in keys where rest > 0.001 {
+                    guard !key.function, !key.spacer, !key.space, key.weight <= rest + 0.25 else { break }
+                    var copy = key
+                    copy.weight = min(key.weight, rest)
+                    result.append(copy)
+                    rest -= copy.weight
+                }
+                return (result, rest)
+            }
+            if leftWeight < rightWeight {
+                let (extra, rest) = copies(of: right, room: rightWeight - leftWeight)
+                left += extra
+                if rest > 0.001 { left.append(PreviewKey(weight: rest, spacer: true)) }
+            }
+            if rightWeight < leftWeight {
+                let (extra, rest) = copies(of: Array(left.reversed()), room: leftWeight - rightWeight)
+                right.insert(contentsOf: extra.reversed(), at: 0)
+                if rest > 0.001 { right.insert(PreviewKey(weight: rest, spacer: true), at: 0) }
+            }
             let gapWeight = max(leftWeight, rightWeight) * 2 * gap / (1 - gap)
             return left + [PreviewKey(weight: gapWeight, spacer: true)] + right
         }

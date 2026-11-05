@@ -392,6 +392,7 @@ final class KeyboardView: UIView {
         for (r, row) in rows.enumerated() {
             for (c, spec) in row.enumerated() {
                 if case .character(let text) = spec.action,
+                   !spec.isCopy,
                    text.count == 1,
                    let letter = text.lowercased().first,
                    letter.isLetter {

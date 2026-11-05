@@ -320,6 +320,7 @@ struct KeySpec {
     var alternates: [String] = []
     var isFunction: Bool = false
     var hint: String? = nil          // small character in the key's corner (first long-press option)
+    var isCopy = false               // a second copy on the split keyboard's other half (not used for swipe positions)
 
     var isSpacer: Bool { return action == .spacer }
 }
@@ -383,14 +384,39 @@ enum LayoutBuilder {
                     right.append(spec)
                 }
             }
-            // The lighter half gets room on its inner side, so both halves are the same width.
+            // The lighter half fills its inner side with copies of the other half's keys beside the gap (the g and
+            // v on both sides), so both halves are the same width; only room smaller than a key is left blank.
             let leftWeight = left.reduce(0) { $0 + $1.weight }
             let rightWeight = right.reduce(0) { $0 + $1.weight }
-            if leftWeight < rightWeight { left.append(KeySpec(action: .spacer, weight: rightWeight - leftWeight)) }
-            if rightWeight < leftWeight { right.insert(KeySpec(action: .spacer, weight: leftWeight - rightWeight), at: 0) }
+            if leftWeight < rightWeight {
+                let (copies, rest) = innerCopies(of: right, room: rightWeight - leftWeight)
+                left += copies
+                if rest > 0.001 { left.append(KeySpec(action: .spacer, weight: rest)) }
+            }
+            if rightWeight < leftWeight {
+                let (copies, rest) = innerCopies(of: Array(left.reversed()), room: leftWeight - rightWeight)
+                right.insert(contentsOf: copies.reversed(), at: 0)
+                if rest > 0.001 { right.insert(KeySpec(action: .spacer, weight: rest), at: 0) }
+            }
             let gapWeight = max(leftWeight, rightWeight) * 2 * gap / (1 - gap)
             return left + [KeySpec(action: .spacer, weight: gapWeight)] + right
         }
+    }
+
+    /// Copies of character keys taken from the gap side of a half (`keys` innermost first) while they fit in `room`
+    /// (a key up to a quarter wider is narrowed to fit); and the room left over.
+    private static func innerCopies(of keys: [KeySpec], room: CGFloat) -> (copies: [KeySpec], rest: CGFloat) {
+        var rest = room
+        var copies: [KeySpec] = []
+        for spec in keys where rest > 0.001 {
+            guard case .character = spec.action, !spec.isFunction, spec.weight <= rest + 0.25 else { break }
+            var copy = spec
+            copy.weight = min(spec.weight, rest)
+            copy.isCopy = true
+            copies.append(copy)
+            rest -= copy.weight
+        }
+        return (copies, rest)
     }
 
     static func rows(language: Language,
