@@ -5,18 +5,14 @@ import UniformTypeIdentifiers
 /// what order. Hold a tool and drag it: within the panel's list to reorder, onto it from the list under it to add
 /// it, or back down to take it off.
 struct FunctionsView: View {
-    /// The panel's tools as this device shows them (split only on an iPad).
+    /// The panel's tools (split shows on an iPhone only in landscape, where the keyboard splits).
     @State private var tools: [KeyboardTool] = []
-    /// The stored list has split, which an iPhone does not show but keeps for the iPad.
-    @State private var keepsSplit = false
     /// The tool being dragged (it moves between and within the lists as it passes over their rows).
     @State private var dragging: KeyboardTool?
 
-    private var isPad: Bool { return UIDevice.current.userInterfaceIdiom == .pad }
-
-    /// The tools not on the panel (split only on an iPad).
+    /// The tools not on the panel.
     private var others: [KeyboardTool] {
-        return KeyboardTool.allCases.filter { !tools.contains($0) && ($0 != .split || isPad) }
+        return KeyboardTool.allCases.filter { !tools.contains($0) }
     }
 
     var body: some View {
@@ -54,10 +50,9 @@ struct FunctionsView: View {
             Section {
                 Button(tr("Restore the standard functions")) {
                     Feedback.choose()
-                    keepsSplit = !isPad
-                    save(KeyboardTool.standard.filter { $0 != .split || isPad })
+                    save(KeyboardTool.standard)
                 }
-                .disabled(tools == KeyboardTool.standard.filter { $0 != .split || isPad })
+                .disabled(tools == KeyboardTool.standard)
             }
             .glassRows()
         }
@@ -72,8 +67,7 @@ struct FunctionsView: View {
         .onAppear {
             let stored = KeyboardTool.list(from: SharedStore.defaults.stringArray(forKey: SettingKey.keyboardTools)
                                            ?? SettingDefault.keyboardTools)
-            keepsSplit = !isPad && stored.contains(.split)
-            tools = stored.filter { $0 != .split || isPad }
+            tools = stored
         }
     }
 
@@ -125,8 +119,7 @@ struct FunctionsView: View {
 
     private func save(_ list: [KeyboardTool]) {
         withAnimation(.easeOut(duration: 0.2)) { tools = list }
-        let stored = keepsSplit && !list.contains(.split) ? list + [.split] : list
-        SharedStore.defaults.set(stored.map { $0.rawValue }, forKey: SettingKey.keyboardTools)
+        SharedStore.defaults.set(list.map { $0.rawValue }, forKey: SettingKey.keyboardTools)
     }
 }
 

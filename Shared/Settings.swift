@@ -1091,7 +1091,7 @@ enum KeySound: String, CaseIterable {
         }
     }
 
-    /// The name shown on the Haptics screen (not yet translated: tr falls back to it).
+    /// The name shown on the Haptics screen (an English key for tr()).
     var displayName: String {
         switch self {
         case .tock: return "Tock"

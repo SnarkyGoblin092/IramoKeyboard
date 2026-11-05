@@ -69,8 +69,11 @@ struct ThemeDefinition: Hashable {
     /// Name shown in the picker.
     let name: String
     let kind: Kind
-    /// What makes it different, in a few words (the editor's subtitle).
+    /// What makes it different, in a few words (the editor's subtitle). An English key for tr(); with
+    /// `summaryValue`, a format whose %@ it fills.
     let summary: String
+    /// The value in `summary` (a colourway's name: "%@ 3D keycaps").
+    var summaryValue: String? = nil
     /// True when the user changed this theme in its editor.
     var isEdited = false
     /// The theme's own style from its editor (nil: not edited, so the old global key settings apply). A keycap
@@ -374,11 +377,13 @@ enum ThemeCatalog {
         style.surface = "flat"   // the profile lights the cap
         style.border = "none"
         let id = "\(family)-\(variant)".lowercased().folding(options: .diacriticInsensitive, locale: nil)
-        return ThemeDefinition(id: id, name: "\(family) \(variant)", kind: .keycap,
-                               summary: "\(variant) 3D keycaps", systemStyle: style,
+        var theme = ThemeDefinition(id: id, name: "\(family) \(variant)", kind: .keycap,
+                               summary: "%@ 3D keycaps", systemStyle: style,
                                colors: ThemeColors(light: ThemeTones(key: light.0, text: light.1, dark: false, mods: mods),
                                                    dark: ThemeTones(key: dark.0, text: dark.1, dark: true, mods: mods)),
                                family: family, font: font, profile: profile)
+        theme.summaryValue = variant
+        return theme
     }
 
     /// Cream caps with candy-coloured modifiers.

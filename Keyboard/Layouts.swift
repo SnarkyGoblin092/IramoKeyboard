@@ -335,7 +335,13 @@ enum KeyboardLayoutMode {
     /// The share of the width the one-handed keyboard takes.
     static let oneHandedWidth: CGFloat = 0.8
 
-    static var split: Bool { return Prefs.splitKeyboard && UIDevice.current.userInterfaceIdiom == .pad }
+    /// On with the setting: always on an iPad, only in landscape on an iPhone (too narrow upright for two halves).
+    static var split: Bool {
+        guard Prefs.splitKeyboard else { return false }
+        if UIDevice.current.userInterfaceIdiom == .pad { return true }
+        let screen = UIScreen.main.bounds.size
+        return screen.width > screen.height
+    }
 
     /// -1 = against the left edge, 1 = against the right edge, 0 = the full width (centred).
     static var oneHandedSide: CGFloat {

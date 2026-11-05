@@ -274,11 +274,11 @@ struct KeysView: View {
                               subtitle: tr("Numbers above the letters"))
                 SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
                               subtitle: tr("The letter shows above your finger"))
-                if isPad {
-                    GlassToggle(title: tr("Split keyboard"),
-                                subtitle: tr("The keys in two halves, one under each thumb, in every language."),
-                                isOn: $split)
-                }
+                GlassToggle(title: tr("Split keyboard"),
+                            subtitle: isPad
+                                ? tr("The keys in two halves, one under each thumb, in every language.")
+                                : tr("In landscape: the keys in two halves, one under each thumb, in every language."),
+                            isOn: $split)
                 SegmentedChoice(title: tr("One-handed"), names: [tr("Off"), tr("Left hand"), tr("Right hand")],
                                 selected: hands.firstIndex(of: oneHanded)) { oneHanded = hands[$0] }
                     .disabled(isPad && split)
@@ -288,6 +288,8 @@ struct KeysView: View {
             } footer: {
                 Text(isPad && split
                      ? tr("The split keyboard is used instead of the one-handed one.")
+                     : split
+                     ? tr("One-handed: a narrower keyboard against that side, upright; in landscape the split keyboard is used instead.")
                      : tr("One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over."))
             }
             .glassRows()

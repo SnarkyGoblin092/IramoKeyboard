@@ -11,9 +11,53 @@ struct ContentView: View {
     /// The app language was just changed: the main list, built again from the top, goes back to its row.
     @State private var returnToLanguageRow = false
 
+    /// The window's full size (the keyboard showing doesn't change it): wide enough, it shows two columns.
+    @State private var windowSize: CGSize = .zero
+
+    /// Landscape on an iPhone or iPad: the main list on the left and the open screen beside it.
+    private static func isWide(_ size: CGSize) -> Bool {
+        return size.width > size.height && size.width >= 640
+    }
+
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollViewReader { proxy in
+        Group {
+            if ContentView.isWide(windowSize) {
+                landscape
+            } else {
+                NavigationStack(path: $path) {
+                    mainList
+                        .navigationDestination(for: Screen.self) { $0.view }
+                }
+                .environment(\.openScreen, { screen in
+                    returnToLanguageRow = false
+                    path.append(screen)
+                })
+            }
+        }
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { windowSize = geometry.size }
+                .onChange(of: geometry.size) { windowSize = $0 }
+        }.ignoresSafeArea())
+        .toggleStyle(GlassSwitchStyle())   // every switch in the app is a piece of Liquid Glass
+        // Everything is built again in the new language when it changes (tr reads it as the views are drawn).
+        .id(appLanguage)
+        .environment(\.locale, AppLanguage.locale)
+        .environment(\.layoutDirection, AppLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
+        .onChange(of: appLanguage) { _ in returnToLanguageRow = true }
+        .modifier(AccentTint())
+        .roundedType()
+        .onAppear {
+            Feedback.prepare()
+            Settings.shared.removeTouchModel()
+            // The enabled languages' data is unpacked now, so the keyboard finds it ready.
+            LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
+        }
+    }
+
+    /// The main list of settings: the whole screen upright, the left column in landscape.
+    private var mainList: some View {
+        ScrollViewReader { proxy in
             // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
             GlassList {
                 HeaderSection()
@@ -31,30 +75,46 @@ struct ContentView: View {
             .navigationTitle(tr("Iramo"))
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
-            .navigationDestination(for: Screen.self) { $0.view }
             .onAppear {
                 guard returnToLanguageRow else { return }
                 DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
             }
-            }
         }
-        .toggleStyle(GlassSwitchStyle())   // every switch in the app is a piece of Liquid Glass
-        // Everything is built again in the new language when it changes (tr reads it as the views are drawn).
-        .id(appLanguage)
-        .environment(\.locale, AppLanguage.locale)
-        .environment(\.layoutDirection, AppLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
-        .environment(\.openScreen, { screen in
-            returnToLanguageRow = false
-            path.append(screen)
-        })
-        .onChange(of: appLanguage) { _ in returnToLanguageRow = true }
-        .modifier(AccentTint())
-        .roundedType()
-        .onAppear {
-            Feedback.prepare()
-            Settings.shared.removeTouchModel()
-            // The enabled languages' data is unpacked now, so the keyboard finds it ready.
-            LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
+    }
+
+    /// Landscape: the main list as a column on the left; a row tapped there opens its screen on the right, where
+    /// the screens it opens in turn are pushed. The same `path` as upright, so turning the device keeps the place.
+    private var landscape: some View {
+        HStack(spacing: 0) {
+            NavigationStack { mainList }
+                .frame(width: min(400, max(300, windowSize.width * 0.38)))
+                .environment(\.openScreen, { screen in
+                    returnToLanguageRow = false
+                    path = [screen]
+                })
+                .environment(\.shownScreen, path.first)
+            Divider().ignoresSafeArea()
+            NavigationStack(path: Binding(get: { Array(path.dropFirst()) },
+                                          set: { path = Array(path.prefix(1)) + $0 })) {
+                Group {
+                    if let screen = path.first {
+                        screen.view
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "keyboard")
+                                .font(.system(size: 44, weight: .light))
+                            Text(tr("Pick a setting on the left."))
+                        }
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .glassScreen()
+                    }
+                }
+                .navigationDestination(for: Screen.self) { $0.view }
+            }
+            // Another screen picked on the left starts afresh.
+            .id(path.first)
+            .environment(\.openScreen, { screen in path.append(screen) })
         }
     }
 }
@@ -541,7 +601,17 @@ private struct OpenScreenKey: EnvironmentKey {
     static let defaultValue: (Screen) -> Void = { _ in }
 }
 
+private struct ShownScreenKey: EnvironmentKey {
+    static let defaultValue: Screen? = nil
+}
+
 extension EnvironmentValues {
+    /// The screen open beside the main list in landscape (its row is marked).
+    var shownScreen: Screen? {
+        get { return self[ShownScreenKey.self] }
+        set { self[ShownScreenKey.self] = newValue }
+    }
+
     /// Opens a screen of the main list (set by ContentView).
     var openScreen: (Screen) -> Void {
         get { return self[OpenScreenKey.self] }
@@ -556,6 +626,7 @@ struct ScreenRow<Label: View>: View {
     let screen: Screen
     @ViewBuilder let label: () -> Label
     @Environment(\.openScreen) private var openScreen
+    @Environment(\.shownScreen) private var shownScreen
 
     init(_ screen: Screen, @ViewBuilder label: @escaping () -> Label) {
         self.screen = screen
@@ -571,7 +642,7 @@ struct ScreenRow<Label: View>: View {
                 label()
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(Color(.tertiaryLabel))
+                    .foregroundColor(shownScreen == screen ? .accentColor : Color(.tertiaryLabel))
             }
             .foregroundColor(.primary)
             .contentShape(Rectangle())

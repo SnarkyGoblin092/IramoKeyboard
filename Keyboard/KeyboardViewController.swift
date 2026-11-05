@@ -263,6 +263,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        if let built = builtSplit, built != KeyboardLayoutMode.split { reloadKeyboardLayout() }
         applyHeight()
         recordEmojiSize()
     }
@@ -476,6 +477,10 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: Layout & language
 
+    /// Whether the keys on screen were laid out split (nil until they are first built); an iPhone splits only in
+    /// landscape, so turning it rebuilds them.
+    private var builtSplit: Bool?
+
     private func reloadKeyboardLayout() {
         var rows = LayoutBuilder.rows(language: language,
                                       page: page,
@@ -497,7 +502,8 @@ final class KeyboardViewController: UIInputViewController {
             titled.title = spaceTitle
             return titled
         } }
-        if KeyboardLayoutMode.split { rows = LayoutBuilder.split(rows) }
+        builtSplit = KeyboardLayoutMode.split
+        if builtSplit == true { rows = LayoutBuilder.split(rows) }
         keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()
@@ -1955,10 +1961,11 @@ extension KeyboardViewController: ToolsPanelDelegate {
         suggestionBar.setTools(panel)
     }
 
-    /// The picked tools this device can use (split only on an iPad).
+    /// The picked tools this device can use (split on an iPhone only in landscape, where the keyboard splits).
     func availableTools() -> [KeyboardTool] {
         let isPad = traitCollection.userInterfaceIdiom == .pad
-        return settings.keyboardTools.filter { $0 != .split || isPad }
+        let screen = UIScreen.main.bounds.size
+        return settings.keyboardTools.filter { $0 != .split || isPad || screen.width > screen.height }
     }
 
     private func hideTools() {

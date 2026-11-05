@@ -36,6 +36,7 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFontID = SettingDefault.keyFont
 
     @Environment(\.colorScheme) private var systemScheme
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     /// The language whose layout is drawn; defaults to the first enabled language, like the keyboard.
     var language: Language? = nil
@@ -149,8 +150,11 @@ struct ThemePreview: View {
         return spaceLanguageCode ? shownLanguage.rawValue.uppercased() : shownLanguage.displayName
     }
 
-    /// The split keyboard is the iPad's only (as KeyboardLayoutMode.split).
-    private var split: Bool { return splitKeyboard && UIDevice.current.userInterfaceIdiom == .pad }
+    /// As KeyboardLayoutMode.split: always on an iPad, on an iPhone only in landscape (a compact height). A card's
+    /// picture (ImageRenderer, with no size class) is drawn upright.
+    private var split: Bool {
+        return splitKeyboard && (UIDevice.current.userInterfaceIdiom == .pad || verticalSizeClass == .compact)
+    }
 
     /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
     private var shownRows: [[PreviewKey]] {

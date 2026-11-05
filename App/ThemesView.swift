@@ -8,7 +8,8 @@ struct ThemesView: View {
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
     @Environment(\.openScreen) private var openScreen
 
-    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+    /// Two cards across on a phone held upright, more where there is room (iPad, landscape).
+    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
@@ -42,7 +43,7 @@ struct ThemesView: View {
                         StatusChip(text: tr("Edited"), symbol: "slider.horizontal.3", color: accent)
                     }
                 }
-                Text(tr(selected.summary))
+                Text(selected.summaryValue.map { tr(selected.summary, $0) } ?? tr(selected.summary))
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
