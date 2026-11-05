@@ -9,6 +9,8 @@ struct KeysView: View {
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
     @AppStorage(SettingKey.splitKeyboard, store: SharedStore.defaults) private var split = SettingDefault.splitKeyboard
+    @AppStorage(SettingKey.splitGap, store: SharedStore.defaults) private var splitGap = SettingDefault.splitGap
+    @AppStorage(SettingKey.splitSidePadding, store: SharedStore.defaults) private var splitSidePadding = SettingDefault.splitSidePadding
     @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
     private let hands = ["off", "left", "right"]
     private var isPad: Bool { return UIDevice.current.userInterfaceIdiom == .pad }
@@ -255,7 +257,7 @@ struct KeysView: View {
                 GlassSlider(title: tr("Key height"), symbol: "arrow.up.and.down", value: $keyHeight,
                             range: Settings.keyHeightRange, step: 1) { "\(Int($0.rounded())) pt" }
                 GlassSlider(title: tr("Keyboard width"), symbol: "arrow.left.and.right", value: $keyboardWidth,
-                            range: Settings.keyboardWidthRange, step: 0.01) { DeviceMetrics.points(DeviceMetrics.portraitWidth * $0) }
+                            range: Settings.keyboardWidthRange, step: 0.01) { DeviceMetrics.points(DeviceMetrics.keyboardWidth * $0) }
                 GlassToggle(title: tr("Own height in landscape"),
                             subtitle: tr("Off: landscape keys are two thirds of the portrait height."),
                             isOn: $landscapeSeparate)
@@ -279,6 +281,12 @@ struct KeysView: View {
                                 ? tr("The keys in two halves, one under each thumb, in every language.")
                                 : tr("In landscape: the keys in two halves, one under each thumb, in every language."),
                             isOn: $split)
+                if split {
+                    GlassSlider(title: tr("Gap between halves"), symbol: "arrow.left.and.right.square",
+                                value: $splitGap, range: Settings.splitGapRange, step: 0.01) { "\(Int(($0 * 100).rounded()))%" }
+                    GlassSlider(title: tr("Side padding"), symbol: "arrow.left.and.line.vertical.and.arrow.right",
+                                value: $splitSidePadding, range: Settings.splitSidePaddingRange, step: 1) { "\(Int($0.rounded())) pt" }
+                }
                 SegmentedChoice(title: tr("One-handed"), names: [tr("Off"), tr("Left hand"), tr("Right hand")],
                                 selected: hands.firstIndex(of: oneHanded)) { oneHanded = hands[$0] }
                     .disabled(isPad && split)

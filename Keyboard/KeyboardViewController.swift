@@ -335,7 +335,7 @@ final class KeyboardViewController: UIInputViewController {
             // Keys and the suggestion bar (the app's Keys and Suggestions screens)
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
-            "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
+            "\(s.splitGap)", "\(s.splitSidePadding)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             "\(s.splitKeyboard)", s.oneHanded, s.keyboardTools.map { $0.rawValue }.joined(separator: ","),
             s.effectsJSON, s.systemEditsJSON
@@ -1961,11 +1961,9 @@ extension KeyboardViewController: ToolsPanelDelegate {
         suggestionBar.setTools(panel)
     }
 
-    /// The picked tools this device can use (split on an iPhone only in landscape, where the keyboard splits).
+    /// The picked tools (split shows everywhere; an iPhone splits only in landscape).
     func availableTools() -> [KeyboardTool] {
-        let isPad = traitCollection.userInterfaceIdiom == .pad
-        let screen = UIScreen.main.bounds.size
-        return settings.keyboardTools.filter { $0 != .split || isPad || screen.width > screen.height }
+        return settings.keyboardTools
     }
 
     private func hideTools() {
@@ -2013,7 +2011,14 @@ extension KeyboardViewController: ToolsPanelDelegate {
         case .numberRow:
             saveTool(!Prefs.numberRow, forKey: SettingKey.numberRow, rebuild: true)
         case .split:
-            saveTool(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard, rebuild: true)
+            // Only the keys are laid out again: the suggestion bar stays as it is. (An iPhone splits only in
+            // landscape; upright the setting is just kept for when it turns.)
+            settings.set(!Prefs.splitKeyboard, forKey: SettingKey.splitKeyboard)
+            Prefs.refresh()
+            reloadKeyboardLayout()
+            keyboardView.setNeedsLayout()
+            builtSignature = settingsSignature()
+            toolsPanel?.refresh()
         case .openApp:
             hideTools()
             openApp()

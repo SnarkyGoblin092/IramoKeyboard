@@ -389,9 +389,15 @@ enum DeviceMetrics {
         return Double(min(bounds.width, bounds.height))
     }
 
-    /// About how wide a letter key is in portrait (ten keys across, less the gap between them).
+    /// The keyboard's width as the device is held now: the screen's width (an iPad in landscape: its long side;
+    /// an iPhone, whose app stays upright, the portrait width).
+    static var keyboardWidth: Double {
+        return Double(UIScreen.main.bounds.width)
+    }
+
+    /// About how wide a letter key is now (ten keys across, less the gap between them).
     static func letterKeyWidth(keyGap: Double) -> Double {
-        return portraitWidth / 10 - keyGap
+        return keyboardWidth / 10 - keyGap
     }
 
     static func points(_ value: Double) -> String {

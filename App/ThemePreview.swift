@@ -18,6 +18,8 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
     @AppStorage(SettingKey.splitKeyboard, store: SharedStore.defaults) private var splitKeyboard = SettingDefault.splitKeyboard
+    @AppStorage(SettingKey.splitGap, store: SharedStore.defaults) private var splitGap = SettingDefault.splitGap
+    @AppStorage(SettingKey.splitSidePadding, store: SharedStore.defaults) private var splitSidePadding = SettingDefault.splitSidePadding
     @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
     @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize
     @AppStorage(SettingKey.hintPosition, store: SharedStore.defaults) private var hintPosition = SettingDefault.hintPosition
@@ -159,7 +161,7 @@ struct ThemePreview: View {
     /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
     private var shownRows: [[PreviewKey]] {
         guard split else { return keyRows }
-        let gap: CGFloat = 0.3
+        let gap = CGFloat(splitGap)
         return keyRows.map { row in
             let total = row.reduce(CGFloat(0)) { $0 + $1.weight }
             guard total > 0, row.count > 1 else { return row }
@@ -312,7 +314,8 @@ struct ThemePreview: View {
             // A narrower keyboard (the Width setting) is centred; the one-handed one sits against its side
             // (as KeyboardView.layoutSubviews, 80% of the width).
             let side: CGFloat = split ? 0 : (oneHanded == "left" ? -1 : (oneHanded == "right" ? 1 : 0))
-            let rowWidth = (width - 2 * s) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
+            let sidePadding = split ? min(CGFloat(splitSidePadding) * s, width / 4) : 0
+            let rowWidth = (width - 2 * s - sidePadding * 2) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
             let shift = (width - 2 * s - rowWidth) / 2 * side
 
             ZStack(alignment: .top) {

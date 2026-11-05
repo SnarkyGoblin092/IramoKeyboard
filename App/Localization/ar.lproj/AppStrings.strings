@@ -907,3 +907,6 @@
 "Warm caps in coral, amber and sun" = "مفاتيح دافئة بالمرجاني والكهرماني والشمس";
 "White caps with ink-black modifiers" = "مفاتيح بيضاء مع مفاتيح خاصة بلون أسود حبري";
 "Wraps the selected text in quotation marks, or types a pair" = "يحيط النص المحدد بعلامات اقتباس، أو يكتب زوجاً منها";
+"Gap between halves" = "المسافة بين النصفين";
+"Side padding" = "الهامش الجانبي";
+"The keys in two halves (on an iPhone, in landscape), on or off" = "المفاتيح في نصفين (على iPhone، في الوضع الأفقي)، تشغيل أو إيقاف";

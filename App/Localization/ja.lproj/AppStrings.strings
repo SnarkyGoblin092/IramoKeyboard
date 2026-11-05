@@ -906,3 +906,6 @@
 "Warm caps in coral, amber and sun" = "コーラル、アンバー、サンのウォームキャップ";
 "White caps with ink-black modifiers" = "インクブラックの修飾キーを使ったホワイトキャップ";
 "Wraps the selected text in quotation marks, or types a pair" = "選択したテキストを引用符で囲むか、引用符のペアを入力します";
+"Gap between halves" = "2つの間の隙間";
+"Side padding" = "左右の余白";
+"The keys in two halves (on an iPhone, in landscape), on or off" = "iPhone（横向き）：キーを2つに分ける機能を、オン／オフします";

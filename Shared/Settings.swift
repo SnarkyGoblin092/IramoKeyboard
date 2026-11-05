@@ -69,6 +69,9 @@ enum SettingKey {
     static let landscapeKeyHeight = "hunkeys.landscapeKeyHeight"
     static let keyboardWidth = "hunkeys.keyboardWidth"
     static let keyGap = "hunkeys.keyGap"
+    /// The split keyboard: the gap between its halves (a share of the width) and the room at its outer sides (pt).
+    static let splitGap = "hunkeys.splitGap"
+    static let splitSidePadding = "hunkeys.splitSidePadding"
     static let rowGap = "hunkeys.rowGap"
     static let alwaysCapitals = "hunkeys.alwaysCapitals"
     static let letterSize = "hunkeys.letterSize"
@@ -162,7 +165,7 @@ enum SettingKey {
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
-        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, splitGap, splitSidePadding, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
         emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay, keyboardTools,
@@ -238,6 +241,8 @@ enum SettingDefault {
     static let landscapeKeyHeight: Double = 30.0
     static let keyboardWidth: Double = 1.0
     static let keyGap: Double = 6.0
+    static let splitGap: Double = 0.3
+    static let splitSidePadding: Double = 0
     static let rowGap: Double = 11.0
     static let alwaysCapitals: Bool = false
     static let letterSize: Double = 1.0
@@ -467,6 +472,8 @@ final class Settings {
             SettingKey.landscapeKeyHeight: SettingDefault.landscapeKeyHeight,
             SettingKey.keyboardWidth: SettingDefault.keyboardWidth,
             SettingKey.keyGap: SettingDefault.keyGap,
+            SettingKey.splitGap: SettingDefault.splitGap,
+            SettingKey.splitSidePadding: SettingDefault.splitSidePadding,
             SettingKey.rowGap: SettingDefault.rowGap,
             SettingKey.alwaysCapitals: SettingDefault.alwaysCapitals,
             SettingKey.letterSize: SettingDefault.letterSize,
@@ -742,6 +749,8 @@ final class Settings {
     static let landscapeKeyHeightRange: ClosedRange<Double> = 24...44
     static let keyboardWidthRange: ClosedRange<Double> = 0.80...1.0
     static let keyGapRange: ClosedRange<Double> = 2...14
+    static let splitGapRange: ClosedRange<Double> = 0.1...0.5
+    static let splitSidePaddingRange: ClosedRange<Double> = 0...48
     static let rowGapRange: ClosedRange<Double> = 4...20
     static let letterSizeRange: ClosedRange<Double> = 0.80...1.30
     static let hintSizeRange: ClosedRange<Double> = 0.70...1.50
@@ -763,6 +772,10 @@ final class Settings {
     var landscapeKeyHeight: Double { return clamp(readDouble(SettingKey.landscapeKeyHeight), Settings.landscapeKeyHeightRange) }
     var keyboardWidth: Double { return clamp(readDouble(SettingKey.keyboardWidth), Settings.keyboardWidthRange) }
     var keyGap: Double { return clamp(readDouble(SettingKey.keyGap), Settings.keyGapRange) }
+    var splitGap: Double { return clamp(readDouble(SettingKey.splitGap), Settings.splitGapRange) }
+    var splitSidePadding: Double {
+        return clamp(readDouble(SettingKey.splitSidePadding), Settings.splitSidePaddingRange)
+    }
     var rowGap: Double { return clamp(readDouble(SettingKey.rowGap), Settings.rowGapRange) }
     var alwaysCapitals: Bool { return readBool(SettingKey.alwaysCapitals) }
     var letterSize: Double { return clamp(readDouble(SettingKey.letterSize), Settings.letterSizeRange) }

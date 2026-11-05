@@ -907,3 +907,6 @@
 "Warm caps in coral, amber and sun" = "Lämpimät näppäimet korallin, meripihkan ja auringon sävyin";
 "White caps with ink-black modifiers" = "Valkoiset näppäimet ja mustepurkin mustat erikoisnäppäimet";
 "Wraps the selected text in quotation marks, or types a pair" = "Kietoo valitun tekstin lainausmerkkeihin tai kirjoittaa parin";
+"Gap between halves" = "Väli puoliskojen välillä";
+"Side padding" = "Reunatila sivuilla";
+"The keys in two halves (on an iPhone, in landscape), on or off" = "Näppäimet kahdessa osassa (iPhonessa vaakatilassa), päällä tai pois";

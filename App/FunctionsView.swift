@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// what order. Hold a tool and drag it: within the panel's list to reorder, onto it from the list under it to add
 /// it, or back down to take it off.
 struct FunctionsView: View {
-    /// The panel's tools (split shows on an iPhone only in landscape, where the keyboard splits).
+    /// The panel's tools (split shows everywhere; an iPhone splits only in landscape).
     @State private var tools: [KeyboardTool] = []
     /// The tool being dragged (it moves between and within the lists as it passes over their rows).
     @State private var dragging: KeyboardTool?

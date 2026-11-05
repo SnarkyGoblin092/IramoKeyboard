@@ -33,11 +33,9 @@ targets:
       properties:
         CFBundleDisplayName: Iramo
         UILaunchScreen: {}
-        UISupportedInterfaceOrientations:          # upright and landscape (two columns: ContentView)
+        UISupportedInterfaceOrientations:          # iPhone: upright only
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UISupportedInterfaceOrientations~ipad:
+        UISupportedInterfaceOrientations~ipad:     # iPad: landscape too (two columns: ContentView)
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft

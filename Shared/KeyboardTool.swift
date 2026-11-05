@@ -45,7 +45,7 @@ enum KeyboardTool: String, CaseIterable {
         case .oneHanded: return "One-handed keyboard on or off; the arrow beside the keys switches sides"
         case .clipboard: return "The last things you copied; tap one to paste it"
         case .numberRow: return "Numbers above the letters, on or off"
-        case .split: return "iPad: the keys in two halves, on or off"
+        case .split: return "The keys in two halves (on an iPhone, in landscape), on or off"
         case .openApp: return "Opens the Iramo app"
         case .changeCase: return "Selected text: UPPERCASE, lowercase, Capitalized, in turn"
         case .quotes: return "Wraps the selected text in quotation marks, or types a pair"

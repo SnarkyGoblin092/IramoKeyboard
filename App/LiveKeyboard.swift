@@ -124,21 +124,24 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private static var stores: [Language: WordStore] = [:]
     private static var loadingStores = Set<Language>()
 
-    /// The keyboard's size (KeyboardViewController.applyHeight, upright): the screen's width, and the bar above its
-    /// rows of keys with the gap between them.
+    /// The keyboard's size (KeyboardViewController.applyHeight): the screen's width as the device is held (an iPad
+    /// in landscape gets the landscape keyboard), and the bar above its rows of keys with the gap between them.
     /// With `emoji` (the picker open) it is as tall as the picker needs, at least (KeyboardViewController.applyHeight).
     static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
                             language: Language, emoji: Bool = false) -> CGSize {
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
         let height = CGFloat(keyHeight) * (isPad ? 61 / 45 : 1)
         let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
-        let width = CGFloat(DeviceMetrics.portraitWidth)
+        let width = CGFloat(DeviceMetrics.keyboardWidth)
         let total = CGFloat(barHeight) + 8 + rows * (height + CGFloat(rowGap))
         // With the picker open: the size the keyboard really had then, once it has been opened on this phone.
         if emoji {
             let parts = (SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) ?? "")
                 .split(separator: ",").compactMap { Double($0) }
-            if parts.count == 2, parts[0] > 100, parts[1] > 100 { return CGSize(width: parts[0], height: parts[1]) }
+            // (Recorded upright only: in landscape the picker is worked out for the wider keyboard.)
+            if parts.count == 2, parts[0] > 100, parts[1] > 100, abs(CGFloat(parts[0]) - width) < 2 {
+                return CGSize(width: parts[0], height: parts[1])
+            }
         }
         return CGSize(width: width, height: emoji ? max(total, EmojiPanel.requiredHeight(forWidth: width)) : total)
     }
@@ -179,7 +182,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Theme.storedID(), s.accentName, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
-            "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
+            "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.splitGap)", "\(s.splitSidePadding)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", "\(KeyboardLayoutMode.split)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),

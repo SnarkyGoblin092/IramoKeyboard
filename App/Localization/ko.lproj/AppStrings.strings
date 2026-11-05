@@ -906,3 +906,6 @@
 "Warm caps in coral, amber and sun" = "코랄, 앰버, 선 색의 따뜻한 키캡";
 "White caps with ink-black modifiers" = "잉크 블랙 수정자 키가 있는 흰색 키캡";
 "Wraps the selected text in quotation marks, or types a pair" = "선택한 텍스트를 따옴표로 감싸거나 한 쌍을 입력합니다";
+"Gap between halves" = "두 부분 사이 간격";
+"Side padding" = "좌우 여백";
+"The keys in two halves (on an iPhone, in landscape), on or off" = "iPhone(가로 방향): 키를 두 부분으로 나누는 기능을 켜거나 끕니다";
