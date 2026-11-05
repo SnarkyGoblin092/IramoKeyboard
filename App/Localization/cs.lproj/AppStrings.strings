@@ -847,7 +847,6 @@
 "Word on the pill" = "Slovo na pilulce";
 "Words" = "Slova";
 "space" = "mezerník";
-"Pick a setting on the left." = "Vyberte nastavení vlevo.";
 
 /* Added translations */
 "%@ 3D keycaps" = "3D klávesy %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Mezera mezi polovinami";
 "Side padding" = "Okraje po stranách";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Klávesy ve dvou polovinách (na iPhonu na šířku), zapnuto nebo vypnuto";
+"Show the upright keyboard" = "Zobrazit klávesnici na výšku";
+"Show the landscape keyboard" = "Zobrazit klávesnici na šířku";
+"Pick a setting on the left." = "Vyberte nastavení vlevo.";

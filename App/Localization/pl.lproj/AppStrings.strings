@@ -847,7 +847,6 @@
 "Word on the pill" = "Słowo na pastylce";
 "Words" = "Słowa";
 "space" = "spacja";
-"Pick a setting on the left." = "Wybierz ustawienie po lewej.";
 /* Added translations */
 "%@ 3D keycaps" = "Klawisze 3D — %@";
 "Blue on blue with ice-blue modifiers" = "Niebieskie na niebieskim z lodowoniebieskimi modyfikatorami";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Odstęp między połówkami";
 "Side padding" = "Margines boczny";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Klawisze w dwóch połówkach (na iPhonie, w poziomie), włączone lub wyłączone";
+"Show the upright keyboard" = "Pokaż klawiaturę w pionie";
+"Show the landscape keyboard" = "Pokaż klawiaturę w poziomie";
+"Pick a setting on the left." = "Wybierz ustawienie po lewej.";

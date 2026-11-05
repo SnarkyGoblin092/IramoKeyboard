@@ -847,7 +847,6 @@
 "Word on the pill" = "الكلمة داخل الحبة";
 "Words" = "الكلمات";
 "space" = "المسافة";
-"Pick a setting on the left." = "اختر إعدادًا من اليسار.";
 
 /* Added translations */
 "%@ 3D keycaps" = "%@ بمفاتيح ثلاثية الأبعاد";
@@ -910,3 +909,6 @@
 "Gap between halves" = "المسافة بين النصفين";
 "Side padding" = "الهامش الجانبي";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "المفاتيح في نصفين (على iPhone، في الوضع الأفقي)، تشغيل أو إيقاف";
+"Show the upright keyboard" = "إظهار لوحة المفاتيح في الوضع العمودي";
+"Show the landscape keyboard" = "إظهار لوحة المفاتيح في الوضع الأفقي";
+"Pick a setting on the left." = "اختر إعدادًا من اليسار.";

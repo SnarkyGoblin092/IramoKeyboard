@@ -847,7 +847,6 @@
 "Word on the pill" = "Paraula a la píndola";
 "Words" = "Paraules";
 "space" = "espai";
-"Pick a setting on the left." = "Tria una configuració a l’esquerra.";
 
 /* Added translations */
 "%@ 3D keycaps" = "Tecles 3D %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Espai entre meitats";
 "Side padding" = "Marge lateral";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Les tecles en dues meitats (a l’iPhone, en horitzontal), activat o desactivat";
+"Show the upright keyboard" = "Mostra el teclat en vertical";
+"Show the landscape keyboard" = "Mostra el teclat en horitzontal";
+"Pick a setting on the left." = "Tria una configuració a l’esquerra.";

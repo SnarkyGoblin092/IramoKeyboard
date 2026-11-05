@@ -847,7 +847,6 @@
 "Word on the pill" = "Слово на капсулі";
 "Words" = "Слова";
 "space" = "пробіл";
-"Pick a setting on the left." = "Виберіть налаштування ліворуч.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D клавіші";
 "Blue on blue with ice-blue modifiers" = "Синє на синьому з льодово-блакитними модифікаторами";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Проміжок між половинами";
 "Side padding" = "Бокові відступи";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Клавіші у двох половинах (на iPhone, в альбомній орієнтації), увімк. або вимк.";
+"Show the upright keyboard" = "Показати клавіатуру в портреті";
+"Show the landscape keyboard" = "Показати клавіатуру в альбомній орієнтації";
+"Pick a setting on the left." = "Виберіть налаштування ліворуч.";

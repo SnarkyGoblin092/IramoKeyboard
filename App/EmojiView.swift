@@ -36,8 +36,8 @@ struct EmojiView: View {
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
-    /// The screen's width: an iPad turned to landscape gets the wider keyboard's proportions.
-    @State private var screenWidth = UIScreen.main.bounds.width
+    /// Upright or landscape (the preview's switch): the picker's proportions follow it.
+    @AppStorage(PreviewOrientation.key) private var previewLandscape = false
 
     // The picker as it will look stays pinned above the settings (PinnedPreview).
     var body: some View {
@@ -59,9 +59,6 @@ struct EmojiView: View {
         }
         .scrollContentBackground(.hidden)
         }
-        .background(GeometryReader { geometry in
-            Color.clear.onChange(of: geometry.size.width) { _ in screenWidth = UIScreen.main.bounds.width }
-        })
         .navigationTitle(tr("Emoji"))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -69,7 +66,7 @@ struct EmojiView: View {
     /// The keyboard's width over its height with the picker open (LiveKeyboardView.naturalSize).
     private func pickerAspect(_ keyHeight: Double, _ rowGap: Double, _ numberRow: Bool, _ barHeight: Double,
                               _ code: String) -> CGFloat {
-        _ = screenWidth   // read so that turning the device works it out again (naturalSize reads the screen)
+        _ = previewLandscape   // read so the switch works it out again (naturalSize reads it)
         let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
                                                 barHeight: barHeight,
                                                 language: LiveKeyboardView.openingLanguage(code: code), emoji: true)

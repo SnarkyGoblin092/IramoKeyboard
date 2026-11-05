@@ -847,7 +847,6 @@
 "Word on the pill" = "Слово на капсуле";
 "Words" = "Слова";
 "space" = "пробел";
-"Pick a setting on the left." = "Выберите настройку слева.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ — объёмные клавиши 3D";
 "Blue on blue with ice-blue modifiers" = "Синие на синем с ледяными модификаторами";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Промежуток между половинами";
 "Side padding" = "Боковые отступы";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Клавиши в двух половинах (на iPhone, в ландшафте), вкл. или выкл.";
+"Show the upright keyboard" = "Показать клавиатуру в портрете";
+"Show the landscape keyboard" = "Показать клавиатуру в ландшафте";
+"Pick a setting on the left." = "Выберите настройку слева.";

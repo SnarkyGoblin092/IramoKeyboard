@@ -847,7 +847,6 @@
 "Word on the pill" = "Từ trên viên thuốc";
 "Words" = "Từ";
 "space" = "dấu cách";
-"Pick a setting on the left." = "Chọn một cài đặt ở bên trái.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ phím 3D";
 "Blue on blue with ice-blue modifiers" = "Xanh trên xanh với phím bổ trợ xanh băng";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Khoảng cách giữa hai nửa";
 "Side padding" = "Khoảng đệm hai bên";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Các phím chia làm hai nửa (trên iPhone, khi xoay ngang), bật hoặc tắt";
+"Show the upright keyboard" = "Hiện bàn phím khi dọc";
+"Show the landscape keyboard" = "Hiện bàn phím khi xoay ngang";
+"Pick a setting on the left." = "Chọn một cài đặt ở bên trái.";

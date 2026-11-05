@@ -847,7 +847,6 @@
 "Word on the pill" = "Ord på pillen";
 "Words" = "Ord";
 "space" = "mellemrum";
-"Pick a setting on the left." = "Vælg en indstilling til venstre.";
 
 /* Added translations */
 "%@ 3D keycaps" = "3D-taster %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Mellemrum mellem halvdelene";
 "Side padding" = "Sidemargen";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tasterne i to halvdele (på iPhone i liggende), til eller fra";
+"Show the upright keyboard" = "Vis tastaturet i stående visning";
+"Show the landscape keyboard" = "Vis tastaturet i liggende visning";
+"Pick a setting on the left." = "Vælg en indstilling til venstre.";

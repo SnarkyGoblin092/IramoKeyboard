@@ -4,6 +4,8 @@ import SwiftUI
 /// letters likely to come next get more) and the hit map (learned from where the user really taps). The keyboard
 /// reads the same settings (Prefs, KeyboardView.hitScore).
 struct HitboxesView: View {
+    /// The previews' upright or landscape keyboard: the sizes in points follow it (DeviceMetrics).
+    @AppStorage(PreviewOrientation.key) private var previewLandscape = false
     @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var size = SettingDefault.hitboxSize
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes

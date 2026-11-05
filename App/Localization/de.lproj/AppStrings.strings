@@ -847,7 +847,6 @@
 "Word on the pill" = "Wort auf der Pille";
 "Words" = "Wörter";
 "space" = "Leer";
-"Pick a setting on the left." = "Wähle links eine Einstellung aus.";
 
 /* Added translations */
 "%@ 3D keycaps" = "3D-Tasten %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Abstand zwischen den Hälften";
 "Side padding" = "Seitenabstand";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Die Tasten in zwei Hälften (auf dem iPhone im Querformat), ein oder aus";
+"Show the upright keyboard" = "Tastatur im Hochformat anzeigen";
+"Show the landscape keyboard" = "Tastatur im Querformat anzeigen";
+"Pick a setting on the left." = "Wähle links eine Einstellung aus.";

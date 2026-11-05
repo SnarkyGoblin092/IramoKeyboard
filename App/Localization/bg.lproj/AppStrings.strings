@@ -847,7 +847,6 @@
 "Word on the pill" = "Дума върху капсулата";
 "Words" = "Думи";
 "space" = "интервал";
-"Pick a setting on the left." = "Изберете настройка отляво.";
 
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D клавиши";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Разстояние между половините";
 "Side padding" = "Странични отстояния";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Клавишите на две половини (на iPhone, в хоризонтален режим), вкл. или изкл.";
+"Show the upright keyboard" = "Показване на клавиатурата във вертикално положение";
+"Show the landscape keyboard" = "Показване на клавиатурата в хоризонтално положение";
+"Pick a setting on the left." = "Изберете настройка отляво.";

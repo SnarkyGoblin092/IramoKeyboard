@@ -847,7 +847,6 @@
 "Word on the pill" = "胶囊上的词语";
 "Words" = "词语";
 "space" = "空格键";
-"Pick a setting on the left." = "请在左侧选择一项设置。";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D 键帽";
 "Blue on blue with ice-blue modifiers" = "蓝底配冰蓝色修饰键";
@@ -909,3 +908,6 @@
 "Gap between halves" = "两半之间的间距";
 "Side padding" = "两侧边距";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "按键分成两半（iPhone 横屏时），开启或关闭";
+"Show the upright keyboard" = "显示竖屏键盘";
+"Show the landscape keyboard" = "显示横屏键盘";
+"Pick a setting on the left." = "请在左侧选择一项设置。";

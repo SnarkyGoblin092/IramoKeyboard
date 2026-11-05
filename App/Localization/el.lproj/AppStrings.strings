@@ -847,7 +847,6 @@
 "Word on the pill" = "Λέξη στο χάπι";
 "Words" = "Λέξεις";
 "space" = "διάστημα";
-"Pick a setting on the left." = "Επιλέξτε μια ρύθμιση αριστερά.";
 
 /* Added translations */
 "%@ 3D keycaps" = "Πλήκτρα 3D %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Κενό ανάμεσα στα μισά";
 "Side padding" = "Περιθώριο στις πλευρές";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Τα πλήκτρα σε δύο μισά (σε iPhone, σε οριζόντιο προσανατολισμό), ενεργοποίηση ή απενεργοποίηση";
+"Show the upright keyboard" = "Εμφάνιση πληκτρολογίου σε κατακόρυφο προσανατολισμό";
+"Show the landscape keyboard" = "Εμφάνιση πληκτρολογίου σε οριζόντιο προσανατολισμό";
+"Pick a setting on the left." = "Επιλέξτε μια ρύθμιση αριστερά.";

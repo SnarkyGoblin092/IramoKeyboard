@@ -847,7 +847,6 @@
 "Word on the pill" = "Kapsuladagi so‘z";
 "Words" = "So‘zlar";
 "space" = "probel";
-"Pick a setting on the left." = "Chapdagi sozlamalardan birini tanlang.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D tugmalar";
 "Blue on blue with ice-blue modifiers" = "Ko‘kda ko‘k, muz-ko‘k modifikatorlar bilan";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Yarimlar orasidagi oraliq";
 "Side padding" = "Yon tomon bo‘shlig‘i";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tugmalar ikki yarimda (iPhone’da gorizontal holatda), yoqilgan yoki o‘chiq";
+"Show the upright keyboard" = "Klaviaturani kitob rejimida ko‘rsatish";
+"Show the landscape keyboard" = "Klaviaturani albom rejimida ko‘rsatish";
+"Pick a setting on the left." = "Chapdagi sozlamalardan birini tanlang.";

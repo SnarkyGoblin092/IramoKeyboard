@@ -389,10 +389,12 @@ enum DeviceMetrics {
         return Double(min(bounds.width, bounds.height))
     }
 
-    /// The keyboard's width as the device is held now: the screen's width (an iPad in landscape: its long side;
-    /// an iPhone, whose app stays upright, the portrait width).
+    /// The previews' keyboard width: the screen's short side upright, its long side with the previews' landscape
+    /// switch on (PreviewOrientation).
     static var keyboardWidth: Double {
-        return Double(UIScreen.main.bounds.width)
+        let bounds = UIScreen.main.bounds
+        let landscape = PreviewOrientation.landscape
+        return Double(landscape ? max(bounds.width, bounds.height) : min(bounds.width, bounds.height))
     }
 
     /// About how wide a letter key is now (ten keys across, less the gap between them).

@@ -847,7 +847,6 @@
 "Word on the pill" = "알약 안의 단어";
 "Words" = "단어";
 "space" = "스페이스";
-"Pick a setting on the left." = "왼쪽에서 설정을 선택하세요.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D 키캡";
 "Blue on blue with ice-blue modifiers" = "아이스 블루 수정자 키가 있는 블루 온 블루";
@@ -909,3 +908,6 @@
 "Gap between halves" = "두 부분 사이 간격";
 "Side padding" = "좌우 여백";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "iPhone(가로 방향): 키를 두 부분으로 나누는 기능을 켜거나 끕니다";
+"Show the upright keyboard" = "세로 방향 키보드 표시";
+"Show the landscape keyboard" = "가로 방향 키보드 표시";
+"Pick a setting on the left." = "왼쪽에서 설정을 선택하세요.";

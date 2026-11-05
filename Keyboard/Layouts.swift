@@ -337,12 +337,14 @@ enum KeyboardLayoutMode {
     /// The share of the width the one-handed keyboard takes.
     static let oneHandedWidth: CGFloat = 0.8
 
+    /// An iPhone keyboard in landscape: set by the keyboard from its own width (KeyboardViewController), and by the
+    /// app's previews from their portrait/landscape switch (LiveKeyboardView).
+    static var phoneLandscape = false
+
     /// On with the setting: always on an iPad, only in landscape on an iPhone (too narrow upright for two halves).
     static var split: Bool {
         guard Prefs.splitKeyboard else { return false }
-        if UIDevice.current.userInterfaceIdiom == .pad { return true }
-        let screen = UIScreen.main.bounds.size
-        return screen.width > screen.height
+        return UIDevice.current.userInterfaceIdiom == .pad || phoneLandscape
     }
 
     /// -1 = against the left edge, 1 = against the right edge, 0 = the full width (centred).

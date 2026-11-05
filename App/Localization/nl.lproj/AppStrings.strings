@@ -847,7 +847,6 @@
 "Word on the pill" = "Woord op de pil";
 "Words" = "Woorden";
 "space" = "spatie";
-"Pick a setting on the left." = "Kies links een instelling.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D-toetsen";
 "Blue on blue with ice-blue modifiers" = "Blauw op blauw met ijsblauwe modifiertoetsen";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Ruimte tussen de helften";
 "Side padding" = "Zijmarge";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "De toetsen in twee helften (op iPhone, in liggende stand), aan of uit";
+"Show the upright keyboard" = "Toon het toetsenbord in staande stand";
+"Show the landscape keyboard" = "Toon het toetsenbord in liggende stand";
+"Pick a setting on the left." = "Kies links een instelling.";

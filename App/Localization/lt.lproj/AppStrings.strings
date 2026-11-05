@@ -847,7 +847,6 @@
 "Word on the pill" = "Žodis ant kapsulės";
 "Words" = "Žodžiai";
 "space" = "tarpas";
-"Pick a setting on the left." = "Pasirinkite nustatymą kairėje.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ — 3D klavišai";
 "Blue on blue with ice-blue modifiers" = "Mėlyna ant mėlynos su ledo mėlynos modifikatoriais";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Tarpas tarp pusių";
 "Side padding" = "Šoniniai tarpai";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Klavišai dviem pusėmis (iPhone gulsčiu režimu), įjungti arba išjungti";
+"Show the upright keyboard" = "Rodyti klaviatūrą stačiai";
+"Show the landscape keyboard" = "Rodyti klaviatūrą gulsčiai";
+"Pick a setting on the left." = "Pasirinkite nustatymą kairėje.";

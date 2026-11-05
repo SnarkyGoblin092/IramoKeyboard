@@ -847,7 +847,6 @@
 "Word on the pill" = "Perkataan pada pil";
 "Words" = "Perkataan";
 "space" = "ruang";
-"Pick a setting on the left." = "Pilih tetapan di sebelah kiri.";
 /* Added translations */
 "%@ 3D keycaps" = "Kekunci 3D — %@";
 "Blue on blue with ice-blue modifiers" = "Biru atas biru dengan modifier biru ais";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Jarak antara dua bahagian";
 "Side padding" = "Ruang tepi sisi";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Kekunci dalam dua bahagian (pada iPhone, dalam landskap), hidup atau mati";
+"Show the upright keyboard" = "Tunjukkan papan kekunci potret";
+"Show the landscape keyboard" = "Tunjukkan papan kekunci landskap";
+"Pick a setting on the left." = "Pilih tetapan di sebelah kiri.";

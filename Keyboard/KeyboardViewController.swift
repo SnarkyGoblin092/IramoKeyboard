@@ -263,6 +263,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        updatePhoneLandscape()
         if let built = builtSplit, built != KeyboardLayoutMode.split { reloadKeyboardLayout() }
         applyHeight()
         recordEmojiSize()
@@ -481,7 +482,15 @@ final class KeyboardViewController: UIInputViewController {
     /// landscape, so turning it rebuilds them.
     private var builtSplit: Bool?
 
+    /// An iPhone keyboard wider than any phone upright is in landscape (as applyHeight); the split keyboard
+    /// follows it (KeyboardLayoutMode.phoneLandscape).
+    private func updatePhoneLandscape() {
+        guard view.bounds.width > 100 else { return }   // not laid out yet
+        KeyboardLayoutMode.phoneLandscape = traitCollection.userInterfaceIdiom != .pad && view.bounds.width > 500
+    }
+
     private func reloadKeyboardLayout() {
+        updatePhoneLandscape()
         var rows = LayoutBuilder.rows(language: language,
                                       page: page,
                                       returnTitle: returnTitle,

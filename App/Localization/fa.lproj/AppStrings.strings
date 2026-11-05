@@ -847,7 +847,6 @@
 "Word on the pill" = "واژه روی کپسول";
 "Words" = "واژه‌ها";
 "space" = "فاصله";
-"Pick a setting on the left." = "یک تنظیم را از سمت چپ انتخاب کنید.";
 
 /* Added translations */
 "%@ 3D keycaps" = "کلیدهای سه‌بعدی %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "فاصله بین دو نیمه";
 "Side padding" = "فاصله از لبه‌های کناری";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "کلیدها در دو نیمه (در آیفون، در حالت افقی)، روشن یا خاموش";
+"Show the upright keyboard" = "نمایش صفحه‌کلید در حالت عمودی";
+"Show the landscape keyboard" = "نمایش صفحه‌کلید در حالت افقی";
+"Pick a setting on the left." = "یک تنظیم را از سمت چپ انتخاب کنید.";

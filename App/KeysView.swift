@@ -4,6 +4,8 @@ import SwiftUI
 /// The preview at the top follows every change; the keyboard reads the same settings (Prefs, KeyboardView,
 /// KeyView).
 struct KeysView: View {
+    /// The previews' upright or landscape keyboard: the sizes in points follow it (DeviceMetrics).
+    @AppStorage(PreviewOrientation.key) private var previewLandscape = false
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight

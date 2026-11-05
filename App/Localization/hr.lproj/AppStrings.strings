@@ -847,7 +847,6 @@
 "Word on the pill" = "Riječ na pilulu";
 "Words" = "Riječi";
 "space" = "razmaknica";
-"Pick a setting on the left." = "Odaberite postavku lijevo.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D kapice";
 "Blue on blue with ice-blue modifiers" = "Plavo na plavome s ledeno plavim modifikatorima";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Razmak između polovica";
 "Side padding" = "Bočni razmak";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tipke u dvije polovice (na iPhoneu u položenom), uključeno ili isključeno";
+"Show the upright keyboard" = "Prikaži tipkovnicu u uspravnom položaju";
+"Show the landscape keyboard" = "Prikaži tipkovnicu u položenom";
+"Pick a setting on the left." = "Odaberite postavku lijevo.";

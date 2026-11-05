@@ -847,7 +847,6 @@
 "Word on the pill" = "מילה על הכפתור המעוגל";
 "Words" = "מילים";
 "space" = "רווח";
-"Pick a setting on the left." = "בחר הגדרה משמאל.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ בתלת-ממד";
 "Blue on blue with ice-blue modifiers" = "כחול על כחול עם מקשי שינוי בכחול קרח";
@@ -909,3 +908,6 @@
 "Gap between halves" = "רווח בין החצאים";
 "Side padding" = "מרווח בצדדים";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "המקשים בשני חצאים (ב-iPhone, במצב אופקי), פועל או כבוי";
+"Show the upright keyboard" = "הצג מקלדת לאורך";
+"Show the landscape keyboard" = "הצג מקלדת לרוחב";
+"Pick a setting on the left." = "בחר הגדרה משמאל.";

@@ -847,7 +847,6 @@
 "Word on the pill" = "Vārds uz kapsulas";
 "Words" = "Vārdi";
 "space" = "atstarpe";
-"Pick a setting on the left." = "Izvēlieties iestatījumu kreisajā pusē.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ — 3D taustiņi";
 "Blue on blue with ice-blue modifiers" = "Zils uz zila ar ledus zilajiem modifikatoriem";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Atstarpe starp pusēm";
 "Side padding" = "Malu atstarpe";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Taustiņi divās pusēs (iPhone ainavorientācijā), ieslēgti vai izslēgti";
+"Show the upright keyboard" = "Rādīt tastatūru portretorientācijā";
+"Show the landscape keyboard" = "Rādīt tastatūru ainavorientācijā";
+"Pick a setting on the left." = "Izvēlieties iestatījumu kreisajā pusē.";

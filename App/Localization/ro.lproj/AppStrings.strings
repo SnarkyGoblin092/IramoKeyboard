@@ -847,7 +847,6 @@
 "Word on the pill" = "Cuvânt pe pastilă";
 "Words" = "Cuvinte";
 "space" = "spațiu";
-"Pick a setting on the left." = "Alegeți o setare din stânga.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ — taste 3D";
 "Blue on blue with ice-blue modifiers" = "Albastru pe albastru cu modificatori albastru gheață";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Spațiu între jumătăți";
 "Side padding" = "Margine laterală";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tastele în două jumătăți (pe iPhone, în peisaj), activat sau dezactivat";
+"Show the upright keyboard" = "Afișează tastatura în portret";
+"Show the landscape keyboard" = "Afișează tastatura în peisaj";
+"Pick a setting on the left." = "Alegeți o setare din stânga.";

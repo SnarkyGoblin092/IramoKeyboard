@@ -847,7 +847,6 @@
 "Word on the pill" = "पिल पर शब्द";
 "Words" = "शब्द";
 "space" = "स्पेस";
-"Pick a setting on the left." = "बाईं ओर से कोई सेटिंग चुनें।";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D कीकैप्स";
 "Blue on blue with ice-blue modifiers" = "आइस-ब्लू मॉडिफ़ायर के साथ नीले पर नीला";
@@ -909,3 +908,6 @@
 "Gap between halves" = "हिस्सों के बीच की दूरी";
 "Side padding" = "किनारों पर जगह";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "कुंजियाँ दो हिस्सों में (iPhone पर लैंडस्केप में), चालू या बंद";
+"Show the upright keyboard" = "कीबोर्ड पोर्ट्रेट में दिखाएँ";
+"Show the landscape keyboard" = "कीबोर्ड लैंडस्केप में दिखाएँ";
+"Pick a setting on the left." = "बाईं ओर से कोई सेटिंग चुनें।";

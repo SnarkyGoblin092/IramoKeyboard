@@ -847,7 +847,6 @@
 "Word on the pill" = "Hap üzerindeki kelime";
 "Words" = "Kelimeler";
 "space" = "boşluk";
-"Pick a setting on the left." = "Soldan bir ayar seçin.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3B tuşlar";
 "Blue on blue with ice-blue modifiers" = "Maviye mavi, buz mavisi değiştiriciler";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Yarılar arasındaki boşluk";
 "Side padding" = "Yan kenar boşluğu";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tuşlar iki yarıda (iPhone'da yatayda), açık veya kapalı";
+"Show the upright keyboard" = "Klavyeyi dikey olarak göster";
+"Show the landscape keyboard" = "Klavyeyi yatay olarak göster";
+"Pick a setting on the left." = "Soldan bir ayar seçin.";

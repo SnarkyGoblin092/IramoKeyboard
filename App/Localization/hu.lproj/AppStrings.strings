@@ -847,7 +847,6 @@
 "Word on the pill" = "Szó a pirulán";
 "Words" = "Szavak";
 "space" = "szóköz";
-"Pick a setting on the left." = "Válasszon egy beállítást balra.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D billentyűsapkák";
 "Blue on blue with ice-blue modifiers" = "Kék kéken, jégkék módosítókkal";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Térköz a két fél között";
 "Side padding" = "Oldalsó margó";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "A billentyűk két félben (iPhone-on fekvő tájolásban), be vagy ki";
+"Show the upright keyboard" = "Billentyűzet megjelenítése álló tájolásban";
+"Show the landscape keyboard" = "Billentyűzet megjelenítése fekvő tájolásban";
+"Pick a setting on the left." = "Válasszon egy beállítást balra.";

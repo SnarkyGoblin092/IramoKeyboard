@@ -847,7 +847,6 @@
 "Word on the pill" = "ピル上の単語";
 "Words" = "単語";
 "space" = "スペース";
-"Pick a setting on the left." = "左側から設定を選んでください。";
 /* Added translations */
 "%@ 3D keycaps" = "%@ の3Dキーキャップ";
 "Blue on blue with ice-blue modifiers" = "ブルー地にアイスブルーの修飾キー";
@@ -909,3 +908,6 @@
 "Gap between halves" = "2つの間の隙間";
 "Side padding" = "左右の余白";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "iPhone（横向き）：キーを2つに分ける機能を、オン／オフします";
+"Show the upright keyboard" = "縦向きのキーボードを表示";
+"Show the landscape keyboard" = "横向きのキーボードを表示";
+"Pick a setting on the left." = "左側から設定を選んでください。";

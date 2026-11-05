@@ -847,7 +847,6 @@
 "Word on the pill" = "Sana pillerissä";
 "Words" = "Sanat";
 "space" = "välilyönti";
-"Pick a setting on the left." = "Valitse asetus vasemmalta.";
 
 /* Added translations */
 "%@ 3D keycaps" = "3D-näppäimet %@";
@@ -910,3 +909,6 @@
 "Gap between halves" = "Väli puoliskojen välillä";
 "Side padding" = "Reunatila sivuilla";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Näppäimet kahdessa osassa (iPhonessa vaakatilassa), päällä tai pois";
+"Show the upright keyboard" = "Näytä näppäimistö pystytilassa";
+"Show the landscape keyboard" = "Näytä näppäimistö vaakatilassa";
+"Pick a setting on the left." = "Valitse asetus vasemmalta.";

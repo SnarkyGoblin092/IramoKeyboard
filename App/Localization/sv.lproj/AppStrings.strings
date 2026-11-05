@@ -847,7 +847,6 @@
 "Word on the pill" = "Ord på pillret";
 "Words" = "Ord";
 "space" = "mellanslag";
-"Pick a setting on the left." = "Välj en inställning till vänster.";
 /* Added translations */
 "%@ 3D keycaps" = "%@ 3D-tangenter";
 "Blue on blue with ice-blue modifiers" = "Blått på blått med isblå modifierare";
@@ -909,3 +908,6 @@
 "Gap between halves" = "Mellanrum mellan halvorna";
 "Side padding" = "Sidomarginal";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tangenterna i två halvor (på iPhone i liggande läge), på eller av";
+"Show the upright keyboard" = "Visa tangentbordet i stående läge";
+"Show the landscape keyboard" = "Visa tangentbordet i liggande läge";
+"Pick a setting on the left." = "Välj en inställning till vänster.";

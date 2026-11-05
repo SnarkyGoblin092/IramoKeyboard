@@ -847,7 +847,6 @@
 "Word on the pill" = "คำบนแคปซูล";
 "Words" = "คำ";
 "space" = "เว้นวรรค";
-"Pick a setting on the left." = "เลือกการตั้งค่าทางด้านซ้าย";
 /* Added translations */
 "%@ 3D keycaps" = "%@ แป้น 3 มิติ";
 "Blue on blue with ice-blue modifiers" = "น้ำเงินบนน้ำเงิน พร้อมแป้นปรับแต่งสีฟ้าอ่อน";
@@ -909,3 +908,6 @@
 "Gap between halves" = "ช่องว่างระหว่างสองส่วน";
 "Side padding" = "ระยะขอบด้านข้าง";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "แป้นแยกเป็นสองส่วน (บน iPhone ในแนวนอน) เปิดหรือปิด";
+"Show the upright keyboard" = "แสดงคีย์บอร์ดในแนวตั้ง";
+"Show the landscape keyboard" = "แสดงคีย์บอร์ดในแนวนอน";
+"Pick a setting on the left." = "เลือกการตั้งค่าทางด้านซ้าย";
