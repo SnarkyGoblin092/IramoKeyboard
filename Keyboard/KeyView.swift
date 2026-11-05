@@ -198,9 +198,11 @@ final class KeyView: UIView {
     }
 
     /// The return key is always accent-coloured (like Gboard); shift lights up in the accent when on.
+    /// `isProminent` can be stale during trait-collection changes (e.g. screen rotation), so the
+    /// return-key check goes first and relies on the spec action rather than that flag.
     private var usesAccent: Bool {
-        if isProminent || isActive { return true }
         if case .enter = spec.action { return true }
+        if isProminent || isActive { return true }
         return false
     }
 

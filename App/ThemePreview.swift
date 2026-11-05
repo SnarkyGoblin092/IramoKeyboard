@@ -151,9 +151,9 @@ struct ThemePreview: View {
         return spaceLanguageCode ? shownLanguage.rawValue.uppercased() : shownLanguage.displayName
     }
 
-    /// As KeyboardLayoutMode.split, for the theme cards (drawn upright): on an iPad only (an iPhone splits only in
-    /// landscape).
-    private var split: Bool { return splitKeyboard && UIDevice.current.userInterfaceIdiom == .pad }
+    /// As KeyboardLayoutMode.split, for the theme cards (drawn upright): mirrors the real keyboard's split
+    /// behaviour — always when the setting is on, so the preview shows the same layout the keyboard draws.
+    private var split: Bool { return splitKeyboard }
 
     /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
     private var shownRows: [[PreviewKey]] {
@@ -175,12 +175,8 @@ struct ThemePreview: View {
                 } else if start >= half {
                     right.append(key)
                 } else if key.space {
-                    var first = key
-                    first.weight = half - start
-                    var second = key
-                    second.weight = end - half
-                    left.append(first)
-                    right.append(second)
+                    // The real keyboard keeps the space bar whole on the left side; keep it there.
+                    left.append(key)
                 } else if half - start >= end - half {
                     left.append(key)
                 } else {
