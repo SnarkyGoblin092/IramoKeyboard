@@ -892,6 +892,59 @@ def build_language(lang: str, groups) -> None:
     build_dictionary(lang)
 
 
+def build_words_from_sentences(lang: str):
+    """Fallback: extract word frequencies directly from Tatoeba sentences when no external word list is available.
+    Returns (words_list, pair_counts, starts, seen) or raises if sentences are unavailable."""
+    import bz2
+    sentences = fetch(f"sentences_{lang}.tsv.bz2", optional=True)
+    if sentences is None:
+        raise RuntimeError("Tatoeba sentences not available for fallback")
+    
+    print(f"  (fallback: extracting words from Tatoeba sentences)")
+    with bz2.open(sentences, "rt", encoding="utf-8", errors="ignore") as handle:
+        text = handle.read()
+    
+    word_counts = collections.Counter()
+    pair_counts = collections.Counter()
+    starts = collections.Counter()
+    seen = collections.Counter()
+    
+    for line in text.split("\n"):
+        if not line.strip():
+            continue
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) < 3:
+            continue
+        sentence_id = parts[0]
+        is_held_out = sentence_id.isdigit() and int(sentence_id) % 20 == 0
+        text_lower = lower(parts[2], lang)
+        
+        for clause_text in CLAUSE_BREAK.split(text_lower):
+            previous = None
+            first = True
+            for token in clause_text.split():
+                token = repair(token.strip("'-"), lang)
+                if not token or len(token) < 2:
+                    continue
+                if not token.isalpha():
+                    continue
+                
+                seen[token] += 1
+                word_counts[token] += 1
+                
+                if first:
+                    starts[token] += 1
+                    first = False
+                
+                if previous is not None and not is_held_out:
+                    pair_counts[(previous, token)] += 1
+                previous = token
+    
+    # Build word list from extracted frequencies (top 20k)
+    words = [(w, w.lower(), c) for w, c in sorted(word_counts.items(), key=lambda x: -x[1])[:20000]]
+    return words, pair_counts, starts, seen
+
+
 def build_dictionary(lang: str) -> None:
     """words_<lang>.tsv and pairs_<lang>.tsv. English (and Russian, for Ukrainian) must be built first: their
     counts filter leaked words out of the other languages."""
@@ -925,12 +978,20 @@ def build_dictionary(lang: str) -> None:
     try:
         sentences = fetch(f"sentences_{lang}.tsv.bz2", optional=True)
         if sentences is None or not words:
-            raise RuntimeError("sentences not available")
-        pair_counts, starts, seen = read_sentences(sentences, lang, {word for word, _, _ in words})
-        words = drop_typos(words, seen)
-        words = drop_short_noise(words, seen, lang)
-        pairs = build_pairs(pair_counts, starts, seen, words)
-        print(f"  {len(pairs[0][1])} sentence starters, {len(pairs) - 1} words with followers")
+            # Fallback: extract word frequencies from Tatoeba sentences directly
+            print(f"  (no external word list, trying fallback from Tatoeba…)")
+            try:
+                words, pair_counts, starts, seen = build_words_from_sentences(lang)
+                pairs = build_pairs(pair_counts, starts, seen, words)
+                print(f"  {len(pairs[0][1])} sentence starters, {len(pairs) - 1} words with followers (from Tatoeba fallback)")
+            except Exception as fallback_error:
+                raise RuntimeError(f"sentences not available: {fallback_error}")
+        else:
+            pair_counts, starts, seen = read_sentences(sentences, lang, {word for word, _, _ in words})
+            words = drop_typos(words, seen)
+            words = drop_short_noise(words, seen, lang)
+            pairs = build_pairs(pair_counts, starts, seen, words)
+            print(f"  {len(pairs[0][1])} sentence starters, {len(pairs) - 1} words with followers")
     except Exception as error:  # noqa: BLE001
         print(f"  WARNING: no sentences for {lang}: {error}")
 
