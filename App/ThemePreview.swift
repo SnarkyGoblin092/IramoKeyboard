@@ -150,8 +150,11 @@ struct ThemePreview: View {
         return spaceLanguageCode ? shownLanguage.rawValue.uppercased() : shownLanguage.displayName
     }
 
-    /// For the theme cards (drawn upright): always non-split, so previews are consistent.
-    private var split: Bool { return false }
+    /// Whether the keyboard is split into two halves (iPad only).
+    private var split: Bool {
+        guard Prefs.splitKeyboard else { return false }
+        return UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
     private var shownRows: [[PreviewKey]] {
@@ -305,9 +308,15 @@ struct ThemePreview: View {
             // A narrower keyboard (the Width setting) is centred; the one-handed one sits against its side
             // (as KeyboardView.layoutSubviews, 80% of the width).
             let side: CGFloat = split ? 0 : (oneHanded == "left" ? -1 : (oneHanded == "right" ? 1 : 0))
-            let sidePadding = split ? min(CGFloat(splitSidePadding) * s, width * 0.35) : 0
-            let rowWidth = (width - 2 * s - sidePadding * 2) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
-            let shift = (width - 2 * s - rowWidth) / 2 * side
+            // Side padding is in raw points like the real keyboard; not scaled by s.
+            let sidePadding: CGFloat = split ? min(CGFloat(splitSidePadding), width * 0.35) : 0
+            let keysWidth = (width - 2 - sidePadding * 2) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
+            // The real keyboard adds a 1pt left margin; the preview mirrors that.
+            let rowWidth: CGFloat = keysWidth
+            // Mirror KeyboardView's leftPadding formula so the preview matches the actual layout.
+            let shift = (width - 2 - rowWidth) / 2 * side + (side == 0 ? 1 : 0)
+            // Side margin for non-split, non-one-handed: mirrors the real keyboard's keyInset (~keyGap/2).
+            let sideMargin: CGFloat = (split || side != 0) ? 0 : max(4, CGFloat(keyGap) / 2)
 
             ZStack(alignment: .top) {
                 look.backdrop(scale: s)
@@ -321,6 +330,7 @@ struct ThemePreview: View {
                     .offset(x: shift)
                     // One glass container for all the keys, as the keyboard's (spacing 2pt).
                     .glassKeyGroup(theme.kind == .liquidGlass, spacing: 2 * s)
+                    .padding(.horizontal, sideMargin)
                     .padding(.vertical, verticalPadding)
                 }
             }
