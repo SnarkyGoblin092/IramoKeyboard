@@ -365,7 +365,7 @@ enum LayoutBuilder {
     /// The split keyboard: every row in two halves of the same width with a gap between them. Keys go to the half
     /// most of them falls in; a space bar across the middle is cut in two, one on each side. Works the same for
     /// every language's rows (and the number and symbol pages).
-    static func split(_ rows: [[KeySpec]], gap: CGFloat = KeyboardLayoutMode.splitGap) -> [[KeySpec]] {
+    static func split(_ rows: [[KeySpec]], gap: CGFloat = 0) -> [[KeySpec]] {
         return rows.map { row in
             let total = row.reduce(0) { $0 + $1.weight }
             guard total > 0, row.count > 1 else { return row }

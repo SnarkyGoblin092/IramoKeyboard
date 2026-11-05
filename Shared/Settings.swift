@@ -70,8 +70,6 @@ enum SettingKey {
     static let keyboardWidth = "hunkeys.keyboardWidth"
     static let keyGap = "hunkeys.keyGap"
     /// The split keyboard: the gap between its halves (a share of the width) and the room at its outer sides (pt).
-    static let splitGap = "hunkeys.splitGap"
-    static let splitSidePadding = "hunkeys.splitSidePadding"
     static let rowGap = "hunkeys.rowGap"
     static let alwaysCapitals = "hunkeys.alwaysCapitals"
     static let letterSize = "hunkeys.letterSize"
@@ -165,7 +163,7 @@ enum SettingKey {
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
-        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, splitGap, splitSidePadding, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
         emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay, keyboardTools,
@@ -241,8 +239,6 @@ enum SettingDefault {
     static let landscapeKeyHeight: Double = 30.0
     static let keyboardWidth: Double = 1.0
     static let keyGap: Double = 6.0
-    static let splitGap: Double = 0.3
-    static let splitSidePadding: Double = 0
     static let rowGap: Double = 11.0
     static let alwaysCapitals: Bool = false
     static let letterSize: Double = 1.0

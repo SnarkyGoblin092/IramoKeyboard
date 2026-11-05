@@ -15,8 +15,6 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
     // The Keys and Suggestions screens' settings, drawn as the keyboard does.
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
-    @AppStorage(SettingKey.splitGap, store: SharedStore.defaults) private var splitGap = SettingDefault.splitGap
-    @AppStorage(SettingKey.splitSidePadding, store: SharedStore.defaults) private var splitSidePadding = SettingDefault.splitSidePadding
     @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
@@ -159,7 +157,7 @@ struct ThemePreview: View {
     /// The rows as drawn: split in two halves on the iPad's split keyboard (as LayoutBuilder.split).
     private var shownRows: [[PreviewKey]] {
         guard split else { return keyRows }
-        let gap = CGFloat(splitGap)
+        // Removed splitGap setting as requested.
         return keyRows.map { row in
             let total = row.reduce(CGFloat(0)) { $0 + $1.weight }
             guard total > 0, row.count > 1 else { return row }
@@ -308,9 +306,8 @@ struct ThemePreview: View {
             // A narrower keyboard (the Width setting) is centred; the one-handed one sits against its side
             // (as KeyboardView.layoutSubviews, 80% of the width).
             let side: CGFloat = split ? 0 : (oneHanded == "left" ? -1 : (oneHanded == "right" ? 1 : 0))
-            // Side padding is in raw points like the real keyboard; not scaled by s.
-            let sidePadding: CGFloat = split ? min(CGFloat(splitSidePadding), width * 0.35) : 0
-            let keysWidth = (width - 2 - sidePadding * 2) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
+            // Side padding removed as requested.
+            let keysWidth = (width - 2) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
             // The real keyboard adds a 1pt left margin; the preview mirrors that.
             let rowWidth: CGFloat = keysWidth
             // Mirror KeyboardView's leftPadding formula so the preview matches the actual layout.

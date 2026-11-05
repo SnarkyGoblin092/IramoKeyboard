@@ -61,10 +61,6 @@ struct LiveKeyboard: View {
                     .clipShape(RoundedRectangle(cornerRadius: showsEmoji ? 14 : 0, style: .continuous))
             }
             .frame(width: size.width * scale, height: size.height * scale)
-            // The switch between the upright and the landscape keyboard, on its top corner.
-            .overlay(alignment: .topTrailing) {
-                PreviewOrientationButton().offset(x: 8, y: -10)
-            }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
@@ -76,8 +72,6 @@ private struct LiveKeyboardHost: UIViewRepresentable {
     let showsHitboxes: Bool
     let hitboxMode: HitboxOverlay.Mode
     let showsEmoji: Bool
-    /// Whether the preview is in landscape (passed from SwiftUI GeometryReader).
-    var isLandscape: Bool = false
 
     func makeUIView(context: Context) -> LiveKeyboardView {
         let view = LiveKeyboardView()
@@ -93,11 +87,6 @@ private struct LiveKeyboardHost: UIViewRepresentable {
         view.effectsOverride = effects
         view.showsHitboxes = showsHitboxes
         view.hitboxMode = hitboxMode
-        view.isLandscapeOverride = isLandscape
-        // Sync the split layout so the keys' side padding matches the current landscape state.
-        view.syncOrientation()
-        // Force a layout pass so the keys are laid out with the correct side padding.
-        view.layoutSplit()
     }
 }
 
@@ -261,7 +250,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Theme.storedID(), s.accentName, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
-            "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.splitGap)", "\(s.splitSidePadding)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
+            "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", "\(KeyboardLayoutMode.split)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),

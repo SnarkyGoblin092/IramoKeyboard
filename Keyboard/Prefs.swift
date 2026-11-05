@@ -33,8 +33,7 @@ final class Prefs {
     static var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
     static var keyboardWidth = SettingDefault.keyboardWidth
     static var keyGap = SettingDefault.keyGap
-    static var splitGap = SettingDefault.splitGap
-    static var splitSidePadding = SettingDefault.splitSidePadding
+
     static var rowGap = SettingDefault.rowGap
     static var alwaysCapitals = SettingDefault.alwaysCapitals
     static var letterSize = SettingDefault.letterSize
@@ -132,8 +131,6 @@ final class Prefs {
         landscapeKeyHeight = s.landscapeKeyHeight
         keyboardWidth = s.keyboardWidth
         keyGap = s.keyGap
-        splitGap = s.splitGap
-        splitSidePadding = s.splitSidePadding
         rowGap = s.rowGap
         alwaysCapitals = s.alwaysCapitals
         letterSize = s.letterSize
