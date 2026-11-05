@@ -70,6 +70,8 @@ enum SettingKey {
     static let keyboardWidth = "hunkeys.keyboardWidth"
     static let keyGap = "hunkeys.keyGap"
     /// The split keyboard: the gap between its halves (a share of the width) and the room at its outer sides (pt).
+    static let splitGap = "hunkeys.splitGap"
+    static let splitSidePadding = "hunkeys.splitSidePadding"
     static let rowGap = "hunkeys.rowGap"
     static let alwaysCapitals = "hunkeys.alwaysCapitals"
     static let letterSize = "hunkeys.letterSize"
@@ -239,6 +241,8 @@ enum SettingDefault {
     static let landscapeKeyHeight: Double = 30.0
     static let keyboardWidth: Double = 1.0
     static let keyGap: Double = 6.0
+    static let splitGap: Double = 0.12
+    static let splitSidePadding: Double = 16.0
     static let rowGap: Double = 11.0
     static let alwaysCapitals: Bool = false
     static let letterSize: Double = 1.0
@@ -745,7 +749,8 @@ final class Settings {
     static let landscapeKeyHeightRange: ClosedRange<Double> = 24...44
     static let keyboardWidthRange: ClosedRange<Double> = 0.80...1.0
     static let keyGapRange: ClosedRange<Double> = 2...14
-
+    static let splitGapRange: ClosedRange<Double> = 2...14
+    static let splitSidePaddingRange: ClosedRange<Double> = 0...16
 
     static let rowGapRange: ClosedRange<Double> = 4...20
     static let letterSizeRange: ClosedRange<Double> = 0.80...1.30
