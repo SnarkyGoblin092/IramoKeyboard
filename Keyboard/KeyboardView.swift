@@ -454,8 +454,9 @@ final class KeyboardView: UIView {
 
         // A narrower keyboard (the Width setting) is centred; the one-handed keyboard sits against its side.
         let side = KeyboardLayoutMode.oneHandedSide
-        // The split keyboard keeps its own room at both outer sides.
-        let sidePadding = min(KeyboardLayoutMode.splitSidePadding, bounds.width / 4)
+        // The split keyboard keeps its own room at both outer sides (at most 35% of the width each, so the keys
+        // always keep some).
+        let sidePadding = min(KeyboardLayoutMode.splitSidePadding, bounds.width * 0.35)
         let keysWidth = (bounds.width - 2 - sidePadding * 2) * min(CGFloat(Prefs.keyboardWidth), side == 0 ? 1 : KeyboardLayoutMode.oneHandedWidth)
         let leftPadding = 1 + (bounds.width - 2 - keysWidth) * (side + 1) / 2
         keysSpan = leftPadding...(leftPadding + keysWidth)

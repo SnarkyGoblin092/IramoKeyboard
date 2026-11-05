@@ -314,7 +314,7 @@ struct ThemePreview: View {
             // A narrower keyboard (the Width setting) is centred; the one-handed one sits against its side
             // (as KeyboardView.layoutSubviews, 80% of the width).
             let side: CGFloat = split ? 0 : (oneHanded == "left" ? -1 : (oneHanded == "right" ? 1 : 0))
-            let sidePadding = split ? min(CGFloat(splitSidePadding) * s, width / 4) : 0
+            let sidePadding = split ? min(CGFloat(splitSidePadding) * s, width * 0.35) : 0
             let rowWidth = (width - 2 * s - sidePadding * 2) * min(CGFloat(keyboardWidth), side == 0 ? 1 : 0.8)
             let shift = (width - 2 * s - rowWidth) / 2 * side
 
