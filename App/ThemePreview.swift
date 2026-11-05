@@ -207,6 +207,7 @@ struct ThemePreview: View {
                 right.insert(contentsOf: extra.reversed(), at: 0)
                 if rest > 0.001 { right.insert(PreviewKey(weight: rest, spacer: true), at: 0) }
             }
+            let gap = 0.05 // Default spacing ratio
             let gapWeight = max(leftWeight, rightWeight) * 2 * gap / (1 - gap)
             return left + [PreviewKey(weight: gapWeight, spacer: true)] + right
         }
