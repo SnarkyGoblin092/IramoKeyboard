@@ -15,6 +15,9 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.keyHints, store: SharedStore.defaults) private var keyHints = SettingDefault.keyHints
     // The Keys and Suggestions screens' settings, drawn as the keyboard does.
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
+    @AppStorage(SettingKey.splitGap, store: SharedStore.defaults) private var splitGap = SettingDefault.splitGap
+    @AppStorage(SettingKey.splitSidePadding, store: SharedStore.defaults) private var splitSidePadding = SettingDefault.splitSidePadding
+    @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
     @AppStorage(SettingKey.letterSize, store: SharedStore.defaults) private var letterSize = SettingDefault.letterSize

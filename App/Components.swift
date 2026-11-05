@@ -407,8 +407,8 @@ struct GlassSheen: View {
 
 /// Any insettable shape, so GlassSheen can take the shape of whatever it lights.
 struct AnyInsettableShape: InsettableShape {
-    private let base: (CGRect) -> Path
-    private let insetBy: (CGFloat) -> AnyInsettableShape
+    private let base: @Sendable (CGRect) -> Path
+    private let insetBy: @Sendable (CGFloat) -> AnyInsettableShape
 
     init<S: InsettableShape>(_ shape: S) {
         base = { shape.path(in: $0) }
