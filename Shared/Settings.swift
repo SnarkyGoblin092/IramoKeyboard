@@ -745,8 +745,8 @@ final class Settings {
     static let landscapeKeyHeightRange: ClosedRange<Double> = 24...44
     static let keyboardWidthRange: ClosedRange<Double> = 0.80...1.0
     static let keyGapRange: ClosedRange<Double> = 2...14
-    static let splitGapRange: ClosedRange<Double> = 0.05...0.7
-    static let splitSidePaddingRange: ClosedRange<Double> = 0...250
+
+
     static let rowGapRange: ClosedRange<Double> = 4...20
     static let letterSizeRange: ClosedRange<Double> = 0.80...1.30
     static let hintSizeRange: ClosedRange<Double> = 0.70...1.50
