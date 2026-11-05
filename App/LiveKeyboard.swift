@@ -94,6 +94,10 @@ private struct LiveKeyboardHost: UIViewRepresentable {
         view.showsHitboxes = showsHitboxes
         view.hitboxMode = hitboxMode
         view.isLandscapeOverride = isLandscape
+        // Sync the split layout so the keys' side padding matches the current landscape state.
+        view.syncOrientation()
+        // Force a layout pass so the keys are laid out with the correct side padding.
+        view.layoutSplit()
     }
 }
 
@@ -277,9 +281,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// A new bar and KeyboardView, as the controller makes them in buildInterface (they read the theme as they are
     /// made).
     /// The split keyboard follows the actual device orientation (not the toggle switch) on an iPhone.
-    private func syncOrientation() {
+    internal func syncOrientation() {
         // Use SwiftUI override or bounds-based detection; matches layoutStage()'s logic.
         KeyboardLayoutMode.phoneLandscape = isLandscapeOverride || isPhoneLandscape
+    }
+
+    /// Relayouts the view and its keys so the split layout and its side padding are applied.
+    internal func layoutSplit() {
+        setNeedsLayout()
+        layoutIfNeeded()
     }
 
     private func rebuild() {
