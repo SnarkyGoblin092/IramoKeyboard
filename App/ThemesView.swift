@@ -10,6 +10,10 @@ struct ThemesView: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var previewMode = SettingDefault.appearance
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openScreen) private var openScreen
+    /// The wave of glass that carries the previews to the other mode (ModeWave), while it crosses the screen.
+    @State private var wave: ModeWave?
+    /// Where this screen is in the window: the wave crosses exactly it.
+    @State private var screenFrame = CGRect.zero
 
     /// Two cards across on a phone held upright, more where there is room (iPad, landscape).
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
@@ -36,6 +40,15 @@ struct ThemesView: View {
             .padding(.bottom, 28)
         }
         }
+        .environment(\.modeWave, wave)
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { screenFrame = geometry.frame(in: .global) }
+                .onChange(of: geometry.frame(in: .global)) { screenFrame = $0 }
+        })
+        .overlay {
+            if let wave = wave { GlassWaveBand(wave: wave) }
+        }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -57,7 +70,7 @@ struct ThemesView: View {
             }
             SegmentedChoice(names: [tr("Light"), tr("Dark")],
                             selected: previewScheme == .dark ? 1 : 0) {
-                previewMode = $0 == 0 ? "light" : "dark"
+                switchMode(dark: $0 == 1)
             }
             Button {
                 Feedback.tap()
@@ -74,6 +87,34 @@ struct ThemesView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
+    }
+
+    /// Switches the previews to the other mode behind a wave of glass (at once with Reduce Motion, where the
+    /// previews fade instead).
+    private func switchMode(dark: Bool) {
+        let mode = dark ? "dark" : "light"
+        guard (previewScheme == .dark) != dark, screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled else {
+            previewMode = mode
+            return
+        }
+        ModeWave.count += 1
+        let id = ModeWave.count
+        let new = ModeWave(id: id, progress: 0, oldScheme: previewScheme, minX: screenFrame.minX,
+                           width: screenFrame.width, started: CACurrentMediaTime())
+        // Before the mode itself: what it sets going (the keyboard's rebuild, the cards' new pictures) looks
+        // for the wave.
+        ModeWave.active = new
+        wave = new
+        previewMode = mode
+        Task { @MainActor in
+            // Drawn once at the left edge, then sent across.
+            withAnimation(.easeInOut(duration: ModeWave.duration)) {
+                if wave?.id == id { wave?.progress = 1 }
+            }
+            try? await Task.sleep(nanoseconds: UInt64((ModeWave.duration + 0.15) * 1_000_000_000))
+            if wave?.id == id { wave = nil }
+            if ModeWave.active?.id == id { ModeWave.active = nil }
+        }
     }
 
     /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
@@ -175,7 +216,10 @@ private struct ThemeThumbnail: View {
     let accent: Color
     @Environment(\.colorScheme) private var scheme
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.modeWave) private var wave
     @State private var image: UIImage?
+    /// The wave (ModeWave.id) that brought `image`: while it crosses, the picture shows only where it has passed.
+    @State private var imageWave: Int?
     /// The picture shown before `image`, kept under it while the new one fades in (light / dark, an edit).
     @State private var previous: UIImage?
     @State private var fade: Double = 1
@@ -188,14 +232,23 @@ private struct ThemeThumbnail: View {
     var body: some View {
         Group {
             if theme.kind == .liquidGlass {
-                ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                    .animation(ThemeThumbnail.fadeAnimation, value: scheme)
+                ZStack {
+                    // The old look ahead of the wave, the new one behind it.
+                    if let wave = wave {
+                        ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                            .environment(\.colorScheme, wave.oldScheme)
+                    }
+                    ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                        .animation(wave == nil ? ThemeThumbnail.fadeAnimation : nil, value: scheme)
+                        .revealedByWave(wave)
+                }
             } else if let image = image {
                 ZStack {
                     if let previous = previous {
                         Image(uiImage: previous).resizable().interpolation(.high)
                     }
                     Image(uiImage: image).resizable().interpolation(.high).opacity(fade)
+                        .revealedByWave(imageWave != nil && wave?.id == imageWave ? wave : nil)
                 }
             } else {
                 // Until it is drawn: the keyboard's backdrop.
@@ -214,15 +267,17 @@ private struct ThemeThumbnail: View {
 
     static let fadeAnimation = Animation.easeInOut(duration: 0.3)
 
-    /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view), faded in over
-    /// the picture it replaces otherwise.
+    /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view); over the picture
+    /// it replaces otherwise, uncovered by the light / dark wave if one is crossing the screen, else faded in.
     private func show(_ new: UIImage?, key: String) {
         guard let new = new else { return }
         let replaces = image != nil && shownKey != key
         previous = replaces ? image : nil
         image = new
         shownKey = key
-        guard replaces else {
+        // (ModeWave.active, not the environment's: this may run in a closure made before the wave set off.)
+        imageWave = replaces ? ModeWave.active?.id : nil
+        guard replaces, imageWave == nil else {
             fade = 1
             return
         }

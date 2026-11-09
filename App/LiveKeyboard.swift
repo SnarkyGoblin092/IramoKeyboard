@@ -19,6 +19,7 @@ struct LiveKeyboard: View {
     /// The mode picked for the preview (Theme.appearanceStyle, which the keys are drawn in); "auto": the app's own.
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     @Environment(\.colorScheme) private var appScheme
+    @Environment(\.modeWave) private var wave
 
     /// The mode the keys are drawn in, for the backdrop behind them.
     private var scheme: ColorScheme {
@@ -35,11 +36,21 @@ struct LiveKeyboard: View {
                 LiveKeyboardHost(effects: effects)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(
-                        look.backdrop(scale: scale)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                            // Fades with the keys (LiveKeyboardView.modeFade) when the mode is switched.
-                            .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
+                        ZStack {
+                            // The Themes screen's wave (ModeWave): the old backdrop ahead of it, the new one
+                            // behind it, as the keys (LiveKeyboardView.rebuildBehindWave).
+                            if let wave = wave {
+                                CurrentThemeLook { old in old.backdrop(scale: scale) }
+                                    .environment(\.colorScheme, wave.oldScheme)
+                            }
+                            look.backdrop(scale: scale)
+                                // Without a wave it fades with the keys (LiveKeyboardView.modeFade).
+                                .animation(wave == nil ? .easeInOut(duration: LiveKeyboardView.modeFade) : nil,
+                                           value: scheme)
+                                .revealedByWave(wave)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                     )
             }
             // The backdrop is drawn in the keys' mode, not the app's: light keys and the bar's dark words would
@@ -221,8 +232,13 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Prefs.refresh()
             self.applyEffects()
             guard self.signature() != self.builtSignature else { return }
-            // Light to dark (the Themes screen's switch): the new keys fade in over the old ones.
+            // Light to dark (the Themes screen's switch): the new keys are uncovered by the screen's wave, or
+            // fade in over the old ones where there is none.
             if self.window != nil, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
+                if let wave = ModeWave.active {
+                    self.rebuildBehindWave(wave)
+                    return
+                }
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
                                   animations: { self.rebuild() })
@@ -230,6 +246,35 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
                 self.rebuild()
             }
         }
+    }
+
+    /// Builds the new keys under a picture of the old ones, which the wave then wipes away from the left: the
+    /// picture's mask starts at the wave's front and moves with it, on the wave's own clock and curve.
+    private func rebuildBehindWave(_ wave: ModeWave) {
+        guard let old = snapshotView(afterScreenUpdates: false) else {
+            rebuild()
+            return
+        }
+        rebuild()
+        old.frame = bounds
+        old.isUserInteractionEnabled = false
+        addSubview(old)
+        let originX = convert(CGPoint.zero, to: nil).x
+        let mask = CALayer()
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = .zero
+        mask.bounds = CGRect(x: 0, y: 0, width: 4000, height: bounds.height)
+        mask.position = CGPoint(x: wave.front(1) - originX, y: 0)
+        old.layer.mask = mask
+        let slide = CABasicAnimation(keyPath: "position.x")
+        slide.fromValue = wave.front(0) - originX
+        slide.toValue = wave.front(1) - originX
+        slide.duration = ModeWave.duration
+        slide.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        slide.beginTime = mask.convertTime(wave.started, from: nil)
+        mask.add(slide, forKey: "wave")
+        let left = max(0, wave.started + ModeWave.duration - CACurrentMediaTime())
+        DispatchQueue.main.asyncAfter(deadline: .now() + left + 0.05) { old.removeFromSuperview() }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
