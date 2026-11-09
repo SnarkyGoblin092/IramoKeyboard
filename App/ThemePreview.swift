@@ -55,7 +55,6 @@ struct ThemePreview: View {
     private var letterRows: [[String]] { return ThemePreview.letterRows(for: shownLanguage) }
 
     // Mirrors `Language.letterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
-    // Also drawn by the hit map (HitboxesView).
     static func letterRows(for language: Language) -> [[String]] {
         func split(_ rows: String...) -> [[String]] { return rows.map { $0.map { String($0) } } }
         switch language {
@@ -134,7 +133,7 @@ struct ThemePreview: View {
     private struct PreviewKey {
         var title = ""
         var symbol: String? = nil
-        /// An emoji-picker tab icon (EmojiTabIcons) instead of an SF Symbol, as the keyboard's emoji key uses.
+        /// An icon from EmojiTabIcons instead of an SF Symbol, as the keyboard's emoji key uses.
         var tabIcon: String? = nil
         var weight: CGFloat = 1
         var function = false

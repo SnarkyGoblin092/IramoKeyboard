@@ -68,14 +68,6 @@ final class Prefs {
     static var oneHanded = SettingDefault.oneHanded
     static var flickUpCapital = SettingDefault.flickUpCapital
     static var flickDownAccent = SettingDefault.flickDownAccent
-    static var hitboxSize = SettingDefault.hitboxSize
-    static var adaptiveHitboxes = SettingDefault.adaptiveHitboxes
-    static var adaptiveGrow = SettingDefault.adaptiveGrow
-    static var adaptiveShrink = SettingDefault.adaptiveShrink
-    static var adaptiveStrength = SettingDefault.adaptiveStrength
-    static var adaptiveWordStart = SettingDefault.adaptiveWordStart
-    static var hitMap = SettingDefault.hitMap
-    static var hitMapStrength = SettingDefault.hitMapStrength
 
     /// 0 = square key corners ... 1 = fully round. Read from the shared defaults directly so this
     /// file works whichever way the Settings class exposes it.
@@ -150,14 +142,6 @@ final class Prefs {
         oneHanded = s.oneHanded
         flickUpCapital = s.flickUpCapital
         flickDownAccent = s.flickDownAccent
-        hitboxSize = s.hitboxSize
-        adaptiveHitboxes = s.adaptiveHitboxes
-        adaptiveGrow = s.adaptiveGrow
-        adaptiveShrink = s.adaptiveShrink
-        adaptiveStrength = s.adaptiveStrength
-        adaptiveWordStart = s.adaptiveWordStart
-        hitMap = s.hitMap
-        hitMapStrength = s.hitMapStrength
         if let stored = SharedStore.defaults.object(forKey: keyRoundnessKey) as? Double {
             keyRoundness = min(max(stored, 0), 1)
         } else {

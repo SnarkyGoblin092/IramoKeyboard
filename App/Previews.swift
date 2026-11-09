@@ -89,7 +89,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
             VStack(spacing: 0) {
                 Group {
                     if fills {
-                        // A keyboard (or the emoji picker) is laid out left to right, also when the app reads
+                        // A keyboard is laid out left to right, also when the app reads
                         // right to left.
                         preview().frame(maxWidth: .infinity, maxHeight: .infinity)
                             .environment(\.layoutDirection, .leftToRight)

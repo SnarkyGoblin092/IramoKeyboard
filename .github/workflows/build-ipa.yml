@@ -41,7 +41,6 @@ jobs:
       - name: Check generated data
         run: |
           ls -la Keyboard/Resources
-          test -s Keyboard/Resources/emoji.json
           for f in en hu; do test -s Keyboard/Resources/dict_$f.bin; done
           for f in Keyboard/Resources/dict_*.bin; do
             test -s "$f" || { echo "::error::$f is empty"; exit 1; }
@@ -60,18 +59,6 @@ jobs:
           done
           wc -l Keyboard/Resources/phonetic_*.tsv || true
           du -ch Keyboard/Resources/dict_*.bin | tail -1
-          python3 - <<'PY'
-          import glob, json
-          data = json.load(open("Keyboard/Resources/emoji.json"))
-          total = sum(len(g["items"]) for g in data["groups"])
-          print("Unicode emoji", data["version"], "->", total, "emoji")
-          assert total > 1500, "emoji list looks too small"
-          for path in sorted(glob.glob("Keyboard/Resources/emoji_search_*.json")):
-              n = len(json.load(open(path)))
-              print(path, "searchable emoji:", n)
-              if n < 800:
-                  print(f"::warning::{path} looks thin; emoji search will be weak")
-          PY
 
   build:
     needs: data
@@ -103,20 +90,19 @@ jobs:
             dict="${f/words_/dict_}"
             if [ -s "${dict%.tsv}.bin" ]; then rm "$f"; fi
           done
-          for kind in dict lm words pairs accents phonetic emoji; do
+          for kind in dict lm words pairs accents phonetic; do
             echo "$kind: $(cat Keyboard/Resources/${kind}_* Keyboard/Resources/${kind}.* 2>/dev/null | wc -c | awk '{printf "%.1f MB", $1 / 1e6}')"
           done
           du -sh Keyboard/Resources
 
       # Every language file ships compressed (raw DEFLATE, which Apple's Compression framework reads as .zlib);
-      # LanguageData unpacks a language's files only once that language is enabled. emoji.json, which every
-      # language uses, stays as it is.
+      # LanguageData unpacks a language's files only once that language is enabled.
       - name: Compress language data
         run: |
           python3 - <<'PY'
           import pathlib, zlib
           for path in sorted(pathlib.Path("Keyboard/Resources").iterdir()):
-              if not path.is_file() or path.name in ("emoji.json", ".gitkeep") or path.suffix == ".zlib":
+              if not path.is_file() or path.name == ".gitkeep" or path.suffix == ".zlib":
                   continue
               packer = zlib.compressobj(9, zlib.DEFLATED, -15)
               path.with_name(path.name + ".zlib").write_bytes(packer.compress(path.read_bytes()) + packer.flush())

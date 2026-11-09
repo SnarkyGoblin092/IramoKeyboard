@@ -29,19 +29,6 @@ enum SettingKey {
     static let oneHanded = "hunkeys.oneHanded"
     static let flickUpCapital = "hunkeys.flickUpCapital"
     static let flickDownAccent = "hunkeys.flickDownAccent"
-    // Hitboxes
-    static let hitboxSize = "hunkeys.hitboxSize"
-    static let adaptiveHitboxes = "hunkeys.adaptiveHitboxes"
-    static let adaptiveGrow = "hunkeys.adaptiveGrow"
-    static let adaptiveShrink = "hunkeys.adaptiveShrink"
-    static let adaptiveStrength = "hunkeys.adaptiveStrength"
-    static let adaptiveWordStart = "hunkeys.adaptiveWordStart"
-    static let hitMap = "hunkeys.hitMap"
-    static let hitMapStrength = "hunkeys.hitMapStrength"
-    /// The learned tap offsets, shared by every language (data written by the keyboard; not a preference).
-    static let hitMapShared = "hunkeys.hitMapShared"
-    /// language code -> an earlier build's tap offsets of that language (merged into hitMapShared, then removed).
-    static let hitMapPrefix = "hunkeys.hitMapData."
     // Layout and look
     static let numberRow = "hunkeys.numberRow"
     static let keyHints = "hunkeys.keyHints"
@@ -108,8 +95,6 @@ enum SettingKey {
     static let systemEdits = "hunkeys.systemEdits"
     /// The keys' typeface (KeyFont).
     static let keyFont = "hunkeys.keyFont"
-    /// The learned key-offset model (data written by the keyboard; not a preference).
-    static let touchModel = "hunkeys.touchModel"
     /// Before learned words were shared by every language: one list per language (moved into `learnedWords`).
     static let learnedPrefix = "hunkeys.learned."
     /// The words the keyboard learned, word -> count, one list for every language.
@@ -141,8 +126,6 @@ enum SettingKey {
         keyboardTools,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
         splitKeyboard, oneHanded,
-        hitboxSize, adaptiveHitboxes, adaptiveGrow, adaptiveShrink, adaptiveStrength, adaptiveWordStart,
-        hitMap, hitMapStrength,
         effects, systemEdits
     ]
 }
@@ -174,14 +157,6 @@ enum SettingDefault {
     static let oneHanded = "off"
     static let flickUpCapital = false
     static let flickDownAccent = false
-    static let hitboxSize = 1.0
-    static let adaptiveHitboxes = true
-    static let adaptiveGrow = 0.35
-    static let adaptiveShrink = 0.20
-    static let adaptiveStrength = 0.65
-    static let adaptiveWordStart = true
-    static let hitMap = true
-    static let hitMapStrength = 0.7
     static let numberRow = false
     static let keyHints = true
     static let extraKeys = ""
@@ -379,14 +354,6 @@ final class Settings {
             SettingKey.oneHanded: SettingDefault.oneHanded,
             SettingKey.flickUpCapital: SettingDefault.flickUpCapital,
             SettingKey.flickDownAccent: SettingDefault.flickDownAccent,
-            SettingKey.hitboxSize: SettingDefault.hitboxSize,
-            SettingKey.adaptiveHitboxes: SettingDefault.adaptiveHitboxes,
-            SettingKey.adaptiveGrow: SettingDefault.adaptiveGrow,
-            SettingKey.adaptiveShrink: SettingDefault.adaptiveShrink,
-            SettingKey.adaptiveStrength: SettingDefault.adaptiveStrength,
-            SettingKey.adaptiveWordStart: SettingDefault.adaptiveWordStart,
-            SettingKey.hitMap: SettingDefault.hitMap,
-            SettingKey.hitMapStrength: SettingDefault.hitMapStrength,
             SettingKey.numberRow: SettingDefault.numberRow,
             SettingKey.keyHints: SettingDefault.keyHints,
             SettingKey.extraKeys: SettingDefault.extraKeys,
@@ -540,58 +507,6 @@ final class Settings {
     var oneHanded: String { return readString(SettingKey.oneHanded) ?? SettingDefault.oneHanded }
     var flickUpCapital: Bool { return readBool(SettingKey.flickUpCapital) }
     var flickDownAccent: Bool { return readBool(SettingKey.flickDownAccent) }
-
-    // MARK: Hitboxes
-
-    static let hitboxSizeRange: ClosedRange<Double> = 0.80...1.30
-    static let adaptiveGrowRange: ClosedRange<Double> = 0...0.60
-    static let adaptiveShrinkRange: ClosedRange<Double> = 0...0.40
-
-    /// Letter-key touch areas compared with the other keys: < 1 lets shift, delete and space take more of the
-    /// edges, > 1 gives them to the letters.
-    var hitboxSize: Double { return clamp(readDouble(SettingKey.hitboxSize), Settings.hitboxSizeRange) }
-    var adaptiveHitboxes: Bool { return readBool(SettingKey.adaptiveHitboxes) }
-    var adaptiveGrow: Double { return clamp(readDouble(SettingKey.adaptiveGrow), Settings.adaptiveGrowRange) }
-    var adaptiveShrink: Double { return clamp(readDouble(SettingKey.adaptiveShrink), Settings.adaptiveShrinkRange) }
-    var adaptiveStrength: Double { return clamp(readDouble(SettingKey.adaptiveStrength), 0...1) }
-    var adaptiveWordStart: Bool { return readBool(SettingKey.adaptiveWordStart) }
-    var hitMap: Bool { return readBool(SettingKey.hitMap) }
-    var hitMapStrength: Double { return clamp(readDouble(SettingKey.hitMapStrength), 0...1) }
-
-    /// The hit map, shared by every language: key position (HitMap.position) -> [taps, mean x offset, mean y offset]
-    /// (offsets in key widths/heights, from the key's centre to where the user actually taps it).
-    func hitMapData() -> [String: [Double]] {
-        return value(SettingKey.hitMapShared) as? [String: [Double]] ?? [:]
-    }
-
-    func setHitMapData(_ data: [String: [Double]]) {
-        put(data.isEmpty ? nil : data, SettingKey.hitMapShared)
-    }
-
-    /// Earlier builds' hit maps, one per language: language code -> letter -> [taps, mean x, mean y].
-    func legacyHitMaps() -> [String: [String: [Double]]] {
-        var maps: [String: [String: [Double]]] = [:]
-        for language in Language.allCases {
-            if let map = value(SettingKey.hitMapPrefix + language.rawValue) as? [String: [Double]], !map.isEmpty {
-                maps[language.rawValue] = map
-            }
-        }
-        return maps
-    }
-
-    func removeLegacyHitMaps() {
-        for language in Language.allCases where value(SettingKey.hitMapPrefix + language.rawValue) != nil {
-            put(nil, SettingKey.hitMapPrefix + language.rawValue)
-        }
-    }
-
-    /// Removes what the old adaptive key areas stored (the feature is gone).
-    func removeTouchModel() {
-        guard SharedStore.defaults.object(forKey: SettingKey.touchModel) != nil
-                || SharedStore.defaults.object(forKey: "hunkeys.touchLearning") != nil else { return }
-        put(nil, SettingKey.touchModel)
-        put(nil, "hunkeys.touchLearning")
-    }
 
     // MARK: Layout and look
 

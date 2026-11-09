@@ -26,10 +26,6 @@ final class KeyboardViewController: UIInputViewController {
     private var builtSignature = ""
 
     private var stores: [Language: WordStore] = [:]
-    /// Where the user really taps each key, the same for every language (see HitMap).
-    private var hitMapStore: HitMap?
-    /// The language and word start the adaptive key areas were last worked out for.
-    private var adaptiveFor: String?
     /// Swipes being decoded: key taps that come meanwhile wait, so they land after the swiped word.
     private var swipesDecoding = 0
     private var queuedActions: [(action: KeyAction, point: CGPoint?)] = []
@@ -129,7 +125,6 @@ final class KeyboardViewController: UIInputViewController {
         // Unpacked data of languages turned off in the app since (LanguageData) is removed.
         LanguageData.removeUnpackedInBackground(keeping: Set(settings.enabledLanguages))
         loadSystemLexicon()
-        EmojiStore.shared.loadIfNeeded()
         Haptics.shared.prepare()
     }
 
@@ -218,16 +213,12 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         seenPersonalRevision = revision
-        // The app may have reset the hit map or changed the hitbox settings.
-        hitMapStore = nil
-        adaptiveFor = nil
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
         if settingsSignature() != builtSignature {
             buildInterface()
         }
-        applyHitMap()
         applyHeight()
         updateAutoShift()
         scheduleRefresh()
@@ -261,7 +252,6 @@ final class KeyboardViewController: UIInputViewController {
         }
         LearnedWords.shared.saveNow()
         for store in stores.values { store.saveNow() }
-        hitMapStore?.saveNow()
         var usage: [String: Double] = [:]
         for (language, value) in Decoder.languageUsage { usage[language.rawValue] = value }
         settings.setLanguageUsage(usage)
@@ -449,63 +439,6 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.typingLanguage = language
         keyboardView.configure(rows: rows, page: page, shift: shift)
         updateReturnProminence()
-        applyHitMap()
-        adaptiveFor = nil
-    }
-
-    // MARK: Hitboxes
-
-    private func hitMap() -> HitMap {
-        if let map = hitMapStore { return map }
-        let map = HitMap()
-        hitMapStore = map
-        return map
-    }
-
-    /// Moves the letter keys' touch centres to where the user really taps them.
-    private func applyHitMap() {
-        keyboardView.hitOffsets = Prefs.hitMap
-            ? hitMap().offsets(strength: Prefs.hitMapStrength, positions: keyboardView.letterPositions()) : [:]
-    }
-
-    /// Learns from a finished word: each of its taps meant the letter of `word` in the same place (the word as
-    /// typed, or what auto-correction made of it when that has as many letters).
-    private func recordHitMap(typed: String, word: String) {
-        guard Prefs.hitMap, page == .letters, textDocumentProxy.isSecureTextEntry != true,
-              language.supports(.keyLearning), word.count == typed.count, wordTaps.count == typed.count else { return }
-        let points = wordTaps.compactMap { $0 }
-        guard points.count == typed.count else { return }
-        hitMap().record(word: word, points: points, centers: keyboardView.letterCenters(),
-                        positions: keyboardView.letterPositions(), keySize: keyboardView.letterKeySize())
-        applyHitMap()
-    }
-
-    /// Adaptive keys: the letters likely to come next (from the dictionary and the user's words) get bigger touch
-    /// areas, the unlikely ones smaller (see KeyboardView.letterBias).
-    private func updateAdaptiveHitboxes() {
-        guard Prefs.adaptiveHitboxes, Prefs.adaptiveStrength > 0, page == .letters,
-              language.supports(.keyLearning),
-              textDocumentProxy.isSecureTextEntry != true, let store = stores[language], store.isLoaded else {
-            if !keyboardView.letterBias.isEmpty { keyboardView.letterBias = [:] }
-            adaptiveFor = nil
-            return
-        }
-        let prefix = currentPrefix(in: textDocumentProxy.documentContextBeforeInput ?? "")
-        let tag = language.rawValue + ":" + prefix
-        guard tag != adaptiveFor else { return }
-        adaptiveFor = tag
-        let weights = (prefix.isEmpty && !Prefs.adaptiveWordStart) ? [:] : store.nextLetterWeights(after: prefix)
-        guard let top = weights.values.max(), top > 0 else {
-            keyboardView.letterBias = [:]
-            return
-        }
-        let strength = Prefs.adaptiveStrength
-        var bias: [Character: CGFloat] = [:]
-        for letter in keyboardView.letterCenters().keys {
-            let share = ((weights[letter] ?? 0) / top).squareRoot()
-            bias[letter] = CGFloat(1 + strength * (share * Prefs.adaptiveGrow - (1 - share) * Prefs.adaptiveShrink))
-        }
-        keyboardView.letterBias = bias
     }
 
     /// Loads a dictionary (with its swipe index) in the background. `limit` nil = every word, for the active
@@ -810,7 +743,6 @@ final class KeyboardViewController: UIInputViewController {
             }
             if !typedWord.isEmpty, let fixed = fix {
                 let replacement = matchCase(of: typedWord, for: fixed)
-                recordHitMap(typed: typedWord, word: fixed)
                 recordBigram(contextBefore: before, next: fixed)
                 noteWordUse(fixed)
                 for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
@@ -823,11 +755,6 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
-        // A word kept as typed teaches the hit map when it is a real word (a typo would teach it wrong).
-        let finished = currentPrefix(in: before)
-        if !finished.isEmpty, stores.values.contains(where: { $0.isLoaded && $0.dictionaryHas(word: finished) }) {
-            recordHitMap(typed: finished, word: finished)
-        }
         clearSwipeState()
         textDocumentProxy.insertText(" ")
         lastSpaceTime = Date()
@@ -1172,7 +1099,7 @@ final class KeyboardViewController: UIInputViewController {
     private func refreshPhoneticSuggestions() {
         if composing.isEmpty {
             var shown: [Suggestion] = []
-            if Prefs.emojiSuggestions, let word = lastPickedWord, EmojiStore.shared.isReady,
+            if Prefs.emojiSuggestions, let word = lastPickedWord,
                let emoji = EmojiStore.shared.suggestions(for: word, languages: [language], limit: 1).first {
                 shown = [Suggestion(text: emoji, kind: .emoji)]
             }
@@ -1197,7 +1124,6 @@ final class KeyboardViewController: UIInputViewController {
                 guard let self = self else { return }
                 self.refreshScheduled = false
                 self.updateAutoShift()
-                self.updateAdaptiveHitboxes()
             }
         }
         // Suggestions are the heavy part: coalesce bursts of typing into one refresh just after the last key,
@@ -1249,7 +1175,7 @@ final class KeyboardViewController: UIInputViewController {
         var emojis: [String] = []
         if Prefs.emojiSuggestions, let emoticon = Emoticons.match(atEndOf: before) {
             emojis = [emoticon.emoji]   // ":)" -> the emoji, in place of the word's
-        } else if Prefs.emojiSuggestions && !emojiWord.isEmpty && EmojiStore.shared.isReady {
+        } else if Prefs.emojiSuggestions && !emojiWord.isEmpty {
             // The word's own language first ("hat" is six in Hungarian, a hat in English), then the others.
             let owners = Predictor.owners(of: emojiWord, stores: stores)
             let order = owners + ([language] + enabledLanguages).filter { !owners.contains($0) }

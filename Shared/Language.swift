@@ -115,7 +115,7 @@ enum Language: String, CaseIterable {
     /// that can't; the app greys a setting out when none of the enabled languages can).
     func supports(_ feature: LanguageFeature) -> Bool {
         switch feature {
-        case .swipe, .keyLearning: return supportsSwipe
+        case .swipe: return supportsSwipe
         case .autoCorrect: return autoCorrects
         case .capitals: return hasCapitals
         // Chinese and Japanese need no space after a full stop; Thai ends sentences with a space, not a full stop.
@@ -150,6 +150,4 @@ enum LanguageFeature {
     case capitals
     /// Double space for a full stop.
     case sentencePeriod
-    /// Adaptive keys and the hit map, which learn from words spelled with the keys' letters.
-    case keyLearning
 }

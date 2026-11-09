@@ -49,7 +49,6 @@ struct ContentView: View {
         .roundedType()
         .onAppear {
             Feedback.prepare()
-            Settings.shared.removeTouchModel()
             // The enabled languages' data is unpacked now, so the keyboard finds it ready.
             LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
         }
@@ -263,26 +262,16 @@ private struct KeyboardSection: View {
     }
 }
 
-/// Where a tap counts as which key, and the gestures on the keys.
+/// The gestures on the keys.
 private struct TouchSection: View {
     @State private var languages = Settings.shared.enabledLanguages
     @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
-    @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var hitboxSize = SettingDefault.hitboxSize
-    @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes
-
-    private var touchSummary: String {
-        let room = abs(hitboxSize - 0.85) < 0.001 ? tr("Strict") : (abs(hitboxSize - 1.2) < 0.001 ? tr("Generous") : tr("Normal"))
-        return adaptive ? tr("%@, adaptive", "\(room)") : room
-    }
 
     var body: some View {
         Section {
             ScreenRow(.gestures) {
                 SettingsRow(title: tr("Gestures"), symbol: "hand.draw.fill", color: .teal,
                             value: swipe && !Language.lacking(.swipe, among: Language.list(from: languages)).all ? tr("Swipe on") : tr("Swipe off"))
-            }
-            ScreenRow(.hitboxes) {
-                SettingsRow(title: tr("Hitboxes"), symbol: "scope", color: .cyan, value: touchSummary)
             }
         } header: {
             SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill", color: .teal)
@@ -564,7 +553,7 @@ struct AppLanguageView: View {
 
 /// The screens the main list opens.
 enum Screen: Hashable {
-    case languages, appLanguage, suggestions, gestures, hitboxes, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
+    case languages, appLanguage, suggestions, gestures, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
 
     @ViewBuilder var view: some View {
         switch self {
@@ -572,7 +561,6 @@ enum Screen: Hashable {
         case .appLanguage: AppLanguageView()
         case .suggestions: SuggestionsView()
         case .gestures: GesturesView()
-        case .hitboxes: HitboxesView()
         case .shortcuts: ShortcutsView()
         case .functions: FunctionsView()
         case .themes: ThemesView()

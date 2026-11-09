@@ -128,7 +128,7 @@ final class KeyView: UIView {
 
     private func configureContent() {
         if spec.action == .emoji, let smiley = EmojiTabIcons.icon(forKey: "smileys", side: 36, weight: 1.8) {
-            // The emoji picker's smiley (an outline in light and dark mode), drawn at the size and line weight the
+            // The emoji key's smiley (an outline in light and dark mode), drawn at the size and line weight the
             // other key symbols reach in their 26pt frame (so it is shown unscaled).
             iconView.contentMode = .center
             iconView.image = smiley

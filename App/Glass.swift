@@ -392,11 +392,6 @@ enum DeviceMetrics {
     /// The previews' keyboard width: the screen's short side (the previews are always upright).
     static var keyboardWidth: Double { return portraitWidth }
 
-    /// About how wide a letter key is now (ten keys across, less the gap between them).
-    static func letterKeyWidth(keyGap: Double) -> Double {
-        return keyboardWidth / 10 - keyGap
-    }
-
     static func points(_ value: Double) -> String {
         return "\(Int(value.rounded())) pt"
     }

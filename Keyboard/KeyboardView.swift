@@ -33,7 +33,7 @@ protocol KeyboardViewDelegate: AnyObject {
 ///  - dragging across the letter keys is recognised as swipe typing (handed between thumbs, and committed word by
 ///    word when it glides through the space bar),
 ///  - a short flick up on a letter types it in capitals, a flick down its first accent (one that goes on becomes a swipe),
-///  - the letter keys' touch areas follow the hitbox settings (size, adaptive keys, the hit map).
+///  - every touch goes to the key nearest to it: the keys' cells tile the whole area, so there are no dead gaps.
 final class KeyboardView: UIView {
     weak var delegate: KeyboardViewDelegate?
     /// Where the last key tap landed (this view's coordinates), read by the controller for the typing decoder.
@@ -42,18 +42,10 @@ final class KeyboardView: UIView {
     var typingLanguage: Language = .english
     /// Popups are added here (the controller's root view) so they can rise above the first row.
     weak var popupHost: UIView?
-    /// Adaptive keys: letter -> touch-area factor (1 = normal), set by the controller as the word grows.
-    var letterBias: [Character: CGFloat] = [:]
-    /// The hit map: letter -> shift of its touch centre, in key widths and heights.
-    var hitOffsets: [Character: CGPoint] = [:]
 
     private var rows: [[KeySpec]] = []
     private var keyViews: [[KeyView]] = []
     private var hitRects: [[CGRect]] = []
-    /// The cells a key's touch area is measured against when the areas are shaped: its hit cell with the room of a
-    /// spacer beside it (a spacer between two keys is shared by both; one at the row's end goes to its neighbour).
-    /// Without this a key next to a spacer (A and L) lost that room to the rows above and below.
-    private var touchRects: [[CGRect]] = []
     private var page: KeyboardPage = .letters
     private var shift: ShiftState = .off
     private var returnProminent = false
@@ -321,7 +313,6 @@ final class KeyboardView: UIView {
         }
         keyViews = built
         hitRects = []
-        touchRects = []
         applyShift()
         applyReturnProminence()
         setNeedsLayout()
@@ -403,22 +394,6 @@ final class KeyboardView: UIView {
             }
         }
         return centers
-    }
-
-    /// Where every letter key is, as the hit map learns it (HitMap.position): its letter row, its place among that
-    /// row's letters, and how many letters the row has.
-    func letterPositions() -> [Character: String] {
-        var positions: [Character: String] = [:]
-        var letterRow = 0
-        for row in rows {
-            let letters = row.compactMap { letter(of: $0) }
-            guard !letters.isEmpty else { continue }
-            for (index, letter) in letters.enumerated() where positions[letter] == nil {
-                positions[letter] = HitMap.position(row: letterRow, index: index, count: letters.count)
-            }
-            letterRow += 1
-        }
-        return positions
     }
 
     func letterKeySize() -> CGSize {
@@ -516,7 +491,6 @@ final class KeyboardView: UIView {
             }
             hitRects.append(rects)
         }
-        touchRects = hitRects.enumerated().map { r, rects in KeyboardView.absorbingSpacers(rects, row: rows[r]) }
         updateHaloMask()
     }
 
@@ -589,143 +563,13 @@ final class KeyboardView: UIView {
             }
         }
         guard let col = bestCol else { return nil }
-        let base = (row: bestRow, col: col)
-        return shapesHitboxes ? shapedKeyIndex(at: point, base: base) : base
+        return (row: bestRow, col: col)
     }
-
-    /// Every letter key as the app's hit map draws it over the keys (the Hitboxes screen): the drawn key, and where
-    /// the hit map has moved its room to (nil when it has not moved it).
-    func hitMapOutlines() -> [(key: CGRect, moved: CGRect?)] {
-        guard keyViews.count == rows.count else { return [] }
-        var outlines: [(key: CGRect, moved: CGRect?)] = []
-        for (r, row) in rows.enumerated() {
-            for (c, spec) in row.enumerated() where c < keyViews[r].count {
-                guard let letter = letter(of: spec) else { continue }
-                let key = keyViews[r][c]
-                let rect = key.convert(key.bounds, to: self)
-                var moved: CGRect? = nil
-                if let shift = hitOffsets[letter], shift != .zero {
-                    moved = rect.offsetBy(dx: shift.x * rect.width, dy: shift.y * rect.height)
-                }
-                outlines.append((rect, moved))
-            }
-        }
-        return outlines
-    }
-
-    /// Every key's touch area as the app draws it over the keys (the Hitboxes screen): the drawn key grown or
-    /// shrunk by its touch-area factor and moved by the hit map, with the key's corners. `factor` is 1 for a key
-    /// whose area is not changed; `letter` is nil for the other keys.
-    func touchOutlines() -> [(rect: CGRect, cornerRadius: CGFloat, factor: CGFloat, letter: Character?)] {
-        if hitRects.count != rows.count, !rows.isEmpty, bounds.width > 0 { layoutIfNeeded() }
-        guard hitRects.count == rows.count, keyViews.count == rows.count else { return [] }
-        var outlines: [(rect: CGRect, cornerRadius: CGFloat, factor: CGFloat, letter: Character?)] = []
-        for (r, row) in rows.enumerated() {
-            for (c, spec) in row.enumerated() where !spec.isSpacer && c < keyViews[r].count && c < hitRects[r].count {
-                let key = keyViews[r][c]
-                let drawn = key.bounds.size
-                let cell = hitRects[r][c]
-                let shape = shapesHitboxes ? touchShape(row: r, col: c) : (center: CGPoint(x: cell.midX, y: cell.midY), factor: 1)
-                // The area the touch logic claims (hitScore): the factor times the distance from the touch centre to
-                // the edge of the touch cell on each side (a spacer's room included), not the drawn key's size.
-                let room = r < touchRects.count && c < touchRects[r].count ? touchRects[r][c] : cell
-                let f = max(shape.factor, 0)
-                let minX = shape.center.x - f * (cell.midX - room.minX)
-                let maxX = shape.center.x + f * (room.maxX - cell.midX)
-                let minY = shape.center.y - f * (cell.midY - room.minY)
-                let maxY = shape.center.y + f * (room.maxY - cell.midY)
-                let rect = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-                outlines.append((rect, Theme.keyCornerRadius(for: drawn) * shape.factor, shape.factor, letter(of: spec)))
-            }
-        }
-        return outlines
-    }
-
-    // MARK: Hitbox shaping
 
     private func letter(of spec: KeySpec) -> Character? {
         guard case .character(let text) = spec.action, text.count == 1,
               let letter = text.lowercased().first, letter.isLetter else { return nil }
         return letter
-    }
-
-    private var shapesHitboxes: Bool {
-        return page == .letters && (Prefs.hitboxSize != 1 || !letterBias.isEmpty || !hitOffsets.isEmpty)
-    }
-
-    /// A row's hit cells with each spacer's room given to the keys beside it.
-    private static func absorbingSpacers(_ rects: [CGRect], row: [KeySpec]) -> [CGRect] {
-        var cells = rects
-        for (c, spec) in row.enumerated() where spec.isSpacer && c < rects.count {
-            let left = c > 0 && !row[c - 1].isSpacer ? c - 1 : nil
-            let right = c + 1 < row.count && !row[c + 1].isSpacer ? c + 1 : nil
-            let spacer = rects[c]
-            switch (left, right) {
-            case let (l?, r?):
-                cells[l].size.width += spacer.width / 2
-                cells[r].origin.x -= spacer.width / 2
-                cells[r].size.width += spacer.width / 2
-            case let (l?, nil):
-                cells[l].size.width += spacer.width
-            case let (nil, r?):
-                cells[r].origin.x -= spacer.width
-                cells[r].size.width += spacer.width
-            default:
-                break
-            }
-        }
-        return cells
-    }
-
-    /// How far `point` is from a key's touch centre, in units of the key's half size (the edge of its cell is 1),
-    /// divided by the key's touch-area factor. With every factor 1 and no shifts this picks exactly the cell
-    /// under the point (inside a cell its own score is below 1, every other key's above), so the settings only
-    /// move the borders between keys; a key's own centre always picks it.
-    private func hitScore(row: Int, col: Int, point: CGPoint) -> CGFloat {
-        let rect = hitRects[row][col]
-        // Measured to the edge of the touch cell on the point's side (farther on a side with a spacer's room).
-        let cell = row < touchRects.count && col < touchRects[row].count ? touchRects[row][col] : rect
-        let (center, factor) = touchShape(row: row, col: col)
-        let halfWidth = point.x < rect.midX ? rect.midX - cell.minX : cell.maxX - rect.midX
-        let halfHeight = point.y < rect.midY ? rect.midY - cell.minY : cell.maxY - rect.midY
-        let dx = abs(point.x - center.x) / max(halfWidth, 1)
-        let dy = abs(point.y - center.y) / max(halfHeight, 1)
-        return max(dx, dy) / max(factor, 0.1)
-    }
-
-    /// A key's touch centre (its cell's, moved by the hit map) and touch-area factor (letter room and adaptive keys).
-    private func touchShape(row: Int, col: Int) -> (center: CGPoint, factor: CGFloat) {
-        let rect = hitRects[row][col]
-        var center = CGPoint(x: rect.midX, y: rect.midY)
-        var factor: CGFloat = 1
-        if let letter = letter(of: rows[row][col]) {
-            factor = CGFloat(Prefs.hitboxSize) * (letterBias[letter] ?? 1)
-            // The hit map measures in drawn key sizes (HitMap.record gets letterKeySize()), not touch cells.
-            if let shift = hitOffsets[letter] {
-                let drawn = keyViews[row][col].bounds.size
-                center.x += shift.x * drawn.width
-                center.y += shift.y * drawn.height
-            }
-        }
-        return (center, factor)
-    }
-
-    /// The key whose shaped touch area claims the point: the cell under it or one of its neighbours.
-    private func shapedKeyIndex(at point: CGPoint, base: (row: Int, col: Int)) -> (row: Int, col: Int) {
-        var best = base
-        var bestScore = hitScore(row: base.row, col: base.col, point: point)
-        for r in max(0, base.row - 1)...min(rows.count - 1, base.row + 1) where r < touchRects.count {
-            for c in rows[r].indices where c < touchRects[r].count && !rows[r][c].isSpacer {
-                let rect = touchRects[r][c]
-                guard rect.insetBy(dx: -rect.width * 0.6, dy: -rect.height * 0.6).contains(point) else { continue }
-                let score = hitScore(row: r, col: c, point: point)
-                if score < bestScore {
-                    bestScore = score
-                    best = (row: r, col: c)
-                }
-            }
-        }
-        return best
     }
 
     /// The full (gap-free) touch cell of a key.
