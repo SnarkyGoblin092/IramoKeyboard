@@ -259,18 +259,34 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         old.frame = bounds
         old.isUserInteractionEnabled = false
         addSubview(old)
-        let originX = convert(CGPoint.zero, to: nil).x
-        let mask = CALayer()
-        mask.backgroundColor = UIColor.black.cgColor
+        let origin = convert(CGPoint.zero, to: nil)
+        // The mask is the part below the wave's half circle, drawn around the circle's lowest point at the layer's
+        // position, which then slides down with the wave.
+        let radius = wave.radius
+        let mask = CAShapeLayer()
+        let path = CGMutablePath()
+        let step: CGFloat = 6
+        var x = wave.minX
+        path.move(to: CGPoint(x: x - origin.x, y: 4000))
+        path.addLine(to: CGPoint(x: x - origin.x, y: ModeWave.arc(dx: x - (wave.minX + radius), radius: radius)))
+        while x < wave.minX + wave.width {
+            x = min(wave.minX + wave.width, x + step)
+            path.addLine(to: CGPoint(x: x - origin.x, y: ModeWave.arc(dx: x - (wave.minX + radius), radius: radius)))
+        }
+        path.addLine(to: CGPoint(x: x - origin.x, y: 4000))
+        path.closeSubpath()
+        mask.path = path
+        mask.fillColor = UIColor.black.cgColor
         mask.anchorPoint = .zero
-        mask.bounds = CGRect(x: 0, y: 0, width: 4000, height: bounds.height)
-        mask.position = CGPoint(x: wave.front(1) - originX, y: 0)
+        mask.bounds = CGRect(x: 0, y: 0, width: 1, height: 1)
+        mask.position = CGPoint(x: 0, y: wave.center(1) - origin.y)
         old.layer.mask = mask
-        let slide = CABasicAnimation(keyPath: "position.x")
-        slide.fromValue = wave.front(0) - originX
-        slide.toValue = wave.front(1) - originX
+        let slide = CABasicAnimation(keyPath: "position.y")
+        slide.fromValue = wave.center(0) - origin.y
+        slide.toValue = wave.center(1) - origin.y
         slide.duration = ModeWave.duration
         slide.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        slide.fillMode = .backwards
         slide.beginTime = mask.convertTime(wave.started, from: nil)
         mask.add(slide, forKey: "wave")
         let left = max(0, wave.started + ModeWave.duration - CACurrentMediaTime())

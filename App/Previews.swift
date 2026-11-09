@@ -48,6 +48,8 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     let aspect: CGFloat?
     /// The height the pane has.
     let startHeight: CGFloat
+    /// The scrolling content runs down to the screen's bottom edge, under the home indicator.
+    let edgeToEdge: Bool
 
     /// The card preview's own height, measured (0 until it has been laid out once).
     @State private var naturalHeight: CGFloat = 0
@@ -58,9 +60,10 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private static var keyboardMinimum: CGFloat { return 150 }
 
     /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
-    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil,
+    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = false,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
+        self.edgeToEdge = edgeToEdge
         self.preview = preview
         self.content = content
         self.fills = fills
@@ -116,6 +119,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                     .clipped()
             }
         }
+        .ignoresSafeArea(edges: edgeToEdge ? .bottom : [])
         .background(GlassBackdrop())
         .onPreferenceChange(NaturalHeightKey.self) { value in
             if abs(value - naturalHeight) > 0.5 { naturalHeight = value }

@@ -27,7 +27,7 @@ struct ThemesView: View {
 
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
-        PinnedPreview(height: 240, fills: true) {
+        PinnedPreview(height: 240, fills: true, edgeToEdge: true) {
             LiveKeyboard()
         } content: {
         ScrollView {
@@ -100,7 +100,8 @@ struct ThemesView: View {
         ModeWave.count += 1
         let id = ModeWave.count
         let new = ModeWave(id: id, progress: 0, oldScheme: previewScheme, minX: screenFrame.minX,
-                           width: screenFrame.width, started: CACurrentMediaTime())
+                           minY: screenFrame.minY, width: screenFrame.width, height: screenFrame.height,
+                           started: CACurrentMediaTime() + ModeWave.lead)
         // Before the mode itself: what it sets going (the keyboard's rebuild, the cards' new pictures) looks
         // for the wave.
         ModeWave.active = new
@@ -108,10 +109,11 @@ struct ThemesView: View {
         previewMode = mode
         Task { @MainActor in
             // Drawn once at the left edge, then sent across.
-            withAnimation(.easeInOut(duration: ModeWave.duration)) {
+            // Held back by the same lead the keyboard's layers wait for (ModeWave.started), so both set off together.
+            withAnimation(.easeInOut(duration: ModeWave.duration).delay(ModeWave.lead)) {
                 if wave?.id == id { wave?.progress = 1 }
             }
-            try? await Task.sleep(nanoseconds: UInt64((ModeWave.duration + 0.15) * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64((ModeWave.lead + ModeWave.duration + 0.15) * 1_000_000_000))
             if wave?.id == id { wave = nil }
             if ModeWave.active?.id == id { ModeWave.active = nil }
         }
