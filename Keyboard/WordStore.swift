@@ -706,7 +706,16 @@ final class WordStore {
             let folded = learnedKeys[word] ?? TextFolding.key(word)
             guard folded.count >= 2, count >= WordStore.learnAfter else { return nil }
             let norm = min(0.9, 0.35 + log(1 + Double(count)) / 12)
-            return WordEntry(word: word, folded: folded, freq: count, norm: norm, length: folded.count)
+            var entry = WordEntry(word: word, folded: folded, freq: count, norm: norm, length: folded.count)
+            // (Swiping shows capitals and ALL CAPS; a mixed form such as "iPhone" shows in the suggestions only.)
+            if let form = LearnedWords.shared.forms[word], form != word {
+                if form.count > 1 && form == form.uppercased() {
+                    entry.capitals = .all
+                } else if form == word.prefix(1).uppercased() + word.dropFirst() {
+                    entry.capitals = .title
+                }
+            }
+            return entry
         }
     }
 
@@ -1004,7 +1013,11 @@ extension WordStore {
         return WordStore.written(entry, language: language)
     }
 
+    /// English words that are always capitalised, whatever the subtitle statistics say.
+    static let alwaysCapital: Set<String> = ["i", "i'm", "i'll", "i've", "i'd"]
+
     static func written(_ entry: WordEntry, language: Language) -> String {
+        if language == .english, alwaysCapital.contains(entry.word) { return Predictor.capitalized(entry.word, language: language) }
         switch entry.capitals {
         case .none: return entry.word
         case .title: return Predictor.capitalized(entry.word, language: language)
@@ -1057,11 +1070,31 @@ final class LearnedWords {
     private var saveScheduled = false
     /// Most words kept; the least used are forgotten first.
     private let maxWords = 3000
+    /// lower-case word -> how the user writes it ("zsófi" -> "Zsófi", "ios" -> "iOS"); only words written other
+    /// than their default (all lower case for learned words, the dictionary's form for the others).
+    private(set) var forms: [String: String]
 
     private init() {
         counts = Settings.shared.learnedWords()
         days = Settings.shared.learnedWordDays()
+        forms = Settings.shared.writtenForms()
         rebuildKeys()
+    }
+
+    /// Remembers how the user just wrote `word` (nil: the default form again).
+    func setForm(_ form: String?, for word: String) {
+        guard forms[word] != form else { return }
+        if let form = form {
+            forms[word] = form
+            if forms.count > 1500 {
+                // Forget the forms of words that are no longer learned first, then arbitrary ones.
+                for key in forms.keys where counts[key] == nil && forms.count > 1200 { forms.removeValue(forKey: key) }
+                while forms.count > 1200, let any = forms.keys.first { forms.removeValue(forKey: any) }
+            }
+        } else {
+            forms.removeValue(forKey: word)
+        }
+        scheduleSave()
     }
 
     private func rebuildKeys() {
@@ -1100,6 +1133,7 @@ final class LearnedWords {
     func reload() {
         counts = Settings.shared.learnedWords()
         days = Settings.shared.learnedWordDays()
+        forms = Settings.shared.writtenForms()
         saveScheduled = false
         rebuildKeys()
     }
@@ -1115,5 +1149,6 @@ final class LearnedWords {
         saveScheduled = false
         Settings.shared.setLearnedWords(counts)
         Settings.shared.setLearnedWordDays(days)
+        Settings.shared.setWrittenForms(forms)
     }
 }

@@ -104,25 +104,17 @@ final class KeyboardViewController: UIInputViewController {
         inputView.allowsSelfSizing = true
         inputView.backgroundColor = UIColor.clear
         view = inputView
-        view.overrideUserInterfaceStyle = Theme.appearanceStyle
     }
 
-    /// Light or dark as the user chose; Auto follows the open app.
-    private func applyAppearance() {
-        view.overrideUserInterfaceStyle = Theme.appearanceStyle
-    }
-
-    /// While the phone turns, the system briefly reports the wrong mode (the keyboard flashes dark in light apps),
-    /// so the mode in use is held until the turn is over.
+    /// The keyboard always follows the open app's mode. While the phone turns, the system briefly reports the
+    /// wrong mode (the keyboard flashes dark in light apps), so the mode in use is held until the turn is over.
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         let held = view.traitCollection.userInterfaceStyle
-        if Theme.appearanceStyle == .unspecified, held != .unspecified {
-            view.overrideUserInterfaceStyle = held
-        }
+        if held != .unspecified { view.overrideUserInterfaceStyle = held }
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             guard let self = self else { return }
-            self.applyAppearance()
+            self.view.overrideUserInterfaceStyle = .unspecified
             self.keyboardView.refreshGlassTints()
         }
     }
@@ -273,6 +265,12 @@ final class KeyboardViewController: UIInputViewController {
         }
         LearnedWords.shared.saveNow()
         for store in stores.values { store.saveNow() }
+        saveLanguageUsage()
+    }
+
+    private var usageNotes = 0
+
+    private func saveLanguageUsage() {
         var usage: [String: Double] = [:]
         for (language, value) in Decoder.languageUsage { usage[language.rawValue] = value }
         settings.setLanguageUsage(usage)
@@ -310,7 +308,7 @@ final class KeyboardViewController: UIInputViewController {
     private func settingsSignature() -> String {
         let s = settings
         return [
-            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName, s.appearance,
+            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
             "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle, s.keyGlow, s.keyFont,
             s.enabledLanguages.joined(separator: ","),
             SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
@@ -328,7 +326,6 @@ final class KeyboardViewController: UIInputViewController {
     private func buildInterface() {
         Prefs.refresh()
         Theme.reload()
-        applyAppearance()
         validateLanguage()
         toolsPanel = nil   // goes with the old stage
         for sub in container.subviews { sub.removeFromSuperview() }
@@ -543,6 +540,7 @@ final class KeyboardViewController: UIInputViewController {
         guard target != language else { return }
         finishComposing()
         lastOtherLanguage = language
+        Decoder.layoutFreshWords = 4
         language = target
         settings.languageCode = target.rawValue
         page = .letters
@@ -695,6 +693,13 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         autoSpaceMarker = nil
+        // Punctuation right after a word finishes it too: it is learned like a word followed by space.
+        if text.count == 1, let mark = text.first, !isWordCharacter(mark), !mark.isWhitespace, page == .letters {
+            let before = textDocumentProxy.documentContextBeforeInput ?? ""
+            if !currentPrefix(in: before).isEmpty {
+                DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
+            }
+        }
         textDocumentProxy.insertText(output)
         lastSpaceTime = Date.distantPast
         afterTyping()
@@ -777,6 +782,23 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
+        // A word the user always writes with capitals ("Zsófi", "iOS") gets them without shift. Typed in capitals
+        // on purpose, it stays as typed; backspace right after takes the change back.
+        if autoCorrectAllowed, Emoticons.match(atEndOf: before) == nil {
+            let typedWord = currentPrefix(in: before)
+            let lower = TextFolding.normalizeApostrophes(typedWord).lowercased()
+            if !typedWord.isEmpty, typedWord == typedWord.lowercased(), let form = LearnedWords.shared.forms[lower],
+               form != typedWord, form.count == typedWord.count {
+                for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
+                textDocumentProxy.insertText(form + " ")
+                clearSwipeState()
+                lastAutoFix = (typed: typedWord, inserted: form + " ")
+                lastSpaceTime = Date()
+                afterTyping()
+                return
+            }
+        }
+
         clearSwipeState()
         textDocumentProxy.insertText(" ")
         lastSpaceTime = Date()
@@ -833,6 +855,11 @@ final class KeyboardViewController: UIInputViewController {
             for _ in 0..<fix.inserted.count { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(fix.typed)
             stores[language]?.learn(fix.typed, asTyped: true)
+            // Taking back the capitals of a word the user writes with them: it is written as typed from now on.
+            let lowerTyped = TextFolding.normalizeApostrophes(fix.typed).lowercased()
+            if LearnedWords.shared.forms[lowerTyped] == fix.inserted.trimmingCharacters(in: .whitespaces) {
+                LearnedWords.shared.setForm(nil, for: lowerTyped)
+            }
             lastCommitted = nil   // the typed word was kept on purpose: no typo to learn here
             clearSwipeState()
         } else if Prefs.deleteSwipedWord, let inserted = lastSwipeInserted, before.hasSuffix(inserted) {
@@ -911,8 +938,48 @@ final class KeyboardViewController: UIInputViewController {
         var prefix = TextFolding.normalizeApostrophes(currentPrefix(in: before))
         while prefix.hasSuffix("'") { prefix.removeLast() }
         guard !prefix.isEmpty else { return }
+        noteWrittenForm(prefix, before: before)
         if prefix.count >= 3 { noteWordUse(prefix) }
         recordBigram(contextBefore: before, next: prefix)
+    }
+
+    /// Votes of a different way to write a dictionary word (word -> the form seen last), so one slip does not change it.
+    private var formVotes: [String: String] = [:]
+
+    /// Learns how the user writes `typed` (just finished, ending `before`): "Zsófi", "iOS", "london". A word the
+    /// dictionaries lack takes the form at once (a name typed with a capital in mid-sentence is learned right
+    /// away); a dictionary word needs the same different form twice in a row. The first word of a sentence says
+    /// nothing about capitals (auto-capitalisation), unless it has capitals inside; ALL CAPS is shouting.
+    private func noteWrittenForm(_ typed: String, before: String) {
+        let lower = TextFolding.normalizeApostrophes(typed).lowercased()
+        guard lower.count >= 2, lower.count <= 24, typed.count == lower.count,
+              typed.contains(where: { $0.isLetter }), typed.allSatisfy({ Predictor.isWordCharacter($0) }),
+              !WordStore.alwaysCapital.contains(lower) else { return }
+        let normalized = TextFolding.normalizeApostrophes(typed)
+        if normalized.count > 1 && normalized == normalized.uppercased() { return }
+        var head = before
+        let tail = currentPrefix(in: before)
+        if !tail.isEmpty, head.hasSuffix(tail) { head = String(head.dropLast(tail.count)) }
+        let inside = normalized.dropFirst().contains { $0.isUppercase }
+        let atStart = Predictor.isSentenceStart(head)
+        if atStart && !inside { return }
+
+        let ordered = [language] + enabledLanguages.filter { $0 != language }
+        let known = ordered.compactMap { stores[$0]?.isLoaded == true ? stores[$0]?.written(lower) : nil }.first
+        let forms = LearnedWords.shared
+        if normalized == (known ?? lower) {
+            formVotes.removeValue(forKey: lower)
+            forms.setForm(nil, for: lower)
+        } else if known == nil {
+            forms.setForm(normalized, for: lower)
+            // A capitalised word in the middle of a sentence that no dictionary has is a name: learned at once.
+            if !atStart, normalized.first?.isUppercase == true { learnTappedWord(normalized) }
+        } else if formVotes[lower] == normalized {
+            formVotes.removeValue(forKey: lower)
+            forms.setForm(normalized, for: lower)
+        } else {
+            formVotes[lower] = normalized
+        }
     }
 
     /// Counts a finished word: a dictionary word ranks higher from now on (in the dictionary that has it, the active
@@ -927,6 +994,9 @@ final class KeyboardViewController: UIInputViewController {
             let typing = currentPrefix(in: head)
             if !typing.isEmpty { head = String(head.dropLast(typing.count)) }
             Decoder.noteLanguage(of: cleaned, before: head, active: language, stores: stores)
+            // Saved as it goes: the keyboard can be closed by the system without a chance to save on the way out.
+            usageNotes += 1
+            if usageNotes % 8 == 0 { saveLanguageUsage() }
             // A different word written where the last one was (the user deleted it): a typo of theirs to learn.
             if let previous = lastCommitted, previous.head == head, previous.word != cleaned,
                isLikelyRetype(previous.word, cleaned) {

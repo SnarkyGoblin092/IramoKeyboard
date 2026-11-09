@@ -6,6 +6,9 @@ struct ThemesView: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
+    /// The mode of the preview only ("auto": the app's own); the keyboard itself always follows the app it is in.
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var previewMode = SettingDefault.appearance
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openScreen) private var openScreen
 
     /// Two cards across on a phone held upright, more where there is room (iPad, landscape).
@@ -47,6 +50,10 @@ struct ThemesView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
+            }
+            SegmentedChoice(names: [tr("Light"), tr("Dark")],
+                            selected: previewMode == "light" ? 0 : (previewMode == "dark" ? 1 : (colorScheme == .dark ? 1 : 0))) {
+                previewMode = $0 == 0 ? "light" : "dark"
             }
             Button {
                 Feedback.tap()

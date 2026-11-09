@@ -317,6 +317,7 @@ final class KeyboardView: UIView {
         applyReturnProminence()
         setNeedsLayout()
         layoutIfNeeded()   // hit areas must match the new rows before the next touch
+        renewGlassContainer()
         refreshGlassTints()
         for (r, columns) in handovers {
             for (c, handover) in columns where r < keyViews.count && c < keyViews[r].count {
@@ -421,6 +422,23 @@ final class KeyboardView: UIView {
     /// The size the keys were last laid out for.
     private var lastLayoutSize = CGSize.zero
 
+    /// With real Liquid Glass, puts the keys into a fresh shared glass container. After the keys were rebuilt or
+    /// the keyboard was resized (turning the phone, the split keyboard) the old one could keep blending the
+    /// return key's accent into the other keys.
+    private func renewGlassContainer() {
+        guard Theme.usesRealGlass, let old = glassContainer else { return }
+        let fresh = GlassSupport.makeContainer(spacing: 2)
+        fresh.isUserInteractionEnabled = false
+        fresh.frame = bounds
+        insertSubview(fresh, aboveSubview: old)
+        for row in keyViews {
+            for key in row where key.superview === old.contentView { fresh.contentView.addSubview(key) }
+        }
+        old.removeFromSuperview()
+        glassContainer = fresh
+        setNeedsLayout()
+    }
+
     /// With real Liquid Glass, gives every key its own tint again, now and once more after the layout has settled.
     func refreshGlassTints() {
         guard Theme.usesRealGlass else { return }
@@ -445,7 +463,11 @@ final class KeyboardView: UIView {
         guard !rows.isEmpty, bounds.width > 2, bounds.height > 8 else { return }
         if bounds.size != lastLayoutSize {
             lastLayoutSize = bounds.size
-            refreshGlassTints()   // turning the phone must not leave the keys in the return key's accent
+            // Turning the phone must not leave the keys in the return key's accent.
+            DispatchQueue.main.async { [weak self] in
+                self?.renewGlassContainer()
+                self?.refreshGlassTints()
+            }
         }
 
         // A narrower keyboard (the Width setting) is centred; the one-handed keyboard sits against its side.

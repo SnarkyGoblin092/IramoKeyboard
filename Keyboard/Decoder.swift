@@ -87,8 +87,20 @@ enum Decoder {
     static func prior(_ language: Language, active: Language) -> Double {
         let total = languageUsage.values.reduce(0, +)
         let share = total > 0 ? (languageUsage[language] ?? 0) / total : 0
-        return log10(0.25 + share) + (language == active ? activeLead : 0)
+        // Once the keyboard knows what the user writes (~30 words), that decides; the layout only leads strongly
+        // for the first words after it was switched to (a clear sign of the language about to be written), and
+        // otherwise only breaks ties. With no history yet the layout leads fully.
+        let known = min(1, total / usageKnownAfter)
+        var lead = activeLead * (1 - 0.75 * known)
+        if layoutFreshWords > 0 { lead = activeLead }
+        let floor = 0.25 - 0.2 * known
+        return log10(floor + share) + (language == active ? lead : 0)
     }
+
+    /// Words of recent writing after which the usage outweighs the layout.
+    private static let usageKnownAfter = 30.0
+    /// Words left in which the layout just switched to keeps its full lead.
+    static var layoutFreshWords = 0
 
     /// Counts a finished word towards the languages, by how likely each one wrote it here.
     static func noteLanguage(of word: String, before: String, active: Language, stores: [Language: WordStore]) {
@@ -96,6 +108,7 @@ enum Decoder {
         let context = Decoder.context(before: before + word + " ", active: active, stores: stores)
         languageUsage = languageUsage.mapValues { $0 * usageDecay }
         for (language, weight) in context.weights { languageUsage[language, default: 0] += weight }
+        if layoutFreshWords > 0 { layoutFreshWords -= 1 }
     }
 
     // MARK: Context
@@ -628,6 +641,8 @@ enum Decoder {
             return word.split(separator: " ").map { written(String($0), context: context, stores: stores) }
                 .joined(separator: " ")
         }
+        // How the user writes this word beats the dictionary's form.
+        if let form = LearnedWords.shared.forms[word] { return form }
         var best: (weight: Double, text: String)? = nil
         for (language, store) in stores where store.isLoaded {
             guard let text = store.written(word) else { continue }
@@ -678,6 +693,8 @@ enum Decoder {
         let lower = TextFolding.normalizeApostrophes(typed).lowercased()
         guard !lower.isEmpty, lower.allSatisfy({ Predictor.isWordCharacter($0) }) else { return false }
         guard typed.filter({ $0.isUppercase }).count < 2 else { return false }
+        // "i" -> "I" is always fixed, even if the field already has a few lower-case ones.
+        if WordStore.alwaysCapital.contains(lower), stores[.english]?.isLoaded == true { return true }
         if field?.uses(lower, atLeast: 2) == true { return false }
         return !stores.values.contains(where: { $0.isLearned(lower) })
     }
@@ -708,7 +725,8 @@ enum Decoder {
             choice = best.word != base.word && best.score >= base.score + correctMargin ? best.word : base.word
         }
         // Someone writing everything in lower case keeps it that way.
-        let text = field?.style == .lower ? choice : written(choice, context: found.context, stores: stores)
+        let text = field?.style == .lower && !WordStore.alwaysCapital.contains(choice)
+            ? choice : written(choice, context: found.context, stores: stores)
         // Nothing to change: the word stays as typed, in whatever case the user typed it.
         if text == TextFolding.normalizeApostrophes(typed) || (choice == lower && text == lower) { return nil }
         return text

@@ -6,9 +6,6 @@ import SwiftUI
 struct ThemeEditorView: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
 
-    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
-    private let modes = ["auto", "light", "dark"]
-
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
     var body: some View {
@@ -16,15 +13,6 @@ struct ThemeEditorView: View {
             LiveKeyboard()
         } content: {
         GlassList {
-            Section {
-                SegmentedChoice(names: [tr("Auto"), tr("Light"), tr("Dark")],
-                                selected: modes.firstIndex(of: appearance)) { appearance = modes[$0] }
-            } header: {
-                SectionHeader(tr("Mode"), symbol: "circle.lefthalf.filled", color: .teal)
-            } footer: {
-                Text(tr("Light and Dark keep the keyboard in that mode. Auto follows the app you are typing in."))
-            }
-            .glassRows()
             SystemThemeSections(theme: theme)
         }
         .scrollContentBackground(.hidden)

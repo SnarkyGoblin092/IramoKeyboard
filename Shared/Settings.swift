@@ -103,6 +103,8 @@ enum SettingKey {
     static let learnedWords = "hunkeys.learnedWords"
     /// Learned word -> last day it was used (days since 1970).
     static let learnedWordDays = "hunkeys.learnedWordDays"
+    /// lower-case word -> the way the user writes it ("zsófi" -> "Zsófi", "ios" -> "iOS"), when that is not the default.
+    static let writtenForms = "hunkeys.writtenForms"
     /// "typed\tmeant" -> how often the user deleted the typed word and wrote the meant one in its place.
     static let correctionsPrefix = "hunkeys.corrections."
     /// Bumped whenever the app changes what the keyboard learned, so a running keyboard reloads it.
@@ -684,6 +686,14 @@ final class Settings {
         put(days, SettingKey.learnedWordDays)
     }
 
+    func writtenForms() -> [String: String] {
+        return value(SettingKey.writtenForms) as? [String: String] ?? [:]
+    }
+
+    func setWrittenForms(_ forms: [String: String]) {
+        put(forms, SettingKey.writtenForms)
+    }
+
     var personalRevision: Int {
         return value(SettingKey.personalRevision) as? Int ?? 0
     }
@@ -703,6 +713,8 @@ final class Settings {
         var days = learnedWordDays()
         days.removeValue(forKey: word)
         setLearnedWordDays(days)
+        var forms = writtenForms()
+        if forms.removeValue(forKey: word) != nil || forms.removeValue(forKey: word.lowercased()) != nil { setWrittenForms(forms) }
         for language in Language.allCases {
             var corrections = self.corrections(for: language.rawValue)
             let before = corrections.count
@@ -772,6 +784,7 @@ final class Settings {
         put(nil, SettingKey.languageUsage)
         put([String: Int](), SettingKey.learnedWords)   // empty rather than missing: nothing left to merge
         put(nil, SettingKey.learnedWordDays)
+        put(nil, SettingKey.writtenForms)
         for language in Language.allCases {
             put(nil, SettingKey.usedWordsPrefix + language.rawValue)
             put(nil, SettingKey.trigramPrefix + language.rawValue)
