@@ -70,6 +70,28 @@ struct ModeWave: Equatable, Identifiable {
         return ModeWave.band / 2 * CGFloat(1 + 0.45 * sin(4 * angle + shift) + 0.2 * sin(7 * angle + 2 * shift))
     }
 
+    enum Relation { case passed, ahead, crossing }
+
+    /// Whether the wave at `progress` has passed all of `frame`, not reached any of it, or is crossing it. (Judged
+    /// by points of the frame and a margin, so a view is only called passed or ahead when it surely is.)
+    func relation(of frame: CGRect, progress: CGFloat) -> Relation {
+        guard frame.width > 0, frame.height > 0 else { return .crossing }
+        let margin: CGFloat = 12
+        var inside = 0, outside = 0
+        let xs = [frame.minX, frame.midX, frame.maxX], ys = [frame.minY, frame.midY, frame.maxY]
+        for x in xs {
+            for y in ys {
+                let dx = x - center.x, dy = y - center.y
+                let distance = hypot(dx, dy)
+                let r = radius(progress, angle: atan2(Double(dy), Double(dx)).truncatingRemainder(dividingBy: 2 * .pi))
+                if distance < r - margin - ModeWave.band { inside += 1 } else if distance > r + margin + ModeWave.band { outside += 1 }
+            }
+        }
+        if inside == 9 { return .passed }
+        if outside == 9 { return .ahead }
+        return .crossing
+    }
+
     /// The cut's outline at `progress`, a point at every step around, relative to `origin` (window coordinates).
     func outline(_ progress: CGFloat, relativeTo origin: CGPoint) -> [CGPoint] {
         return (0..<ModeWave.steps).map { index in
@@ -171,18 +193,39 @@ extension View {
     /// While a wave crosses the screen, shows the view only where it has passed (what is drawn under the view,
     /// its old look, shows outside the front). Without a wave the view is shown whole.
     func revealedByWave(_ wave: ModeWave?) -> some View {
-        return mask {
+        return modifier(WaveReveal(wave: wave))
+    }
+}
+
+/// Masks the view to the wave's circle, but only while the circle's edge crosses it: a view the wave has not
+/// reached is not drawn, and one it has passed by is drawn whole, without the mask (which costs a pass each).
+private struct WaveReveal: ViewModifier {
+    let wave: ModeWave?
+    @State private var frame = CGRect.zero
+
+    func body(content: Content) -> some View {
+        Group {
             if let wave = wave {
                 TimelineView(.animation) { context in
-                    GeometryReader { geometry in
-                        WavePassed(wave: wave, progress: wave.progress(at: context.date),
-                                   origin: geometry.frame(in: .global).origin)
+                    let progress = wave.progress(at: context.date)
+                    switch wave.relation(of: frame, progress: progress) {
+                    case .passed:
+                        content
+                    case .ahead:
+                        EmptyView()
+                    case .crossing:
+                        content.mask(WavePassed(wave: wave, progress: progress, origin: frame.origin))
                     }
                 }
             } else {
-                Rectangle()
+                content
             }
         }
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { frame = geometry.frame(in: .global) }
+                .onChange(of: geometry.frame(in: .global)) { frame = $0 }
+        })
     }
 }
 
@@ -218,7 +261,6 @@ private struct WaveGlass: View {
     var body: some View {
         glass
             .overlay(shape.stroke(Color.white.opacity(0.5), lineWidth: 0.75))
-            .shadow(color: Color.black.opacity(0.14), radius: 6, x: 0, y: 0)
     }
 
     @ViewBuilder private var glass: some View {
@@ -249,13 +291,19 @@ private struct WaveRingShape: Shape {
         var path = Path()
         guard progress > 0, progress < 1 else { return path }
         let ring = wave.ring(progress, relativeTo: origin)
+        // What lies beyond the screen is not drawn: the glass costs more the more it covers, and a big ring is mostly
+        // off the screen. Points out there are pulled in to just outside it (the ring pinches shut there).
+        let bounds = rect.insetBy(dx: -40, dy: -40)
+        func held(_ point: CGPoint) -> CGPoint {
+            return CGPoint(x: min(bounds.maxX, max(bounds.minX, point.x)), y: min(bounds.maxY, max(bounds.minY, point.y)))
+        }
         guard let first = ring.outer.first, let start = ring.inner.last else { return path }
-        path.move(to: first)
-        for point in ring.outer.dropFirst() { path.addLine(to: point) }
+        path.move(to: held(first))
+        for point in ring.outer.dropFirst() { path.addLine(to: held(point)) }
         path.closeSubpath()
         // The inner edge runs the other way round, so the middle is left open.
-        path.move(to: start)
-        for point in ring.inner.reversed().dropFirst() { path.addLine(to: point) }
+        path.move(to: held(start))
+        for point in ring.inner.reversed().dropFirst() { path.addLine(to: held(point)) }
         path.closeSubpath()
         return path
     }
