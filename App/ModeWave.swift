@@ -212,7 +212,8 @@ private struct WaveReveal: ViewModifier {
                     case .passed:
                         content
                     case .ahead:
-                        EmptyView()
+                        // (Hidden, not removed: it keeps its size, which the frame measured here comes from.)
+                        content.hidden()
                     case .crossing:
                         content.mask(WavePassed(wave: wave, progress: progress, origin: frame.origin))
                     }
