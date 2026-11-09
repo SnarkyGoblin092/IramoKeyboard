@@ -176,6 +176,9 @@ private struct ThemeThumbnail: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
+    /// The picture shown before `image`, kept under it while the new one fades in (light / dark, an edit).
+    @State private var previous: UIImage?
+    @State private var fade: Double = 1
     @State private var shownKey = ""
     @State private var wantedKey = ""
 
@@ -186,8 +189,14 @@ private struct ThemeThumbnail: View {
         Group {
             if theme.kind == .liquidGlass {
                 ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                    .animation(ThemeThumbnail.fadeAnimation, value: scheme)
             } else if let image = image {
-                Image(uiImage: image).resizable().interpolation(.high)
+                ZStack {
+                    if let previous = previous {
+                        Image(uiImage: previous).resizable().interpolation(.high)
+                    }
+                    Image(uiImage: image).resizable().interpolation(.high).opacity(fade)
+                }
             } else {
                 // Until it is drawn: the keyboard's backdrop.
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -203,6 +212,27 @@ private struct ThemeThumbnail: View {
         .onChange(of: theme) { newTheme in load(theme: newTheme, dark: scheme == .dark) }
     }
 
+    static let fadeAnimation = Animation.easeInOut(duration: 0.3)
+
+    /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view), faded in over
+    /// the picture it replaces otherwise.
+    private func show(_ new: UIImage?, key: String) {
+        guard let new = new else { return }
+        let replaces = image != nil && shownKey != key
+        previous = replaces ? image : nil
+        image = new
+        shownKey = key
+        guard replaces else {
+            fade = 1
+            return
+        }
+        // Drawn clear once, over the old picture, then faded in (set to 1 in this same update it would not fade).
+        fade = 0
+        Task { @MainActor in
+            withAnimation(ThemeThumbnail.fadeAnimation) { fade = 1 }
+        }
+    }
+
     /// What the picture depends on: the theme with its edits, light or dark, and every setting the preview reads.
     private static func key(theme: ThemeDefinition, dark: Bool) -> String {
         return "\(theme.id)|\(theme.hashValue)|\(dark)|\(ThumbnailCache.settingsSignature())"
@@ -214,8 +244,7 @@ private struct ThemeThumbnail: View {
         wantedKey = key
         guard key != shownKey || image == nil else { return }
         if let cached = ThumbnailCache.shared.image(for: key) {
-            image = cached
-            shownKey = key
+            show(cached, key: key)
             return
         }
         let accent = self.accent, scale = displayScale
@@ -231,8 +260,7 @@ private struct ThemeThumbnail: View {
             // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
             // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
             guard wantedKey == key else { return }
-            image = rendered
-            shownKey = key
+            show(rendered, key: key)
         }
     }
 }

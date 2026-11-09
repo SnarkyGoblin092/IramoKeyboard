@@ -20,6 +20,11 @@ struct LiveKeyboard: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     @Environment(\.colorScheme) private var appScheme
 
+    /// The mode the keys are drawn in, for the backdrop behind them.
+    private var scheme: ColorScheme {
+        return appearance == "light" ? .light : (appearance == "dark" ? .dark : appScheme)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
@@ -33,11 +38,13 @@ struct LiveKeyboard: View {
                         look.backdrop(scale: scale)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                            // Fades with the keys (LiveKeyboardView.modeFade) when the mode is switched.
+                            .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
                     )
             }
             // The backdrop is drawn in the keys' mode, not the app's: light keys and the bar's dark words would
             // be lost on a dark backdrop.
-            .environment(\.colorScheme, appearance == "light" ? .light : (appearance == "dark" ? .dark : appScheme))
+            .environment(\.colorScheme, scheme)
             .frame(width: size.width * scale, height: size.height * scale)
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -76,6 +83,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var builtSignature = ""
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
+
+    /// How long the keys take to fade from light to dark and back when the preview's mode is switched.
+    static let modeFade: TimeInterval = 0.3
 
     /// The Effects screen's settings while they are edited; nil plays the stored ones.
     var effectsOverride: EffectsConfig? {
@@ -147,7 +157,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         Theme.reload()
         overrideUserInterfaceStyle = Theme.appearanceStyle
         builtSignature = signature()
-        builtStyle = traitCollection.userInterfaceStyle
+        // The picked mode is the one built even if the view's traits have not caught up yet (a second build for
+        // them would cut the fade short).
+        builtStyle = overrideUserInterfaceStyle != .unspecified ? overrideUserInterfaceStyle : traitCollection.userInterfaceStyle
         language = LiveKeyboardView.openingLanguage(code: Settings.shared.languageCode)
         bar.removeFromSuperview()
         keyboard.removeFromSuperview()
@@ -208,7 +220,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Settings.shared.refresh()
             Prefs.refresh()
             self.applyEffects()
-            if self.signature() != self.builtSignature { self.rebuild() }
+            guard self.signature() != self.builtSignature else { return }
+            // Light to dark (the Themes screen's switch): the new keys fade in over the old ones.
+            if self.window != nil, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
+                UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
+                                  options: [.transitionCrossDissolve, .allowUserInteraction],
+                                  animations: { self.rebuild() })
+            } else {
+                self.rebuild()
+            }
         }
     }
 
