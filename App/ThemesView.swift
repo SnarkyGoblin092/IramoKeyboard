@@ -47,6 +47,10 @@ struct ThemesView: View {
                 .onChange(of: geometry.frame(in: .global)) { screenFrame = $0 }
         })
         .overlay {
+            // Nothing on the screen can be touched while a wave is out.
+            if !waves.isEmpty { Color.clear.contentShape(Rectangle()).onTapGesture {}.gesture(DragGesture()) }
+        }
+        .overlay {
             if waves.contains(where: { $0.kind == .mode }) { GlassWaveBand(waves: waves.filter { $0.kind == .mode }) }
         }
         .navigationTitle(tr("Themes"))
@@ -92,6 +96,7 @@ struct ThemesView: View {
     /// Switches the previews to the other mode behind a wave of glass (at once with Reduce Motion, where the
     /// previews fade instead).
     private func switchMode(dark: Bool) {
+        guard waves.isEmpty else { return }
         let mode = dark ? "dark" : "light"
         guard (previewScheme == .dark) != dark, screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled else {
             previewMode = mode
@@ -104,6 +109,7 @@ struct ThemesView: View {
     /// Plays a theme wave in the main preview's box, then switches to `id` (at once where there is no box or with
     /// Reduce Motion).
     private func chooseTheme(_ id: String) {
+        guard waves.isEmpty else { return }
         let box = ModeWave.previewBox
         if box.width > 0, !UIAccessibility.isReduceMotionEnabled {
             launch(kind: .theme, frame: box, anchorY: 1, newScheme: previewScheme, newTheme: id)

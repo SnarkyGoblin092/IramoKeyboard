@@ -77,9 +77,9 @@ struct ModeWave: Equatable, Identifiable {
         return progress * endRadius * swell
     }
 
-    /// The ring's half thickness at `angle`: thicker here, thinner there.
+    /// The ring's half thickness: the same all round, so the cut never shows outside the ring.
     private func half(angle: Double) -> CGFloat {
-        return ModeWave.band / 2 * CGFloat(1 + 0.45 * sin(4 * angle + shift) + 0.2 * sin(7 * angle + 2 * shift))
+        return ModeWave.band / 2
     }
 
     enum Relation { case passed, ahead, crossing }
@@ -115,13 +115,13 @@ struct ModeWave: Equatable, Identifiable {
     }
 
     /// The ring: the inner and the outer edge at every step around, relative to `origin`.
-    func ring(_ progress: CGFloat, relativeTo origin: CGPoint) -> (inner: [CGPoint], outer: [CGPoint]) {
+    func ring(_ progress: CGFloat, relativeTo origin: CGPoint, grow: CGFloat = 0) -> (inner: [CGPoint], outer: [CGPoint]) {
         var inner: [CGPoint] = [], outer: [CGPoint] = []
         for index in 0..<ModeWave.steps {
             let angle = Double(index) / Double(ModeWave.steps) * 2 * .pi
             let r = radius(progress, angle: angle)
             let half = self.half(angle: angle)
-            let near = max(0, r - half), far = r + min(half, r)
+            let near = max(0, r - half - grow), far = r + min(half, r) + grow
             let direction = CGPoint(x: CGFloat(cos(angle)), y: CGFloat(sin(angle)))
             inner.append(CGPoint(x: center.x + near * direction.x - origin.x, y: center.y + near * direction.y - origin.y))
             outer.append(CGPoint(x: center.x + far * direction.x - origin.x, y: center.y + far * direction.y - origin.y))
@@ -272,6 +272,9 @@ private struct WaveGlass: View {
     let origin: CGPoint
 
     private var shape: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin) }
+    /// The glass is made a little wider than the ring and cut back to it, so the bright edge the system draws on
+    /// Liquid Glass falls outside what is seen.
+    private var wider: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin, grow: 5) }
 
     var body: some View {
         glass
@@ -280,7 +283,7 @@ private struct WaveGlass: View {
     @ViewBuilder private var glass: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(.clear, in: shape)
+            Color.clear.glassEffect(.clear, in: wider).mask(shape)
         } else {
             frosted
         }
@@ -300,11 +303,12 @@ private struct WaveRingShape: Shape {
     let wave: ModeWave
     let progress: CGFloat
     let origin: CGPoint
+    var grow: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
         guard progress > 0, progress < 1 else { return path }
-        let ring = wave.ring(progress, relativeTo: origin)
+        let ring = wave.ring(progress, relativeTo: origin, grow: grow)
         // What lies beyond the screen is not drawn: the glass costs more the more it covers, and a big ring is mostly
         // off the screen. Points out there are pulled in to just outside it (the ring pinches shut there).
         let bounds = rect.insetBy(dx: -40, dy: -40)
