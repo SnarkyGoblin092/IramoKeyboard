@@ -22,9 +22,7 @@ final class Lexicon {
     init?(language: Language) {
         guard let url = LanguageData.url(forResource: "dict_\(language.rawValue)", withExtension: "bin"),
               let data = try? NSData(contentsOf: url, options: .alwaysMapped),
-              data.length >= 32 else {
-            return nil
-        }
+              data.length >= 32 else { return nil }
         // Everything is read through locals first: a class may not read its own properties before all are set.
         let pointer = data.bytes
         guard pointer.loadUnaligned(as: UInt32.self) == 0x5844_4B48,                      // "HKDX"
@@ -102,11 +100,13 @@ final class Lexicon {
         return min(1, log(Double(frequency(index)) + 1) / max(log(Double(maxCount) + 1), 1))
     }
 
+    /// The record as a `WordEntry` (strings are made here, so hot loops use the accessors above instead).
     func entry(_ index: Int) -> WordEntry {
         return WordEntry(word: word(index), folded: key(index), freq: frequency(index), norm: norm(index),
                          length: keyLength(index), rank: rank(index), capitals: capitals(index))
     }
 
+    /// Record index of a language model rank (= line of words_<lang>.tsv), or nil.
     func index(ofRank rank: Int) -> Int? {
         guard rank >= 0, rank < count else { return nil }
         return u32(byRankOffset + 4 * rank)
@@ -114,6 +114,7 @@ final class Lexicon {
 
     // MARK: Search
 
+    /// -1, 0, 1 comparing record `index`'s key with `key` bytewise.
     @inline(__always) private func compareKey(_ index: Int, _ key: [UInt8]) -> Int {
         let bytes = keyBytes(index)
         let n = min(bytes.count, key.count)
@@ -124,6 +125,7 @@ final class Lexicon {
         return bytes.count == key.count ? 0 : (bytes.count < key.count ? -1 : 1)
     }
 
+    /// First record whose key is not below `key`.
     func lowerBound(_ key: String) -> Int {
         let target = Array(key.utf8)
         var low = 0, high = count
@@ -134,7 +136,8 @@ final class Lexicon {
         return low
     }
 
-    func keyHasPrefix(_ index: Int, _ prefix: [UInt8]) -> Bool {
+    /// True if record `index`'s key starts with `prefix` (UTF-8 bytes).
+    @inline(__always) func keyHasPrefix(_ index: Int, _ prefix: [UInt8]) -> Bool {
         let bytes = keyBytes(index)
         guard bytes.count >= prefix.count else { return false }
         for i in 0..<prefix.count where bytes[i] != prefix[i] { return false }
@@ -145,6 +148,7 @@ final class Lexicon {
 
     // MARK: Swipe index
 
+    /// Records whose first and last key letters are `first` and `last`.
     func edgeEntries(first: Character, last: Character) -> [Int] {
         guard let f = first.unicodeScalars.first?.value, let l = last.unicodeScalars.first?.value else { return [] }
         var low = 0, high = edgeKeyCount
@@ -162,6 +166,7 @@ final class Lexicon {
         return (start..<stop).map { u32(edgeEntriesOffset + 4 * $0) }
     }
 
+    /// The words with an apostrophe ("l'amour", "it's"), found by scanning the words' bytes.
     func wordsWithApostrophe() -> [String] {
         var result: [String] = []
         for index in 0..<count {
@@ -172,6 +177,7 @@ final class Lexicon {
         return result
     }
 
+    /// The number of entries in the swipe index (stored after them).
     private var totalEdgeEntries: Int {
         return u32(textOffset - 4)
     }
@@ -182,7 +188,7 @@ final class Lexicon {
 /// accessors, which do not build strings for the memory-mapped list. A value type over immutable storage, so a copy
 /// can be handed to another thread (the swipe decoder).
 struct Entries {
-    private let lexicon: LexiconProtocol?
+    private let lexicon: Lexicon?
     private let list: [WordEntry]
     private let edges: [String: [Int]]
     private let byRank: [Int32]
@@ -192,7 +198,7 @@ struct Entries {
 
     static let empty = Entries(list: [], edges: [:], byRank: [], totalCount: 1)
 
-    init(lexicon: LexiconProtocol) {
+    init(lexicon: Lexicon) {
         self.lexicon = lexicon
         list = []
         edges = [:]
@@ -227,6 +233,7 @@ struct Entries {
         return list[index].freq
     }
 
+    /// First index whose match key is not below `key` (code point order).
     func lowerBound(_ key: String) -> Int {
         if let lexicon = lexicon { return lexicon.lowerBound(key) }
         var low = 0
@@ -248,46 +255,28 @@ struct Entries {
         return list[index].folded.utf8.elementsEqual(key)
     }
 
+    /// Indices of words whose first and last key letters are `first` and `last` (the swipe index).
     func edgeEntries(first: Character, last: Character) -> [Int] {
         if let lexicon = lexicon { return lexicon.edgeEntries(first: first, last: last) }
         return edges[String([first, last])] ?? []
     }
 
+    /// The words with an apostrophe ("l'amour", "it's").
     func wordsWithApostrophe() -> [String] {
         if let lexicon = lexicon { return lexicon.wordsWithApostrophe() }
         return list.filter { $0.word.contains("'") }.map { $0.word }
     }
 
+    /// Index of the word on line `rank` of words_<lang>.tsv (language model id - 3), if loaded.
     func index(ofRank rank: Int) -> Int? {
         if let lexicon = lexicon { return lexicon.index(ofRank: rank) }
         guard rank >= 0, rank < byRank.count, byRank[rank] >= 0 else { return nil }
         return Int(byRank[rank])
     }
 
+    /// Indices of the `limit` most common words, most common first.
     func mostCommon(_ limit: Int) -> [Int] {
         if lexicon != nil { return (0..<min(limit, count)).compactMap { index(ofRank: $0) } }
         return Array((0..<list.count).sorted { list[$0].freq > list[$1].freq }.prefix(limit))
     }
 }
-
-protocol LexiconProtocol {
-    var count: Int { get }
-    var totalCount: Double { get }
-    func frequency(_ index: Int) -> Int
-    func rank(_ index: Int) -> Int32
-    func keyLength(_ index: Int) -> Int
-    func capitals(_ index: Int) -> WordCapitals
-    func keyBytes(_ index: Int) -> UnsafeRawBufferPointer
-    func word(_ index: Int) -> String
-    func key(_ index: Int) -> String
-    func norm(_ index: Int) -> Double
-    func entry(_ index: Int) -> WordEntry
-    func index(ofRank rank: Int) -> Int?
-    func lowerBound(_ key: String) -> Int
-    func keyHasPrefix(_ index: Int, _ prefix: [UInt8]) -> Bool
-    func keyEquals(_ index: Int, _ key: [UInt8]) -> Bool
-    func edgeEntries(first: Character, last: Character) -> [Int]
-    func wordsWithApostrophe() -> [String]
-}
-
-extension Lexicon: LexiconProtocol {}
