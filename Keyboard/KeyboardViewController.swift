@@ -690,6 +690,11 @@ final class KeyboardViewController: UIInputViewController {
             if let marker = autoSpaceMarker, !marker.isEmpty, before.hasSuffix(marker), before.hasSuffix(" "),
                let beforeSpace = before.dropLast().last, beforeSpace.isLetter || beforeSpace.isNumber {
                 textDocumentProxy.deleteBackward()
+            } else if autoCorrectAllowed, language != .french, ",.!?;".contains(text), Date().timeIntervalSince(lastSpaceTime) < 1.5,
+                      before.hasSuffix(" "), !before.hasSuffix("  "),
+                      let beforeSpace = before.dropLast().last, beforeSpace.isLetter || beforeSpace.isNumber {
+                // A space typed a moment ago, then a full stop or comma: it belongs right after the word.
+                textDocumentProxy.deleteBackward()
             }
         }
         autoSpaceMarker = nil
@@ -778,7 +783,7 @@ final class KeyboardViewController: UIInputViewController {
                 lastAutoFix = (typed: typedWord, inserted: replacement + " ")
                 lastSpaceTime = Date()
                 afterTyping()
-                return
+                return   // (the word before stays as it is: this fix must stay takeable-back with backspace)
             }
         }
 
@@ -804,7 +809,41 @@ final class KeyboardViewController: UIInputViewController {
         lastSpaceTime = Date()
         afterTyping()
         // Learning the finished word is not needed to show the space, so it runs right after.
-        DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
+        DispatchQueue.main.async { [weak self] in
+            self?.learnWord(endingAt: before)
+            self?.retroCorrectPrevious()
+        }
+    }
+
+    /// Right after a space: the word before the one just finished is looked at again, now that the word after it is
+    /// known (Decoder.retroCorrect). Each pair is looked at once; text edited in between is left alone.
+    private var retroChecked = ""
+
+    private func retroCorrectPrevious() {
+        guard autoCorrectAllowed else { return }
+        let text = textDocumentProxy.documentContextBeforeInput ?? ""
+        guard text.hasSuffix(" "), !text.hasSuffix("  ") else { return }
+        let words = Predictor.lastWords(in: text, count: 2)
+        guard words.count == 2 else { return }
+        let (previous, current) = (words[0], words[1])
+        let tail = previous + " " + current + " "
+        guard text.lowercased().hasSuffix(tail.lowercased()), previous.count >= 2 else { return }
+        let head = String(text.dropLast(tail.count))
+        guard head.isEmpty || head.hasSuffix(" ") || head.hasSuffix("\n") || head.last?.isPunctuation == true else { return }
+        let key = head + "|" + previous + "|" + current
+        guard key != retroChecked else { return }
+        retroChecked = key
+        // The written forms (capitals) of the two words as they stand in the field.
+        let fullPrevious = String(text.dropLast(current.count + 2).suffix(previous.count))
+        let fullCurrent = String(text.dropLast(1).suffix(current.count))
+        let field = Predictor.fieldContext(before: head, after: textDocumentProxy.documentContextAfterInput ?? "")
+        guard let fix = Decoder.retroCorrect(typed: fullPrevious, before: head, next: fullCurrent, active: language,
+                                             enabled: enabledLanguages, stores: stores, field: field) else { return }
+        for _ in 0..<tail.count { textDocumentProxy.deleteBackward() }
+        textDocumentProxy.insertText(fix + " " + fullCurrent + " ")
+        clearSwipeState()
+        lastAutoFix = nil
+        scheduleRefresh()
     }
 
     /// Auto-correction is on and the field accepts it (not passwords, addresses or codes).

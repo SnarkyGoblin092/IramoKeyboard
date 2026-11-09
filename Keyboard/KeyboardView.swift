@@ -408,6 +408,14 @@ final class KeyboardView: UIView {
         return CGSize(width: bounds.width / 10, height: 44)
     }
 
+    /// Every touch inside the keyboard (and just outside it) belongs to this view, never to a layer or view in the
+    /// gaps between the keys: where three keys meet nothing else may take the touch.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
+        if !sideButton.isHidden, sideButton.frame.contains(point) { return sideButton }
+        return self
+    }
+
     /// Touches just outside the keys (screen edges, the very bottom) still count, so edge keys never feel dead.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         guard bounds.inset(by: UIEdgeInsets(top: 0, left: -10, bottom: -10, right: -10)).contains(point) else { return false }
@@ -551,7 +559,9 @@ final class KeyboardView: UIView {
     /// The key under (or nearest to) a point. Rows and keys tile the whole area, so there are no dead gaps.
     private func keyIndex(at point: CGPoint) -> (row: Int, col: Int)? {
         if hitRects.count != rows.count, !rows.isEmpty, bounds.width > 0 { layoutIfNeeded() }
-        guard !hitRects.isEmpty, hitRects.count == rows.count, keyViews.count == rows.count else { return nil }
+        guard !hitRects.isEmpty, hitRects.count == rows.count, keyViews.count == rows.count else {
+            return nearestKeyByFrame(to: point)
+        }
 
         var bestRow = 0
         var bestRowDistance = CGFloat.greatestFiniteMagnitude
@@ -591,6 +601,25 @@ final class KeyboardView: UIView {
         return (row: bestRow, col: col)
     }
 
+    /// When the touch cells are not ready (the keys were just rebuilt), the key whose drawn frame is nearest.
+    private func nearestKeyByFrame(to point: CGPoint) -> (row: Int, col: Int)? {
+        var best: (row: Int, col: Int)?
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for (r, row) in keyViews.enumerated() where r < rows.count {
+            for (c, key) in row.enumerated() where c < rows[r].count && !rows[r][c].isSpacer && key.superview != nil {
+                let frame = key.frame
+                let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
+                let dy = max(frame.minY - point.y, 0, point.y - frame.maxY)
+                let distance = dx * dx + dy * dy
+                if distance < bestDistance {
+                    bestDistance = distance
+                    best = (r, c)
+                }
+            }
+        }
+        return best
+    }
+
     private func letter(of spec: KeySpec) -> Character? {
         guard case .character(let text) = spec.action, text.count == 1,
               let letter = text.lowercased().first, letter.isLetter else { return nil }
@@ -623,8 +652,13 @@ final class KeyboardView: UIView {
             let state = TouchState(start: point, order: nextTouchOrder)
             nextTouchOrder += 1
             states[touch] = state
-            guard let index = keyIndex(at: point) else { continue }
+            // The key is chosen from where this user's thumbs tend to land (TapBias), not from the raw point.
+            let aimed = page == .letters ? TapBias.shared.corrected(point, in: bounds, keySize: letterKeySize()) : point
+            guard let index = keyIndex(at: aimed) else { continue }
             let key = keyViews[index.row][index.col]
+            if page == .letters, letter(of: key.spec) != nil, let rect = hitRect(of: key) {
+                TapBias.shared.learn(point, keyCenter: CGPoint(x: rect.midX, y: rect.midY), in: bounds, keySize: letterKeySize())
+            }
             // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
             // that same word.
             if Prefs.twoThumbSwipe && swipeAllowed && page == .letters && letter(of: key.spec) != nil {
@@ -1399,5 +1433,55 @@ final class KeyboardView: UIView {
     private func hideAlternates() {
         alternatesPopup?.removeFromSuperview()
         alternatesPopup = nil
+    }
+}
+
+/// Where this user's thumbs land relative to the keys they mean. Every letter press shows how far from the key's
+/// centre it was; the running average, kept separately for the left and right half of the keyboard and for portrait
+/// and landscape (the thumbs reach differently), shifts the point a press is resolved with. Small (a fifth of a
+/// key at most), slow to change, and saved so it is there the next time.
+final class TapBias {
+    static let shared = TapBias()
+
+    private struct Offset { var x = 0.0, y = 0.0 }   // in key widths and heights
+    private var offsets: [Offset]
+    private var samples = 0
+    private static let key = "hunkeys.tapBias"
+    private static let limit = 0.2
+    private static let rate = 0.01
+
+    private init() {
+        let saved = SharedStore.defaults.array(forKey: TapBias.key) as? [Double] ?? []
+        offsets = (0..<4).map { i in i * 2 + 1 < saved.count ? Offset(x: saved[i * 2], y: saved[i * 2 + 1]) : Offset() }
+    }
+
+    private func slot(for point: CGPoint, in bounds: CGRect) -> Int {
+        let right = point.x > bounds.midX ? 1 : 0
+        let landscape = bounds.width > 500 ? 2 : 0
+        return landscape + right
+    }
+
+    /// `point` moved by what is known of this user's aim.
+    func corrected(_ point: CGPoint, in bounds: CGRect, keySize: CGSize) -> CGPoint {
+        guard keySize.width > 1, keySize.height > 1 else { return point }
+        let offset = offsets[slot(for: point, in: bounds)]
+        return CGPoint(x: point.x - CGFloat(offset.x) * keySize.width, y: point.y - CGFloat(offset.y) * keySize.height)
+    }
+
+    /// A press at `point` was resolved to the key centred at `keyCenter`.
+    func learn(_ point: CGPoint, keyCenter: CGPoint, in bounds: CGRect, keySize: CGSize) {
+        guard keySize.width > 1, keySize.height > 1 else { return }
+        let dx = Double((point.x - keyCenter.x) / keySize.width)
+        let dy = Double((point.y - keyCenter.y) / keySize.height)
+        // Presses near a key's edge are as likely the neighbour's: only the middle of a key teaches.
+        guard abs(dx) < 0.45, abs(dy) < 0.45 else { return }
+        let i = slot(for: point, in: bounds)
+        let limit = TapBias.limit
+        offsets[i].x = max(-limit, min(limit, offsets[i].x + (dx - offsets[i].x) * TapBias.rate))
+        offsets[i].y = max(-limit, min(limit, offsets[i].y + (dy - offsets[i].y) * TapBias.rate))
+        samples += 1
+        if samples % 60 == 0 {
+            SharedStore.defaults.set(offsets.flatMap { [$0.x, $0.y] }, forKey: TapBias.key)
+        }
     }
 }

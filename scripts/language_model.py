@@ -54,6 +54,7 @@ MAX_TRIGRAMS = int(os.environ.get("HUNKEYS_MAX_TRIGRAMS", 350_000))
 MIN_COUNT = 2
 DISCOUNT2 = 0.75
 DISCOUNT3 = 0.80
+CONTINUATION = 0.8               # share of the unigram backoff taken from continuation counts (see `build`)
 PRUNE_AT = 8_000_000             # trigram table size that triggers dropping rare entries while counting
 
 P_MIN, P_STEP = -9.0, 9.0 / 255
@@ -213,6 +214,15 @@ def build(counts, unigram_counts, path):
     p1[START] = p1[UNKNOWN] = 1e-9
     comma = sum(v for k, v in counts.bigrams.items() if k & MASK == COMMA)
     p1[COMMA] = max(comma, 1) / max(counts.tokens, 1)
+
+    # Kneser-Ney's idea for the backoff level: a word that follows many different words ("the") is likelier in a
+    # new context than one that is common but always follows the same word ("Francisco"). The continuation share is
+    # blended with the plain frequency (measured on held-out sentences: 0.8 gives +0.03 log10 per word in English
+    # and +0.04 in Hungarian at no cost in size; discount tuning, entropy pruning gave nothing).
+    continuations = collections.Counter(k & MASK for k in counts.bigrams)
+    continuation_total = sum(continuations.values()) or 1
+    for w in range(FIRST_WORD, vocabulary_size):
+        p1[w] = (1 - CONTINUATION) * p1[w] + CONTINUATION * max(continuations[w], 0.5) / continuation_total
 
     # Context totals and the number of distinct followers, from every counted n-gram.
     context1 = collections.Counter()

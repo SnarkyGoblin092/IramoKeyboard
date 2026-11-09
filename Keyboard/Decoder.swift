@@ -670,6 +670,43 @@ enum Decoder {
         return correction(typed: typed, found: found, stores: stores, field: field)
     }
 
+    /// A correction for a word written one word ago, now that the word after it is known: the candidates are scored
+    /// as before and also by how well `next` follows each of them ("form" before "the" loses to "from"). A word no
+    /// dictionary has needs the usual margin; a real word, a much larger one. nil: leave it.
+    static func retroCorrect(typed: String,
+                             before: String,
+                             next: String,
+                             active: Language,
+                             enabled: [Language],
+                             stores: [Language: WordStore],
+                             field: Predictor.FieldContext?) -> String? {
+        guard mayCorrect(typed, stores: stores, field: field) else { return nil }
+        let ordered = ([active] + enabled.filter { $0 != active }).filter { stores[$0]?.isLoaded == true }
+        let found = rows(typed: typed, before: before + typed, active: active, ordered: ordered, stores: stores,
+                         field: field, taps: nil)
+        let known = stores.values.contains { $0.isLoaded && $0.dictionaryHas(word: found.lower) }
+        let nextKey = next.lowercased()
+        func withNext(_ word: String, _ score: Double) -> Double {
+            let after = Decoder.context(before: before + word + " ", active: active, stores: stores)
+            return score + logProb(nextKey, context: after, stores: stores, field: field)
+        }
+        let base = withNext(found.lower, max(logProb(found.lower, context: found.context, stores: stores, field: field), unknownWord))
+        var best: (word: String, total: Double)? = nil
+        for candidate in ranked(found.rows, whole: true).prefix(8) where candidate.word != found.lower && !candidate.word.contains(" ") {
+            let total = withNext(candidate.word, candidate.score)
+            if best == nil || total > best!.total { best = (candidate.word, total) }
+        }
+        guard let choice = best, choice.total >= base + (known ? 2.5 : correctMargin) else { return nil }
+        let text = written(choice.word, context: found.context, stores: stores)
+        return text == typed ? nil : matchedCase(of: typed, text)
+    }
+
+    /// The suggestion with the typed word's capitalisation (a Title word stays Title).
+    private static func matchedCase(of typed: String, _ word: String) -> String {
+        guard let first = typed.first, first.isUppercase, typed.dropFirst().allSatisfy({ !$0.isUppercase }) else { return word }
+        return Predictor.capitalized(word)
+    }
+
     /// The completions (as `suggest`) and the auto-correction (as `autoCorrect`) from one pass over the candidates.
     static func suggestAndCorrect(typed: String,
                                   before: String,
