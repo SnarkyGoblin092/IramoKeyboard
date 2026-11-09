@@ -726,25 +726,9 @@ struct ThemeLook {
             // The keyboard's frosted panel over the app (Theme.panelBackground).
             Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
         } else {
-            // Liquid Glass has no panel: the app shows straight through. A colourful backdrop stands in for the
-            // app, so the glass keys have something to bend and blur.
-            ZStack {
-                LinearGradient(colors: pick([Color(red: 0.62, green: 0.80, blue: 1.0), Color(red: 1.0, green: 0.80, blue: 0.86)],
-                                            [Color(red: 0.10, green: 0.16, blue: 0.38), Color(red: 0.36, green: 0.12, blue: 0.34)]),
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                GeometryReader { geometry in
-                    Circle()
-                        .fill(pick(Color(red: 1.0, green: 0.86, blue: 0.45), Color(red: 0.95, green: 0.45, blue: 0.30)).opacity(0.75))
-                        .frame(width: geometry.size.width * 0.45)
-                        .blur(radius: geometry.size.width * 0.06)
-                        .offset(x: geometry.size.width * 0.55, y: -geometry.size.width * 0.08)
-                    Circle()
-                        .fill(pick(Color(red: 0.45, green: 0.85, blue: 0.75), Color(red: 0.20, green: 0.55, blue: 0.70)).opacity(0.7))
-                        .frame(width: geometry.size.width * 0.38)
-                        .blur(radius: geometry.size.width * 0.05)
-                        .offset(x: -geometry.size.width * 0.06, y: geometry.size.height * 0.45)
-                }
-            }
+            // Liquid Glass has no panel of its own; the preview shows it over the plain light or dark keyboard
+            // backdrop of the system.
+            Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
         }
     }
 
