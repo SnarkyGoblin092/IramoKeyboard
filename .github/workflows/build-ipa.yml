@@ -13,32 +13,57 @@ jobs:
   # The dictionaries and emoji data are plain Python work, so they are built on Linux, whose minutes cost a tenth
   # of macOS minutes in private repos. They only change when the scripts do (or the sources update), so they are
   # cached for a week and shared with the macOS job instead of downloading ~400 MB of word lists on every push.
+  # They are compressed here too, once, rather than in every macOS build.
   data:
     runs-on: ubuntu-latest
     timeout-minutes: 240   # 33 word lists, each with its language model
     outputs:
-      key: ${{ steps.key.outputs.key }}
+      key: ${{ steps.key.outputs.packed }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache key (the scripts, refreshed weekly)
+      # Two caches: the data as the scripts write it, and the same data compressed as it ships (what the macOS job
+      # needs). A push that changes neither restores only the second one, in seconds; "xz1" names how the files are
+      # packed, so change it when the "Compress language data" step changes.
+      - name: Cache keys (the scripts, refreshed weekly)
         id: key
-        run: echo "key=data-${{ hashFiles('scripts/build_data.py', 'scripts/language_model.py', 'scripts/lexicon.py', 'scripts/predict_eval/keyboard.py') }}-$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+        run: |
+          raw="data-${{ hashFiles('scripts/build_data.py', 'scripts/language_model.py', 'scripts/lexicon.py', 'scripts/predict_eval/keyboard.py') }}-$(date -u +%G-%V)"
+          echo "raw=$raw" >> "$GITHUB_OUTPUT"
+          echo "packed=$raw-xz1" >> "$GITHUB_OUTPUT"
 
-      - name: Restore generated data
-        id: data-cache
-        uses: actions/cache@v4
+      - name: Restore compressed data
+        id: packed
+        uses: actions/cache/restore@v4
         with:
           path: Keyboard/Resources
-          key: ${{ steps.key.outputs.key }}
+          key: ${{ steps.key.outputs.packed }}
+          enableCrossOsArchive: true
+
+      - name: Restore generated data
+        id: raw
+        if: steps.packed.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: Keyboard/Resources
+          key: ${{ steps.key.outputs.raw }}
           enableCrossOsArchive: true
 
       - name: Download words, emoji and keywords
-        if: steps.data-cache.outputs.cache-hit != 'true'
+        if: steps.packed.outputs.cache-hit != 'true' && steps.raw.outputs.cache-hit != 'true'
         run: python3 scripts/build_data.py
 
+      - name: Save generated data
+        if: steps.packed.outputs.cache-hit != 'true' && steps.raw.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Keyboard/Resources
+          key: ${{ steps.key.outputs.raw }}
+          enableCrossOsArchive: true
+
       - name: Check generated data
+        if: steps.packed.outputs.cache-hit != 'true'
         run: |
           ls -la Keyboard/Resources
           for f in en hu; do test -s Keyboard/Resources/dict_$f.bin; done
@@ -60,30 +85,10 @@ jobs:
           wc -l Keyboard/Resources/phonetic_*.tsv || true
           du -ch Keyboard/Resources/dict_*.bin | tail -1
 
-  build:
-    needs: data
-    # macOS 26 runners carry Xcode 26+, which has the Liquid Glass APIs (UIGlassEffect). They run on Apple
-    # silicon, which builds far faster than the Intel runners; if jobs sit queued, use macos-15-intel.
-    runs-on: macos-26
-    timeout-minutes: 30
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Restore generated data (built by the data job)
-        uses: actions/cache/restore@v4
-        with:
-          path: Keyboard/Resources
-          key: ${{ needs.data.outputs.key }}
-          enableCrossOsArchive: true
-          fail-on-cache-miss: true
-
       # words_<lang>.tsv is only read when dict_<lang>.bin is missing (WordStore.parse), so a language that has
       # its dictionary ships without the word list. The sizes show what the language data takes up.
       - name: Drop word lists the dictionaries replace
+        if: steps.packed.outputs.cache-hit != 'true'
         run: |
           du -sh Keyboard/Resources
           for f in Keyboard/Resources/words_*.tsv; do
@@ -100,18 +105,52 @@ jobs:
       # that language is enabled. The 1 MB dictionary costs under 1% of the size and keeps the memory the keyboard
       # needs to unpack a file small.
       - name: Compress language data
+        if: steps.packed.outputs.cache-hit != 'true'
         run: |
           python3 - <<'PY'
-          import lzma, pathlib
-          filters = [{"id": lzma.FILTER_LZMA2, "preset": 6, "dict_size": 1 << 20}]
-          for path in sorted(pathlib.Path("Keyboard/Resources").iterdir()):
-              if not path.is_file() or path.name == ".gitkeep" or path.suffix == ".lzma":
-                  continue
+          import lzma, multiprocessing, pathlib
+
+          def pack(path):
+              filters = [{"id": lzma.FILTER_LZMA2, "preset": 6, "dict_size": 1 << 20}]
               packed = lzma.compress(path.read_bytes(), format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC32, filters=filters)
               path.with_name(path.name + ".lzma").write_bytes(packed)
               path.unlink()
+
+          files = [path for path in sorted(pathlib.Path("Keyboard/Resources").iterdir())
+                   if path.is_file() and path.name != ".gitkeep" and path.suffix != ".lzma"]
+          with multiprocessing.Pool() as pool:   # one file per core
+              pool.map(pack, files, chunksize=1)
           PY
           du -sh Keyboard/Resources
+
+      - name: Save compressed data
+        if: steps.packed.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Keyboard/Resources
+          key: ${{ steps.key.outputs.packed }}
+          enableCrossOsArchive: true
+
+  build:
+    needs: data
+    # macOS 26 runners carry Xcode 26+, which has the Liquid Glass APIs (UIGlassEffect). They run on Apple
+    # silicon, which builds far faster than the Intel runners; if jobs sit queued, use macos-15-intel.
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore compressed data (built by the data job)
+        uses: actions/cache/restore@v4
+        with:
+          path: Keyboard/Resources
+          key: ${{ needs.data.outputs.key }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       - name: Select newest stable Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -119,16 +158,19 @@ jobs:
           xcode-version: latest-stable
 
       - name: Show toolchain
-        run: |
-          xcodebuild -version
-          swift --version
+        run: xcodebuild -version
 
-      - name: Install XcodeGen and ldid
-        run: brew install xcodegen ldid
+      - name: Install XcodeGen and ldid (those the runner lacks)
+        run: |
+          for tool in xcodegen ldid; do
+            command -v "$tool" >/dev/null || brew install "$tool"
+          done
 
       - name: Generate Xcode project
         run: xcodegen generate
 
+      # No dSYM (it is not part of the IPA) and no index. The timing summary at the end of the log and the
+      # compiler's warnings about code that is slow to type-check are shown by the "Build timing" step.
       - name: Build (unsigned)
         run: |
           set -o pipefail
@@ -139,10 +181,25 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
+            -showBuildTimingSummary \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -warn-long-expression-type-checking=200 -Xfrontend -warn-long-function-bodies=300' \
             build 2>&1 | tee build.log
+
+      # Where the build's minutes go: Xcode's own summary by kind of work, and the expressions and functions the
+      # Swift compiler needed longest to type-check (each of those is a place to make the build faster).
+      - name: Build timing
+        if: always()
+        run: |
+          sed -n '/Build Timing Summary/,$p' build.log | head -40 || true
+          echo "---- slowest to type-check (ms) ----"
+          grep -E "took [0-9]+ms to type-check" build.log \
+            | awk '{ if (match($0, /took [0-9]+ms/)) print substr($0, RSTART + 5, RLENGTH - 7), $0 }' \
+            | sort -rn | awk '!seen[$0]++' | head -40 || true
 
       # One IPA. The App Group entitlement is written into the signature of BOTH the app and the keyboard
       # (ldid), so iloader / AltStore / SideStore can keep it when they re-sign, and the app's settings

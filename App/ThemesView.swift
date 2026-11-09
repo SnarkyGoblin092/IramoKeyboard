@@ -16,6 +16,10 @@ struct ThemesView: View {
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var selected: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
+    /// The mode every preview on this screen is drawn in: the toggle's, or the app's own until it is used.
+    private var previewScheme: ColorScheme {
+        return previewMode == "light" ? .light : (previewMode == "dark" ? .dark : colorScheme)
+    }
 
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
@@ -52,7 +56,7 @@ struct ThemesView: View {
                     .multilineTextAlignment(.center)
             }
             SegmentedChoice(names: [tr("Light"), tr("Dark")],
-                            selected: previewMode == "light" ? 0 : (previewMode == "dark" ? 1 : (colorScheme == .dark ? 1 : 0))) {
+                            selected: previewScheme == .dark ? 1 : 0) {
                 previewMode = $0 == 0 ? "light" : "dark"
             }
             Button {
@@ -80,7 +84,7 @@ struct ThemesView: View {
                 Section {
                     ForEach(section.themes, id: \.id) { base in
                         let theme = edited(base, edits)
-                        ThemeCard(theme: theme, accent: accent, isSelected: theme.id == themeID) {
+                        ThemeCard(theme: theme, accent: accent, scheme: previewScheme, isSelected: theme.id == themeID) {
                             guard theme.id != themeID else { return }
                             Feedback.choose()
                             themeID = theme.id
@@ -112,6 +116,8 @@ struct ThemesView: View {
 private struct ThemeCard: View {
     let theme: ThemeDefinition
     let accent: Color
+    /// Light or dark, for the miniature keyboard only (the card's name follows the app).
+    let scheme: ColorScheme
     let isSelected: Bool
     let action: () -> Void
 
@@ -119,6 +125,7 @@ private struct ThemeCard: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 ThemeThumbnail(theme: theme, accent: accent)
+                    .environment(\.colorScheme, scheme)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(isSelected ? accent : Color.primary.opacity(0.12),

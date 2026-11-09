@@ -16,6 +16,9 @@ struct LiveKeyboard: View {
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
+    /// The mode picked for the preview (Theme.appearanceStyle, which the keys are drawn in); "auto": the app's own.
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
+    @Environment(\.colorScheme) private var appScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -32,6 +35,9 @@ struct LiveKeyboard: View {
                             .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                     )
             }
+            // The backdrop is drawn in the keys' mode, not the app's: light keys and the bar's dark words would
+            // be lost on a dark backdrop.
+            .environment(\.colorScheme, appearance == "light" ? .light : (appearance == "dark" ? .dark : appScheme))
             .frame(width: size.width * scale, height: size.height * scale)
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
