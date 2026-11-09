@@ -906,6 +906,8 @@ extension View {
 /// light or dark mode) for the settings screens' previews, and redraws them when any of it changes.
 struct CurrentThemeLook<Content: View>: View {
     @ViewBuilder let content: (ThemeLook) -> Content
+    /// A theme to show instead of the chosen one (the waves' old and new looks).
+    var theme: String? = nil
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
@@ -916,12 +918,13 @@ struct CurrentThemeLook<Content: View>: View {
     @AppStorage(SettingKey.keyGlow, store: SharedStore.defaults) private var keyGlow = SettingDefault.keyGlow
     @Environment(\.colorScheme) private var scheme
 
-    init(@ViewBuilder content: @escaping (ThemeLook) -> Content) {
+    init(theme: String? = nil, @ViewBuilder content: @escaping (ThemeLook) -> Content) {
+        self.theme = theme
         self.content = content
     }
 
     var body: some View {
-        content(ThemeLook(theme: ThemeCatalog.theme(id: themeID),
+        content(ThemeLook(theme: ThemeCatalog.theme(id: theme ?? themeID),
                           accent: Color.currentAccent(name: accentName, hex: accentHex),
                           dark: scheme == .dark, roundness: roundness,
                           keySurface: keySurface, keyBorderStyle: keyBorderStyle, keyGlow: keyGlow,

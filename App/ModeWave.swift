@@ -8,9 +8,18 @@ import SwiftUI
 /// each frame of a wave: whoever draws it (the previews' masks, the ring, the keyboard's layers) reads the clock
 /// itself, `progress(at:)`, so they are always at the same place.
 struct ModeWave: Equatable, Identifiable {
+    enum Kind { case mode, theme }
+
     let id: Int
-    /// The mode the previews are leaving.
+    /// A light / dark wave crossing the whole screen, or a wave of a new theme inside the main preview.
+    let kind: Kind
+    /// The mode and the theme the main preview is leaving, and the ones it is going to.
     let oldScheme: ColorScheme
+    let newScheme: ColorScheme
+    let oldTheme: String
+    let newTheme: String
+    /// Where the circle starts, down the frame: 0.5 the middle, 1 the bottom edge.
+    let anchorY: CGFloat
     /// The screen's frame, in the window's coordinates.
     let minX: CGFloat
     let minY: CGFloat
@@ -37,7 +46,10 @@ struct ModeWave: Equatable, Identifiable {
     ]
     private static let reach: CGFloat = 0.153
 
-    var center: CGPoint { return CGPoint(x: minX + width / 2, y: minY + height / 2) }
+    /// The main preview's box in the window, for the theme waves (set by LiveKeyboard).
+    static var previewBox = CGRect.zero
+
+    var center: CGPoint { return CGPoint(x: minX + width / 2, y: minY + height * anchorY) }
 
     /// Each wave has its own edge.
     private var shift: Double { return Double(id) * 1.618 }
@@ -53,7 +65,7 @@ struct ModeWave: Equatable, Identifiable {
 
     /// The radius the cut has at the end, when the ring's inner edge has passed the screen's farthest corner.
     private var endRadius: CGFloat {
-        return (hypot(width, height) / 2 + ModeWave.band) / (1 - ModeWave.reach) * 1.15
+        return (hypot(width / 2, height * max(anchorY, 1 - anchorY)) + ModeWave.band) / (1 - ModeWave.reach) * 1.15
     }
 
     /// The radius of the cut at `angle`.
@@ -233,6 +245,8 @@ private struct WaveReveal: ViewModifier {
 /// The rings themselves, over the whole screen: Liquid Glass spreading out with the waves' fronts.
 struct GlassWaveBand: View {
     let waves: [ModeWave]
+    /// Over the whole screen, safe areas and all (else only its own box).
+    var fullScreen = true
 
     var body: some View {
         GeometryReader { geometry in
@@ -245,7 +259,7 @@ struct GlassWaveBand: View {
                 }
             }
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: fullScreen ? .all : [])
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

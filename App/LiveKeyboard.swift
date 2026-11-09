@@ -45,11 +45,9 @@ struct LiveKeyboard: View {
                                 look.backdrop(scale: scale)
                                     .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
                             } else {
-                                CurrentThemeLook { old in old.backdrop(scale: scale) }
-                                    .environment(\.colorScheme, waves[0].oldScheme)
+                                backdrop(scheme: waves[0].oldScheme, theme: waves[0].oldTheme, scale: scale)
                                 ForEach(waves) { wave in
-                                    CurrentThemeLook { new in new.backdrop(scale: scale) }
-                                        .environment(\.colorScheme, wave.oldScheme == .dark ? .light : .dark)
+                                    backdrop(scheme: wave.newScheme, theme: wave.newTheme, scale: scale)
                                         .revealedByWave(wave)
                                 }
                             }
@@ -62,9 +60,28 @@ struct LiveKeyboard: View {
             // be lost on a dark backdrop.
             .environment(\.colorScheme, scheme)
             .frame(width: size.width * scale, height: size.height * scale)
+            // The theme waves spread over this box only.
+            .overlay {
+                let own = waves.filter { $0.kind == .theme }
+                if !own.isEmpty {
+                    GlassWaveBand(waves: own, fullScreen: false)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+            .background(GeometryReader { box in
+                Color.clear
+                    .onAppear { ModeWave.previewBox = box.frame(in: .global) }
+                    .onChange(of: box.frame(in: .global)) { ModeWave.previewBox = $0 }
+            })
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
+    }
+
+    /// The backdrop in one mode and theme, for the waves' layers.
+    private func backdrop(scheme: ColorScheme, theme: String, scale: CGFloat) -> some View {
+        return CurrentThemeLook(theme: theme) { look in look.backdrop(scale: scale) }
+            .environment(\.colorScheme, scheme)
     }
 }
 
@@ -249,11 +266,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             guard self.signature() != self.builtSignature else { return }
             // Light to dark (the Themes screen's switch): the new keys are uncovered by the screen's wave, or
             // fade in over the old ones where there is none.
-            if self.window != nil, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
-                if let wave = ModeWave.running.last {
-                    self.rebuildBehindWave(wave)
-                    return
-                }
+            if self.window != nil, let wave = ModeWave.running.last,
+               wave.kind == .theme || Theme.appearanceStyle != self.overrideUserInterfaceStyle {
+                self.rebuildBehindWave(wave)
+            } else if self.window != nil, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
                                   animations: { self.rebuild() })

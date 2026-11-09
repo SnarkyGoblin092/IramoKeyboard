@@ -47,7 +47,7 @@ struct ThemesView: View {
                 .onChange(of: geometry.frame(in: .global)) { screenFrame = $0 }
         })
         .overlay {
-            if !waves.isEmpty { GlassWaveBand(waves: waves) }
+            if waves.contains(where: { $0.kind == .mode }) { GlassWaveBand(waves: waves.filter { $0.kind == .mode }) }
         }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
@@ -97,16 +97,30 @@ struct ThemesView: View {
             previewMode = mode
             return
         }
+        launch(kind: .mode, frame: screenFrame, anchorY: 0.5, newScheme: dark ? .dark : .light, newTheme: themeID)
+        previewMode = mode
+    }
+
+    /// Plays a theme wave in the main preview's box, then switches to `id` (at once where there is no box or with
+    /// Reduce Motion).
+    private func chooseTheme(_ id: String) {
+        let box = ModeWave.previewBox
+        if box.width > 0, !UIAccessibility.isReduceMotionEnabled {
+            launch(kind: .theme, frame: box, anchorY: 1, newScheme: previewScheme, newTheme: id)
+        }
+        themeID = id
+    }
+
+    /// Starts a wave across `frame` (before the setting itself changes: what that sets going, the keyboard's
+    /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
+    private func launch(kind: ModeWave.Kind, frame: CGRect, anchorY: CGFloat, newScheme: ColorScheme, newTheme: String) {
         ModeWave.count += 1
         let id = ModeWave.count
-        let new = ModeWave(id: id, oldScheme: previewScheme, minX: screenFrame.minX, minY: screenFrame.minY,
-                           width: screenFrame.width, height: screenFrame.height,
-                           started: CACurrentMediaTime(), startedDate: Date())
-        // Before the mode itself: what it sets going (the keyboard's rebuild, the cards' new pictures) looks
-        // for the wave.
+        let new = ModeWave(id: id, kind: kind, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
+                           newTheme: newTheme, anchorY: anchorY, minX: frame.minX, minY: frame.minY,
+                           width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         ModeWave.running.append(new)
         waves.append(new)
-        previewMode = mode
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64((ModeWave.duration + 0.1) * 1_000_000_000))
@@ -126,7 +140,7 @@ struct ThemesView: View {
                         ThemeCard(theme: theme, accent: accent, scheme: previewScheme, isSelected: theme.id == themeID) {
                             guard theme.id != themeID else { return }
                             Feedback.choose()
-                            themeID = theme.id
+                            chooseTheme(theme.id)
                         }
                     }
                 } header: {
@@ -214,7 +228,7 @@ private struct ThemeThumbnail: View {
     let accent: Color
     @Environment(\.colorScheme) private var scheme
     @Environment(\.displayScale) private var displayScale
-    @Environment(\.modeWaves) private var waves
+    @Environment(\.modeWaves) private var allWaves
     @State private var image: UIImage?
     /// The picture shown before `image`, kept under it while the new one fades in (an edit).
     @State private var previous: UIImage?
@@ -226,6 +240,9 @@ private struct ThemeThumbnail: View {
 
     /// The width the picture is drawn at (about a card's width); it is scaled to the card.
     private static let renderWidth: CGFloat = 200
+
+    /// The light / dark waves (the theme waves are the main preview's).
+    private var waves: [ModeWave] { return allWaves.filter { $0.kind == .mode } }
 
     var body: some View {
         Group {
@@ -296,7 +313,7 @@ private struct ThemeThumbnail: View {
     /// crosses (the wave shows the change); over the picture it replaces otherwise, faded in.
     private func show(_ new: UIImage?, key: String) {
         guard let new = new else { return }
-        let replaces = image != nil && shownKey != key && ModeWave.running.isEmpty
+        let replaces = image != nil && shownKey != key && !ModeWave.running.contains { $0.kind == .mode }
         previous = replaces ? image : nil
         image = new
         shownKey = key
