@@ -20,10 +20,10 @@ struct ModeWave: Equatable, Identifiable {
     let started: CFTimeInterval
     let startedDate: Date
 
-    static let duration: TimeInterval = 1.1
+    static let duration: TimeInterval = 1.2
     /// The ring's thickness.
     static let band: CGFloat = 19
-    private static let steps = 90
+    private static let steps = 64
 
     /// The waves now crossing the screen, for the code that learns of the new mode outside SwiftUI's updates (the
     /// keyboard's rebuild, a card's picture arriving from the queue).
@@ -53,7 +53,7 @@ struct ModeWave: Equatable, Identifiable {
 
     /// The radius the cut has at the end, when the ring's inner edge has passed the screen's farthest corner.
     private var endRadius: CGFloat {
-        return (hypot(width, height) / 2 + ModeWave.band) / (1 - ModeWave.reach)
+        return (hypot(width, height) / 2 + ModeWave.band) / (1 - ModeWave.reach) * 1.15
     }
 
     /// The radius of the cut at `angle`.
@@ -261,7 +261,6 @@ private struct WaveGlass: View {
 
     var body: some View {
         glass
-            .overlay(shape.stroke(Color.white.opacity(0.5), lineWidth: 0.75))
     }
 
     @ViewBuilder private var glass: some View {
