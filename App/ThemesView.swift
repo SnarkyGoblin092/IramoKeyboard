@@ -10,11 +10,10 @@ struct ThemesView: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var previewMode = SettingDefault.appearance
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openScreen) private var openScreen
-    /// The wave of glass that carries the previews to the other mode (ModeWave), while it crosses the screen.
-    @State private var wave: ModeWave?
+    /// The waves of glass that carry the previews to the other mode (ModeWave), while they cross the screen.
+    @State private var waves: [ModeWave] = []
     /// Where this screen is in the window: the wave crosses exactly it.
     @State private var screenFrame = CGRect.zero
-    @State private var waveDriver = WaveDriver()
 
     /// Two cards across on a phone held upright, more where there is room (iPad, landscape).
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
@@ -41,14 +40,14 @@ struct ThemesView: View {
             .padding(.bottom, 28)
         }
         }
-        .environment(\.modeWave, wave)
+        .environment(\.modeWaves, waves)
         .background(GeometryReader { geometry in
             Color.clear
                 .onAppear { screenFrame = geometry.frame(in: .global) }
                 .onChange(of: geometry.frame(in: .global)) { screenFrame = $0 }
         })
         .overlay {
-            if let wave = wave { GlassWaveBand(wave: wave) }
+            if !waves.isEmpty { GlassWaveBand(waves: waves) }
         }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
@@ -100,26 +99,19 @@ struct ThemesView: View {
         }
         ModeWave.count += 1
         let id = ModeWave.count
-        let new = ModeWave(id: id, progress: 0, oldScheme: previewScheme, minX: screenFrame.minX,
-                           minY: screenFrame.minY, width: screenFrame.width, height: screenFrame.height,
-                           started: CACurrentMediaTime())
+        let new = ModeWave(id: id, oldScheme: previewScheme, minX: screenFrame.minX, minY: screenFrame.minY,
+                           width: screenFrame.width, height: screenFrame.height,
+                           started: CACurrentMediaTime(), startedDate: Date())
         // Before the mode itself: what it sets going (the keyboard's rebuild, the cards' new pictures) looks
         // for the wave.
-        ModeWave.active = new
-        wave = new
+        ModeWave.running.append(new)
+        waves.append(new)
         previewMode = mode
-        // Followed frame by frame from the same clock the keyboard's layers run on (ModeWave.started), so the
-        // previews and the keys are always at the same place.
-        waveDriver.start { now in
-            let share = CGFloat((now - new.started) / ModeWave.duration)
-            guard wave?.id == id else { waveDriver.stop(); return }
-            if share >= 1 {
-                waveDriver.stop()
-                wave = nil
-                if ModeWave.active?.id == id { ModeWave.active = nil }
-            } else {
-                wave?.progress = ModeWave.ease(share)
-            }
+        // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64((ModeWave.duration + 0.1) * 1_000_000_000))
+            waves.removeAll { $0.id == id }
+            ModeWave.running.removeAll { $0.id == id }
         }
     }
 
@@ -222,44 +214,41 @@ private struct ThemeThumbnail: View {
     let accent: Color
     @Environment(\.colorScheme) private var scheme
     @Environment(\.displayScale) private var displayScale
-    @Environment(\.modeWave) private var wave
+    @Environment(\.modeWaves) private var waves
     @State private var image: UIImage?
-    /// The wave (ModeWave.id) that brought `image`: while it crosses, the picture shows only where it has passed.
-    @State private var imageWave: Int?
-    /// The picture shown before `image`, kept under it while the new one fades in (light / dark, an edit).
+    /// The picture shown before `image`, kept under it while the new one fades in (an edit).
     @State private var previous: UIImage?
     @State private var fade: Double = 1
     @State private var shownKey = ""
     @State private var wantedKey = ""
+    /// Counts the pictures of the other mode that arrive while a wave crosses, to draw them.
+    @State private var arrived = 0
 
     /// The width the picture is drawn at (about a card's width); it is scaled to the card.
     private static let renderWidth: CGFloat = 200
 
     var body: some View {
         Group {
-            if theme.kind == .liquidGlass {
+            if !waves.isEmpty {
+                // The first wave's old look at the bottom, each wave's new look over it inside that wave's circle.
                 ZStack {
-                    // The old look ahead of the wave, the new one behind it.
-                    if let wave = wave {
-                        ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                            .environment(\.colorScheme, wave.oldScheme)
+                    layer(dark: waves[0].oldScheme == .dark)
+                    ForEach(waves) { wave in
+                        layer(dark: wave.oldScheme != .dark).revealedByWave(wave)
                     }
-                    ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                        .animation(wave == nil ? ThemeThumbnail.fadeAnimation : nil, value: scheme)
-                        .revealedByWave(wave)
                 }
+            } else if theme.kind == .liquidGlass {
+                ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                    .animation(ThemeThumbnail.fadeAnimation, value: scheme)
             } else if let image = image {
                 ZStack {
                     if let previous = previous {
                         Image(uiImage: previous).resizable().interpolation(.high)
                     }
                     Image(uiImage: image).resizable().interpolation(.high).opacity(fade)
-                        .revealedByWave(imageWave != nil && wave?.id == imageWave ? wave : nil)
                 }
             } else {
-                // Until it is drawn: the keyboard's backdrop.
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+                placeholder(dark: scheme == .dark)
             }
         }
         .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
@@ -269,21 +258,49 @@ private struct ThemeThumbnail: View {
         // than read from `scheme` / `theme` (which would still be the old ones and draw the wrong look).
         .onChange(of: scheme) { newScheme in load(theme: theme, dark: newScheme == .dark) }
         .onChange(of: theme) { newTheme in load(theme: newTheme, dark: scheme == .dark) }
+        // A wave shows both modes at once: the other one's picture is made too.
+        .onChange(of: waves.count) { count in
+            guard count > 0 else { return }
+            prepare(dark: true)
+            prepare(dark: false)
+        }
     }
 
     static let fadeAnimation = Animation.easeInOut(duration: 0.3)
 
-    /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view); over the picture
-    /// it replaces otherwise, uncovered by the light / dark wave if one is crossing the screen, else faded in.
+    /// The card in one mode, for the wave's layers.
+    @ViewBuilder private func layer(dark: Bool) -> some View {
+        if theme.kind == .liquidGlass {
+            ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                .environment(\.colorScheme, dark ? .dark : .light)
+        } else if let picture = picture(dark: dark) {
+            Image(uiImage: picture).resizable().interpolation(.high)
+        } else {
+            placeholder(dark: dark)
+        }
+    }
+
+    private func picture(dark: Bool) -> UIImage? {
+        _ = arrived
+        if let cached = ThumbnailCache.shared.image(for: ThemeThumbnail.key(theme: theme, dark: dark)) { return cached }
+        return image
+    }
+
+    /// Until it is drawn: the keyboard's backdrop.
+    private func placeholder(dark: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+    }
+
+    /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view) or while a wave
+    /// crosses (the wave shows the change); over the picture it replaces otherwise, faded in.
     private func show(_ new: UIImage?, key: String) {
         guard let new = new else { return }
-        let replaces = image != nil && shownKey != key
+        let replaces = image != nil && shownKey != key && ModeWave.running.isEmpty
         previous = replaces ? image : nil
         image = new
         shownKey = key
-        // (ModeWave.active, not the environment's: this may run in a closure made before the wave set off.)
-        imageWave = replaces ? ModeWave.active?.id : nil
-        guard replaces, imageWave == nil else {
+        guard replaces else {
             fade = 1
             return
         }
@@ -299,15 +316,8 @@ private struct ThemeThumbnail: View {
         return "\(theme.id)|\(theme.hashValue)|\(dark)|\(ThumbnailCache.settingsSignature())"
     }
 
-    private func load(theme: ThemeDefinition, dark: Bool) {
-        guard theme.kind != .liquidGlass else { return }
-        let key = ThemeThumbnail.key(theme: theme, dark: dark)
-        wantedKey = key
-        guard key != shownKey || image == nil else { return }
-        if let cached = ThumbnailCache.shared.image(for: key) {
-            show(cached, key: key)
-            return
-        }
+    /// Queues the picture for `key` (drawn once, then kept in the cache).
+    private func queue(theme: ThemeDefinition, dark: Bool, key: String, done: @escaping (UIImage?) -> Void) {
         let accent = self.accent, scale = displayScale
         ThumbnailCache.shared.render(key: key) {
             let width = ThemeThumbnail.renderWidth
@@ -318,6 +328,28 @@ private struct ThemeThumbnail: View {
             renderer.scale = scale
             return renderer.uiImage
         } done: { rendered in
+            done(rendered)
+        }
+    }
+
+    /// Draws the picture for `dark` ahead of the wave that needs it.
+    private func prepare(dark: Bool) {
+        guard theme.kind != .liquidGlass else { return }
+        let key = ThemeThumbnail.key(theme: theme, dark: dark)
+        guard ThumbnailCache.shared.image(for: key) == nil else { return }
+        queue(theme: theme, dark: dark, key: key) { _ in arrived += 1 }
+    }
+
+    private func load(theme: ThemeDefinition, dark: Bool) {
+        guard theme.kind != .liquidGlass else { return }
+        let key = ThemeThumbnail.key(theme: theme, dark: dark)
+        wantedKey = key
+        guard key != shownKey || image == nil else { return }
+        if let cached = ThumbnailCache.shared.image(for: key) {
+            show(cached, key: key)
+            return
+        }
+        queue(theme: theme, dark: dark, key: key) { rendered in
             // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
             // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
             guard wantedKey == key else { return }

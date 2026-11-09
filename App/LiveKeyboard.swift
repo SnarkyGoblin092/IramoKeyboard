@@ -19,7 +19,7 @@ struct LiveKeyboard: View {
     /// The mode picked for the preview (Theme.appearanceStyle, which the keys are drawn in); "auto": the app's own.
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     @Environment(\.colorScheme) private var appScheme
-    @Environment(\.modeWave) private var wave
+    @Environment(\.modeWaves) private var waves
 
     /// The mode the keys are drawn in, for the backdrop behind them.
     private var scheme: ColorScheme {
@@ -37,17 +37,22 @@ struct LiveKeyboard: View {
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(
                         ZStack {
-                            // The Themes screen's wave (ModeWave): the old backdrop ahead of it, the new one
-                            // behind it, as the keys (LiveKeyboardView.rebuildBehindWave).
-                            if let wave = wave {
-                                CurrentThemeLook { old in old.backdrop(scale: scale) }
-                                    .environment(\.colorScheme, wave.oldScheme)
-                            }
-                            look.backdrop(scale: scale)
+                            // The Themes screen's waves (ModeWave): the first one's old backdrop at the bottom, each
+                            // wave's new one over it inside that wave's circle, as the keys
+                            // (LiveKeyboardView.rebuildBehindWave).
+                            if waves.isEmpty {
                                 // Without a wave it fades with the keys (LiveKeyboardView.modeFade).
-                                .animation(wave == nil ? .easeInOut(duration: LiveKeyboardView.modeFade) : nil,
-                                           value: scheme)
-                                .revealedByWave(wave)
+                                look.backdrop(scale: scale)
+                                    .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
+                            } else {
+                                CurrentThemeLook { old in old.backdrop(scale: scale) }
+                                    .environment(\.colorScheme, waves[0].oldScheme)
+                                ForEach(waves) { wave in
+                                    CurrentThemeLook { new in new.backdrop(scale: scale) }
+                                        .environment(\.colorScheme, wave.oldScheme == .dark ? .light : .dark)
+                                        .revealedByWave(wave)
+                                }
+                            }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
@@ -96,6 +101,14 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var builtStyle: UIUserInterfaceStyle = .unspecified
     /// The wave (ModeWave.id) whose cover of old keys has been made.
     private var coveredWave = 0
+    /// The pictures of the old keys, each under its wave's circle.
+    private struct Cover {
+        let wave: ModeWave
+        let view: UIView
+        let mask: CAShapeLayer
+    }
+    private var covers: [Cover] = []
+    private let coverDriver = WaveDriver()
 
     /// How long the keys take to fade from light to dark and back when the preview's mode is switched.
     static let modeFade: TimeInterval = 0.3
@@ -237,7 +250,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             // Light to dark (the Themes screen's switch): the new keys are uncovered by the screen's wave, or
             // fade in over the old ones where there is none.
             if self.window != nil, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
-                if let wave = ModeWave.active {
+                if let wave = ModeWave.running.last {
                     self.rebuildBehindWave(wave)
                     return
                 }
@@ -251,7 +264,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     }
 
     /// Builds the new keys under a picture of the old ones, which the wave then uncovers: the picture is masked to
-    /// everything outside the wave's wavy circle, and the circle grows on the wave's own clock and curve.
+    /// everything outside the wave's irregular circle, and the circle follows the wave's own clock and curve, frame
+    /// by frame. A second wave takes a picture of the first one's half-done work, and covers it the same way.
     private func rebuildBehindWave(_ wave: ModeWave) {
         // (Both the trait change and the settings change come here for one wave; the second finds the new keys.)
         guard coveredWave != wave.id else { return }
@@ -264,34 +278,40 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         old.frame = bounds
         old.isUserInteractionEnabled = false
         addSubview(old)
+        let mask = CAShapeLayer()
+        mask.fillRule = .evenOdd
+        mask.fillColor = UIColor.black.cgColor
+        mask.frame = bounds
+        old.layer.mask = mask
+        covers.append(Cover(wave: wave, view: old, mask: mask))
+        updateCovers(at: CACurrentMediaTime())
+        if covers.isEmpty { return }
+        coverDriver.start { [weak self] time in self?.updateCovers(at: time) }
+    }
+
+    /// Moves every cover's circle to where its wave is at `time`; a wave that has finished takes its cover away.
+    private func updateCovers(at time: CFTimeInterval) {
         let origin = convert(CGPoint.zero, to: nil)
-        func outside(_ progress: CGFloat) -> CGPath {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for cover in covers {
+            if time - cover.wave.started >= ModeWave.duration {
+                cover.view.removeFromSuperview()
+                continue
+            }
             let path = CGMutablePath()
             path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
-            let points = wave.outline(progress, relativeTo: origin)
+            let points = cover.wave.outline(cover.wave.progress(atMediaTime: time), relativeTo: origin)
             if let first = points.first {
                 path.move(to: first)
                 for point in points.dropFirst() { path.addLine(to: point) }
                 path.closeSubpath()
             }
-            return path
+            cover.mask.path = path
         }
-        let mask = CAShapeLayer()
-        mask.fillRule = .evenOdd
-        mask.fillColor = UIColor.black.cgColor
-        mask.frame = bounds
-        mask.path = outside(1)
-        old.layer.mask = mask
-        let spread = CABasicAnimation(keyPath: "path")
-        spread.fromValue = outside(0)
-        spread.toValue = outside(1)
-        spread.duration = ModeWave.duration
-        spread.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        spread.fillMode = .backwards
-        spread.beginTime = mask.convertTime(wave.started, from: nil)
-        mask.add(spread, forKey: "wave")
-        let left = max(0, wave.started + ModeWave.duration - CACurrentMediaTime())
-        DispatchQueue.main.asyncAfter(deadline: .now() + left + 0.05) { old.removeFromSuperview() }
+        CATransaction.commit()
+        covers.removeAll { time - $0.wave.started >= ModeWave.duration }
+        if covers.isEmpty { coverDriver.stop() }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -299,7 +319,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         guard traitCollection.userInterfaceStyle != builtStyle else { return }
         // The screen's switch reaches this view's traits before its settings are read: the wave's cover has to be
         // made now, or the new keys would show before the wave gets to them.
-        if window != nil, let wave = ModeWave.active {
+        if window != nil, let wave = ModeWave.running.last {
             rebuildBehindWave(wave)
         } else {
             rebuild()
