@@ -47,6 +47,8 @@ enum SettingKey {
     static let appLanguage = "hunkeys.appLanguage"
     static let accent = "hunkeys.accent"
     static let accentHex = "hunkeys.accentHex"
+    /// Which mode the keyboard uses: "auto" (the open app's), "light" or "dark".
+    static let appearance = "hunkeys.appearance"
     // Keys, haptics and the suggestion bar (the app's Keys, Haptics and Suggestions screens)
     static let keyHeight = "hunkeys.keyHeight"
     static let landscapeSeparate = "hunkeys.landscapeSeparate"
@@ -121,7 +123,7 @@ enum SettingKey {
     static let preferenceKeys: [String] = [
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
-        theme, accent, accentHex, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
+        theme, accent, accentHex, appearance, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         keyboardTools,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
@@ -170,6 +172,7 @@ enum SettingDefault {
     static let appLanguage = "system"
     static let accent = "blue"
     static let accentHex = ""
+    static let appearance = "auto"
     /// Flat, sheen or raised keys for the system themes; "auto": flat. Designed themes set their own.
     static let keySurface = "auto"
     /// None, thin, bold or accent outlines for the system themes; "auto": thin on every theme but Native.
@@ -368,6 +371,7 @@ final class Settings {
             SettingKey.enabledLanguages: SettingDefault.enabledLanguages,
             SettingKey.accent: SettingDefault.accent,
             SettingKey.accentHex: SettingDefault.accentHex,
+            SettingKey.appearance: SettingDefault.appearance,
             SettingKey.keySurface: SettingDefault.keySurface,
             SettingKey.keyBorderStyle: SettingDefault.keyBorderStyle,
             SettingKey.keyGlow: SettingDefault.keyGlow,
@@ -562,6 +566,12 @@ final class Settings {
     var accentName: String {
         get { return readString(SettingKey.accent) ?? SettingDefault.accent }
         set { put(newValue, SettingKey.accent) }
+    }
+
+    /// "auto", "light" or "dark".
+    var appearance: String {
+        get { return readString(SettingKey.appearance) ?? SettingDefault.appearance }
+        set { put(newValue, SettingKey.appearance) }
     }
 
     var accent: AccentChoice { return AccentChoice(rawValue: accentName) ?? .blue }

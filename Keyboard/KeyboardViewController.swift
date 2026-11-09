@@ -104,6 +104,27 @@ final class KeyboardViewController: UIInputViewController {
         inputView.allowsSelfSizing = true
         inputView.backgroundColor = UIColor.clear
         view = inputView
+        view.overrideUserInterfaceStyle = Theme.appearanceStyle
+    }
+
+    /// Light or dark as the user chose; Auto follows the open app.
+    private func applyAppearance() {
+        view.overrideUserInterfaceStyle = Theme.appearanceStyle
+    }
+
+    /// While the phone turns, the system briefly reports the wrong mode (the keyboard flashes dark in light apps),
+    /// so the mode in use is held until the turn is over.
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        let held = view.traitCollection.userInterfaceStyle
+        if Theme.appearanceStyle == .unspecified, held != .unspecified {
+            view.overrideUserInterfaceStyle = held
+        }
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            guard let self = self else { return }
+            self.applyAppearance()
+            self.keyboardView.refreshGlassTints()
+        }
     }
 
     override func viewDidLoad() {
@@ -289,7 +310,7 @@ final class KeyboardViewController: UIInputViewController {
     private func settingsSignature() -> String {
         let s = settings
         return [
-            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
+            "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName, s.appearance,
             "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle, s.keyGlow, s.keyFont,
             s.enabledLanguages.joined(separator: ","),
             SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
@@ -307,6 +328,7 @@ final class KeyboardViewController: UIInputViewController {
     private func buildInterface() {
         Prefs.refresh()
         Theme.reload()
+        applyAppearance()
         validateLanguage()
         toolsPanel = nil   // goes with the old stage
         for sub in container.subviews { sub.removeFromSuperview() }

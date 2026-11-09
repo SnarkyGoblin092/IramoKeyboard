@@ -422,12 +422,15 @@ final class KeyboardView: UIView {
     private var lastLayoutSize = CGSize.zero
 
     /// With real Liquid Glass, gives every key its own tint again, now and once more after the layout has settled.
-    private func refreshGlassTints() {
+    func refreshGlassTints() {
         guard Theme.usesRealGlass else { return }
         for row in keyViews { for key in row { key.refreshGlassTint() } }
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            for row in self.keyViews { for key in row { key.refreshGlassTint() } }
+        // Once more after the layout (and a turn's animation) has settled.
+        for delay in [0.0, 0.15, 0.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self else { return }
+                for row in self.keyViews { for key in row { key.refreshGlassTint() } }
+            }
         }
     }
 

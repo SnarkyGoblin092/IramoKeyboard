@@ -121,7 +121,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private func signature() -> String {
         let s = Settings.shared
         return [
-            Theme.storedID(), s.accentName, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
+            Theme.storedID(), s.accentName, s.appearance, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
@@ -139,6 +139,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         Prefs.refresh()
         applyEffects()
         Theme.reload()
+        overrideUserInterfaceStyle = Theme.appearanceStyle
         builtSignature = signature()
         builtStyle = traitCollection.userInterfaceStyle
         language = LiveKeyboardView.openingLanguage(code: Settings.shared.languageCode)

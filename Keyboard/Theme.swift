@@ -229,6 +229,15 @@ enum Theme {
 
     // MARK: Colours (read at use time, so they follow the cached palette)
 
+    /// The mode the user picked for the keyboard (`.unspecified`: follow the open app).
+    static var appearanceStyle: UIUserInterfaceStyle {
+        switch SharedStore.defaults.string(forKey: SettingKey.appearance) ?? SettingDefault.appearance {
+        case "light": return .light
+        case "dark": return .dark
+        default: return .unspecified
+        }
+    }
+
     static var accent: UIColor { return palette.accent }
     static var onAccent: UIColor { return palette.onAccent }
     static var text: UIColor { return palette.text }
