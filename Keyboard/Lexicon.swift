@@ -20,16 +20,6 @@ final class Lexicon {
     private let recordSize = 20
 
     init?(language: Language) {
-        if let sqliteUrl = LanguageData.url(forResource: "dict_\(language.rawValue)", withExtension: "sqlite") {
-            self.count = 0 // Placeholder, SQLiteLexicon will set these
-            self.totalCount = 0
-            self.maxCount = 0
-            // We'll need to refine this to actually return a Lexicon instance
-            // Since Lexicon is a class and we want to switch between implementations,
-            // we should probably make Lexicon a protocol or use a factory.
-            return nil // Placeholder for now
-        }
-
         guard let url = LanguageData.url(forResource: "dict_\(language.rawValue)", withExtension: "bin"),
               let data = try? NSData(contentsOf: url, options: .alwaysMapped),
               data.length >= 32 else {
