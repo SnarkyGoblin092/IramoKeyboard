@@ -108,7 +108,7 @@ jobs:
         if: steps.packed.outputs.cache-hit != 'true'
         run: |
           python3 - <<'PY'
-          import lzma, multiprocessing, pathlib
+          import concurrent.futures, lzma, os, pathlib
 
           def pack(path):
               filters = [{"id": lzma.FILTER_LZMA2, "preset": 6, "dict_size": 1 << 20}]
@@ -118,8 +118,10 @@ jobs:
 
           files = [path for path in sorted(pathlib.Path("Keyboard/Resources").iterdir())
                    if path.is_file() and path.name != ".gitkeep" and path.suffix != ".lzma"]
-          with multiprocessing.Pool() as pool:   # one file per core
-              pool.map(pack, files, chunksize=1)
+          # Threads, one file per core: lzma compresses outside Python's lock, and worker processes cannot
+          # be started from a script read from standard input (they import the main script by its path).
+          with concurrent.futures.ThreadPoolExecutor(os.cpu_count() or 2) as pool:
+              list(pool.map(pack, files))
           PY
           du -sh Keyboard/Resources
 
