@@ -326,6 +326,7 @@ final class KeyboardView: UIView {
         applyReturnProminence()
         setNeedsLayout()
         layoutIfNeeded()   // hit areas must match the new rows before the next touch
+        refreshGlassTints()
         for (r, columns) in handovers {
             for (c, handover) in columns where r < keyViews.count && c < keyViews[r].count {
                 keyViews[r][c].takeEffects(handover)
@@ -442,6 +443,19 @@ final class KeyboardView: UIView {
         return true
     }
 
+    /// The size the keys were last laid out for.
+    private var lastLayoutSize = CGSize.zero
+
+    /// With real Liquid Glass, gives every key its own tint again, now and once more after the layout has settled.
+    private func refreshGlassTints() {
+        guard Theme.usesRealGlass else { return }
+        for row in keyViews { for key in row { key.refreshGlassTint() } }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            for row in self.keyViews { for key in row { key.refreshGlassTint() } }
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         trailLayer.frame = bounds
@@ -451,6 +465,10 @@ final class KeyboardView: UIView {
         glassContainer?.frame = bounds
         // Too small for the padding (not laid out yet): the keys' frames would come out null.
         guard !rows.isEmpty, bounds.width > 2, bounds.height > 8 else { return }
+        if bounds.size != lastLayoutSize {
+            lastLayoutSize = bounds.size
+            refreshGlassTints()   // turning the phone must not leave the keys in the return key's accent
+        }
 
         // A narrower keyboard (the Width setting) is centred; the one-handed keyboard sits against its side.
         let side = KeyboardLayoutMode.oneHandedSide

@@ -43,7 +43,7 @@ struct FunctionsView: View {
             } header: {
                 SectionHeader(tr("Not on the panel"), symbol: "square.dashed", color: .gray)
             } footer: {
-                Text(tr("Drag a function up to add it to the panel, or down here to take it off. Copy, cut, paste, the clipboard and vibration need Full Access."))
+                Text(tr("Drag a function up to add it to the panel, or down here to take it off. Copy, cut, paste and vibration need Full Access."))
             }
             .glassRows()
 

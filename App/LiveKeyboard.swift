@@ -4,7 +4,7 @@ import UIKit.UIGestureRecognizerSubclass
 
 /// The keyboard itself, pinned above the settings screens: Keyboard/SuggestionBar, Keyboard/KeyboardView and its
 /// KeyViews, built from the same settings and played by the same code as while typing, so the keys, the bar, the
-/// effects, the haptics and the gestures look and feel as they do there. The emoji key opens no picker and the keys
+/// effects, the haptics and the gestures look and feel as they do there. The emoji key opens nothing and the keys
 /// write nothing: the bar always shows the same few words, so its look can be seen. Shift and the number and symbol
 /// pages work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
 struct LiveKeyboard: View {
@@ -13,55 +13,29 @@ struct LiveKeyboard: View {
     /// The Hitboxes screen: the touch areas drawn over the keys (HitboxOverlay), and the letters typed on the
     /// preview drive adaptive keys as they do while typing.
     var showsHitboxes = false
-    /// What the Hitboxes preview draws over the keys: the touch areas or the hit map.
-    var hitboxMode: HitboxOverlay.Mode = .hitboxes
-    /// The Emoji screen: the keyboard as it is with its emoji picker open (nothing in it leaves the picker).
-    var showsEmoji = false
-    @Environment(\.colorScheme) private var scheme
-
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
     @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
-    @AppStorage(SettingKey.landscapeSeparate, store: SharedStore.defaults) private var landscapeSeparate = SettingDefault.landscapeSeparate
-    @AppStorage(SettingKey.landscapeKeyHeight, store: SharedStore.defaults) private var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
-    /// Upright or landscape (the switch in the corner).
-    @AppStorage(PreviewOrientation.key) private var landscape = false
 
     var body: some View {
         GeometryReader { geometry in
-            // naturalSize reads these itself: read here too, so a change resizes the preview at once.
-            let _ = (landscape, landscapeSeparate, landscapeKeyHeight)
-            let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
+                        let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
                                                     barHeight: barHeight,
-                                                    language: LiveKeyboardView.openingLanguage(code: languageCode),
-                                                    emoji: showsEmoji)
+                                                    language: LiveKeyboardView.openingLanguage(code: languageCode))
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
-                LiveKeyboardHost(effects: effects, showsHitboxes: showsHitboxes, hitboxMode: hitboxMode,
-                                 showsEmoji: showsEmoji)
-                    // A transparent backdrop shows only the keys, over whatever the screen has behind them. The emoji
-                    // picker shows the system's own backdrop (as it does in the keyboard).
-                    .background(Group {
-                        if showsEmoji {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(scheme == .dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
-                                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
-                        } else {
-                            look.backdrop(scale: scale)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                        }
-                    })
-                    .clipShape(RoundedRectangle(cornerRadius: showsEmoji ? 14 : 0, style: .continuous))
+                LiveKeyboardHost(effects: effects, showsHitboxes: showsHitboxes)
+                    // A transparent backdrop shows only the keys, over whatever the screen has behind them.
+                    .background(
+                        look.backdrop(scale: scale)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                    )
             }
             .frame(width: size.width * scale, height: size.height * scale)
-            // The switch between the upright and the landscape keyboard, on its top corner.
-            .overlay(alignment: .topTrailing) {
-                PreviewOrientationButton().offset(x: 8, y: -10)
-            }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
@@ -71,15 +45,11 @@ struct LiveKeyboard: View {
 private struct LiveKeyboardHost: UIViewRepresentable {
     let effects: EffectsConfig?
     let showsHitboxes: Bool
-    let hitboxMode: HitboxOverlay.Mode
-    let showsEmoji: Bool
 
     func makeUIView(context: Context) -> LiveKeyboardView {
         let view = LiveKeyboardView()
-        view.showsEmoji = showsEmoji
         view.effectsOverride = effects
         view.showsHitboxes = showsHitboxes
-        view.hitboxMode = hitboxMode
         return view
     }
 
@@ -87,7 +57,6 @@ private struct LiveKeyboardHost: UIViewRepresentable {
         // Read by the keys at every press (KeyView.syncEffects), so a change shows on the next one.
         view.effectsOverride = effects
         view.showsHitboxes = showsHitboxes
-        view.hitboxMode = hitboxMode
     }
 }
 
@@ -95,7 +64,7 @@ private struct LiveKeyboardHost: UIViewRepresentable {
 /// the keyboard's controller: it builds them (as KeyboardViewController.buildInterface and reloadKeyboardLayout),
 /// handles shift and the pages, fills the bar with a few fixed words, and builds everything again when a setting
 /// that changes their look is edited (as the controller's settingsSignature).
-final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegate, EmojiPanelDelegate {
+final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegate {
     /// The keyboard's points; scaled to the view. Popups are added here too, so they are drawn at the same scale.
     private let stage = UIView()
     private var bar = SuggestionBar()
@@ -117,63 +86,23 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     var showsHitboxes = false {
         didSet { if showsHitboxes != oldValue { updateHitboxes() } }
     }
-    /// What the overlay draws (LiveKeyboard.hitboxMode).
-    var hitboxMode: HitboxOverlay.Mode {
-        get { return hitboxOverlay.mode }
-        set { hitboxOverlay.mode = newValue }
-    }
     private let hitboxOverlay = HitboxOverlay()
-    /// The Emoji screen's preview: the emoji picker open in place of the bar and the keys (LiveKeyboard.showsEmoji).
-    var showsEmoji = false {
-        didSet { if showsEmoji != oldValue { rebuild() } }
-    }
-    private var emojiPanel: EmojiPanel?
     /// The word typed on the preview so far (the Hitboxes screen), which adaptive keys follow.
     private var typed = ""
     /// The dictionaries adaptive keys read, loaded once for every preview.
     private static var stores: [Language: WordStore] = [:]
     private static var loadingStores = Set<Language>()
 
-    /// An iPhone keyboard in landscape (the previews' landscape switch on an iPhone).
-    private static var phoneLandscape: Bool {
-        return PreviewOrientation.landscape && UIDevice.current.userInterfaceIdiom != .pad
-    }
-
-    /// The suggestion bar's height (KeyboardViewController.applyHeight: lower on an iPhone in landscape).
-    static func barHeight(_ stored: Double) -> CGFloat {
-        return CGFloat(stored) * (phoneLandscape ? 36.0 / 44.0 : 1.0)
-    }
-
-    /// The keyboard's size (KeyboardViewController.applyHeight), upright or in landscape (PreviewOrientation): the
-    /// screen's width, and the bar above its rows of keys with the gap between them. An iPad's keys are as tall
-    /// either way; an iPhone's are two thirds as tall in landscape (or their own landscape height), and the keyboard
-    /// is always as tall as the emoji picker there. With `emoji` (the picker open) it is as tall as the picker
-    /// needs, at least.
+    /// The keyboard's size (KeyboardViewController.applyHeight), upright: the screen's width, and the bar above its
+    /// rows of keys with the gap between them. An iPad's keys are taller than an iPhone's.
     static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
-                            language: Language, emoji: Bool = false) -> CGSize {
+                            language: Language) -> CGSize {
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let height: CGFloat
-        if isPad {
-            height = CGFloat(keyHeight) * 61 / 45
-        } else if phoneLandscape {
-            let defaults = SharedStore.defaults
-            height = defaults.bool(forKey: SettingKey.landscapeSeparate)
-                ? CGFloat(defaults.double(forKey: SettingKey.landscapeKeyHeight)) : CGFloat(keyHeight) * 30 / 45
-        } else {
-            height = CGFloat(keyHeight)
-        }
+        let height = isPad ? CGFloat(keyHeight) * 61 / 45 : CGFloat(keyHeight)
         let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
         let width = CGFloat(DeviceMetrics.keyboardWidth)
-        let total = LiveKeyboardView.barHeight(barHeight) + 8 + rows * (height + CGFloat(rowGap))
-        // With the picker open: the size the keyboard really had then, once it has been opened on this phone
-        // (recorded upright only: in landscape it is worked out for the wider keyboard).
-        if emoji && !PreviewOrientation.landscape {
-            let parts = (SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) ?? "")
-                .split(separator: ",").compactMap { Double($0) }
-            if parts.count == 2, parts[0] > 100, parts[1] > 100 { return CGSize(width: parts[0], height: parts[1]) }
-        }
-        let fitsPicker = emoji || phoneLandscape
-        return CGSize(width: width, height: fitsPicker ? max(total, EmojiPanel.requiredHeight(forWidth: width)) : total)
+        let total = CGFloat(barHeight) + 8 + rows * (height + CGFloat(rowGap))
+        return CGSize(width: width, height: total)
     }
 
     /// The language the keyboard opens in: the stored one if it is enabled, else the first enabled one.
@@ -212,32 +141,17 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Theme.storedID(), s.accentName, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
-            "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.splitGap)", "\(s.splitSidePadding)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
+            "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", "\(KeyboardLayoutMode.split)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
-            s.systemEditsJSON, "\(showsEmoji)", "\(PreviewOrientation.landscape)"
-        ].joined(separator: "|") + (showsEmoji ? "|" + emojiSettingsSignature() : "")
-    }
-
-    /// The Emoji screen's settings the picker is built from.
-    private func emojiSettingsSignature() -> String {
-        return SharedStore.defaults.dictionaryRepresentation()
-            .filter { $0.key.hasPrefix("hunkeys.emoji") && $0.key != SettingKey.emojiUseCounts }
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: "|")
+            s.systemEditsJSON
+        ].joined(separator: "|")
     }
 
     /// A new bar and KeyboardView, as the controller makes them in buildInterface (they read the theme as they are
     /// made).
-    /// The split keyboard follows the previews' landscape switch on an iPhone (KeyboardLayoutMode.split).
-    private func syncOrientation() {
-        KeyboardLayoutMode.phoneLandscape = LiveKeyboardView.phoneLandscape
-    }
-
     private func rebuild() {
-        syncOrientation()
         Settings.shared.refresh()
         Prefs.refresh()
         applyEffects()
@@ -258,24 +172,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         hitboxOverlay.keyboard = keyboard
         hitboxOverlay.tintColor = UIColor(Color.currentAccent(name: Settings.shared.accentName,
                                                              hex: SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? ""))
-        emojiPanel?.removeFromSuperview()
-        emojiPanel = nil
-        if showsEmoji {
-            // The keyboard with its emoji picker open: the picker replaces the bar and the keys (as showEmojiPanel),
-            // and nothing in it leaves it (ABC, search and the emoji key do nothing here).
-            bar.isHidden = true
-            keyboard.isHidden = true
-            hitboxOverlay.isHidden = true
-            let panel = EmojiPanel()
-            panel.delegate = self
-            panel.language = language
-            stage.addSubview(panel)
-            emojiPanel = panel
-            layoutStage()
-            panel.reload()
-            EmojiStore.shared.loadIfNeeded { [weak panel] in panel?.reload() }
-            return
-        }
         layoutStage()
         loadRows()
         showWords()
@@ -396,7 +292,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             // only showed after the next change): read the shared defaults afresh.
             Settings.shared.refresh()
             Prefs.refresh()
-            self.syncOrientation()
             self.applyEffects()
             if self.signature() != self.builtSignature { self.rebuild() } else { self.updateHitboxes() }
         }
@@ -439,14 +334,13 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private func layoutStage() {
         let size = LiveKeyboardView.naturalSize(keyHeight: Prefs.keyHeight, rowGap: Prefs.rowGap,
                                                 numberRow: Prefs.numberRow, barHeight: Prefs.suggestionHeight,
-                                                language: language, emoji: showsEmoji)
+                                                language: language)
         // The bar and the keys are always laid out at the keyboard's size, also before this view has one (it is
         // built in init): at 0×0 every key's frame would come out null and Core Animation would throw.
         stage.bounds = CGRect(origin: .zero, size: size)
-        let barHeight = LiveKeyboardView.barHeight(Prefs.suggestionHeight)
+        let barHeight = CGFloat(Prefs.suggestionHeight)
         let barFrame = CGRect(x: 0, y: 0, width: size.width, height: barHeight)
         let keysFrame = CGRect(x: 0, y: barHeight, width: size.width, height: size.height - barHeight)
-        if let panel = emojiPanel, panel.frame != stage.bounds { panel.frame = stage.bounds }
         if bar.frame != barFrame { bar.frame = barFrame }
         if keyboard.frame != keysFrame { keyboard.frame = keysFrame }
         if hitboxOverlay.frame != keysFrame {
@@ -500,14 +394,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     func keyboardViewDidEndWordDelete(_ view: KeyboardView) {}
     func keyboardViewDidHoldEmoji(_ view: KeyboardView) {}
 
-    // MARK: EmojiPanelDelegate
-
-    // The picker plays its own taps; the preview writes nothing, searches nothing and never goes back to the keys.
-    func emojiPanel(_ panel: EmojiPanel, didSelect emoji: String) {}
-    func emojiPanelDidTapBackspace(_ panel: EmojiPanel) {}
-    func emojiPanelDidTapSearch(_ panel: EmojiPanel) {}
-    func emojiPanelDidClose(_ panel: EmojiPanel) {}
-    func emojiPanelDidTapHide(_ panel: EmojiPanel) {}
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int) {}
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {}
     func keyboardView(_ view: KeyboardView, didFinishSwipe path: [CGPoint]) {

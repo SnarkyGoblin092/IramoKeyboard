@@ -1,20 +1,11 @@
 import UIKit
 
 /// The Hitboxes screen's drawing over the live keyboard. It takes no touches: the keys under it still type.
-/// - hitboxes: a tinted box over every letter where its touch area is, with every hitbox setting (letter room,
-///   adaptive keys, the hit map) as the keyboard applies them (KeyboardView.touchOutlines).
-/// - hitMap: what the hit map learned: a tinted box where a moved key's room has gone (KeyboardView.hitMapOutlines).
+/// A tinted box over every letter where its touch area is, with every hitbox setting (letter room, adaptive keys,
+/// the hit map) as the keyboard applies them (KeyboardView.touchOutlines); a key the hit map has moved the room of
+/// gets a stronger box, so what was learned shows in the same picture (KeyboardView.hitMapOutlines).
 final class HitboxOverlay: UIView {
-    enum Mode {
-        case hitboxes
-        case hitMap
-    }
-
     weak var keyboard: KeyboardView?
-
-    var mode: Mode = .hitboxes {
-        didSet { if mode != oldValue { setNeedsDisplay() } }
-    }
 
     /// How far each box sits inside its area, so neighbouring boxes stay apart.
     private let inset: CGFloat = 1.5
@@ -36,36 +27,14 @@ final class HitboxOverlay: UIView {
     override func draw(_ rect: CGRect) {
         guard let keyboard = keyboard, let context = UIGraphicsGetCurrentContext() else { return }
         let accent = tintColor ?? UIColor.systemBlue
-        switch mode {
-        case .hitboxes:
-            for outline in keyboard.touchOutlines() where outline.letter != nil {
-                guard let path = box(keyboard.convert(outline.rect, to: self)) else { continue }
-                highlight(path, accent: accent, in: context)
-            }
-        case .hitMap:
-            var drawn = false
-            for outline in keyboard.hitMapOutlines() {
-                if let moved = outline.moved, let path = box(keyboard.convert(moved, to: self)) {
-                    highlight(path, accent: accent, in: context)
-                    drawn = true
-                }
-            }
-            if !drawn { drawNote(Prefs.hitMap ? tr("Nothing learned yet") : tr("Hit map is off")) }
+        for outline in keyboard.touchOutlines() where outline.letter != nil {
+            guard let path = box(keyboard.convert(outline.rect, to: self)) else { continue }
+            highlight(path, accent: accent, fill: 0.22, width: 1.5, in: context)
         }
-    }
-
-    /// A short note in the middle when the hit map has nothing to show, so an empty preview is not mistaken for broken.
-    private func drawNote(_ text: String) {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 15, weight: .semibold),
-            .foregroundColor: UIColor.white
-        ]
-        let size = (text as NSString).size(withAttributes: attributes)
-        let pill = CGRect(x: bounds.midX - size.width / 2 - 12, y: bounds.midY - size.height / 2 - 6,
-                          width: size.width + 24, height: size.height + 12)
-        UIColor.black.withAlphaComponent(0.55).setFill()
-        UIBezierPath(roundedRect: pill, cornerRadius: pill.height / 2).fill()
-        (text as NSString).draw(at: CGPoint(x: pill.minX + 12, y: pill.minY + 6), withAttributes: attributes)
+        for outline in keyboard.hitMapOutlines() {
+            guard let moved = outline.moved, let path = box(keyboard.convert(moved, to: self)) else { continue }
+            highlight(path, accent: accent, fill: 0.2, width: 3, in: context)
+        }
     }
 
     private func box(_ frame: CGRect) -> UIBezierPath? {
@@ -74,12 +43,12 @@ final class HitboxOverlay: UIView {
         return UIBezierPath(roundedRect: frame, cornerRadius: min(cornerRadius, frame.width / 2, frame.height / 2))
     }
 
-    /// The Hit map's look: a tinted fill with a solid outline.
-    private func highlight(_ path: UIBezierPath, accent: UIColor, in context: CGContext) {
-        context.setFillColor(accent.withAlphaComponent(0.28).cgColor)
+    /// A tinted fill with a solid outline.
+    private func highlight(_ path: UIBezierPath, accent: UIColor, fill: CGFloat, width: CGFloat, in context: CGContext) {
+        context.setFillColor(accent.withAlphaComponent(fill).cgColor)
         context.addPath(path.cgPath)
         context.fillPath()
-        stroke(path, accent, width: 1.5, in: context)
+        stroke(path, accent, width: width, in: context)
     }
 
     private func stroke(_ path: UIBezierPath, _ color: UIColor, width: CGFloat, in context: CGContext) {

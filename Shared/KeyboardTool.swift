@@ -4,13 +4,12 @@ import Foundation
 /// Functions screen picks which ones the panel shows and in what order (Settings.keyboardTools).
 /// Things the keyboard already has elsewhere (the globe key, the hide button) are not here.
 enum KeyboardTool: String, CaseIterable {
-    case oneHanded, clipboard, numberRow, split, openApp
+    case oneHanded, numberRow, split, openApp
     case changeCase, lineStart, lineEnd, quotes, insertDate, insertTime
 
     var title: String {
         switch self {
         case .oneHanded: return "One-handed"
-        case .clipboard: return "Clipboard"
         case .numberRow: return "Number row"
         case .split: return "Split keyboard"
         case .openApp: return "Settings"
@@ -26,7 +25,6 @@ enum KeyboardTool: String, CaseIterable {
     var symbol: String {
         switch self {
         case .oneHanded: return "hand.raised"
-        case .clipboard: return "list.clipboard"
         case .numberRow: return "number"
         case .split: return "rectangle.split.2x1"
         case .openApp: return "gearshape"
@@ -43,7 +41,6 @@ enum KeyboardTool: String, CaseIterable {
     var subtitle: String {
         switch self {
         case .oneHanded: return "One-handed keyboard on or off; the arrow beside the keys switches sides"
-        case .clipboard: return "The last things you copied; tap one to paste it"
         case .numberRow: return "Numbers above the letters, on or off"
         case .split: return "The keys in two halves (on an iPhone, in landscape), on or off"
         case .openApp: return "Opens the Iramo app"
@@ -57,7 +54,7 @@ enum KeyboardTool: String, CaseIterable {
     }
 
     /// The tools a new install's panel shows (split only appears on an iPad).
-    static let standard: [KeyboardTool] = [.oneHanded, .split, .clipboard, .changeCase, .lineStart, .lineEnd, .quotes,
+    static let standard: [KeyboardTool] = [.oneHanded, .split, .changeCase, .lineStart, .lineEnd, .quotes,
                                            .numberRow, .openApp]
 
     /// Stored names in order, unknown ones dropped.

@@ -247,9 +247,6 @@ private struct KeyboardSection: View {
                 SettingsRow(title: tr("Text shortcuts"), symbol: "bolt.fill", color: .orange,
                             value: shortcutCount > 0 ? "\(shortcutCount)" : nil)
             }
-            ScreenRow(.emoji) {
-                SettingsRow(title: tr("Emoji"), symbol: "face.smiling.inverse", color: .yellow)
-            }
             ScreenRow(.functions) {
                 SettingsRow(title: tr("Functions panel"), symbol: "square.grid.2x2.fill", color: .pink)
             }
@@ -385,11 +382,10 @@ private struct LookSection: View {
 
 private struct DataSection: View {
     private enum Action: String {
-        case recents, learned, reset
+        case learned, reset
 
         var title: String {
             switch self {
-            case .recents: return tr("Clear recent emoji?")
             case .learned: return tr("Forget learned words?")
             case .reset: return tr("Reset all settings?")
             }
@@ -397,7 +393,6 @@ private struct DataSection: View {
 
         var message: String {
             switch self {
-            case .recents: return tr("The Recently Used emoji tab will be empty.")
             case .learned: return tr("Words the keyboard picked up while you type will be removed.")
             case .reset: return tr("Your shortcuts, recent emoji and learned words are kept.")
             }
@@ -405,7 +400,6 @@ private struct DataSection: View {
 
         var button: String {
             switch self {
-            case .recents: return tr("Clear")
             case .learned: return tr("Forget")
             case .reset: return tr("Reset")
             }
@@ -419,7 +413,6 @@ private struct DataSection: View {
         Section {
             // Orange: they remove things (each asks first), short of red Reset, which undoes every setting.
             row(.learned, tr("Forget learned words"), symbol: "text.book.closed", color: .orange)
-            row(.recents, tr("Clear recent emoji"), symbol: "clock.arrow.circlepath", color: .orange)
             row(.reset, tr("Reset all settings"), symbol: "arrow.counterclockwise", color: .red, role: .destructive)
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
@@ -459,9 +452,6 @@ private struct DataSection: View {
 
     private func perform(_ action: Action) {
         switch action {
-        case .recents:
-            Settings.shared.clearRecentEmoji()
-            note = tr("Recent emoji cleared.")
         case .learned:
             Settings.shared.clearLearnedWords()
             note = tr("Learned words forgotten.")
@@ -574,7 +564,7 @@ struct AppLanguageView: View {
 
 /// The screens the main list opens.
 enum Screen: Hashable {
-    case languages, appLanguage, suggestions, gestures, hitboxes, shortcuts, emoji, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
+    case languages, appLanguage, suggestions, gestures, hitboxes, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
 
     @ViewBuilder var view: some View {
         switch self {
@@ -584,7 +574,6 @@ enum Screen: Hashable {
         case .gestures: GesturesView()
         case .hitboxes: HitboxesView()
         case .shortcuts: ShortcutsView()
-        case .emoji: EmojiView()
         case .functions: FunctionsView()
         case .themes: ThemesView()
         case .themeEditor: ThemeEditorView()

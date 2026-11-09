@@ -4,17 +4,22 @@ import SwiftUI
 /// The preview at the top follows every change; the keyboard reads the same settings (Prefs, KeyboardView,
 /// KeyView).
 struct KeysView: View {
-    /// The previews' upright or landscape keyboard: the sizes in points follow it (DeviceMetrics).
-    @AppStorage(PreviewOrientation.key) private var previewLandscape = false
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.keyboardWidth, store: SharedStore.defaults) private var keyboardWidth = SettingDefault.keyboardWidth
     @AppStorage(SettingKey.splitKeyboard, store: SharedStore.defaults) private var split = SettingDefault.splitKeyboard
-    @AppStorage(SettingKey.splitGap, store: SharedStore.defaults) private var splitGap = SettingDefault.splitGap
-    @AppStorage(SettingKey.splitSidePadding, store: SharedStore.defaults) private var splitSidePadding = SettingDefault.splitSidePadding
     @AppStorage(SettingKey.oneHanded, store: SharedStore.defaults) private var oneHanded = SettingDefault.oneHanded
-    private let hands = ["off", "left", "right"]
+    /// The one-handed keyboard on or off; it comes back on the side it was last on (the keyboard's arrow moves it).
+    private func setOneHanded(_ on: Bool) {
+        let sideKey = "oneHandedLastSide"
+        if on {
+            oneHanded = SharedStore.defaults.string(forKey: sideKey) ?? "right"
+        } else {
+            if oneHanded != "off" { SharedStore.defaults.set(oneHanded, forKey: sideKey) }
+            oneHanded = "off"
+        }
+    }
     private var isPad: Bool { return UIDevice.current.userInterfaceIdiom == .pad }
     @AppStorage(SettingKey.landscapeSeparate, store: SharedStore.defaults) private var landscapeSeparate = SettingDefault.landscapeSeparate
     @AppStorage(SettingKey.landscapeKeyHeight, store: SharedStore.defaults) private var landscapeKeyHeight = SettingDefault.landscapeKeyHeight
@@ -283,24 +288,18 @@ struct KeysView: View {
                                 ? tr("The keys in two halves, one under each thumb, in every language.")
                                 : tr("In landscape: the keys in two halves, one under each thumb, in every language."),
                             isOn: $split)
-                if split {
-                    GlassSlider(title: tr("Gap between halves"), symbol: "arrow.left.and.right.square",
-                                value: $splitGap, range: Settings.splitGapRange, step: 0.01) { "\(Int(($0 * 100).rounded()))%" }
-                    GlassSlider(title: tr("Side padding"), symbol: "arrow.left.and.line.vertical.and.arrow.right",
-                                value: $splitSidePadding, range: Settings.splitSidePaddingRange, step: 1) { "\(Int($0.rounded())) pt" }
-                }
-                SegmentedChoice(title: tr("One-handed"), names: [tr("Off"), tr("Left hand"), tr("Right hand")],
-                                selected: hands.firstIndex(of: oneHanded)) { oneHanded = hands[$0] }
+                GlassToggle(title: tr("One-handed"), subtitle: tr("One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over."),
+                            isOn: Binding(get: { oneHanded != "off" }, set: { setOneHanded($0) }))
                     .disabled(isPad && split)
                     .opacity(isPad && split ? 0.45 : 1)
             } header: {
                 SectionHeader(tr("Layout"), symbol: "hand.raised.fingers.spread", color: .teal)
             } footer: {
-                Text(isPad && split
-                     ? tr("The split keyboard is used instead of the one-handed one.")
-                     : split
-                     ? tr("One-handed: a narrower keyboard against that side, upright; in landscape the split keyboard is used instead.")
-                     : tr("One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over."))
+                if split {
+                    Text(isPad
+                         ? tr("The split keyboard is used instead of the one-handed one.")
+                         : tr("One-handed: a narrower keyboard against that side, upright; in landscape the split keyboard is used instead."))
+                }
             }
             .glassRows()
 
@@ -410,7 +409,7 @@ struct KeysView: View {
             .glassRows()
 
             Section {
-                GlassToggle(title: tr("Emoji key"), subtitle: tr("Without it, the emoji are in the Functions panel when Emoji is one of its tools."),
+                GlassToggle(title: tr("Emoji key"), subtitle: tr("Opens the emoji picker"),
                             isOn: $emojiKey)
                 GlassToggle(title: tr("Comma key"),
                             subtitle: !commaKey && blocksReturn(comma: true)

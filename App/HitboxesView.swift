@@ -4,8 +4,6 @@ import SwiftUI
 /// letters likely to come next get more) and the hit map (learned from where the user really taps). The keyboard
 /// reads the same settings (Prefs, KeyboardView.hitScore).
 struct HitboxesView: View {
-    /// The previews' upright or landscape keyboard: the sizes in points follow it (DeviceMetrics).
-    @AppStorage(PreviewOrientation.key) private var previewLandscape = false
     @AppStorage(SettingKey.hitboxSize, store: SharedStore.defaults) private var size = SettingDefault.hitboxSize
     @AppStorage(SettingKey.keyGap, store: SharedStore.defaults) private var keyGap = SettingDefault.keyGap
     @AppStorage(SettingKey.adaptiveHitboxes, store: SharedStore.defaults) private var adaptive = SettingDefault.adaptiveHitboxes
@@ -15,9 +13,6 @@ struct HitboxesView: View {
     @AppStorage(SettingKey.adaptiveWordStart, store: SharedStore.defaults) private var wordStart = SettingDefault.adaptiveWordStart
     @AppStorage(SettingKey.hitMap, store: SharedStore.defaults) private var hitMap = SettingDefault.hitMap
     @AppStorage(SettingKey.hitMapStrength, store: SharedStore.defaults) private var hitMapStrength = SettingDefault.hitMapStrength
-
-    /// What the preview draws over the keys: 0 the touch areas, 1 the hit map.
-    @AppStorage("hitboxPreviewMode") private var previewMode = 0
 
     private let sizes: [Double] = [0.85, 1.0, 1.2]
 
@@ -50,11 +45,7 @@ struct HitboxesView: View {
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
         PinnedPreview(height: 260, fills: true) {
-            VStack(spacing: 8) {
-                SegmentedChoice(names: [tr("Hitboxes"), tr("Hit map")], selected: previewMode) { previewMode = $0 }
-                    .padding(.horizontal)
-                LiveKeyboard(showsHitboxes: true, hitboxMode: previewMode == 1 ? .hitMap : .hitboxes)
-            }
+            LiveKeyboard(showsHitboxes: true)
         } content: {
         GlassList {
             Section {
@@ -112,8 +103,8 @@ struct HitboxesView: View {
 
 // MARK: - Hit map
 
-/// What the keyboard learned about where the user taps (one map for every language, see HitMap); the preview's
-/// Hit map view shows where each key's room has moved.
+/// What the keyboard learned about where the user taps (one map for every language, see HitMap); the preview
+/// marks the keys whose room has moved.
 private struct HitMapSection: View {
     @Binding var isOn: Bool
     @Binding var strength: Double

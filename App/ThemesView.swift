@@ -261,7 +261,7 @@ final class ThumbnailCache {
     /// Every setting the previews draw with (ThemePreview's), so a change made on another screen redraws them.
     static func settingsSignature() -> String {
         let keys = [SettingKey.keyRoundness, SettingKey.keySurface, SettingKey.keyBorderStyle, SettingKey.keyGlow,
-                    SettingKey.keyHints, SettingKey.keyGap, SettingKey.splitGap, SettingKey.splitSidePadding, SettingKey.rowGap, SettingKey.keyboardWidth,
+                    SettingKey.keyHints, SettingKey.keyGap, SettingKey.rowGap, SettingKey.keyboardWidth,
                     SettingKey.splitKeyboard, SettingKey.oneHanded, SettingKey.letterSize, SettingKey.hintPosition,
                     SettingKey.hintSize, SettingKey.spaceTextSize, SettingKey.spaceLanguageCode,
                     SettingKey.numberRow, SettingKey.autoCapitalize, SettingKey.alwaysCapitals, SettingKey.keyFont,

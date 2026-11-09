@@ -330,10 +330,12 @@ struct KeySpec {
 /// How the keys sit across the keyboard: in two halves (the split keyboard, iPad only), or narrower against one side
 /// for one hand (iPhone and iPad; the split keyboard takes precedence).
 enum KeyboardLayoutMode {
-    /// The share of the width the gap of the split keyboard takes (the Keys screen's Gap between halves).
-    static var splitGap: CGFloat { return CGFloat(Prefs.splitGap) }
-    /// The room left at the split keyboard's outer sides, in points (the Keys screen's Side padding).
-    static var splitSidePadding: CGFloat { return split ? CGFloat(Prefs.splitSidePadding) : 0 }
+    /// The share of the width the gap between the split keyboard's halves takes: room for both thumbs to reach the
+    /// middle keys (the g and v are on both halves) without the halves growing too small.
+    static let splitGap: CGFloat = 0.16
+    /// The room left at the split keyboard's outer sides, in points, so the outer keys are not against the bezel.
+    static var splitSidePadding: CGFloat { return split ? splitSideMargin : 0 }
+    static let splitSideMargin: CGFloat = 10
     /// The share of the width the one-handed keyboard takes.
     static let oneHandedWidth: CGFloat = 0.8
 

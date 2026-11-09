@@ -34,37 +34,6 @@ struct PreviewCard<Content: View>: View {
     }
 }
 
-// MARK: - Portrait or landscape
-
-/// The keyboard previews show the keyboard upright or as it is in landscape (the switch on each preview; the app
-/// itself always stays upright). One choice for every preview, kept by the app only.
-enum PreviewOrientation {
-    static let key = "previewLandscape"
-    static var landscape: Bool { return UserDefaults.standard.bool(forKey: key) }
-}
-
-/// The switch on a keyboard preview between the upright and the landscape keyboard.
-struct PreviewOrientationButton: View {
-    @AppStorage(PreviewOrientation.key) private var landscape = false
-
-    var body: some View {
-        Button {
-            Feedback.tap()
-            withAnimation(.easeInOut(duration: 0.25)) { landscape.toggle() }
-        } label: {
-            Image(systemName: landscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary)
-                .frame(width: 32, height: 32)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.12)))
-                .shadow(color: Color.black.opacity(0.15), radius: 3, x: 0, y: 1)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(landscape ? tr("Show the upright keyboard") : tr("Show the landscape keyboard"))
-    }
-}
-
 // MARK: - Pinned preview
 
 /// A settings screen with its preview pinned at the top: the preview stays in view while the settings below it

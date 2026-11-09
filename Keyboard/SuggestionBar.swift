@@ -51,16 +51,12 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     private(set) var toolsOpen = false {
         didSet { if toolsOpen != oldValue { setToolsImage(); setNeedsLayout() } }
     }
-    /// The Clipboard panel covers the keys: the button shows the keyboard, which takes the user back to them.
-    var clipboardOpen = false {
-        didSet { if clipboardOpen != oldValue { setToolsImage(); setNeedsLayout() } }
-    }
     /// Off when the Functions screen picked no tools: the button leaves the bar (it still shows while a panel it
     /// closes is open).
     var showsToolsButton = true {
         didSet { if showsToolsButton != oldValue { setNeedsLayout() } }
     }
-    private var toolsButtonVisible: Bool { return showsToolsButton || toolsOpen || clipboardOpen }
+    private var toolsButtonVisible: Bool { return showsToolsButton || toolsOpen }
     private var toolsStrip: ToolsPanel?
     /// The strip that is sliding away.
     private weak var leavingTools: ToolsPanel?
@@ -175,7 +171,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private func setToolsImage() {
-        let name = toolsOpen ? "xmark" : (clipboardOpen ? "keyboard" : "square.grid.2x2")
+        let name = toolsOpen ? "xmark" : "square.grid.2x2"
         let image = UIImage(systemName: name,
                             withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular))
         if window != nil {
@@ -191,7 +187,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         } else {
             toolsIcon.image = image
         }
-        toolsIcon.accessibilityLabel = toolsOpen ? "Close the functions" : (clipboardOpen ? "Back to the keys" : "Functions")
+        toolsIcon.accessibilityLabel = toolsOpen ? "Close the functions" : "Functions"
     }
 
     /// Puts the Functions strip in the bar in place of the suggestions (nil takes it out again).

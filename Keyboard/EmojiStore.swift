@@ -300,32 +300,6 @@ final class EmojiStore {
     }()
 
     /// Emoji whose names / keywords start with every word of `query` (in the languages loaded for search).
-    /// Every emoji (and each of its skin tones) to the picker item it belongs to; built once the data is ready.
-    private var itemsByEmoji: [String: EmojiItem]?
-
-    /// The picker item an emoji belongs to (found by its plain form or any of its skin tones).
-    func item(for emoji: String) -> EmojiItem? {
-        if itemsByEmoji == nil, isReady {
-            var map: [String: EmojiItem] = [:]
-            for category in categories {
-                for item in category.items {
-                    map[item.base] = item
-                    for variant in item.variants where map[variant] == nil { map[variant] = item }
-                }
-            }
-            itemsByEmoji = map
-        }
-        return itemsByEmoji?[emoji]
-    }
-
-    /// An emoji as the picker shows it: in the skin tone chosen in the app (1 light ... 5 dark, 0 none) when given
-    /// its plain form, or as it is when it already is a tone (a recent one), with its other forms to hold for.
-    func toned(_ emoji: String, tone: Int) -> EmojiItem {
-        guard let item = item(for: emoji) else { return EmojiItem(base: emoji, variants: []) }
-        if emoji == item.base { return EmojiPanel.toned(item, tone) }
-        return EmojiItem(base: emoji, variants: [item.base] + item.variants.filter { $0 != emoji })
-    }
-
     func search(_ query: String, limit: Int = 80) -> [String] {
         guard searchReady else { return [] }
         let tokens = TextFolding.fold(query)

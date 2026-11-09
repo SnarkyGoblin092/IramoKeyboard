@@ -216,6 +216,14 @@ final class KeyView: UIView {
         }
     }
 
+    /// Puts the glass tint back to the key's own (the shared glass can leave a key with the accent of the return
+    /// key after the keyboard is laid out again, e.g. when the phone is turned).
+    func refreshGlassTint() {
+        guard glassView != nil else { return }
+        lastGlassState = ""
+        refreshAppearance()
+    }
+
     private func refreshAppearance() {
         // A keycap theme's modifier in its own colour (shift keeps it when on; its symbol shows the state).
         let own = role.flatMap { Theme.roleColor($0) }
