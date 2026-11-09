@@ -14,6 +14,7 @@ struct ThemesView: View {
     @State private var wave: ModeWave?
     /// Where this screen is in the window: the wave crosses exactly it.
     @State private var screenFrame = CGRect.zero
+    @State private var waveDriver = WaveDriver()
 
     /// Two cards across on a phone held upright, more where there is room (iPad, landscape).
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
@@ -101,21 +102,24 @@ struct ThemesView: View {
         let id = ModeWave.count
         let new = ModeWave(id: id, progress: 0, oldScheme: previewScheme, minX: screenFrame.minX,
                            minY: screenFrame.minY, width: screenFrame.width, height: screenFrame.height,
-                           started: CACurrentMediaTime() + ModeWave.lead)
+                           started: CACurrentMediaTime())
         // Before the mode itself: what it sets going (the keyboard's rebuild, the cards' new pictures) looks
         // for the wave.
         ModeWave.active = new
         wave = new
         previewMode = mode
-        Task { @MainActor in
-            // Drawn once at the left edge, then sent across.
-            // Held back by the same lead the keyboard's layers wait for (ModeWave.started), so both set off together.
-            withAnimation(.easeInOut(duration: ModeWave.duration).delay(ModeWave.lead)) {
-                if wave?.id == id { wave?.progress = 1 }
+        // Followed frame by frame from the same clock the keyboard's layers run on (ModeWave.started), so the
+        // previews and the keys are always at the same place.
+        waveDriver.start { now in
+            let share = CGFloat((now - new.started) / ModeWave.duration)
+            guard wave?.id == id else { waveDriver.stop(); return }
+            if share >= 1 {
+                waveDriver.stop()
+                wave = nil
+                if ModeWave.active?.id == id { ModeWave.active = nil }
+            } else {
+                wave?.progress = ModeWave.ease(share)
             }
-            try? await Task.sleep(nanoseconds: UInt64((ModeWave.lead + ModeWave.duration + 0.15) * 1_000_000_000))
-            if wave?.id == id { wave = nil }
-            if ModeWave.active?.id == id { ModeWave.active = nil }
         }
     }
 

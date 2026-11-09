@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// The wave that carries the Themes screen from light to dark and back: a glowing, rainbow-tinted band of Liquid
-/// Glass sweeps down the screen as a half circle (its front bulging downward), and every preview shows its new look
-/// where the band has passed and its old look below it.
+/// The wave that carries the Themes screen from light to dark and back: a ring of Liquid Glass with wavy edges
+/// spreads out from the middle of the screen, and every preview shows its new look inside the ring and its old look
+/// outside it.
 ///
 /// The screen owns the wave (ThemesView) and hands it down in the environment; the previews cut themselves at its
 /// front (`revealedByWave`), each from where it is on the screen, so the cut is one curve across all of them,
-/// hidden under the band. `progress` is animated from 0 to 1.
+/// hidden under the ring. `progress` follows `started` on the animation's own curve (`ModeWave.ease`), so SwiftUI's
+/// views and the keyboard's Core Animation layers, which both read that clock, are always at the same place.
 struct ModeWave: Equatable {
     let id: Int
-    /// 0: the band is above the top edge; 1: below the bottom edge.
+    /// 0: the ring is a point in the middle; 1: it has left the screen.
     var progress: CGFloat
     /// The mode the previews are leaving.
     let oldScheme: ColorScheme
@@ -18,39 +19,74 @@ struct ModeWave: Equatable {
     let minY: CGFloat
     let width: CGFloat
     let height: CGFloat
-    /// When the wave sets off (CACurrentMediaTime; a little after it is made), for the keyboard's own layers, which
-    /// follow it outside SwiftUI on this same clock.
+    /// When the wave set off (CACurrentMediaTime).
     let started: CFTimeInterval
 
     static let duration: TimeInterval = 1.1
-    /// The head start the keyboard's layers and SwiftUI's animation both wait for, so they set off together.
-    static let lead: TimeInterval = 0.12
-    /// The band's thickness.
+    /// The ring's thickness.
     static let band: CGFloat = 96
+    /// How many crests the edge has, and how high they are as a share of the radius.
+    static let crests = 9.0
+    static let swell: CGFloat = 0.05
+    private static let steps = 144
 
     /// The wave now crossing the screen, for the code that learns of the new mode outside SwiftUI's updates (the
     /// keyboard's rebuild, a card's picture arriving from the queue).
     static var active: ModeWave?
     static var count = 0
 
-    /// The half circle's radius: half the screen's width.
-    var radius: CGFloat { return width / 2 }
+    var center: CGPoint { return CGPoint(x: minX + width / 2, y: minY + height / 2) }
 
-    /// The height of the cut at the circle's lowest point (the middle of the screen), in the window's coordinates.
-    func center(_ progress: CGFloat) -> CGFloat {
-        let start = minY - ModeWave.band / 2
-        let end = minY + height + radius + ModeWave.band / 2
-        return start + progress * (end - start)
+    /// The radius the cut has at the end, when the ring's inner edge has passed the screen's farthest corner.
+    var endRadius: CGFloat {
+        return (hypot(width, height) / 2 + ModeWave.band / 2) / (1 - ModeWave.swell)
     }
 
-    /// The height of the cut at window x.
-    func cutY(x: CGFloat, progress: CGFloat) -> CGFloat {
-        return center(progress) + ModeWave.arc(dx: x - (minX + radius), radius: radius)
+    /// The radius of the cut at `angle`.
+    func radius(_ progress: CGFloat, angle: Double) -> CGFloat {
+        return progress * endRadius * (1 + ModeWave.swell * CGFloat(sin(ModeWave.crests * angle)))
     }
 
-    /// How far the half circle lies above its lowest point at `dx` from the middle.
-    static func arc(dx: CGFloat, radius: CGFloat) -> CGFloat {
-        return sqrt(max(0, radius * radius - dx * dx)) - radius
+    /// The cut's outline at `progress`, a point at every step around, relative to `origin` (window coordinates).
+    func outline(_ progress: CGFloat, relativeTo origin: CGPoint) -> [CGPoint] {
+        return (0..<ModeWave.steps).map { index in
+            let angle = Double(index) / Double(ModeWave.steps) * 2 * .pi
+            let r = radius(progress, angle: angle)
+            return CGPoint(x: center.x + r * CGFloat(cos(angle)) - origin.x,
+                           y: center.y + r * CGFloat(sin(angle)) - origin.y)
+        }
+    }
+
+    /// The ring: the inner and the outer edge at every step around, relative to `origin`.
+    func ring(_ progress: CGFloat, relativeTo origin: CGPoint) -> (inner: [CGPoint], outer: [CGPoint]) {
+        var inner: [CGPoint] = [], outer: [CGPoint] = []
+        for index in 0..<ModeWave.steps {
+            let angle = Double(index) / Double(ModeWave.steps) * 2 * .pi
+            let r = radius(progress, angle: angle)
+            let half = ModeWave.band / 2
+            let near = max(0, r - half), far = r + min(half, r)
+            let direction = CGPoint(x: CGFloat(cos(angle)), y: CGFloat(sin(angle)))
+            inner.append(CGPoint(x: center.x + near * direction.x - origin.x, y: center.y + near * direction.y - origin.y))
+            outer.append(CGPoint(x: center.x + far * direction.x - origin.x, y: center.y + far * direction.y - origin.y))
+        }
+        return (inner, outer)
+    }
+
+    /// The animation's curve (ease in, ease out: the same as Core Animation's `easeInEaseOut`, which the keyboard's
+    /// layers use), for a share `t` of the duration.
+    static func ease(_ t: CGFloat) -> CGFloat {
+        let t = min(1, max(0, t))
+        // Cubic Bézier (0.42, 0, 0.58, 1): solve x(s) = t for s, then y(s).
+        func coordinate(_ s: CGFloat, _ a: CGFloat, _ b: CGFloat) -> CGFloat {
+            let inverse = 1 - s
+            return 3 * inverse * inverse * s * a + 3 * inverse * s * s * b + s * s * s
+        }
+        var low: CGFloat = 0, high: CGFloat = 1
+        for _ in 0..<24 {
+            let mid = (low + high) / 2
+            if coordinate(mid, 0.42, 0.58) < t { low = mid } else { high = mid }
+        }
+        return coordinate((low + high) / 2, 0, 1)
     }
 }
 
@@ -66,33 +102,42 @@ extension EnvironmentValues {
     }
 }
 
-/// The part of a view the wave has passed: everything above its curved front. `origin` is the view's top left in
+/// Calls `onFrame` with the clock (CACurrentMediaTime) on every screen refresh, until stopped.
+final class WaveDriver: NSObject {
+    private var link: CADisplayLink?
+    private var onFrame: ((CFTimeInterval) -> Void)?
+
+    func start(_ onFrame: @escaping (CFTimeInterval) -> Void) {
+        stop()
+        self.onFrame = onFrame
+        let link = CADisplayLink(target: self, selector: #selector(step))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+        onFrame = nil
+    }
+
+    @objc private func step() {
+        onFrame?(CACurrentMediaTime())
+    }
+}
+
+/// The part of a view the wave has passed: everything inside its wavy circle. `origin` is the view's top left in
 /// the window.
 private struct WavePassed: Shape {
-    var progress: CGFloat
     let wave: ModeWave
     let origin: CGPoint
 
-    var animatableData: CGFloat {
-        get { return progress }
-        set { progress = newValue }
-    }
-
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let step: CGFloat = 6
-        func cut(_ x: CGFloat) -> CGFloat {
-            let y = wave.cutY(x: origin.x + x - rect.minX, progress: progress) - origin.y + rect.minY
-            return min(rect.maxY, max(rect.minY, y))
-        }
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        var x = rect.minX
-        path.addLine(to: CGPoint(x: x, y: cut(x)))
-        while x < rect.maxX {
-            x = min(rect.maxX, x + step)
-            path.addLine(to: CGPoint(x: x, y: cut(x)))
-        }
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        let points = wave.outline(wave.progress, relativeTo: origin)
+        guard let first = points.first else { return path }
+        path.move(to: first)
+        for point in points.dropFirst() { path.addLine(to: point) }
         path.closeSubpath()
         return path
     }
@@ -100,13 +145,12 @@ private struct WavePassed: Shape {
 
 extension View {
     /// While a wave crosses the screen, shows the view only where it has passed (what is drawn under the view,
-    /// its old look, shows below the front). Without a wave the view is shown whole.
+    /// its old look, shows outside the front). Without a wave the view is shown whole.
     func revealedByWave(_ wave: ModeWave?) -> some View {
         return mask {
             if let wave = wave {
                 GeometryReader { geometry in
-                    let frame = geometry.frame(in: .global)
-                    WavePassed(progress: wave.progress, wave: wave, origin: frame.origin)
+                    WavePassed(wave: wave, origin: geometry.frame(in: .global).origin)
                 }
             } else {
                 Rectangle()
@@ -115,19 +159,13 @@ extension View {
     }
 }
 
-/// The band itself, over the whole screen: a half circle of Liquid Glass, as thick as ModeWave.band, moving down
-/// with the wave's front.
+/// The ring itself, over the whole screen: Liquid Glass with wavy edges, spreading out with the wave's front.
 struct GlassWaveBand: View {
     let wave: ModeWave
 
     var body: some View {
         GeometryReader { geometry in
-            let height = wave.radius + ModeWave.band
-            // The band's lowest edge sits half a band under the cut, in the middle.
-            WaveGlass()
-                .frame(width: wave.width, height: height)
-                .offset(x: wave.minX - geometry.frame(in: .global).minX,
-                        y: wave.center(wave.progress) + ModeWave.band / 2 - height - geometry.frame(in: .global).minY)
+            WaveGlass(wave: wave, origin: geometry.frame(in: .global).origin)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -135,27 +173,19 @@ struct GlassWaveBand: View {
     }
 }
 
-private let rainbow: [Color] = [
-    Color(red: 1.0, green: 0.30, blue: 0.35), Color(red: 1.0, green: 0.65, blue: 0.20),
-    Color(red: 1.0, green: 0.92, blue: 0.30), Color(red: 0.35, green: 0.90, blue: 0.45),
-    Color(red: 0.25, green: 0.75, blue: 1.0), Color(red: 0.55, green: 0.40, blue: 1.0),
-    Color(red: 0.95, green: 0.40, blue: 0.85)
-]
-
-/// Liquid Glass in the band's shape (a frosted material before iOS 26), tinted with rainbow colors and glowing.
+/// Liquid Glass in the ring's shape (a frosted material before iOS 26), with a rim of light on its edges.
 private struct WaveGlass: View {
-    private let shape = WaveBandShape()
+    let wave: ModeWave
+    let origin: CGPoint
+
+    private var shape: WaveRingShape { return WaveRingShape(wave: wave, origin: origin) }
 
     var body: some View {
         glass
-            .overlay(shape.fill(LinearGradient(colors: rainbow.reversed(), startPoint: .top, endPoint: .bottom))
-                .opacity(0.38))
-            .overlay(shape.stroke(LinearGradient(colors: rainbow + [rainbow[0]], startPoint: .leading,
-                                                 endPoint: .trailing), lineWidth: 2).opacity(0.9))
-            .background(shape.fill(LinearGradient(colors: rainbow.reversed(), startPoint: .top, endPoint: .bottom))
-                .blur(radius: 18).opacity(0.7))
-            .shadow(color: Color.white.opacity(0.55), radius: 14, x: 0, y: 0)
-            .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 0)
+            .overlay(shape.stroke(LinearGradient(colors: [Color.white.opacity(0.75), Color.white.opacity(0.15),
+                                                          Color.white.opacity(0.55)],
+                                                 startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 0)
     }
 
     @ViewBuilder private var glass: some View {
@@ -177,28 +207,21 @@ private struct WaveGlass: View {
     }
 }
 
-/// A band in the shape of a half circle's rim, bulging downward: its lower edge is the half circle (the screen's
-/// width across), its upper edge the same half circle ModeWave.band higher.
-private struct WaveBandShape: Shape {
+/// A ring whose two edges are the wave's wavy circle, half a band inside it and half a band outside.
+private struct WaveRingShape: Shape {
+    let wave: ModeWave
+    let origin: CGPoint
+
     func path(in rect: CGRect) -> Path {
-        let radius = rect.width / 2
-        let band = ModeWave.band
-        let step: CGFloat = 6
-        func lower(_ x: CGFloat) -> CGFloat {
-            return rect.maxY + ModeWave.arc(dx: x - rect.midX, radius: radius)
-        }
         var path = Path()
-        var x = rect.minX
-        path.move(to: CGPoint(x: x, y: lower(x)))
-        while x < rect.maxX {
-            x = min(rect.maxX, x + step)
-            path.addLine(to: CGPoint(x: x, y: lower(x)))
-        }
-        while x > rect.minX {
-            path.addLine(to: CGPoint(x: x, y: lower(x) - band))
-            x = max(rect.minX, x - step)
-        }
-        path.addLine(to: CGPoint(x: x, y: lower(x) - band))
+        let ring = wave.ring(wave.progress, relativeTo: origin)
+        guard let first = ring.outer.first, let start = ring.inner.last else { return path }
+        path.move(to: first)
+        for point in ring.outer.dropFirst() { path.addLine(to: point) }
+        path.closeSubpath()
+        // The inner edge runs the other way round, so the middle is left open.
+        path.move(to: start)
+        for point in ring.inner.reversed().dropFirst() { path.addLine(to: point) }
         path.closeSubpath()
         return path
     }

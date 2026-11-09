@@ -94,6 +94,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var builtSignature = ""
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
+    /// The wave (ModeWave.id) whose cover of old keys has been made.
+    private var coveredWave = 0
 
     /// How long the keys take to fade from light to dark and back when the preview's mode is switched.
     static let modeFade: TimeInterval = 0.3
@@ -248,9 +250,12 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         }
     }
 
-    /// Builds the new keys under a picture of the old ones, which the wave then wipes away from the left: the
-    /// picture's mask starts at the wave's front and moves with it, on the wave's own clock and curve.
+    /// Builds the new keys under a picture of the old ones, which the wave then uncovers: the picture is masked to
+    /// everything outside the wave's wavy circle, and the circle grows on the wave's own clock and curve.
     private func rebuildBehindWave(_ wave: ModeWave) {
+        // (Both the trait change and the settings change come here for one wave; the second finds the new keys.)
+        guard coveredWave != wave.id else { return }
+        coveredWave = wave.id
         guard let old = snapshotView(afterScreenUpdates: false) else {
             rebuild()
             return
@@ -260,42 +265,45 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         old.isUserInteractionEnabled = false
         addSubview(old)
         let origin = convert(CGPoint.zero, to: nil)
-        // The mask is the part below the wave's half circle, drawn around the circle's lowest point at the layer's
-        // position, which then slides down with the wave.
-        let radius = wave.radius
-        let mask = CAShapeLayer()
-        let path = CGMutablePath()
-        let step: CGFloat = 6
-        var x = wave.minX
-        path.move(to: CGPoint(x: x - origin.x, y: 4000))
-        path.addLine(to: CGPoint(x: x - origin.x, y: ModeWave.arc(dx: x - (wave.minX + radius), radius: radius)))
-        while x < wave.minX + wave.width {
-            x = min(wave.minX + wave.width, x + step)
-            path.addLine(to: CGPoint(x: x - origin.x, y: ModeWave.arc(dx: x - (wave.minX + radius), radius: radius)))
+        func outside(_ progress: CGFloat) -> CGPath {
+            let path = CGMutablePath()
+            path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
+            let points = wave.outline(progress, relativeTo: origin)
+            if let first = points.first {
+                path.move(to: first)
+                for point in points.dropFirst() { path.addLine(to: point) }
+                path.closeSubpath()
+            }
+            return path
         }
-        path.addLine(to: CGPoint(x: x - origin.x, y: 4000))
-        path.closeSubpath()
-        mask.path = path
+        let mask = CAShapeLayer()
+        mask.fillRule = .evenOdd
         mask.fillColor = UIColor.black.cgColor
-        mask.anchorPoint = .zero
-        mask.bounds = CGRect(x: 0, y: 0, width: 1, height: 1)
-        mask.position = CGPoint(x: 0, y: wave.center(1) - origin.y)
+        mask.frame = bounds
+        mask.path = outside(1)
         old.layer.mask = mask
-        let slide = CABasicAnimation(keyPath: "position.y")
-        slide.fromValue = wave.center(0) - origin.y
-        slide.toValue = wave.center(1) - origin.y
-        slide.duration = ModeWave.duration
-        slide.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        slide.fillMode = .backwards
-        slide.beginTime = mask.convertTime(wave.started, from: nil)
-        mask.add(slide, forKey: "wave")
+        let spread = CABasicAnimation(keyPath: "path")
+        spread.fromValue = outside(0)
+        spread.toValue = outside(1)
+        spread.duration = ModeWave.duration
+        spread.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        spread.fillMode = .backwards
+        spread.beginTime = mask.convertTime(wave.started, from: nil)
+        mask.add(spread, forKey: "wave")
         let left = max(0, wave.started + ModeWave.duration - CACurrentMediaTime())
         DispatchQueue.main.asyncAfter(deadline: .now() + left + 0.05) { old.removeFromSuperview() }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        if traitCollection.userInterfaceStyle != builtStyle { rebuild() }
+        guard traitCollection.userInterfaceStyle != builtStyle else { return }
+        // The screen's switch reaches this view's traits before its settings are read: the wave's cover has to be
+        // made now, or the new keys would show before the wave gets to them.
+        if window != nil, let wave = ModeWave.active {
+            rebuildBehindWave(wave)
+        } else {
+            rebuild()
+        }
     }
 
     // MARK: The bar
