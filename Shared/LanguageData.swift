@@ -2,7 +2,7 @@ import Compression
 import Foundation
 
 /// The keyboard's language data (dictionaries, language models, word pairs, accents, phonetic tables, emoji
-/// keywords) ships compressed in the keyboard's bundle as `<file>.zlib` (raw DEFLATE, written by the CI build), so
+/// keywords) ships compressed in the keyboard's bundle as `<file>.lzma` (an xz stream, written by the CI build), so
 /// the app stays small. A language's files are unpacked only once it is used: by the app when the language is
 /// enabled, or by the keyboard the first time it loads one that is not unpacked yet. Unpacked files go to the App
 /// Group container when this process can write there (so the app and the keyboard share them), else to this
@@ -32,7 +32,7 @@ enum LanguageData {
     static func prepare(enabled: [String]) {
         let wanted = Set(enabled)
         for packed in packedFiles() where wanted.contains(languageCode(of: packed.lastPathComponent)) {
-            let file = String(packed.lastPathComponent.dropLast(".zlib".count))
+            let file = String(packed.lastPathComponent.dropLast(".lzma".count))
             let parts = file.split(separator: ".", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { continue }
             _ = url(forResource: parts[0], withExtension: parts[1])
@@ -58,7 +58,7 @@ enum LanguageData {
         let keeping = keeping.union(["en"])
         var current = Set<String>()
         for packed in packedFiles() {
-            if let stamp = size(of: packed) { current.insert("\(packed.lastPathComponent.dropLast(".zlib".count)).\(stamp)") }
+            if let stamp = size(of: packed) { current.insert("\(packed.lastPathComponent.dropLast(".lzma".count)).\(stamp)") }
         }
         for folder in folders() {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
@@ -82,11 +82,11 @@ enum LanguageData {
     }()
 
     private static func packedURL(_ file: String) -> URL? {
-        return packedBundle?.url(forResource: file, withExtension: "zlib")
+        return packedBundle?.url(forResource: file, withExtension: "lzma")
     }
 
     private static func packedFiles() -> [URL] {
-        return packedBundle?.urls(forResourcesWithExtension: "zlib", subdirectory: nil) ?? []
+        return packedBundle?.urls(forResourcesWithExtension: "lzma", subdirectory: nil) ?? []
     }
 
     /// The folders unpacked files are kept in, the shared one first. Created when missing.
@@ -124,7 +124,7 @@ enum LanguageData {
             let target = folder.appendingPathComponent(unpackedName)
             let temporary = folder.appendingPathComponent(".\(unpackedName).\(UUID().uuidString)")
             guard FileManager.default.createFile(atPath: temporary.path, contents: nil) else { continue }
-            if inflate(packed, into: temporary) {
+            if decompress(packed, into: temporary) {
                 // Older copies of the same file (an earlier build's data) go.
                 let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
                 for name in names where name.hasPrefix("\(file).") && name != unpackedName {
@@ -144,7 +144,7 @@ enum LanguageData {
         return nil
     }
 
-    private static func inflate(_ packed: URL, into target: URL) -> Bool {
+    private static func decompress(_ packed: URL, into target: URL) -> Bool {
         guard let input = try? FileHandle(forReadingFrom: packed),
               let output = try? FileHandle(forWritingTo: target) else { return false }
         defer {
@@ -152,7 +152,7 @@ enum LanguageData {
             try? output.close()
         }
         do {
-            let filter = try OutputFilter(.decompress, using: .zlib) { data in
+            let filter = try OutputFilter(.decompress, using: .lzma) { data in
                 if let data = data { output.write(data) }
             }
             while true {
