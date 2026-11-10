@@ -39,20 +39,15 @@ struct LiveKeyboard: View {
                 LiveKeyboardHost(effects: effects, barOnly: barOnly)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(
-                        ZStack {
-                            // The Themes screen's waves (ModeWave): the first one's old backdrop at the bottom, each
-                            // wave's new one over it inside that wave's circle, as the keys
-                            // (LiveKeyboardView.cover).
+                        Group {
                             if waves.isEmpty {
                                 // Without a wave it fades with the keys (LiveKeyboardView.modeFade).
                                 look.backdrop(scale: scale)
                                     .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
                             } else {
-                                backdrop(scheme: waves[0].oldScheme, theme: waves[0].oldTheme, scale: scale)
-                                ForEach(waves) { wave in
-                                    backdrop(scheme: wave.newScheme, theme: wave.newTheme, scale: scale)
-                                        .revealedByWave(wave)
-                                }
+                                // Under the Themes screen's wave (WindowWave), which carries the change across
+                                // the whole window: the new look at once.
+                                look.backdrop(scale: scale)
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -66,12 +61,6 @@ struct LiveKeyboard: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
-    }
-
-    /// The backdrop in one mode and theme, for the waves' layers.
-    private func backdrop(scheme: ColorScheme, theme: String, scale: CGFloat) -> some View {
-        return CurrentThemeLook(theme: theme) { look in look.backdrop(scale: scale) }
-            .environment(\.colorScheme, scheme)
     }
 }
 
@@ -119,19 +108,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     }
     private var cycleTimer: Timer?
     private var cycleStep = 0
-    /// The keyboard on screen, for the Themes screen to have it covered before anything changes.
-    static weak var current: LiveKeyboardView?
-    /// The pictures of the old keys, each under its wave's circle.
-    private struct Cover {
-        let wave: ModeWave
-        let view: UIView
-        let mask: CAShapeLayer
-        /// When its wave has left the keyboard (ModeWave.lifetime).
-        let ends: CFTimeInterval
-    }
-    private var covers: [Cover] = []
-    private let coverDriver = WaveDriver()
-
     /// How long the keys take to fade from light to dark and back when the preview's mode is switched.
     static let modeFade: TimeInterval = 0.3
 
@@ -307,7 +283,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             }
             guard self.signature() != self.builtSignature else { return }
             // Light to dark (the Themes screen's switch): the new keys fade in over the old ones where there is no wave
-            // (with a wave, the picture of the old keys that it took (cover) hides the change until it gets there).
+            // (with a wave, the picture of the old window it took (WindowWave) hides the change until it gets there).
             if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
@@ -318,75 +294,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         }
     }
 
-    /// Takes a picture of the keys as they are, and lays it over them: the wave (called as it sets off, before anything
-    /// has changed) then wipes the picture away, so the new keys, the accent colours and all, show only where the
-    /// wave has passed. The picture is masked to everything outside the wave's irregular circle, and the circle
-    /// follows the wave's own clock and curve, frame by frame. A second wave takes a picture of the first one's
-    /// half-done work, and covers it the same way.
-    ///
-    /// The picture is of the screen itself where the keyboard is, backdrop and all, not of the keys alone: see-through
-    /// keys (glass, the transparent theme) taken alone would let the keys under them show through, and the preview
-    /// would change the moment the wave sets off.
-    func cover(for wave: ModeWave) {
-        guard let window = window else { return }
-        let taken = window.resizableSnapshotView(from: convert(bounds, to: nil), afterScreenUpdates: false,
-                                                 withCapInsets: .zero) ?? snapshotView(afterScreenUpdates: false)
-        guard let picture = taken else { return }
-        let old = UIView(frame: bounds)
-        old.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        old.isUserInteractionEnabled = false
-        // Cut to the preview's rounded box (LiveKeyboard's backdrop), so nothing of the screen around it is covered.
-        let box = UIView(frame: bounds)
-        box.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        box.layer.cornerRadius = 14
-        box.layer.cornerCurve = .continuous
-        box.layer.masksToBounds = true
-        picture.frame = box.bounds
-        picture.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        box.addSubview(picture)
-        old.addSubview(box)
-        addSubview(old)
-        let mask = CAShapeLayer()
-        mask.fillRule = .evenOdd
-        mask.fillColor = UIColor.black.cgColor
-        mask.frame = bounds
-        old.layer.mask = mask
-        covers.append(Cover(wave: wave, view: old, mask: mask, ends: wave.started + wave.lifetime))
-        updateCovers(at: CACurrentMediaTime())
-        if covers.isEmpty { return }
-        coverDriver.start { [weak self] time in self?.updateCovers(at: time) }
-    }
-
-    /// Moves every cover's circle to where its wave is at `time`; a wave that has finished takes its cover away.
-    private func updateCovers(at time: CFTimeInterval) {
-        let origin = convert(CGPoint.zero, to: nil)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for cover in covers {
-            if time >= cover.ends {
-                cover.view.removeFromSuperview()
-                continue
-            }
-            let path = CGMutablePath()
-            path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
-            let points = cover.wave.outline(cover.wave.progress(atMediaTime: time), relativeTo: origin)
-            if let first = points.first {
-                path.move(to: first)
-                for point in points.dropFirst() { path.addLine(to: point) }
-                path.closeSubpath()
-            }
-            cover.mask.path = path
-        }
-        CATransaction.commit()
-        covers.removeAll { time >= $0.ends }
-        if covers.isEmpty { coverDriver.stop() }
-    }
-
-    /// The keyboard the screen shows is the one that is in the window now (not the last one made: a screen
-    /// pushed on top and left again made one after this).
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil { LiveKeyboardView.current = self }
         updateCycle()
     }
 

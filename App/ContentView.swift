@@ -9,7 +9,6 @@ struct ContentView: View {
     @State private var path: [Screen] = []
     @AppStorage(SettingKey.appLanguage, store: SharedStore.defaults) private var appLanguage = SettingDefault.appLanguage
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
-    @ObservedObject private var waveState = ModeWaveState.shared
     /// The app language was just changed: the main list, built again from the top, goes back to its row.
     @State private var returnToLanguageRow = false
 
@@ -50,14 +49,7 @@ struct ContentView: View {
         .modifier(AccentTint())
         .roundedType()
         // The Themes screen's light / dark switch sets the mode of the whole app ("auto": the system's).
-        .preferredColorScheme({ () -> ColorScheme? in
-            let mode = waveState.held ?? appearance
-            return mode == "light" ? .light : (mode == "dark" ? .dark : nil)
-        }())
-        // The wave's rim and glass lens run over the whole window, the navigation bar included.
-        .overlay {
-            if !waveState.waves.isEmpty { GlassWaveBand(waves: waveState.waves) }
-        }
+        .preferredColorScheme(appearance == "light" ? .light : (appearance == "dark" ? .dark : nil))
         .onAppear {
             Feedback.prepare()
             // The enabled languages' data is unpacked now, so the keyboard finds it ready.

@@ -10,7 +10,7 @@ struct ThemesView: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var previewMode = SettingDefault.appearance
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openScreen) private var openScreen
-    /// The waves of glass that carry the previews to the other mode (ModeWave), while they cross the screen.
+    /// The wave that carries the whole window to the other mode or theme (ModeWave, WindowWave), while it crosses.
     @State private var waves: [ModeWave] = []
     /// Where this screen is in the window: the wave crosses exactly it.
     @State private var screenFrame = CGRect.zero
@@ -62,7 +62,6 @@ struct ThemesView: View {
             // Nothing on the screen can be touched while a wave is out.
             if !waves.isEmpty { Color.clear.contentShape(Rectangle()).onTapGesture {}.gesture(DragGesture()) }
         }
-        .onChange(of: waves) { ModeWaveState.shared.waves = $0 }
         .onAppear { prewarm() }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
@@ -71,53 +70,34 @@ struct ThemesView: View {
     /// The chosen theme's name and what it is, and the way into its editor.
     private var header: some View {
         VStack(spacing: 10) {
-            layered { theme in
-                VStack(spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text(theme.name).font(.title3.weight(.semibold))
-                        if theme.isEdited {
-                            StatusChip(text: tr("Edited"), symbol: "slider.horizontal.3", color: accent)
-                        }
+            let theme = selected
+            VStack(spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(theme.name).font(.title3.weight(.semibold))
+                    if theme.isEdited {
+                        StatusChip(text: tr("Edited"), symbol: "slider.horizontal.3", color: accent)
                     }
-                    Text(theme.summaryValue.map { tr(theme.summary, $0) } ?? tr(theme.summary))
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
                 }
+                Text(theme.summaryValue.map { tr(theme.summary, $0) } ?? tr(theme.summary))
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
             }
             Button {
                 Feedback.tap()
                 openScreen(.themeEditor)
             } label: {
-                layered { theme in
-                    Label(tr("Customize %@", "\(theme.name)"), systemImage: "paintbrush.pointed.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                        .foregroundColor(.white)
-                }
-                .glassTile(Capsule(), isOn: true)
-                .contentShape(Capsule())
+                Label(tr("Customize %@", "\(theme.name)"), systemImage: "paintbrush.pointed.fill")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .foregroundColor(.white)
+                    .glassTile(Capsule(), isOn: true)
+                    .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
-    }
-
-    /// `content` for the chosen theme; while a wave crosses, the old theme's at the bottom and each wave's new
-    /// theme's over it inside that wave's circle, as the previews are.
-    @ViewBuilder private func layered<Content: View>(@ViewBuilder _ content: @escaping (ThemeDefinition) -> Content) -> some View {
-        if let first = waves.first {
-            let edits = SystemEdits.decode(systemEdits)
-            ZStack {
-                content(edited(ThemeCatalog.theme(id: first.oldTheme), edits)).hiddenByWave(first)
-                ForEach(waves) { wave in
-                    content(edited(ThemeCatalog.theme(id: wave.newTheme), edits)).revealedByWave(wave)
-                }
-            }
-        } else {
-            content(selected)
-        }
     }
 
     /// Switches the previews to the other mode behind a wave of glass (at once with Reduce Motion, where the
@@ -135,19 +115,9 @@ struct ThemesView: View {
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
         // Once the switch has played its little slide to the new choice.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            // The app's own chrome (the navigation bar) keeps the old mode until the front has passed it; the
-            // previews and the backdrop change with the wave itself.
-            let state = ModeWaveState.shared
-            state.held = previewMode
-            let wave = launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
+            launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
             previewMode = mode
             pendingMode = nil
-            let top = CGRect(x: screenFrame.minX, y: 0, width: screenFrame.width, height: max(screenFrame.minY, 100))
-            let wait = wave.time(passing: top)
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(max(0, wait - Date().timeIntervalSince(wave.startedDate)) * 1_000_000_000))
-                state.held = nil
-            }
         }
     }
 
@@ -161,18 +131,18 @@ struct ThemesView: View {
         themeID = id
     }
 
-    /// Starts a wave across `frame` (before the setting itself changes: what that sets going, the keyboard's
+    /// Starts a wave across the whole window (before the setting itself changes: what that sets going, the keyboard's
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
-    @discardableResult
-    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) -> ModeWave {
-        let frame = screenFrame
+    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) {
+        let frame = WindowWave.window?.bounds ?? screenFrame
         ModeWave.count += 1
         let id = ModeWave.count
         let new = ModeWave(id: id, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
                            newTheme: newTheme, source: source, minX: frame.minX, minY: frame.minY,
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
-        // The keyboard's picture of itself is taken now, before the setting changes anything on it.
-        LiveKeyboardView.current?.cover(for: new)
+        // A picture of the whole window is taken now, before the setting changes anything on it: the wave carries
+        // all of it across, the navigation bar, the keyboard, the buttons and labels, bent by the same lens.
+        WindowWave.start(for: new)
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
@@ -180,9 +150,7 @@ struct ThemesView: View {
             try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
-            ModeWaveState.shared.held = nil
         }
-        return new
     }
 
     /// Every theme's light and dark picture, drawn ahead (one by one, when nothing else is wanted), so cards and
@@ -205,7 +173,6 @@ struct ThemesView: View {
     /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
     private var grid: some View {
         let edits = SystemEdits.decode(systemEdits)
-        let modeWaves = waves
         return LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
             ForEach(ThemeCatalog.pickerSections, id: \.title) { section in
                 Section {
@@ -216,9 +183,6 @@ struct ThemesView: View {
                             Feedback.choose()
                             chooseTheme(theme.id)
                         }
-                        // Each card on its own, not the grid: only the cards the front is near are drawn through
-                        // the shader. (Not the header: its toggles are views the system draws, which it cannot reach.)
-                        .waveLensed(modeWaves)
                     }
                 } header: {
                     HStack(spacing: 10) {
@@ -324,13 +288,8 @@ private struct ThemeThumbnail: View {
     var body: some View {
         Group {
             if !waves.isEmpty {
-                // The first wave's old look at the bottom, each wave's new look over it inside that wave's circle.
-                ZStack {
-                    layer(dark: waves[0].oldScheme == .dark)
-                    ForEach(waves) { wave in
-                        layer(dark: wave.newScheme == .dark).revealedByWave(wave)
-                    }
-                }
+                // Under the window's wave (WindowWave), which carries the change across: the new look at once.
+                layer(dark: scheme == .dark)
             } else if let image = image {
                 ZStack {
                     if let previous = previous {
@@ -367,7 +326,7 @@ private struct ThemeThumbnail: View {
 
     static let fadeAnimation = Animation.easeInOut(duration: 0.3)
 
-    /// The card in one mode, for the wave's layers.
+    /// The card in one mode, while a wave crosses.
     @ViewBuilder private func layer(dark: Bool) -> some View {
         if let picture = picture(dark: dark) {
             Image(uiImage: picture).resizable().interpolation(.high)
