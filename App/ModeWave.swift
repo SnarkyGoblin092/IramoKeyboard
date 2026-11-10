@@ -27,7 +27,7 @@ struct ModeWave: Equatable, Identifiable {
 
     static let duration: TimeInterval = 1.4
     /// The ring's thickness.
-    static let band: CGFloat = 28
+    static let band: CGFloat = 21
     /// The longest the wave's drawings wait between frames (60 a second).
     static let frame: TimeInterval = 1.0 / 60
     private static let steps = 80
@@ -373,7 +373,8 @@ private struct WaveGlass: View {
 
     let size: CGSize
 
-    private var rim: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin) }
+    /// The rim's centre line lies on the front itself (the outer edge is half a band beyond it).
+    private var rim: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: -ModeWave.band / 2) }
 
     /// A thin ring of Liquid Glass at the front (what it covers, the inside of the circle, is left clear: the new
     /// look shows there as it is), with a bright blue line and a blue glow on its outer edge, and a shine of
@@ -400,45 +401,14 @@ private struct WaveGlass: View {
                 // Many overlapping wide, faint strokes, so the colours run into each other (a blur, without the cost of
                 // blurring the whole screen every frame).
                 for band in palette.spectrum {
-                    let path = WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: band.grow).path(in: rect)
-                    context.stroke(path, with: .color(band.color.opacity(0.34)), lineWidth: 7)
-                }
-            }.blendMode(.plusLighter))
-            // Streaks of light across the front, as a lens flares: they swell in the middle of the wave and fade
-            // at its ends.
-            .overlay(Canvas { context, canvas in
-                guard progress > 0, progress < ModeWave.doneShare else { return }
-                let envelope = sin(Double(progress / ModeWave.doneShare) * .pi)
-                let edge = wave.ring(progress, relativeTo: origin).outer
-                guard !edge.isEmpty else { return }
-                for flare in WaveGlass.flares {
-                    let angle = (flare.angle + flare.drift * Double(progress)).truncatingRemainder(dividingBy: 2 * .pi)
-                    let turn = angle < 0 ? angle + 2 * .pi : angle
-                    let point = edge[min(edge.count - 1, Int(turn / (2 * .pi) * Double(edge.count)))]
-                    let length = min(canvas.width, 420) * flare.size * 0.6 * (0.55 + 0.45 * envelope)
-                    var layer = context
-                    layer.opacity = min(1, envelope * 1.4) * flare.strength
-                    layer.translateBy(x: point.x, y: point.y)
-                    layer.rotate(by: .radians(flare.tilt + flare.spin * Double(progress) + wave.shift))
-                    // The long streak: a round glow flattened to a thin sliver, white at its heart and blue at its fringe.
-                    var streak = layer
-                    streak.scaleBy(x: 1, y: 0.14)
-                    streak.fill(Path(ellipseIn: CGRect(x: -length, y: -length, width: length * 2, height: length * 2)),
-                                with: .radialGradient(palette.streak, center: .zero, startRadius: 0, endRadius: length))
-                    // The hot heart.
-                    layer.fill(Path(ellipseIn: CGRect(x: -30, y: -30, width: 60, height: 60)),
-                               with: .radialGradient(palette.heart, center: .zero, startRadius: 0, endRadius: 30))
+                    let path = WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: band.grow - ModeWave.band / 2).path(in: rect)
+                    context.stroke(path, with: .color(band.color.opacity(0.34)), lineWidth: 5.25)
                 }
             }.blendMode(.plusLighter))
     }
 
-    /// Where the streaks sit on the front (angle round it, how far they travel round, tilt, size and strength).
-    private static let flares: [(angle: Double, drift: Double, tilt: Double, spin: Double, size: CGFloat, strength: Double)] = [
-        (-0.35, 0.9, -0.5, 1.6, 0.5, 1.0), (2.75, -1.1, 1.1, -2.1, 0.55, 1.0), (4.55, 0.6, 2.4, 1.3, 0.32, 0.8)
-    ]
-
     /// The blue glow under the glass, and the shine's own glow of colours over it: widest and faintest first.
-    private static let glow: [(width: CGFloat, opacity: Double)] = [(56, 0.07), (38, 0.12), (22, 0.20), (9, 0.35)]
+    private static let glow: [(width: CGFloat, opacity: Double)] = [(42, 0.07), (28, 0.12), (17, 0.20), (7, 0.35)]
 }
 
 /// A ring whose two edges follow the wave's front, half a band inside it and half a band outside.
@@ -561,7 +531,7 @@ private struct WaveLens: ViewModifier {
     private static func shader(center: CGPoint, progress: CGFloat, endRadius: CGFloat, shift: Double) -> Shader {
         return ShaderLibrary.waveLens(
             .float2(center), .float(Float(progress)), .float(Float(endRadius)), .float(Float(shift)),
-            .float(Float(ModeWave.band * 2.0)), .float(10))
+            .float(Float(ModeWave.band * 2.0)), .float(24))
     }
 }
 
@@ -603,7 +573,7 @@ enum WindowWaveCover {
             let path = CGMutablePath()
             path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
             // Cut out to the ring's outer edge, so the glass ring itself is not hidden.
-            let points = cover.wave.ring(cover.wave.progress(atMediaTime: time), relativeTo: .zero, grow: 26).outer
+            let points = cover.wave.ring(cover.wave.progress(atMediaTime: time), relativeTo: .zero).outer
             if let first = points.first {
                 path.move(to: first)
                 for point in points.dropFirst() { path.addLine(to: point) }
@@ -617,92 +587,32 @@ enum WindowWaveCover {
     }
 }
 
-/// The colours of a wave's rim: the new theme's own, in the new mode, spread into a soft spectrum.
+/// The colours of a wave's rim: a rainbow, red inside to violet outside, run softly into one another.
 private struct WavePalette {
-    /// The rim's colours from inside to out, by how far each lies from the front.
+    /// The rim's colours from the inside out, as offsets from the rim's centre line.
     let spectrum: [(grow: CGFloat, color: Color)]
-    /// The glow's and the flares' colour.
-    let tint: Color
-    let streak: Gradient
-    let heart: Gradient
+    /// The glow's colour.
+    let tint = Color(red: 0.30, green: 0.50, blue: 1.0)
 
-    private static var cache: [Int: WavePalette] = [:]
+    private static let stops: [(r: CGFloat, g: CGFloat, b: CGFloat)] = [
+        (0.85, 0.10, 0.05), (1.0, 0.40, 0.05), (1.0, 0.78, 0.15), (0.30, 0.85, 0.25),
+        (0.15, 0.70, 0.85), (0.15, 0.35, 1.0), (0.55, 0.20, 0.95)
+    ]
+    private static let shared = WavePalette()
 
-    static func of(_ wave: ModeWave) -> WavePalette {
-        if let cached = cache[wave.id] { return cached }
-        let made = WavePalette(colors: colors(for: wave))
-        cache[wave.id] = made
-        if cache.count > 6 { cache.removeValue(forKey: cache.keys.min() ?? 0) }
-        return made
-    }
+    static func of(_ wave: ModeWave) -> WavePalette { return shared }
 
-    /// The theme's colours (its accent and its keys' colours, in the mode it is going to), made bright enough to
-    /// glow, and worked into at least three hues round the accent's.
-    private static func colors(for wave: ModeWave) -> [(r: CGFloat, g: CGFloat, b: CGFloat)] {
-        let theme = ThemeCatalog.theme(id: wave.newTheme)
-        var rgb: [(Double, Double, Double)] = []
-        if let tones = theme.colors?.tones(dark: wave.newScheme == .dark) {
-            var picked: [ThemeRGBA] = tones.letterTints
-            for role in [KeyRole.ret, .shift, .delete, .numbers, .space] {
-                if let fill = tones.roles[role]?.fill { picked.append(fill) }
-            }
-            picked += [tones.key, tones.text]
-            rgb = picked.map { ($0.r, $0.g, $0.b) }
-        } else {
-            let accent = UIColor(Color.currentAccent(name: Settings.shared.accentName,
-                                                     hex: SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? ""))
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
-            accent.getRed(&r, green: &g, blue: &b, alpha: nil)
-            rgb = [(Double(r), Double(g), Double(b))]
-        }
-        // Hue, saturation, brightness of each; the grey ones (no hue to spread) are left out unless nothing else is left.
-        var hues: [(h: CGFloat, s: CGFloat, v: CGFloat)] = []
-        for (r, g, b) in rgb {
-            var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0
-            UIColor(red: r, green: g, blue: b, alpha: 1).getHue(&h, saturation: &s, brightness: &v, alpha: nil)
-            if s < 0.2 { continue }
-            if hues.contains(where: { min(abs($0.h - h), 1 - abs($0.h - h)) < 0.05 }) { continue }
-            hues.append((h, max(s, 0.65), max(v, 0.9)))
-        }
-        if hues.isEmpty { hues = [(0.6, 0.7, 1)] }
-        // Few hues: the ones beside the first fill the spectrum out.
-        var k: CGFloat = 1
-        while hues.count < 3 {
-            let base = hues[0]
-            hues.append(((base.h + 0.07 * k).truncatingRemainder(dividingBy: 1), base.s, base.v))
-            hues.append(((base.h - 0.07 * k + 1).truncatingRemainder(dividingBy: 1), base.s, base.v))
-            k += 1
-        }
-        hues = Array(hues.prefix(6)).sorted { $0.h < $1.h }
-        return hues.map { hue in
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
-            UIColor(hue: hue.h, saturation: hue.s, brightness: hue.v, alpha: 1).getRed(&r, green: &g, blue: &b, alpha: nil)
-            return (r, g, b)
-        }
-    }
-
-    private init(colors stops: [(r: CGFloat, g: CGFloat, b: CGFloat)]) {
+    private init() {
         let count = 15
         var bands: [(grow: CGFloat, color: Color)] = []
         for index in 0..<count {
-            let t = CGFloat(index) / CGFloat(count - 1) * CGFloat(stops.count - 1)
-            let low = min(stops.count - 2, Int(t)), f = t - CGFloat(low)
-            let a = stops[low], b = stops[low + 1]
-            bands.append((-15 + CGFloat(index) * 1.6,
+            let t = CGFloat(index) / CGFloat(count - 1) * CGFloat(WavePalette.stops.count - 1)
+            let low = min(WavePalette.stops.count - 2, Int(t)), f = t - CGFloat(low)
+            let a = WavePalette.stops[low], b = WavePalette.stops[low + 1]
+            // Centred on the front: from 8 points inside it to 8 beyond it.
+            bands.append((-8.25 + CGFloat(index) * 1.18,
                           Color(red: a.r + (b.r - a.r) * f, green: a.g + (b.g - a.g) * f, blue: a.b + (b.b - a.b) * f)))
         }
         spectrum = bands
-        let mid = stops[stops.count / 2]
-        tint = Color(red: mid.r, green: mid.g, blue: mid.b)
-        // Soft all the way out: white barely at the heart, the theme's colour through the middle.
-        streak = Gradient(stops: [
-            .init(color: Color.white.opacity(0.55), location: 0), .init(color: Color.white.opacity(0.22), location: 0.15),
-            .init(color: tint.opacity(0.16), location: 0.45), .init(color: tint.opacity(0.04), location: 0.75),
-            .init(color: .clear, location: 1)
-        ])
-        heart = Gradient(stops: [
-            .init(color: Color.white.opacity(0.8), location: 0), .init(color: Color.white.opacity(0.35), location: 0.25),
-            .init(color: tint.opacity(0.2), location: 0.6), .init(color: .clear, location: 1)
-        ])
     }
 }
