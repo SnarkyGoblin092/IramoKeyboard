@@ -125,7 +125,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
             }
         }
         .ignoresSafeArea(edges: edgeToEdge ? .bottom : [])
-        .background(GlassBackdrop())
+        .background(WaveLayered { GlassBackdrop() })
         .onPreferenceChange(NaturalHeightKey.self) { value in
             if abs(value - naturalHeight) > 0.5 { naturalHeight = value }
         }

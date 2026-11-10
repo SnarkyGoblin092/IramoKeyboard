@@ -374,6 +374,22 @@ private struct WaveGlass: View {
     let size: CGSize
 
     /// The rim's centre line lies on the front itself (the outer edge is half a band beyond it).
+    private var ring: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin) }
+
+    /// A thin ring of real Liquid Glass at the front (iOS 26): it bends whatever is under it, live, the navigation
+    /// bar and the keyboard too, as no picture of the screen could. Before iOS 26 the rainbow rim alone is the effect.
+    @ViewBuilder private var glass: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(.clear, in: ring)
+        } else {
+            Color.clear
+        }
+        #else
+        Color.clear
+        #endif
+    }
+
     private var rim: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: -ModeWave.band / 2) }
 
     /// The front's line at `offset` points from the front (negative: inside), the same all round except that the
@@ -406,7 +422,7 @@ private struct WaveGlass: View {
         let base = wave.outline(progress, relativeTo: origin)
         let fade = Double(min(1, progress / 0.05) * min(1, max(0, (ModeWave.doneShare - progress) / 0.08)))
         let turn = Angle.radians(Double(progress) * 5 + wave.shift)
-        return Color.clear
+        return glass
             .background(Canvas { context, _ in
                 context.opacity = fade
                 for stroke in WaveGlass.glow {
@@ -574,76 +590,49 @@ private struct WaveLens: ViewModifier {
     }
 }
 
-/// What the wave stage shows: the new picture of the screen, once it is taken, and the wave that wipes it in.
-final class WaveStageModel: ObservableObject {
-    @Published var new: UIImage?
-    @Published var wave: ModeWave?
+/// What the whole app needs to know of the light / dark wave: the waves out now (for the rim and glass lens drawn
+/// over the whole window), and the mode the app's own chrome is held at until the front has passed it.
+final class ModeWaveState: ObservableObject {
+    static let shared = ModeWaveState()
+    @Published var waves: [ModeWave] = []
+    /// The appearance setting the window keeps ("auto", "light" or "dark") while a wave crosses; nil: the stored one.
+    @Published var held: String?
 }
 
-/// The whole screen during a light / dark wave: a picture of how the app looked (under) and one of how it looks
-/// now (revealed inside the wave's circle), the lens bending both at the front, and the rainbow rim over it. Being
-/// pictures, the whole window is carried: the navigation bar, the keyboard, everything.
-struct WaveStage: View {
-    let old: UIImage
-    @ObservedObject var model: WaveStageModel
+/// Content that is drawn in the old mode outside the wave and in the new one inside it, while a wave crosses (the
+/// backdrop under the Themes screen, so it changes with the wave and not before it). Without a wave it is drawn
+/// once.
+struct WaveLayered<Content: View>: View {
+    @Environment(\.modeWaves) private var waves
+    private let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
 
     var body: some View {
-        let waves = model.wave.map { [$0] } ?? []
-        ZStack {
-            Image(uiImage: old).resizable()
-            if let new = model.new, let wave = model.wave {
-                Image(uiImage: new).resizable().revealedByWave(wave)
+        if let wave = waves.first {
+            ZStack {
+                content().environment(\.colorScheme, wave.oldScheme).hiddenByWave(wave)
+                ForEach(waves) { wave in
+                    content().environment(\.colorScheme, wave.newScheme).revealedByWave(wave)
+                }
             }
+        } else {
+            content()
         }
-        .waveLensed(waves)
-        .overlay {
-            if !waves.isEmpty { GlassWaveBand(waves: waves) }
-        }
-        .ignoresSafeArea()
     }
 }
 
-/// Puts the wave stage over the window (UIKit, above everything: it also covers the navigation bar) and takes it
-/// away again.
-@MainActor
-enum WaveScreen {
-    private static var host: UIViewController?
-
-    private static var window: UIWindow? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        return scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
-    }
-
-    static var bounds: CGRect { return window?.bounds ?? .zero }
-
-    /// A picture of the app as it is now (not of the stage, which lies over the window, not in the app's own view).
-    static func capture() -> UIImage? {
-        guard let view = window?.rootViewController?.view else { return nil }
-        return UIGraphicsImageRenderer(bounds: view.bounds).image { _ in
-            view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)
+extension ModeWave {
+    /// How long after it sets off the wave's front has passed all of `frame`.
+    func time(passing frame: CGRect) -> TimeInterval {
+        var share: CGFloat = 0
+        while share < 1 {
+            if relation(of: frame, progress: share, within: 8) == .passed { return ModeWave.time(reaching: share) }
+            share += 0.01
         }
-    }
-
-    static func show(old: UIImage, model: WaveStageModel) {
-        hide()
-        guard let window = window, let root = window.rootViewController else { return }
-        let controller = UIHostingController(rootView: WaveStage(old: old, model: model))
-        controller.view.backgroundColor = .clear
-        controller.view.frame = window.bounds
-        controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        if #available(iOS 16.4, *) { controller.safeAreaRegions = [] }
-        root.addChild(controller)
-        window.addSubview(controller.view)
-        controller.didMove(toParent: root)
-        host = controller
-    }
-
-    static func hide() {
-        guard let controller = host else { return }
-        controller.willMove(toParent: nil)
-        controller.view.removeFromSuperview()
-        controller.removeFromParent()
-        host = nil
+        return lifetime
     }
 }
 

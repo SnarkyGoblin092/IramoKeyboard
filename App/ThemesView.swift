@@ -62,9 +62,7 @@ struct ThemesView: View {
             // Nothing on the screen can be touched while a wave is out.
             if !waves.isEmpty { Color.clear.contentShape(Rectangle()).onTapGesture {}.gesture(DragGesture()) }
         }
-        .overlay {
-            if !waves.isEmpty { GlassWaveBand(waves: waves) }
-        }
+        .onChange(of: waves) { ModeWaveState.shared.waves = $0 }
         .onAppear { prewarm() }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
@@ -128,8 +126,7 @@ struct ThemesView: View {
         guard waves.isEmpty, pendingMode == nil, mode != previewMode else { return }
         // Auto follows the system's mode (the screen's traits, which the app's own override does not touch).
         let dark = mode == "auto" ? UIScreen.main.traitCollection.userInterfaceStyle == .dark : mode == "dark"
-        guard (previewScheme == .dark) != dark, screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled,
-              WaveScreen.bounds.width > 0 else {
+        guard (previewScheme == .dark) != dark, screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled else {
             previewMode = mode
             return
         }
@@ -138,22 +135,18 @@ struct ThemesView: View {
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
         // Once the switch has played its little slide to the new choice.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            // The whole screen is carried by the wave: a picture of the app as it is lies over the window, the mode
-            // changes under it, and a second picture of the new look is taken once that has settled.
-            let before = previewScheme
-            guard let old = WaveScreen.capture() else {
-                previewMode = mode
-                pendingMode = nil
-                return
-            }
-            let stage = WaveStageModel()
-            WaveScreen.show(old: old, model: stage)
+            // The app's own chrome (the navigation bar) keeps the old mode until the front has passed it; the
+            // previews and the backdrop change with the wave itself.
+            let state = ModeWaveState.shared
+            state.held = previewMode
+            let wave = launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
             previewMode = mode
             pendingMode = nil
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                stage.new = WaveScreen.capture()
-                launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID, oldScheme: before,
-                       frame: WaveScreen.bounds, stage: stage)
+            let top = CGRect(x: screenFrame.minX, y: 0, width: screenFrame.width, height: max(screenFrame.minY, 100))
+            let wait = wave.time(passing: top)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0, wait - Date().timeIntervalSince(wave.startedDate)) * 1_000_000_000))
+                state.held = nil
             }
         }
     }
@@ -170,25 +163,14 @@ struct ThemesView: View {
 
     /// Starts a wave across `frame` (before the setting itself changes: what that sets going, the keyboard's
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
-    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String, oldScheme: ColorScheme? = nil,
-                        frame: CGRect? = nil, stage: WaveStageModel? = nil) {
-        let frame = frame ?? screenFrame
+    @discardableResult
+    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) -> ModeWave {
+        let frame = screenFrame
         ModeWave.count += 1
         let id = ModeWave.count
-        let new = ModeWave(id: id, oldScheme: oldScheme ?? previewScheme, newScheme: newScheme, oldTheme: themeID,
+        let new = ModeWave(id: id, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
                            newTheme: newTheme, source: source, minX: frame.minX, minY: frame.minY,
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
-        if let stage = stage {
-            // A light / dark wave over the whole screen (WaveStage), which draws the rim and the lens itself.
-            ModeWave.running.append(new)
-            stage.wave = new
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
-                ModeWave.running.removeAll { $0.id == id }
-                WaveScreen.hide()
-            }
-            return
-        }
         // The keyboard's picture of itself is taken now, before the setting changes anything on it.
         LiveKeyboardView.current?.cover(for: new)
         ModeWave.running.append(new)
@@ -198,7 +180,9 @@ struct ThemesView: View {
             try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
+            ModeWaveState.shared.held = nil
         }
+        return new
     }
 
     /// Every theme's light and dark picture, drawn ahead (one by one, when nothing else is wanted), so cards and
