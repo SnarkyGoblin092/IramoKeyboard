@@ -416,7 +416,7 @@ private struct WaveGlass: View {
                 let hues = GraphicsContext.Shading.conicGradient(palette.conic, center: center, angle: turn)
                 for (offset, width, opacity) in [(-20.0, 26.0, 0.07), (-13.0, 14.0, 0.10), (-8.0, 6.0, 0.14)] {
                     var layer = context
-                    layer.opacity = fade * opacity * 6
+                    layer.opacity = fade * opacity * (palette.dark ? 3 : 4)
                     layer.stroke(line(offset: CGFloat(offset), around: base, from: center), with: hues, lineWidth: CGFloat(width))
                 }
             })
@@ -426,26 +426,28 @@ private struct WaveGlass: View {
                 // blurring the whole screen every frame).
                 for band in palette.spectrum {
                     context.stroke(line(offset: band.grow, around: base, from: center),
-                                   with: .color(band.color.opacity(0.34)), lineWidth: 5.25)
+                                   with: .color(band.color.opacity(palette.bandOpacity)), lineWidth: 5.25)
                 }
                 // The bright line in its heart, hot in a few places that travel round it.
-                let hot = GraphicsContext.Shading.conicGradient(WaveGlass.hot, center: center, angle: turn * -0.7)
+                let hot = GraphicsContext.Shading.conicGradient(WaveGlass.hot(palette.heart), center: center, angle: turn * -0.7)
                 let heart = line(offset: 0, around: base, from: center)
                 context.stroke(heart, with: hot, lineWidth: 7)
                 context.stroke(heart, with: hot, lineWidth: 1.6)
-            }.blendMode(.plusLighter))
+            }.blendMode(palette.dark ? .plusLighter : .normal))
     }
 
-    /// White along the heart line: bright in a few places, faint between.
-    private static let hot = Gradient(stops: [
-        .init(color: Color.white.opacity(0.08), location: 0), .init(color: Color.white.opacity(0.85), location: 0.1),
-        .init(color: Color.white.opacity(0.08), location: 0.24), .init(color: Color.white.opacity(0.12), location: 0.5),
-        .init(color: Color.white.opacity(0.7), location: 0.63), .init(color: Color.white.opacity(0.08), location: 0.78),
-        .init(color: Color.white.opacity(0.08), location: 1)
-    ])
+    /// The heart line's colour (white on dark, deep indigo on light): bright in a few places, faint between.
+    private static func hot(_ color: Color) -> Gradient {
+        return Gradient(stops: [
+            .init(color: color.opacity(0.08), location: 0), .init(color: color.opacity(0.85), location: 0.1),
+            .init(color: color.opacity(0.08), location: 0.24), .init(color: color.opacity(0.12), location: 0.5),
+            .init(color: color.opacity(0.7), location: 0.63), .init(color: color.opacity(0.08), location: 0.78),
+            .init(color: color.opacity(0.08), location: 1)
+        ])
+    }
 
     /// The blue glow under the glass, and the shine's own glow of colours over it: widest and faintest first.
-    private static let glow: [(width: CGFloat, opacity: Double)] = [(42, 0.07), (28, 0.12), (17, 0.20), (7, 0.35)]
+    private static let glow: [(width: CGFloat, opacity: Double)] = [(42, 0.05), (28, 0.08), (17, 0.13), (7, 0.22)]
 }
 
 /// A ring whose two edges follow the wave's front, half a band inside it and half a band outside.
@@ -637,11 +639,21 @@ private struct WavePalette {
         (0.85, 0.10, 0.05), (1.0, 0.40, 0.05), (1.0, 0.78, 0.15), (0.30, 0.85, 0.25),
         (0.15, 0.70, 0.85), (0.15, 0.35, 1.0), (0.55, 0.20, 0.95)
     ]
-    private static let shared = WavePalette()
+    /// How strongly each band is drawn.
+    let bandOpacity: Double
+    let heart: Color
+    let dark: Bool
+    private static let darkMode = WavePalette(dark: true)
+    private static let lightMode = WavePalette(dark: false)
 
-    static func of(_ wave: ModeWave) -> WavePalette { return shared }
+    /// Going to dark: light that adds to the dark, pale and glowing. Going to light: deeper, truer inks laid over
+    /// the light (light added to light would not show).
+    static func of(_ wave: ModeWave) -> WavePalette { return wave.newScheme == .dark ? darkMode : lightMode }
 
-    private init() {
+    private init(dark: Bool) {
+        self.dark = dark
+        bandOpacity = dark ? 0.2 : 0.3
+        heart = dark ? .white : Color(red: 0.30, green: 0.30, blue: 0.80)
         let count = 15
         var bands: [(grow: CGFloat, color: Color)] = []
         for index in 0..<count {
@@ -649,8 +661,10 @@ private struct WavePalette {
             let low = min(WavePalette.stops.count - 2, Int(t)), f = t - CGFloat(low)
             let a = WavePalette.stops[low], b = WavePalette.stops[low + 1]
             // Centred on the front: from 8 points inside it to 8 beyond it.
+            // Paled a little toward white, so the colours are soft.
+            func pale(_ v: CGFloat) -> CGFloat { return dark ? v + (1 - v) * 0.3 : v * 0.88 }
             bands.append((-8.25 + CGFloat(index) * 1.18,
-                          Color(red: a.r + (b.r - a.r) * f, green: a.g + (b.g - a.g) * f, blue: a.b + (b.b - a.b) * f)))
+                          Color(red: pale(a.r + (b.r - a.r) * f), green: pale(a.g + (b.g - a.g) * f), blue: pale(a.b + (b.b - a.b) * f))))
         }
         spectrum = bands
         var ring = WavePalette.stops.map { Color(red: $0.r, green: $0.g, blue: $0.b) }
