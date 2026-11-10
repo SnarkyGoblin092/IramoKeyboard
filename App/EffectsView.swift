@@ -377,6 +377,124 @@ struct EffectsView: View {
         (id: "sweep", title: "Neon sweep")
     ]
 
+    /// What the add-effect list shows of each built-in effect: its symbol, colour and what it does (English; shown
+    /// through tr).
+    static let builtInInfo: [String: (symbol: String, color: Color, note: String)] = [
+        "glow": (symbol: "light.max", color: .orange, note: "A light that fades in under your finger and fades out after it lifts."),
+        "border": (symbol: "square.dashed", color: .blue, note: "A line round the key lights up and fades away."),
+        "ripple": (symbol: "circle.hexagongrid.fill", color: .teal, note: "Light spreads from the middle of the key, inside its shape, and fades away."),
+        "shine": (symbol: "sun.max.fill", color: .yellow, note: "A slanted band of light sweeps across the key."),
+        "sparks": (symbol: "sparkles", color: .pink, note: "Specks fly out of the key in every direction and fade."),
+        "pop": (symbol: "arrow.up.left.and.down.right.magnifyingglass", color: .green, note: "The label swells (or shrinks) and springs back."),
+        "echo": (symbol: "text.append", color: .indigo, note: "A copy of the label floats up out of the key and fades."),
+        "wave": (symbol: "dot.radiowaves.left.and.right", color: .cyan, note: "The keys around the pressed one light up in turn, the farther ones a moment later."),
+        "shockwave": (symbol: "dot.radiowaves.right", color: .mint, note: "A ring of light spreads far out over the keys around the one you press."),
+        "confetti": (symbol: "gift.fill", color: .orange, note: "Little pieces of paper are thrown up out of the key and tumble down."),
+        "bubbles": (symbol: "circle.grid.2x2.fill", color: .cyan, note: "Bubbles float up from the key, swaying as they go."),
+        "squish": (symbol: "arrow.down.right.and.arrow.up.left", color: .green, note: "The key squashes under your finger and springs back."),
+        "flash": (symbol: "bolt.fill", color: .yellow, note: "The key lights up in the effect colour for a moment."),
+        "jelly": (symbol: "waveform.path", color: .purple, note: "The key wobbles like jelly, the swings getting smaller."),
+        "hearts": (symbol: "heart.fill", color: .pink, note: "Little hearts float up from the key."),
+        "stars": (symbol: "star.fill", color: .yellow, note: "Stars burst out of the key and fade."),
+        "snow": (symbol: "snowflake", color: .cyan, note: "Snowflakes drift down past the key."),
+        "notes": (symbol: "music.note", color: .purple, note: "Musical notes drift up and to the side."),
+        "fireworks": (symbol: "sparkle", color: .orange, note: "Streaks burst out of the key and fall like fireworks."),
+        "starburst": (symbol: "sun.max", color: .yellow, note: "Thin rays shoot out of the key in every direction."),
+        "rain": (symbol: "cloud.rain.fill", color: .blue, note: "Drops of rain fall past the key."),
+        "embers": (symbol: "flame.fill", color: .red, note: "Glowing embers rise and flicker out."),
+        "smoke": (symbol: "smoke.fill", color: .gray, note: "Soft puffs of smoke rise from the key and grow."),
+        "lightning": (symbol: "bolt.circle.fill", color: .indigo, note: "A bolt of lightning strikes up from the key."),
+        "orbit": (symbol: "atom", color: .teal, note: "Little lights circle around the key."),
+        "spiral": (symbol: "tornado", color: .mint, note: "Specks spiral outwards from the key."),
+        "heartbeat": (symbol: "heart.circle.fill", color: .pink, note: "The key pulses twice like a heartbeat."),
+        "flip": (symbol: "rectangle.2.swap", color: .blue, note: "The key flips over like a card."),
+        "shake": (symbol: "iphone.radiowaves.left.and.right", color: .orange, note: "The key shakes from side to side."),
+        "drop": (symbol: "arrow.down.circle.fill", color: .green, note: "The key sinks and bounces back."),
+        "glitch": (symbol: "waveform.path.ecg", color: .red, note: "The key glitches with flickering colours."),
+        "underline": (symbol: "underline", color: .cyan, note: "A line grows along the bottom of the key and fades."),
+        "sweep": (symbol: "arrow.triangle.2.circlepath", color: .teal, note: "A light runs round the key's outline."),
+        "trail": (symbol: "scribble", color: .red, note: "The line you draw while swipe typing takes the colour and glows.")
+    ]
+
+    /// The switch of each built-in effect (and the swipe trail) in EffectsConfig.
+    static let flags: [String: WritableKeyPath<EffectsConfig, Bool>] = [
+        "glow": \.glow,
+        "border": \.border,
+        "ripple": \.ripple,
+        "shine": \.shine,
+        "sparks": \.sparks,
+        "pop": \.pop,
+        "echo": \.echo,
+        "wave": \.wave,
+        "shockwave": \.shockwave,
+        "confetti": \.confetti,
+        "bubbles": \.bubbles,
+        "squish": \.squish,
+        "flash": \.flash,
+        "jelly": \.jelly,
+        "hearts": \.hearts,
+        "stars": \.stars,
+        "snow": \.snow,
+        "notes": \.notes,
+        "fireworks": \.fireworks,
+        "starburst": \.starburst,
+        "rain": \.rain,
+        "embers": \.embers,
+        "smoke": \.smoke,
+        "lightning": \.lightning,
+        "orbit": \.orbit,
+        "spiral": \.spiral,
+        "heartbeat": \.heartbeat,
+        "flip": \.flip,
+        "shake": \.shake,
+        "drop": \.drop,
+        "glitch": \.glitch,
+        "underline": \.underline,
+        "sweep": \.sweep,
+        "trail": \.trail
+    ]
+
+    static func isActive(_ id: String, in config: EffectsConfig) -> Bool {
+        if let flag = flags[id] { return config[keyPath: flag] }
+        return config.isOn(id)
+    }
+
+    static func setActive(_ id: String, _ on: Bool, in config: inout EffectsConfig) {
+        if let flag = flags[id] { config[keyPath: flag] = on } else { config.setOn(id, on) }
+    }
+
+    static func catalogColor(_ name: String) -> Color {
+        switch name {
+        case "red": return .red
+        case "orange": return .orange
+        case "yellow": return .yellow
+        case "green": return .green
+        case "mint": return .mint
+        case "teal": return .teal
+        case "cyan": return .cyan
+        case "blue": return .blue
+        case "indigo": return .indigo
+        case "purple": return .purple
+        case "pink": return .pink
+        default: return .gray
+        }
+    }
+
+    /// Every effect that can be added, the built-in ones, the swipe trail and the catalog's, in alphabetical order
+    /// of their names in the app's language.
+    static var allEffects: [(id: String, title: String, symbol: String, color: Color, note: String)] {
+        var items: [(id: String, title: String, symbol: String, color: Color, note: String)] = []
+        for item in builtInEffects {
+            guard let info = builtInInfo[item.id] else { continue }
+            items.append((item.id, tr(item.title), info.symbol, info.color, tr(info.note)))
+        }
+        items.append(("trail", tr("Swipe trail"), "scribble", .red, tr("The line you draw while swipe typing takes the colour and glows.")))
+        for entry in EffectCatalog.all {
+            items.append((entry.id, tr(entry.title), entry.symbol, catalogColor(entry.color), tr(entry.note)))
+        }
+        return items.sorted { AppLanguage.precedes($0.title, $1.title) }
+    }
+
     /// Every effect on the keys, these and the catalog's, in alphabetical order of their names in the app's
     /// language, worked out once for each language.
     private static var orderCache: (language: String, items: [(id: String, title: String)])?
@@ -389,6 +507,12 @@ struct EffectsView: View {
         let items = named.sorted { AppLanguage.precedes($0.title, $1.title) }
         EffectsView.orderCache = (language, items)
         return items
+    }
+
+    /// The effects that are on, in order of their names: the list under the presets.
+    private var activeEffects: [(id: String, title: String)] {
+        let current = config
+        return effectsByName.filter { EffectsView.isActive($0.id, in: current) }
     }
 
     // MARK: Saved presets
@@ -511,6 +635,43 @@ struct EffectsView: View {
             .glassRows()
 
             Section {
+                NavigationLink {
+                    AddEffectView()
+                } label: {
+                    HStack {
+                        Label(tr("Add effect"), systemImage: "plus.circle.fill")
+                        Spacer()
+                        DisclosureChevron()
+                    }
+                    .foregroundColor(.accentColor)
+                    .contentShape(Rectangle())
+                }
+            } header: {
+                SectionHeader(tr("Effects"), symbol: "sparkles", color: .orange)
+            } footer: {
+                Text(activeEffects.isEmpty && !config.trail
+                     ? tr("No effects yet. Add one, or pick a preset above to fill the list.")
+                     : tr("Every effect here plays when a key is pressed, with its settings under its name. A preset fills the list with its own effects."))
+            }
+            .glassRows()
+
+            ForEach(activeEffects, id: \.id) { item in
+                if let entry = EffectCatalog.entry(item.id) {
+                    moreEffect(entry)
+                } else {
+                    builtInEffect(item.id, item.title)
+                }
+            }
+
+            if config.trail {
+                effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
+                       note: tr("The line you draw while swipe typing takes the colour and glows.")) {
+                    GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
+                                range: EffectsConfig.trailGlowRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+                }
+            }
+
+            Section {
                 GlassChoiceLink(title: tr("Colour"), symbol: "paintpalette",
                                 options: colorOptions(inherit: false),
                                 selected: config.colorMode) { bind(\.colorMode).wrappedValue = $0 }
@@ -550,19 +711,6 @@ struct EffectsView: View {
             }
             .glassRows()
 
-            ForEach(effectsByName, id: \.id) { item in
-                if let entry = EffectCatalog.entry(item.id) {
-                    moreEffect(entry)
-                } else {
-                    builtInEffect(item.id, item.title)
-                }
-            }
-
-            effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
-                   note: tr("The line you draw while swipe typing takes the colour and glows.")) {
-                GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
-                            range: EffectsConfig.trailGlowRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-            }
         }
         .scrollContentBackground(.hidden)
         }
@@ -834,7 +982,7 @@ struct EffectsView: View {
             next.setOn(item.id, value)
             json = next.encoded()
         })
-        return effect(tr(item.title), item.symbol, catalogColor(item.color), id: item.id, on: on, note: tr(item.note)) {
+        return effect(tr(item.title), item.symbol, EffectsView.catalogColor(item.color), id: item.id, on: on, note: tr(item.note)) {
             ForEach(item.params, id: \.id) { param in
                 GlassSlider(title: tr(param.title), symbol: param.symbol,
                             value: Binding(get: { config.setting(item, param.id) }, set: { value in
@@ -847,31 +995,18 @@ struct EffectsView: View {
         }
     }
 
-    private func catalogColor(_ name: String) -> Color {
-        switch name {
-        case "red": return .red
-        case "orange": return .orange
-        case "yellow": return .yellow
-        case "green": return .green
-        case "mint": return .mint
-        case "teal": return .teal
-        case "cyan": return .cyan
-        case "blue": return .blue
-        case "indigo": return .indigo
-        case "purple": return .purple
-        case "pink": return .pink
-        default: return .gray
-        }
-    }
-
-    /// One effect: a switch with a line of explanation, and its settings underneath while it is on.
+    /// One effect of the list: what it does, all its settings and a way to take it out of the list.
     private func effect<Settings: View>(_ title: String, _ symbol: String, _ color: Color, id: String, on: Binding<Bool>,
                                         note: String, @ViewBuilder settings: () -> Settings) -> some View {
         Section {
-            GlassToggle(title: title, subtitle: note, isOn: on, tapsAnywhere: true)
-            if on.wrappedValue {
-                settings()
-                lookRows(id)
+            Text(note).font(.footnote).foregroundColor(.secondary)
+            settings()
+            lookRows(id)
+            Button(role: .destructive) {
+                on.wrappedValue = false
+                Feedback.delete()
+            } label: {
+                Label(tr("Remove effect"), systemImage: "minus.circle.fill").foregroundColor(.red)
             }
         } header: {
             SectionHeader(title, symbol: symbol, color: color)
@@ -957,6 +1092,63 @@ private extension ThemeRGBA {
         UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
         func byte(_ value: CGFloat) -> Double { return (Double(min(max(value, 0), 1)) * 255).rounded() / 255 }
         self.init(byte(r), byte(g), byte(b), 1)
+    }
+}
+
+/// Every effect there is: a tap puts one in the Effects screen's list (and takes it out again).
+struct AddEffectView: View {
+    @AppStorage(SettingKey.effects, store: SharedStore.defaults) private var json = SettingDefault.effects
+    @State private var query = ""
+
+    private var config: EffectsConfig { return EffectsConfig.decode(json) }
+
+    private var shown: [(id: String, title: String, symbol: String, color: Color, note: String)] {
+        let all = EffectsView.allEffects
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return all }
+        return all.filter { $0.title.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+
+    private func toggle(_ id: String) {
+        var next = config
+        let on = !EffectsView.isActive(id, in: next)
+        EffectsView.setActive(id, on, in: &next)
+        json = next.encoded()
+        if on { Feedback.success() } else { Feedback.delete() }
+    }
+
+    var body: some View {
+        GlassList {
+            Section {
+                ForEach(shown, id: \.id) { item in
+                    let added = EffectsView.isActive(item.id, in: config)
+                    Button { toggle(item.id) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: item.symbol)
+                                .foregroundColor(item.color)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title).foregroundColor(.primary)
+                                Text(item.note).font(.footnote).foregroundColor(.secondary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer()
+                            Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
+                                .font(.title3)
+                                .foregroundColor(added ? .accentColor : .secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+            } footer: {
+                Text(tr("Tap an effect to add it to the list; tap it again to take it out."))
+            }
+            .glassRows()
+        }
+        .glassScreen()
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: tr("Search effects"))
+        .navigationTitle(tr("Add effect"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

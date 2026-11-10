@@ -574,6 +574,79 @@ private struct WaveLens: ViewModifier {
     }
 }
 
+/// What the wave stage shows: the new picture of the screen, once it is taken, and the wave that wipes it in.
+final class WaveStageModel: ObservableObject {
+    @Published var new: UIImage?
+    @Published var wave: ModeWave?
+}
+
+/// The whole screen during a light / dark wave: a picture of how the app looked (under) and one of how it looks
+/// now (revealed inside the wave's circle), the lens bending both at the front, and the rainbow rim over it. Being
+/// pictures, the whole window is carried: the navigation bar, the keyboard, everything.
+struct WaveStage: View {
+    let old: UIImage
+    @ObservedObject var model: WaveStageModel
+
+    var body: some View {
+        let waves = model.wave.map { [$0] } ?? []
+        ZStack {
+            Image(uiImage: old).resizable()
+            if let new = model.new, let wave = model.wave {
+                Image(uiImage: new).resizable().revealedByWave(wave)
+            }
+        }
+        .waveLensed(waves)
+        .overlay {
+            if !waves.isEmpty { GlassWaveBand(waves: waves) }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// Puts the wave stage over the window (UIKit, above everything: it also covers the navigation bar) and takes it
+/// away again.
+@MainActor
+enum WaveScreen {
+    private static var host: UIViewController?
+
+    private static var window: UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
+    }
+
+    static var bounds: CGRect { return window?.bounds ?? .zero }
+
+    /// A picture of the app as it is now (not of the stage, which lies over the window, not in the app's own view).
+    static func capture() -> UIImage? {
+        guard let view = window?.rootViewController?.view else { return nil }
+        return UIGraphicsImageRenderer(bounds: view.bounds).image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)
+        }
+    }
+
+    static func show(old: UIImage, model: WaveStageModel) {
+        hide()
+        guard let window = window, let root = window.rootViewController else { return }
+        let controller = UIHostingController(rootView: WaveStage(old: old, model: model))
+        controller.view.backgroundColor = .clear
+        controller.view.frame = window.bounds
+        controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        if #available(iOS 16.4, *) { controller.safeAreaRegions = [] }
+        root.addChild(controller)
+        window.addSubview(controller.view)
+        controller.didMove(toParent: root)
+        host = controller
+    }
+
+    static func hide() {
+        guard let controller = host else { return }
+        controller.willMove(toParent: nil)
+        controller.view.removeFromSuperview()
+        controller.removeFromParent()
+        host = nil
+    }
+}
+
 /// The colours of a wave's rim: a rainbow, red inside to violet outside, run softly into one another.
 private struct WavePalette {
     /// The rim's colours from the inside out, as offsets from the rim's centre line.
