@@ -1057,14 +1057,17 @@ final class KeyboardViewController: UIInputViewController {
     /// Tapping the word exactly as typed keeps it: a spelling that no enabled dictionary has is learned at once
     /// (and from then on suggested, and never corrected away). Only the exact spelling counts as known: a
     /// dictionary word with the same letters but other accents ("omaga" for "omágá") must not block it.
-    private func learnTappedWord(_ word: String) {
+    private func learnTappedWord(_ word: String, pin: Bool = false) {
         guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
         let cleaned = TextFolding.normalizeApostrophes(word)
         let key = TextFolding.key(cleaned)
         guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
         ensureStores()
         let known = stores.values.contains { $0.isLoaded && $0.dictionaryHas(word: cleaned) }
-        if !known { stores[language]?.learn(cleaned, asTyped: true) }
+        if !known {
+            stores[language]?.learn(cleaned, asTyped: true)
+            if pin { LearnedWords.shared.pin(TextFolding.normalizeApostrophes(cleaned).lowercased()) }
+        }
     }
 
     /// Remembers which word followed which, for next-word suggestions.
@@ -1742,7 +1745,9 @@ extension KeyboardViewController: SuggestionBarDelegate {
         switch suggestion.kind {
         case .literal, .word:
             guard !suggestion.text.isEmpty else { return }
-            if suggestion.kind == .literal { learnTappedWord(suggestion.text) }
+            if suggestion.kind == .literal { learnTappedWord(suggestion.text, pin: true) }
+            // A learned word picked in the bar is kept for good and ranked first from now on.
+            LearnedWords.shared.pin(TextFolding.normalizeApostrophes(suggestion.text).lowercased())
             replacePrefix(with: suggestion.text)
             clearSwipeState()
             afterTyping()

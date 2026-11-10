@@ -103,6 +103,8 @@ enum SettingKey {
     static let learnedWords = "hunkeys.learnedWords"
     /// Learned word -> last day it was used (days since 1970).
     static let learnedWordDays = "hunkeys.learnedWordDays"
+    /// Learned words the user picked in the suggestion bar: kept for good and ranked first.
+    static let learnedPinned = "hunkeys.learnedPinned"
     /// lower-case word -> the way the user writes it ("zsófi" -> "Zsófi", "ios" -> "iOS"), when that is not the default.
     static let writtenForms = "hunkeys.writtenForms"
     /// "typed\tmeant" -> how often the user deleted the typed word and wrote the meant one in its place.
@@ -686,6 +688,14 @@ final class Settings {
         put(days, SettingKey.learnedWordDays)
     }
 
+    func learnedPinned() -> Set<String> {
+        return Set(value(SettingKey.learnedPinned) as? [String] ?? [])
+    }
+
+    func setLearnedPinned(_ words: Set<String>) {
+        put(Array(words), SettingKey.learnedPinned)
+    }
+
     func writtenForms() -> [String: String] {
         return value(SettingKey.writtenForms) as? [String: String] ?? [:]
     }
@@ -727,6 +737,8 @@ final class Settings {
             for key in corrections.keys where key.hasSuffix("\t" + word) { corrections.removeValue(forKey: key) }
             if corrections.count != before { setCorrections(corrections, for: language.rawValue) }
         }
+        var pinned = learnedPinned()
+        if pinned.remove(word) != nil { setLearnedPinned(pinned) }
         bumpPersonalRevision()
     }
 
@@ -790,6 +802,7 @@ final class Settings {
         put(nil, SettingKey.languageUsage)
         put([String: Int](), SettingKey.learnedWords)   // empty rather than missing: nothing left to merge
         put(nil, SettingKey.learnedWordDays)
+        put(nil, SettingKey.learnedPinned)
         put(nil, SettingKey.writtenForms)
         for language in Language.allCases {
             put(nil, SettingKey.usedWordsPrefix + language.rawValue)

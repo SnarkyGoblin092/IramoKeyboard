@@ -1078,12 +1078,36 @@ final class LearnedWords {
     /// lower-case word -> how the user writes it ("zsófi" -> "Zsófi", "ios" -> "iOS"); only words written other
     /// than their default (all lower case for learned words, the dictionary's form for the others).
     private(set) var forms: [String: String]
+    /// Words the user picked in the suggestion bar: they are never forgotten and come first.
+    private(set) var pinned: Set<String>
 
     private init() {
         counts = Settings.shared.learnedWords()
         days = Settings.shared.learnedWordDays()
         forms = Settings.shared.writtenForms()
+        pinned = Settings.shared.learnedPinned()
+        forgetUnused()
         rebuildKeys()
+    }
+
+    /// The user picked `word` in the suggestion bar: it stays for good and is ranked above the rest.
+    func pin(_ word: String) {
+        guard (counts[word] ?? 0) >= WordStore.learnAfter else { return }
+        if pinned.insert(word).inserted { scheduleSave() }
+        days[word] = LearnedWords.today
+    }
+
+    /// Words learned by typing fade as they go unused (`effective` halves every ~45 days) and are forgotten once
+    /// they have faded away; the more a word was used, the longer that takes. Pinned words are never forgotten.
+    private func forgetUnused() {
+        var forgotten = false
+        for word in counts.keys where !pinned.contains(word) && effective(word) < 0.35 {
+            counts.removeValue(forKey: word)
+            days.removeValue(forKey: word)
+            forms.removeValue(forKey: word)
+            forgotten = true
+        }
+        if forgotten { scheduleSave() }
     }
 
     /// Remembers how the user just wrote `word` (nil: the default form again).
@@ -1113,6 +1137,7 @@ final class LearnedWords {
     /// How much the word is used: its count, halving every ~45 days without use.
     func effective(_ word: String) -> Double {
         guard let count = counts[word] else { return 0 }
+        if pinned.contains(word) { return Double(count) + 30 }   // never fades; the most strongly ranked
         let age = days[word].map { max(0, LearnedWords.today - $0) } ?? 0
         return Double(count) * pow(0.5, Double(age) / 45)
     }
@@ -1121,7 +1146,7 @@ final class LearnedWords {
         counts[word, default: 0] += amount
         days[word] = LearnedWords.today
         if counts.count > maxWords {
-            let weakest = counts.keys.sorted { effective($0) < effective($1) }.prefix(maxWords / 5)
+            let weakest = counts.keys.filter { !pinned.contains($0) }.sorted { effective($0) < effective($1) }.prefix(maxWords / 5)
             for weak in weakest {
                 counts.removeValue(forKey: weak)
                 days.removeValue(forKey: weak)
@@ -1139,6 +1164,8 @@ final class LearnedWords {
         counts = Settings.shared.learnedWords()
         days = Settings.shared.learnedWordDays()
         forms = Settings.shared.writtenForms()
+        pinned = Settings.shared.learnedPinned()
+        forgetUnused()
         saveScheduled = false
         rebuildKeys()
     }
@@ -1155,5 +1182,6 @@ final class LearnedWords {
         Settings.shared.setLearnedWords(counts)
         Settings.shared.setLearnedWordDays(days)
         Settings.shared.setWrittenForms(forms)
+        Settings.shared.setLearnedPinned(pinned)
     }
 }
