@@ -544,14 +544,22 @@ private struct GlassKeyShape: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         if staticGlass {
-            // For a picture (ImageRenderer can't draw live glass or blur): a flat pane with the glass's rim and sheen.
+            // For a picture (ImageRenderer can't draw live glass or blur): a clear pane with the glass's look, drawn
+            // once: a body of light, a specular highlight at the top left, light gathering at the lower rim, and a
+            // rim that is bright where the light hits it.
             shape
-                .fill((tint ?? Color.clear).opacity(0.55))
-                .overlay(shape.fill(Color.white.opacity(dark ? 0.14 : 0.55)))
-                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.18 : 0.45), Color.white.opacity(0)],
-                                                   startPoint: .top, endPoint: .center)))
-                .overlay(shape.strokeBorder(Color.white.opacity(dark ? 0.35 : 0.8), lineWidth: 0.8))
-                .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+                .fill((tint ?? Color.clear).opacity(0.5))
+                .overlay(shape.fill(Color.white.opacity(dark ? 0.10 : 0.42)))
+                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.30 : 0.65), Color.white.opacity(0)],
+                                                   startPoint: .topLeading, endPoint: UnitPoint(x: 0.7, y: 0.55))))
+                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(0), Color.white.opacity(dark ? 0.12 : 0.25)],
+                                                   startPoint: UnitPoint(x: 0.5, y: 0.6), endPoint: .bottom)))
+                .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(dark ? 0.65 : 0.95),
+                                                                    Color.white.opacity(dark ? 0.08 : 0.25),
+                                                                    Color.white.opacity(dark ? 0.35 : 0.7)],
+                                                           startPoint: .topLeading, endPoint: .bottomTrailing),
+                                            lineWidth: 1))
+                .shadow(color: Color.black.opacity(dark ? 0.35 : 0.18), radius: 3, x: 0, y: 1.5)
         } else {
             live(shape)
         }

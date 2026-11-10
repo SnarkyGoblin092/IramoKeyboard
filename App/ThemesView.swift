@@ -49,7 +49,7 @@ struct ThemesView: View {
         }
         }
         .environment(\.modeWaves, waves)
-        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { touches.point = $0.startLocation })
+        .background(TouchRecorder(touches: touches))
         .background(GeometryReader { geometry in
             Color.clear
                 .onAppear { screenFrame = geometry.frame(in: .global) }
@@ -62,6 +62,7 @@ struct ThemesView: View {
         .overlay {
             if waves.contains(where: { $0.kind == .mode }) { GlassWaveBand(waves: waves.filter { $0.kind == .mode }) }
         }
+        .onAppear { prewarm() }
         .navigationTitle(tr("Themes"))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -139,6 +140,23 @@ struct ThemesView: View {
             try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
+        }
+    }
+
+    /// Every theme's light and dark picture, drawn ahead (one by one, when nothing else is wanted), so cards and
+    /// the light / dark switch never wait for one.
+    private func prewarm() {
+        let edits = SystemEdits.decode(systemEdits)
+        let scale = UIScreen.main.scale
+        for section in ThemeCatalog.pickerSections {
+            for base in section.themes {
+                let theme = edited(base, edits)
+                for dark in [previewScheme == .dark, previewScheme != .dark] {
+                    let key = ThemeThumbnail.key(theme: theme, dark: dark)
+                    guard ThumbnailCache.shared.image(for: key) == nil else { continue }
+                    ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: scale, dark: dark, key: key, idle: true) { _ in }
+                }
+            }
         }
     }
 
@@ -348,26 +366,36 @@ private struct ThemeThumbnail: View {
     }
 
     /// What the picture depends on: the theme with its edits, light or dark, and every setting the preview reads.
-    private static func key(theme: ThemeDefinition, dark: Bool) -> String {
+    fileprivate static func key(theme: ThemeDefinition, dark: Bool) -> String {
         return "\(theme.id)|\(theme.hashValue)|\(dark)|\(ThumbnailCache.settingsSignature())"
     }
 
-    /// Queues the picture for `key` (drawn once, then kept in the cache).
+    /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
     private func queue(theme: ThemeDefinition, dark: Bool, key: String, idle: Bool = false,
                        done: @escaping (UIImage?) -> Void) {
-        let accent = self.accent, scale = displayScale
+        ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: displayScale, dark: dark, key: key, idle: idle, done: done)
+    }
+
+    /// The picture of a theme in one mode. Liquid Glass is drawn as the real glass keyboard (GlassSnapshot) and
+    /// photographed; the other themes go through ImageRenderer.
+    fileprivate static func enqueue(theme: ThemeDefinition, accent: Color, scale: CGFloat, dark: Bool, key: String,
+                                    idle: Bool, done: @escaping (UIImage?) -> Void) {
         let width = ThemeThumbnail.renderWidth
-        let flat: () -> UIImage? = {
-            let preview = ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                .frame(width: width, height: width / ThemePreview.aspectKeysOnly)
+        let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
+        func preview() -> some View {
+            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
-                .environment(\.staticGlass, true)
-            let renderer = ImageRenderer(content: preview)
-            renderer.scale = scale
-            return renderer.uiImage
         }
         ThumbnailCache.shared.render(key: key, idle: idle) {
-            return flat()
+            if theme.kind == .liquidGlass,
+               let shot = await GlassSnapshot.take(AnyView(preview()), size: size, dark: dark, scale: scale,
+                                                   backdrop: ThemePreviewBackdrop.color(theme: theme, dark: dark)) {
+                return shot
+            }
+            let renderer = ImageRenderer(content: preview().environment(\.staticGlass, true))
+            renderer.scale = scale
+            return renderer.uiImage
         } done: { rendered in
             done(rendered)
         }
@@ -404,20 +432,45 @@ final class ThumbnailCache {
     static let shared = ThumbnailCache()
 
     private let images = NSCache<NSString, UIImage>()
-    private var queue: [(key: String, make: () -> UIImage?, done: (UIImage?) -> Void)] = []
+    private var queue: [(key: String, make: () async -> UIImage?, done: (UIImage?) -> Void)] = []
     /// The pictures nothing shows yet (the other mode's, for the next wave): drawn when `queue` is empty.
-    private var idle: [(key: String, make: () -> UIImage?, done: (UIImage?) -> Void)] = []
+    private var idle: [(key: String, make: () async -> UIImage?, done: (UIImage?) -> Void)] = []
     private var draining = false
 
     init() {
-        images.countLimit = 120
+        images.countLimit = 160
     }
 
-    func image(for key: String) -> UIImage? { return images.object(forKey: key as NSString) }
+    /// The picture in memory, else the one kept on disk from an earlier run (a theme is drawn once, ever, until
+    /// what it depends on changes: the key holds all of that).
+    func image(for key: String) -> UIImage? {
+        if let image = images.object(forKey: key as NSString) { return image }
+        guard let url = diskURL(key), let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data, scale: UIScreen.main.scale) else { return nil }
+        images.setObject(image, forKey: key as NSString)
+        return image
+    }
 
-    func store(_ image: UIImage, key: String) { images.setObject(image, forKey: key as NSString) }
+    func store(_ image: UIImage, key: String) {
+        images.setObject(image, forKey: key as NSString)
+        if let url = diskURL(key), let data = image.pngData() { try? data.write(to: url, options: .atomic) }
+    }
 
-    func render(key: String, idle: Bool = false, make: @escaping () -> UIImage?, done: @escaping (UIImage?) -> Void) {
+    private lazy var directory: URL? = {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let url = base.appendingPathComponent("ThemeCards", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
+
+    /// A file name that is the same on every run (String.hashValue is not).
+    private func diskURL(_ key: String) -> URL? {
+        var hash: UInt64 = 5381
+        for byte in key.utf8 { hash = hash &* 33 &+ UInt64(byte) }
+        return directory?.appendingPathComponent(String(hash, radix: 16) + ".png")
+    }
+
+    func render(key: String, idle: Bool = false, make: @escaping () async -> UIImage?, done: @escaping (UIImage?) -> Void) {
         if idle { self.idle.append((key, make, done)) } else { queue.append((key, make, done)) }
         drain()
     }
@@ -434,8 +487,9 @@ final class ThumbnailCache {
                 } while self.queue.isEmpty && !ModeWave.running.isEmpty
             }
             let job = self.queue.isEmpty ? self.idle.removeFirst() : self.queue.removeFirst()
-            let image = self.image(for: job.key) ?? job.make()
-            if let image = image { self.images.setObject(image, forKey: job.key as NSString) }
+            let made = await job.make()
+            let image = self.image(for: job.key) ?? made
+            if let image = image, self.image(for: job.key) == nil { self.store(image, key: job.key) }
             job.done(image)
             self.draining = false
             self.drain()
@@ -455,8 +509,108 @@ final class ThumbnailCache {
     }
 }
 
+/// The keyboard's backdrop colour (ThemeLook.backdrop) for a snapshot to sit on, as a UIColor.
+enum ThemePreviewBackdrop {
+    static func color(theme: ThemeDefinition, dark: Bool) -> UIColor {
+        if theme.kind == .transparent { return dark ? UIColor(white: 0.12, alpha: 1) : UIColor(white: 0.93, alpha: 1) }
+        return dark ? UIColor(white: 0.17, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
+    }
+}
+
+/// Takes a picture of a view with real Liquid Glass in it: the view is put, on its backdrop, in the key window just
+/// off the screen (where the glass is drawn as on a real keyboard) and photographed once. One at a time.
+@MainActor
+enum GlassSnapshot {
+    private static var busy = false
+    private static var waiters: [CheckedContinuation<Void, Never>] = []
+
+    static func take(_ content: AnyView, size: CGSize, dark: Bool, scale: CGFloat, backdrop: UIColor) async -> UIImage? {
+        if busy {
+            await withCheckedContinuation { waiters.append($0) }
+        } else {
+            busy = true
+        }
+        defer { if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() } }
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
+        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
+        let container = UIView(frame: CGRect(x: window.bounds.maxX + 40, y: 0, width: size.width, height: size.height))
+        container.backgroundColor = backdrop
+        container.overrideUserInterfaceStyle = dark ? .dark : .light
+        let host = UIHostingController(rootView: AnyView(content.ignoresSafeArea()))
+        host.view.backgroundColor = .clear
+        if #available(iOS 16.4, *) { host.safeAreaRegions = [] }
+        host.view.frame = container.bounds
+        container.addSubview(host.view)
+        window.addSubview(container)
+        window.rootViewController?.addChild(host)
+        host.didMove(toParent: window.rootViewController)
+        defer {
+            host.willMove(toParent: nil)
+            host.removeFromParent()
+            container.removeFromSuperview()
+        }
+        container.layoutIfNeeded()
+        // Long enough for the glass to be laid out and drawn.
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            container.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        }
+    }
+}
+
 /// The last place the screen was touched (written as touches begin, read when a wave is launched; not state, so
 /// touching redraws nothing).
 final class TouchPoint {
     var point: CGPoint?
+}
+
+/// Records where each touch lands, in the window, the moment it lands (before any button's action runs, which a
+/// SwiftUI gesture does not manage). It fails at once, so it never takes a touch from anything.
+private struct TouchRecorder: UIViewRepresentable {
+    let touches: TouchPoint
+
+    func makeUIView(context: Context) -> RecorderView { return RecorderView(touches: touches) }
+    func updateUIView(_ view: RecorderView, context: Context) {}
+
+    final class RecorderView: UIView {
+        let touches: TouchPoint
+        private var recorder: Recorder?
+
+        init(touches: TouchPoint) {
+            self.touches = touches
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let recorder = recorder { recorder.view?.removeGestureRecognizer(recorder) }
+            recorder = nil
+            guard let window = window else { return }
+            let new = Recorder(touches: touches)
+            window.addGestureRecognizer(new)
+            recorder = new
+        }
+    }
+
+    final class Recorder: UIGestureRecognizer {
+        let touches: TouchPoint
+
+        init(touches: TouchPoint) {
+            self.touches = touches
+            super.init(target: nil, action: nil)
+            cancelsTouchesInView = false
+            delaysTouchesBegan = false
+            delaysTouchesEnded = false
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            if let touch = touches.first { self.touches.point = touch.location(in: nil) }
+            state = .failed
+        }
+    }
 }
