@@ -17,6 +17,8 @@ struct ThemesView: View {
     /// The mode just picked while its wave is setting off: the switch shows it in the picture of the window the wave
     /// wipes away, so it does not seem to jump back to the old one.
     @State private var pendingMode: String?
+    /// A theme was just tapped and its wave is about to set off.
+    @State private var choosing = false
     /// Where the finger last touched the screen: the light / dark wave spreads out from there.
     @State private var touches = TouchPoint()
 
@@ -124,11 +126,19 @@ struct ThemesView: View {
     /// Switches to the theme `id` behind the same wave of glass, spreading out from the tap (at once with Reduce
     /// Motion).
     private func chooseTheme(_ id: String) {
-        guard waves.isEmpty else { return }
-        if screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled {
-            launch(source: touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY), newScheme: previewScheme, newTheme: id)
+        guard waves.isEmpty, !choosing else { return }
+        guard screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled else {
+            themeID = id
+            return
         }
-        themeID = id
+        // Two frames' wait, so the card's pressed overlay has let go before the window is photographed.
+        choosing = true
+        let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60) {
+            choosing = false
+            launch(source: source, newScheme: previewScheme, newTheme: id)
+            themeID = id
+        }
     }
 
     /// Starts a wave across the whole window (before the setting itself changes: what that sets going, the keyboard's
