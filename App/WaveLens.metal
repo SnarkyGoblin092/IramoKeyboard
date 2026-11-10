@@ -29,6 +29,14 @@ static float frontRadius(float angle, float progress, float endRadius, float shi
     }
     float2 offset = position - center;
     float distance = length(offset);
+    // Far from the front nothing is bent: those points (nearly all of them) are passed through before any of the
+    // costly work. (The crests move the front by at most 31.5% of its radius; 2.2 reaches away the bend is under
+    // the 1% it is cut off at below.)
+    float front = progress * endRadius;
+    float margin = reach * 2.2;
+    if (distance < front * 0.685 - margin || distance > front * 1.315 + margin) {
+        return layer.sample(position);
+    }
     float2 direction = offset / max(distance, 0.001);
     // How far outside the front this point is (negative: inside).
     float signedDistance = distance - frontRadius(atan2(offset.y, offset.x), progress, endRadius, shift);
@@ -43,10 +51,9 @@ static float frontRadius(float angle, float progress, float endRadius, float shi
     float bend = strength * profile;
     float2 toward = -direction * bend * sign(signedDistance + 0.001);
     half red = layer.sample(position + toward * 1.45).r;
-    half green = layer.sample(position + toward).g;
+    half4 middle = layer.sample(position + toward);
     half blue = layer.sample(position + toward * 0.55).b;
-    half alpha = layer.sample(position + toward).a;
-    half4 color = half4(red, green, blue, alpha);
+    half4 color = half4(red, middle.g, blue, middle.a);
     // A little darker just inside the front, as the thick edge of the glass would be.
     float sharp = signedDistance / (spread * 0.35);
     float edge = step(signedDistance, 0.0) * exp(-sharp * sharp);

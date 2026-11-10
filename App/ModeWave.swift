@@ -300,34 +300,47 @@ private struct WaveGlass: View {
     /// colours running round the line. The shader (WaveLens.metal) bends the colours around it.
     ///
     /// The glow is a few strokes of falling strength, not a blur: a blur of the whole screen's size every frame
-    /// is what made it slow.
+    /// is what made it slow. The outline is worked out once a frame and all its strokes are drawn in three
+    /// canvases (under the glass, the line, the shine), not a layer of the screen's size for each stroke.
     var body: some View {
-        // (Strokes are computed once: the shape's outline is the same for every one of them.)
-        let line = rim
+        let line = rim.path(in: CGRect(origin: .zero, size: size))
+        let blue = WaveGlass.blue
+        let shine = GraphicsContext.Shading.conicGradient(
+            Gradient(colors: WaveGlass.colors),
+            center: CGPoint(x: wave.center.x - origin.x, y: wave.center.y - origin.y),
+            angle: .degrees(Double(progress) * 300))
         return glass
-            .background(
-                ZStack {
-                    line.stroke(blue, lineWidth: 16).opacity(0.10)
-                    line.stroke(blue, lineWidth: 10).opacity(0.18)
-                    line.stroke(blue, lineWidth: 5).opacity(0.35)
+            .background(Canvas { context, _ in
+                for stroke in WaveGlass.glow {
+                    context.stroke(line, with: .color(blue.opacity(stroke.opacity)), lineWidth: stroke.width)
                 }
-            )
-            .overlay(line.stroke(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95), lineWidth: 2))
-            .overlay(line.stroke(shine, lineWidth: 3.5).blendMode(.plusLighter).opacity(0.85))
-            .overlay(line.stroke(shine, lineWidth: 11).blendMode(.plusLighter).opacity(0.22))
+            })
+            .overlay(Canvas { context, _ in
+                context.stroke(line, with: .color(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95)), lineWidth: 2)
+            })
+            .overlay(Canvas { context, _ in
+                for stroke in WaveGlass.shine {
+                    context.opacity = stroke.opacity
+                    context.stroke(line, with: shine, lineWidth: stroke.width)
+                }
+            }.blendMode(.plusLighter))
     }
 
-    private var blue: Color { return Color(red: 0.30, green: 0.50, blue: 1.0) }
+    private static let blue = Color(red: 0.30, green: 0.50, blue: 1.0)
+
+    /// The blue glow under the glass, and the shine's own glow of colours over it: widest and faintest first.
+    private static let glow: [(width: CGFloat, opacity: Double)] = [(26, 0.07), (18, 0.12), (11, 0.20), (5, 0.40)]
+    private static let shine: [(width: CGFloat, opacity: Double)] = [(22, 0.16), (11, 0.36), (3.5, 0.95)]
 
     /// The colours of the shine, turning round the front as it spreads.
-    private var shine: AngularGradient {
-        let colors = [Color(red: 1.0, green: 0.45, blue: 0.75), Color(red: 1.0, green: 0.85, blue: 0.40),
-                      Color(red: 0.45, green: 1.0, blue: 0.75), Color(red: 0.40, green: 0.75, blue: 1.0),
-                      Color(red: 0.70, green: 0.50, blue: 1.0), Color(red: 1.0, green: 0.45, blue: 0.75)]
-        let center = UnitPoint(x: (wave.center.x - origin.x) / max(size.width, 1),
-                               y: (wave.center.y - origin.y) / max(size.height, 1))
-        return AngularGradient(colors: colors, center: center, angle: .degrees(Double(progress) * 300))
-    }
+    private static let colors: [Color] = [
+        Color(red: 1.0, green: 0.40, blue: 0.75), Color(red: 1.0, green: 0.40, blue: 0.40),
+        Color(red: 1.0, green: 0.62, blue: 0.30), Color(red: 1.0, green: 0.88, blue: 0.35),
+        Color(red: 0.65, green: 1.0, blue: 0.40), Color(red: 0.40, green: 1.0, blue: 0.70),
+        Color(red: 0.35, green: 0.95, blue: 1.0), Color(red: 0.35, green: 0.65, blue: 1.0),
+        Color(red: 0.50, green: 0.45, blue: 1.0), Color(red: 0.75, green: 0.45, blue: 1.0),
+        Color(red: 1.0, green: 0.45, blue: 0.95), Color(red: 1.0, green: 0.40, blue: 0.75)
+    ]
 
     @ViewBuilder private var glass: some View {
         #if compiler(>=6.2)

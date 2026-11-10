@@ -282,11 +282,28 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// wave has passed. The picture is masked to everything outside the wave's irregular circle, and the circle
     /// follows the wave's own clock and curve, frame by frame. A second wave takes a picture of the first one's
     /// half-done work, and covers it the same way.
+    ///
+    /// The picture is of the screen itself where the keyboard is, backdrop and all, not of the keys alone: see-through
+    /// keys (glass, the transparent theme) taken alone would let the keys under them show through, and the preview
+    /// would change the moment the wave sets off.
     func cover(for wave: ModeWave) {
-        guard window != nil, let old = snapshotView(afterScreenUpdates: false) else { return }
-        old.frame = bounds
+        guard let window = window else { return }
+        let taken = window.resizableSnapshotView(from: convert(bounds, to: nil), afterScreenUpdates: false,
+                                                 withCapInsets: .zero) ?? snapshotView(afterScreenUpdates: false)
+        guard let picture = taken else { return }
+        let old = UIView(frame: bounds)
         old.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         old.isUserInteractionEnabled = false
+        // Cut to the preview's rounded box (LiveKeyboard's backdrop), so nothing of the screen around it is covered.
+        let box = UIView(frame: bounds)
+        box.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        box.layer.cornerRadius = 14
+        box.layer.cornerCurve = .continuous
+        box.layer.masksToBounds = true
+        picture.frame = box.bounds
+        picture.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        box.addSubview(picture)
+        old.addSubview(box)
         addSubview(old)
         let mask = CAShapeLayer()
         mask.fillRule = .evenOdd
