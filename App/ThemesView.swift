@@ -14,8 +14,9 @@ struct ThemesView: View {
     @State private var waves: [ModeWave] = []
     /// Where this screen is in the window: the wave crosses exactly it.
     @State private var screenFrame = CGRect.zero
-    /// Where the mode switch is: it shows its new choice at once, not under the old picture of the window.
-    @State private var toggleFrame = CGRect.zero
+    /// The mode just picked while its wave is setting off: the switch shows it in the picture of the window the wave
+    /// wipes away, so it does not seem to jump back to the old one.
+    @State private var pendingMode: String?
     /// Where the finger last touched the screen: the light / dark wave spreads out from there.
     @State private var touches = TouchPoint()
 
@@ -35,14 +36,9 @@ struct ThemesView: View {
             VStack(spacing: 8) {
                 LiveKeyboard()
                 SegmentedChoice(names: [tr("Auto"), tr("Light"), tr("Dark")],
-                                selected: previewMode == "light" ? 1 : (previewMode == "dark" ? 2 : 0)) {
+                                selected: (pendingMode ?? previewMode) == "light" ? 1 : ((pendingMode ?? previewMode) == "dark" ? 2 : 0)) {
                     switchMode(["auto", "light", "dark"][$0])
                 }
-                .background(GeometryReader { geometry in
-                    Color.clear
-                        .onAppear { toggleFrame = geometry.frame(in: .global) }
-                        .onChange(of: geometry.frame(in: .global)) { toggleFrame = $0 }
-                })
             }
         } content: {
         ScrollView {
@@ -129,15 +125,21 @@ struct ThemesView: View {
     /// Switches the previews to the other mode behind a wave of glass (at once with Reduce Motion, where the
     /// previews fade instead).
     private func switchMode(_ mode: String) {
-        guard waves.isEmpty, mode != previewMode else { return }
+        guard waves.isEmpty, pendingMode == nil, mode != previewMode else { return }
         // Auto follows the system's mode (the screen's traits, which the app's own override does not touch).
         let dark = mode == "auto" ? UIScreen.main.traitCollection.userInterfaceStyle == .dark : mode == "dark"
         guard (previewScheme == .dark) != dark, screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled else {
             previewMode = mode
             return
         }
-        launch(source: touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY), newScheme: dark ? .dark : .light, newTheme: themeID)
-        previewMode = mode
+        // The switch is drawn with its new choice first, then the picture of the window is taken and the mode changes.
+        pendingMode = mode
+        let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
+        DispatchQueue.main.async {
+            launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
+            previewMode = mode
+            pendingMode = nil
+        }
     }
 
     /// Switches to the theme `id` behind the same wave of glass, spreading out from the tap (at once with Reduce
@@ -162,7 +164,7 @@ struct ThemesView: View {
         // The keyboard's picture of itself is taken now, before the setting changes anything on it.
         LiveKeyboardView.current?.cover(for: new)
         // The whole app changes mode with the previews: a picture of the window is wiped away by the same wave.
-        if newScheme != previewScheme { WindowWaveCover.start(for: new, leaving: toggleFrame) }
+        if newScheme != previewScheme { WindowWaveCover.start(for: new) }
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).

@@ -572,24 +572,12 @@ enum WindowWaveCover {
     private static let driver = WaveDriver()
     private static var covers: [(wave: ModeWave, view: UIView, mask: CAShapeLayer, ends: CFTimeInterval)] = []
 
-    /// `leaving`: a part of the window that is not covered (the control that was just used).
-    static func start(for wave: ModeWave, leaving hole: CGRect = .zero) {
+    static func start(for wave: ModeWave) {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         guard let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }),
               let picture = window.snapshotView(afterScreenUpdates: false) else { return }
         picture.frame = window.bounds
-        // The picture lacks the part that is left out; the container is cut to the outside of the wave.
-        if !hole.isEmpty {
-            let leave = CAShapeLayer()
-            leave.fillRule = .evenOdd
-            leave.fillColor = UIColor.black.cgColor
-            leave.frame = window.bounds
-            let path = CGMutablePath()
-            path.addRect(window.bounds)
-            path.addRoundedRect(in: hole, cornerWidth: 9, cornerHeight: 9)
-            leave.path = path
-            picture.layer.mask = leave
-        }
+        // The container is cut to the outside of the wave.
         let container = UIView(frame: window.bounds)
         container.isUserInteractionEnabled = false
         container.addSubview(picture)
