@@ -132,10 +132,11 @@ struct ThemesView: View {
             previewMode = mode
             return
         }
-        // The switch is drawn with its new choice first, then the picture of the window is taken and the mode changes.
+        // The switch is drawn with its new choice first, then (once it has settled) the picture of the window is taken and the mode changes.
         pendingMode = mode
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
-        DispatchQueue.main.async {
+        // Once the switch has played its little slide to the new choice.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
             previewMode = mode
             pendingMode = nil
