@@ -18,8 +18,9 @@ struct ModeWave: Equatable, Identifiable {
     let newScheme: ColorScheme
     let oldTheme: String
     let newTheme: String
-    /// Where the circle starts, down the frame: 0.5 the middle, 1 the bottom edge.
-    let anchorY: CGFloat
+    /// Where the circle starts, in the window's coordinates: where the finger touched (a theme wave: the bottom of
+    /// the preview).
+    let source: CGPoint
     /// The screen's frame, in the window's coordinates.
     let minX: CGFloat
     let minY: CGFloat
@@ -49,10 +50,10 @@ struct ModeWave: Equatable, Identifiable {
     /// The main preview's box in the window, for the theme waves (set by LiveKeyboard).
     static var previewBox = CGRect.zero
 
-    var center: CGPoint { return CGPoint(x: minX + width / 2, y: minY + height * anchorY) }
+    var center: CGPoint { return source }
 
     /// Each wave has its own edge.
-    private var shift: Double { return Double(id) * 1.618 }
+    var shift: Double { return Double(id) * 1.618 }
 
     /// The share of the wave's way it has gone at `date`, on the animation's curve.
     func progress(at date: Date) -> CGFloat {
@@ -64,8 +65,12 @@ struct ModeWave: Equatable, Identifiable {
     }
 
     /// The radius the cut has at the end, when the ring's inner edge has passed the screen's farthest corner.
-    private var endRadius: CGFloat {
-        return (hypot(width / 2, height * max(anchorY, 1 - anchorY)) + ModeWave.band) / (1 - ModeWave.reach) * 1.15
+    var endRadius: CGFloat {
+        // The farthest corner of the frame from where the circle starts.
+        let far = max(hypot(source.x - minX, source.y - minY), hypot(source.x - minX - width, source.y - minY),
+                      hypot(source.x - minX, source.y - minY - height),
+                      hypot(source.x - minX - width, source.y - minY - height))
+        return (far + ModeWave.band) / (1 - ModeWave.reach) * 1.15
     }
 
     /// The radius of the cut at `angle`.
@@ -115,13 +120,13 @@ struct ModeWave: Equatable, Identifiable {
     }
 
     /// The ring: the inner and the outer edge at every step around, relative to `origin`.
-    func ring(_ progress: CGFloat, relativeTo origin: CGPoint) -> (inner: [CGPoint], outer: [CGPoint]) {
+    func ring(_ progress: CGFloat, relativeTo origin: CGPoint, grow: CGFloat = 0) -> (inner: [CGPoint], outer: [CGPoint]) {
         var inner: [CGPoint] = [], outer: [CGPoint] = []
         for index in 0..<ModeWave.steps {
             let angle = Double(index) / Double(ModeWave.steps) * 2 * .pi
             let r = radius(progress, angle: angle)
             let half = self.half(angle: angle)
-            let near = max(0, r - half), far = r + min(half, r)
+            let near = max(0, r - half - grow), far = r + min(half, r) + grow
             let direction = CGPoint(x: CGFloat(cos(angle)), y: CGFloat(sin(angle)))
             inner.append(CGPoint(x: center.x + near * direction.x - origin.x, y: center.y + near * direction.y - origin.y))
             outer.append(CGPoint(x: center.x + far * direction.x - origin.x, y: center.y + far * direction.y - origin.y))
@@ -272,12 +277,31 @@ private struct WaveGlass: View {
     let origin: CGPoint
 
     private var shape: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin) }
+    private func edge(_ grow: CGFloat) -> WaveDiscShape {
+        return WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: grow)
+    }
 
-    /// A lens of Liquid Glass over everything the wave has passed, with a glowing blue rim.
+    /// A lens of Liquid Glass over everything the wave has passed. Its rim is a thin bright blue line in a blue
+    /// glow, and just outside it a soft milky halo with pastel fringes (as light splits at a lens's edge).
     var body: some View {
         glass
-            .background(shape.stroke(Color(red: 0.30, green: 0.50, blue: 1.0), lineWidth: 7).blur(radius: 7).opacity(0.85))
-            .overlay(shape.stroke(Color(red: 0.55, green: 0.70, blue: 1.0).opacity(0.9), lineWidth: 2.5).blur(radius: 1.5))
+            // The glow, and the halo with its fringes of colour.
+            .background(
+                ZStack {
+                    edge(6).stroke(Color(red: 0.30, green: 0.50, blue: 1.0), lineWidth: 9).blur(radius: 8).opacity(0.8)
+                    edge(14).stroke(Color.white, lineWidth: 22).blur(radius: 10).opacity(0.35)
+                    edge(10).stroke(AngularGradient(colors: fringe, center: .center), lineWidth: 8)
+                        .blur(radius: 5).opacity(0.55)
+                }
+            )
+            .overlay(edge(0).stroke(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95), lineWidth: 2.5).blur(radius: 1.2))
+    }
+
+    /// The pastel colours around the rim.
+    private var fringe: [Color] {
+        return [Color(red: 1.0, green: 0.55, blue: 0.85), Color(red: 1.0, green: 0.90, blue: 0.45),
+                Color(red: 0.55, green: 0.95, blue: 0.80), Color(red: 0.50, green: 0.75, blue: 1.0),
+                Color(red: 0.75, green: 0.55, blue: 1.0), Color(red: 1.0, green: 0.55, blue: 0.85)]
     }
 
     @ViewBuilder private var glass: some View {
@@ -303,11 +327,13 @@ private struct WaveDiscShape: Shape {
     let wave: ModeWave
     let progress: CGFloat
     let origin: CGPoint
+    /// How far beyond the front the edge lies (the halo and glow are drawn from wider edges).
+    var grow: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
         guard progress > 0, progress < 1 else { return path }
-        let edge = wave.ring(progress, relativeTo: origin).outer
+        let edge = wave.ring(progress, relativeTo: origin, grow: grow).outer
         // What lies beyond the screen is not drawn (the glass costs more the more it covers): points out there are
         // pulled in to just outside it.
         let bounds = rect.insetBy(dx: -40, dy: -40)
@@ -319,5 +345,57 @@ private struct WaveDiscShape: Shape {
         for point in edge.dropFirst() { path.addLine(to: held(point)) }
         path.closeSubpath()
         return path
+    }
+}
+
+extension View {
+    /// Bends and splits the colours of what is drawn around the light / dark waves' fronts (WaveLens.metal), as
+    /// light is at the edge of a thick lens. (Needs iOS 17; earlier the glass ring alone is the effect. Views the
+    /// system draws itself, as the keyboard's keys, cannot be reached by a shader.)
+    func waveLensed(_ waves: [ModeWave]) -> some View {
+        return modifier(WaveLens(waves: waves))
+    }
+}
+
+private struct WaveLens: ViewModifier {
+    let waves: [ModeWave]
+    /// Where the view is in the window (not state: scrolling would redraw it for nothing; the clock redraws it
+    /// while a wave is out).
+    @State private var place = Place()
+
+    private final class Place {
+        var origin = CGPoint.zero
+    }
+
+    func body(content: Content) -> some View {
+        Group {
+            if #available(iOS 17.0, *), !waves.isEmpty {
+                TimelineView(.animation) { context in
+                    lensed(content, at: context.date, from: 0)
+                }
+            } else {
+                content
+            }
+        }
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { place.origin = geometry.frame(in: .global).origin }
+                .onChange(of: geometry.frame(in: .global)) { place.origin = $0.origin }
+        })
+    }
+
+    /// The content with the waves from `index` on applied, one over the other.
+    @available(iOS 17.0, *)
+    private func lensed(_ content: Content, at date: Date, from index: Int) -> AnyView {
+        guard index < waves.count else { return AnyView(content) }
+        let wave = waves[index]
+        let progress = wave.progress(at: date)
+        let inner = lensed(content, at: date, from: index + 1)
+        guard progress > 0, progress < 1 else { return inner }
+        let shader = ShaderLibrary.waveLens(
+            .float2(CGPoint(x: wave.center.x - place.origin.x, y: wave.center.y - place.origin.y)),
+            .float(Float(progress)), .float(Float(wave.endRadius)), .float(Float(wave.shift)),
+            .float(Float(ModeWave.band * 2.6)), .float(14))
+        return AnyView(inner.layerEffect(shader, maxSampleOffset: CGSize(width: 40, height: 40)))
     }
 }

@@ -14,6 +14,8 @@ struct ThemesView: View {
     @State private var waves: [ModeWave] = []
     /// Where this screen is in the window: the wave crosses exactly it.
     @State private var screenFrame = CGRect.zero
+    /// Where the finger last touched the screen: the light / dark wave spreads out from there.
+    @State private var touches = TouchPoint()
 
     /// Two cards across on a phone held upright, more where there is room (iPad, landscape).
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
@@ -38,9 +40,11 @@ struct ThemesView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
+            .waveLensed(waves.filter { $0.kind == .mode })
         }
         }
         .environment(\.modeWaves, waves)
+        .simultaneousGesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { touches.point = $0.startLocation })
         .background(GeometryReader { geometry in
             Color.clear
                 .onAppear { screenFrame = geometry.frame(in: .global) }
@@ -102,7 +106,7 @@ struct ThemesView: View {
             previewMode = mode
             return
         }
-        launch(kind: .mode, frame: screenFrame, anchorY: 0.5, newScheme: dark ? .dark : .light, newTheme: themeID)
+        launch(kind: .mode, frame: screenFrame, source: touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY), newScheme: dark ? .dark : .light, newTheme: themeID)
         previewMode = mode
     }
 
@@ -112,18 +116,18 @@ struct ThemesView: View {
         guard waves.isEmpty else { return }
         let box = ModeWave.previewBox
         if box.width > 0, !UIAccessibility.isReduceMotionEnabled {
-            launch(kind: .theme, frame: box, anchorY: 1, newScheme: previewScheme, newTheme: id)
+            launch(kind: .theme, frame: box, source: CGPoint(x: box.midX, y: box.maxY), newScheme: previewScheme, newTheme: id)
         }
         themeID = id
     }
 
     /// Starts a wave across `frame` (before the setting itself changes: what that sets going, the keyboard's
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
-    private func launch(kind: ModeWave.Kind, frame: CGRect, anchorY: CGFloat, newScheme: ColorScheme, newTheme: String) {
+    private func launch(kind: ModeWave.Kind, frame: CGRect, source: CGPoint, newScheme: ColorScheme, newTheme: String) {
         ModeWave.count += 1
         let id = ModeWave.count
         let new = ModeWave(id: id, kind: kind, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
-                           newTheme: newTheme, anchorY: anchorY, minX: frame.minX, minY: frame.minY,
+                           newTheme: newTheme, source: source, minX: frame.minX, minY: frame.minY,
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         ModeWave.running.append(new)
         waves.append(new)
@@ -427,4 +431,10 @@ final class ThumbnailCache {
         let defaults = SharedStore.defaults
         return keys.map { "\(defaults.object(forKey: $0) ?? "")" }.joined(separator: "|")
     }
+}
+
+/// The last place the screen was touched (written as touches begin, read when a wave is launched; not state, so
+/// touching redraws nothing).
+final class TouchPoint {
+    var point: CGPoint?
 }
