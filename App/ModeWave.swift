@@ -254,6 +254,64 @@ extension View {
     }
 }
 
+/// Everything outside the wave's circle (the inside is cut out).
+private struct WaveAhead: Shape {
+    let wave: ModeWave
+    let progress: CGFloat
+    let origin: CGPoint
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
+        let points = wave.outline(progress, relativeTo: origin)
+        if let first = points.first {
+            path.move(to: first)
+            for point in points.dropFirst() { path.addLine(to: point) }
+            path.closeSubpath()
+        }
+        return path
+    }
+}
+
+extension View {
+    /// The other half of revealedByWave: the view is shown only outside the wave's circle (the old look, which the
+    /// new one replaces as the wave passes, so the two are never seen together).
+    func hiddenByWave(_ wave: ModeWave?) -> some View {
+        return modifier(WaveHide(wave: wave))
+    }
+}
+
+private struct WaveHide: ViewModifier {
+    let wave: ModeWave?
+    @State private var frame = CGRect.zero
+
+    func body(content: Content) -> some View {
+        Group {
+            if let wave = wave {
+                TimelineView(.animation(minimumInterval: ModeWave.frame)) { context in
+                    let progress = wave.progress(at: context.date)
+                    switch wave.relation(of: frame, progress: progress) {
+                    case .passed:
+                        content.hidden()
+                    case .ahead:
+                        content
+                    case .crossing:
+                        content.mask(WaveAhead(wave: wave, progress: progress, origin: frame.origin)
+                            .fill(style: FillStyle(eoFill: true)))
+                    }
+                }
+            } else {
+                content
+            }
+        }
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { frame = geometry.frame(in: .global) }
+                .onChange(of: geometry.frame(in: .global)) { frame = $0 }
+        })
+    }
+}
+
 /// Masks the view to the wave's circle, but only while the circle's edge crosses it: a view the wave has not
 /// reached is not drawn, and one it has passed by is drawn whole, without the mask (which costs a pass each).
 private struct WaveReveal: ViewModifier {

@@ -109,7 +109,7 @@ struct ThemesView: View {
         if let first = waves.first {
             let edits = SystemEdits.decode(systemEdits)
             ZStack {
-                content(edited(ThemeCatalog.theme(id: first.oldTheme), edits))
+                content(edited(ThemeCatalog.theme(id: first.oldTheme), edits)).hiddenByWave(first)
                 ForEach(waves) { wave in
                     content(edited(ThemeCatalog.theme(id: wave.newTheme), edits)).revealedByWave(wave)
                 }

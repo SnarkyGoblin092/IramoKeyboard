@@ -303,7 +303,7 @@ enum ThemeCatalog {
     static let defaultID = "native"
 
     /// The themes, in picker order.
-    static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + signatureThemes + keycapThemes
+    static let all: [ThemeDefinition] = [native, transparent, liquidGlass] + signatureThemes + collectionThemes + keycapThemes
 
     /// The picker's sections: the system themes, then the keycaps by how they are built (and light or dark caps),
     /// each ordered round the colour wheel by its accent, with the greys last.
@@ -644,6 +644,208 @@ enum ThemeCatalog {
                     .numbers: RoleTone(0x2C3238, label: 0x5FCFC6, ring: 0x3F8F88),
                     .ret: RoleTone(0x2C3238, label: 0x8EA2EE, ring: 0x5A68A8)],
                     letterTints: [0x6FB5E6, 0x5FCFC6, 0x8EA2EE, 0xA596EA, 0x6FD3EA], keyRing: 0x465058)),
+
+        // More 3D caps (sculpted and soft) and 2D outlined keys, each in a light and a dark mode.
+        signature("typist-neon", "Typist Neon", "Sculpted graphite caps with neon modifiers", font: "mono",
+                  profile: .sculpted, roundness: 0.24,
+                  light: ThemeTones(key: 0xE9EAEE, text: 0x1E2026, roles: [
+                    .shift: RoleTone(0xFF3D8B, label: 0xFFFFFF), .delete: RoleTone(0x7A5CFF, label: 0xFFFFFF),
+                    .numbers: RoleTone(0x19C7E0, label: 0x06262C), .ret: RoleTone(0xC6F23A, label: 0x1E2416)]),
+                  dark: ThemeTones(key: 0x2B2D33, text: 0xE6E8EE, roles: [
+                    .shift: RoleTone(0xFF3D8B, label: 0xFFFFFF), .delete: RoleTone(0x7A5CFF, label: 0xFFFFFF),
+                    .numbers: RoleTone(0x19C7E0, label: 0x06262C), .ret: RoleTone(0xC6F23A, label: 0x1E2416)])),
+        signature("typist-mint", "Typist Mint", "Sculpted pale caps with mint and peach", font: "mono",
+                  profile: .sculpted, roundness: 0.24,
+                  light: ThemeTones(key: 0xEEF4EE, text: 0x25332B, roles: [
+                    .shift: RoleTone(0x5CC0A0, label: 0x10332A), .delete: RoleTone(0xF2A98A, label: 0x3A1A0E),
+                    .numbers: RoleTone(0xBFE3D2, label: 0x25332B), .ret: RoleTone(0x3E9C84, label: 0xFFFFFF)]),
+                  dark: ThemeTones(key: 0x34403A, text: 0xE4F2EA, roles: [
+                    .shift: RoleTone(0x5CC0A0, label: 0x10332A), .delete: RoleTone(0xE59878, label: 0x3A1A0E),
+                    .numbers: RoleTone(0x4C6A5C, label: 0xE4F2EA), .ret: RoleTone(0x3E9C84, label: 0xFFFFFF)])),
+        signature("obsidian", "Obsidian", "Deep dished caps with gold modifiers", roundness: 0.3,
+                  light: ThemeTones(key: 0x3A3B40, text: 0xF1EBDD, roles: [
+                    .shift: RoleTone(0xC9A24A, label: 0x2A1F08), .numbers: RoleTone(0xC9A24A, label: 0x2A1F08),
+                    .delete: RoleTone(0x55565C, label: 0xF1EBDD), .ret: RoleTone(0xE2BC5E, label: 0x2A1F08)]),
+                  dark: ThemeTones(key: 0x1F2024, text: 0xE9E2D2, roles: [
+                    .shift: RoleTone(0xB8923C, label: 0x1E1606), .numbers: RoleTone(0xB8923C, label: 0x1E1606),
+                    .delete: RoleTone(0x33343A, label: 0xE9E2D2), .ret: RoleTone(0xD4AE50, label: 0x1E1606)])),
+        signature("aqua-pop", "Aqua Pop", "Bubbly caps in aqua, lemon and pink", roundness: 0.45,
+                  light: ThemeTones(key: 0xEAF7FA, text: 0x16505C, roles: [
+                    .shift: RoleTone(0x2CC6D8, label: 0x06323A), .numbers: RoleTone(0xFFE066, label: 0x4A3A06),
+                    .delete: RoleTone(0xFF8FB8, label: 0x4A1028), .ret: RoleTone(0x1AA3BA, label: 0xFFFFFF)]),
+                  dark: ThemeTones(key: 0x1F3C44, text: 0xD6F4F9, roles: [
+                    .shift: RoleTone(0x2CC6D8, label: 0x06323A), .numbers: RoleTone(0xF2D25A, label: 0x4A3A06),
+                    .delete: RoleTone(0xF07FAE, label: 0x4A1028), .ret: RoleTone(0x1AA3BA, label: 0xFFFFFF)])),
+        signature("sandstone", "Sandstone", "Warm dished caps in sand and terracotta", roundness: 0.34,
+                  light: ThemeTones(key: 0xF3EBDD, text: 0x5A4632, roles: [
+                    .shift: RoleTone(0xC8734A, label: 0xFFFFFF), .numbers: RoleTone(0xD9B98A, label: 0x4A3A22),
+                    .delete: RoleTone(0xBFA27A, label: 0x2E2410), .ret: RoleTone(0xA9532F, label: 0xFFFFFF)]),
+                  dark: ThemeTones(key: 0x4A4036, text: 0xF1E6D4, roles: [
+                    .shift: RoleTone(0xC8734A, label: 0xFFFFFF), .numbers: RoleTone(0x8A7658, label: 0xF1E6D4),
+                    .delete: RoleTone(0x6E5E48, label: 0xF1E6D4), .ret: RoleTone(0xB8603A, label: 0xFFFFFF)])),
+        signature("forest", "Forest", "Moss dished caps with amber modifiers", roundness: 0.32,
+                  light: ThemeTones(key: 0xE6EEE2, text: 0x24402A, roles: [
+                    .shift: RoleTone(0x3E7A48, label: 0xFFFFFF), .numbers: RoleTone(0x9CC28E, label: 0x1E3A22),
+                    .delete: RoleTone(0xD9A441, label: 0x3A2808), .ret: RoleTone(0x2C5E36, label: 0xFFFFFF)]),
+                  dark: ThemeTones(key: 0x27382B, text: 0xDCEBD8, roles: [
+                    .shift: RoleTone(0x4F9059, label: 0xFFFFFF), .numbers: RoleTone(0x41624A, label: 0xDCEBD8),
+                    .delete: RoleTone(0xD9A441, label: 0x3A2808), .ret: RoleTone(0x3A7A46, label: 0xFFFFFF)])),
+        signature("prism-neon", "Prism Neon", "Outlined keys in glowing neon", profile: .ringed, roundness: 0.6,
+                  light: ThemeTones(key: 0xF1F1F6, text: 0x55557A, roles: [
+                    .shift: RoleTone(0xE0328A),
+                    .delete: RoleTone(0xF1F1F6, label: 0xC21E73, ring: 0xE86AAE),
+                    .numbers: RoleTone(0xF1F1F6, label: 0x1E8FA6, ring: 0x6AC9DC),
+                    .ret: RoleTone(0xF1F1F6, label: 0x6A8E12, ring: 0xAACF3E)],
+                    letterTints: [0xD0338A, 0x7A4FE0, 0x1E8FA6, 0x6A8E12, 0xE0742A], keyRing: 0xCFCFE0),
+                  dark: ThemeTones(key: 0x1C1C24, text: 0xCFCFF0, roles: [
+                    .shift: RoleTone(0xFF4FA3, label: 0x2A0A1A),
+                    .delete: RoleTone(0x1C1C24, label: 0xFF6FB6, ring: 0xB03C80),
+                    .numbers: RoleTone(0x1C1C24, label: 0x45E0FF, ring: 0x2C93AA),
+                    .ret: RoleTone(0x1C1C24, label: 0xC6F23A, ring: 0x84A126)],
+                    letterTints: [0xFF6FB6, 0xA58BFF, 0x45E0FF, 0xC6F23A, 0xFFA04A], keyRing: 0x3A3A4A)),
+        signature("prism-mono", "Prism Mono", "Outlined keys in clean black and white", profile: .ringed,
+                  roundness: 0.5,
+                  light: ThemeTones(key: 0xFAFAFA, text: 0x2A2A2E, roles: [
+                    .shift: RoleTone(0x2A2A2E, label: 0xFFFFFF),
+                    .delete: RoleTone(0xFAFAFA, label: 0x2A2A2E, ring: 0x2A2A2E),
+                    .numbers: RoleTone(0xFAFAFA, label: 0x2A2A2E, ring: 0x2A2A2E),
+                    .ret: RoleTone(0x2A2A2E, label: 0xFFFFFF)], keyRing: 0xB9B9BE),
+                  dark: ThemeTones(key: 0x161618, text: 0xEDEDF0, roles: [
+                    .shift: RoleTone(0xEDEDF0, label: 0x161618),
+                    .delete: RoleTone(0x161618, label: 0xEDEDF0, ring: 0xEDEDF0),
+                    .numbers: RoleTone(0x161618, label: 0xEDEDF0, ring: 0xEDEDF0),
+                    .ret: RoleTone(0xEDEDF0, label: 0x161618)], keyRing: 0x4A4A50)),
+        signature("prism-sunset", "Prism Sunset", "Outlined keys in a sunset gradient of colours", profile: .ringed,
+                  roundness: 0.6,
+                  light: ThemeTones(key: 0xF7F0EC, text: 0x6A5048, roles: [
+                    .shift: RoleTone(0xE8584A),
+                    .delete: RoleTone(0xF7F0EC, label: 0xC93A5E, ring: 0xE8788E),
+                    .numbers: RoleTone(0xF7F0EC, label: 0xB86A12, ring: 0xEBA64A),
+                    .ret: RoleTone(0xF7F0EC, label: 0x8A3FA8, ring: 0xBE86D6)],
+                    letterTints: [0xC93A5E, 0xE8584A, 0xE08A2A, 0xC9A12A, 0x8A3FA8], keyRing: 0xE0D0CA),
+                  dark: ThemeTones(key: 0x2A2124, text: 0xE8D8D2, roles: [
+                    .shift: RoleTone(0xFF6A58, label: 0x2A0E0A),
+                    .delete: RoleTone(0x2A2124, label: 0xFF7A96, ring: 0xB0485E),
+                    .numbers: RoleTone(0x2A2124, label: 0xFFB454, ring: 0xAA7A38),
+                    .ret: RoleTone(0x2A2124, label: 0xD39AF0, ring: 0x8E64A8)],
+                    letterTints: [0xFF7A96, 0xFF6A58, 0xFFA04A, 0xF2D06A, 0xD39AF0], keyRing: 0x4A3A3E)),
+    ]
+
+
+    // MARK: Collections: four families, four colourways each
+
+    /// `a` moved `t` (0...1) of the way toward `b`, per channel.
+    private static func blend(_ a: UInt32, _ b: UInt32, _ t: Double) -> UInt32 {
+        func channel(_ shift: UInt32) -> UInt32 {
+            let x = Double((a >> shift) & 0xFF), y = Double((b >> shift) & 0xFF)
+            return UInt32(max(0, min(255, (x + (y - x) * t).rounded())))
+        }
+        return (channel(16) << 16) | (channel(8) << 8) | channel(0)
+    }
+
+    /// A collection theme: keycaps of one family in one colourway.
+    private static func collection(_ family: String, _ variant: String, _ summary: String, font: String?,
+                                   profile: KeycapProfile, roundness: Double,
+                                   light: ThemeTones, dark: ThemeTones) -> ThemeDefinition {
+        var style = SystemStyle()
+        style.roundness = roundness
+        style.surface = "flat"   // the profile lights the cap
+        style.border = "none"
+        let id = "\(family)-\(variant)".lowercased().replacingOccurrences(of: " ", with: "-")
+        return ThemeDefinition(id: "collection-\(id)", name: "\(family) \(variant)", kind: .keycap, summary: summary,
+                               systemStyle: style, colors: ThemeColors(light: light, dark: dark), family: family,
+                               font: font, profile: profile)
+    }
+
+    /// Neon Tube: outlined pill keys that glow like sign tubes, each letter column in its own shade of one colour.
+    /// `glow`: the neon in dark mode; `ink`: its deeper form in light mode; `partner`: the second tube's colour.
+    private static func neonTube(_ variant: String, ink: UInt32, glow: UInt32, partner: UInt32) -> ThemeDefinition {
+        let lightTints = [ink, blend(ink, partner, 0.35), blend(ink, partner, 0.7), partner, blend(ink, 0x000000, 0.25)]
+        let darkTints = [glow, blend(glow, partner, 0.35), blend(glow, partner, 0.7), partner, blend(glow, 0xFFFFFF, 0.3)]
+        let light = ThemeTones(key: 0xF3F3F7, text: blend(ink, 0x000000, 0.35), roles: [
+            .shift: RoleTone(ink, label: 0xFFFFFF),
+            .delete: RoleTone(0xF3F3F7, label: ink, ring: blend(ink, 0xFFFFFF, 0.45)),
+            .numbers: RoleTone(0xF3F3F7, label: partner, ring: blend(partner, 0xFFFFFF, 0.45)),
+            .ret: RoleTone(ink, label: 0xFFFFFF)],
+            letterTints: lightTints, keyRing: 0xD6D6E0)
+        let dark = ThemeTones(key: 0x14151B, text: glow, roles: [
+            .shift: RoleTone(glow, label: 0x101014),
+            .delete: RoleTone(0x14151B, label: glow, ring: blend(glow, 0x000000, 0.45)),
+            .numbers: RoleTone(0x14151B, label: partner, ring: blend(partner, 0x000000, 0.45)),
+            .ret: RoleTone(glow, label: 0x101014)],
+            letterTints: darkTints, keyRing: 0x2E3040)
+        var theme = collection("Neon Tube", variant, "Glowing outlined keys in %@ tubes", font: "rounded", profile: .ringed,
+                               roundness: 0.6, light: light, dark: dark)
+        theme.summaryValue = variant.lowercased()
+        return theme
+    }
+
+    /// Pebble: very round, soft dished caps in two muted tones, like stones worn smooth.
+    private static func pebble(_ variant: String, cap: (UInt32, UInt32), accent: (UInt32, UInt32),
+                               text: (UInt32, UInt32)) -> ThemeDefinition {
+        func tones(dark: Bool) -> ThemeTones {
+            let key = dark ? cap.1 : cap.0, tone = dark ? accent.1 : accent.0
+            return ThemeTones(key: key, text: dark ? text.1 : text.0, roles: [
+                .shift: RoleTone(tone), .numbers: RoleTone(blend(tone, key, 0.45)),
+                .delete: RoleTone(blend(tone, key, 0.45)), .space: RoleTone(blend(key, tone, 0.18)),
+                .ret: RoleTone(blend(tone, dark ? 0xFFFFFF : 0x000000, 0.12))])
+        }
+        var theme = collection("Pebble", variant, "Soft, round %@ stones", font: "rounded", profile: .dished,
+                               roundness: 0.62, light: tones(dark: false), dark: tones(dark: true))
+        theme.summaryValue = variant.lowercased()
+        return theme
+    }
+
+    /// Terminal: square sculpted caps in a monospace font and a single phosphor ink, on dark or paper stock.
+    private static func terminal(_ variant: String, ink: (UInt32, UInt32), cap: (UInt32, UInt32)) -> ThemeDefinition {
+        func tones(dark: Bool) -> ThemeTones {
+            let key = dark ? cap.1 : cap.0, tint = dark ? ink.1 : ink.0
+            let onInk: UInt32 = dark ? 0x0B0F0B : 0xFFFFFF
+            return ThemeTones(key: key, text: tint, roles: [
+                .shift: RoleTone(tint, label: onInk), .numbers: RoleTone(blend(key, tint, 0.28), label: tint),
+                .delete: RoleTone(blend(key, tint, 0.28), label: tint), .ret: RoleTone(tint, label: onInk)])
+        }
+        var theme = collection("Terminal", variant, "Square %@ phosphor caps in a monospace font", font: "mono",
+                               profile: .sculpted, roundness: 0.1, light: tones(dark: false), dark: tones(dark: true))
+        theme.summaryValue = variant.lowercased()
+        return theme
+    }
+
+    /// Gem: dished caps cut from one jewel colour, with lighter facets for the modifiers.
+    private static func gem(_ variant: String, light: UInt32, dark: UInt32, facet: UInt32) -> ThemeDefinition {
+        func tones(dark isDark: Bool) -> ThemeTones {
+            let key = isDark ? dark : light
+            return ThemeTones(key: key, text: 0xFFFFFF, roles: [
+                .shift: RoleTone(blend(key, facet, 0.55), label: 0x1A1A1E), .numbers: RoleTone(blend(key, 0x000000, 0.22), label: 0xFFFFFF),
+                .delete: RoleTone(blend(key, 0x000000, 0.22), label: 0xFFFFFF),
+                .ret: RoleTone(facet, label: 0x1A1A1E)])
+        }
+        var theme = collection("Gem", variant, "Dished caps cut from %@", font: nil, profile: .dished,
+                               roundness: 0.38, light: tones(dark: false), dark: tones(dark: true))
+        theme.summaryValue = variant.lowercased()
+        return theme
+    }
+
+    static let collectionThemes: [ThemeDefinition] = [
+        neonTube("Magenta", ink: 0xD6247F, glow: 0xFF4FB4, partner: 0x7A4FFF),
+        neonTube("Cyan", ink: 0x0E8FB0, glow: 0x3FE6FF, partner: 0x3F7BFF),
+        neonTube("Lime", ink: 0x5E8A0E, glow: 0xB6F23A, partner: 0x1ED6A0),
+        neonTube("Amber", ink: 0xC9680E, glow: 0xFFB020, partner: 0xFF5A3C),
+
+        pebble("Sage", cap: (0xE9EDE3, 0x3B4339), accent: (0x7E9A78, 0x8FAE88), text: (0x44503F, 0xE4EBDF)),
+        pebble("Clay", cap: (0xF1E6DF, 0x4A3A36), accent: (0xC2806A, 0xD99580), text: (0x5E453D, 0xF3E5DD)),
+        pebble("Mist", cap: (0xE6EBF1, 0x37404A), accent: (0x7E97B8, 0x8FA9CC), text: (0x3C4A5C, 0xE1E8F1)),
+        pebble("Lilac", cap: (0xEEE8F3, 0x40384D), accent: (0xA48CC4, 0xB59DD6), text: (0x4E4262, 0xEBE3F4)),
+
+        terminal("Phosphor", ink: (0x1E7A2E, 0x4DFF7A), cap: (0xE4EBE2, 0x101712)),
+        terminal("Amber", ink: (0xA8610A, 0xFFB000), cap: (0xEFE8DA, 0x18120A)),
+        terminal("Paper", ink: (0x24241F, 0xE9E6DA), cap: (0xF1EEE4, 0x23231F)),
+        terminal("Ice", ink: (0x0C6E8C, 0x5CD6FF), cap: (0xE2EBF0, 0x0C151A)),
+
+        gem("Ruby", light: 0xC22F4C, dark: 0x8E1E38, facet: 0xFF9DB0),
+        gem("Emerald", light: 0x1F9A66, dark: 0x136B47, facet: 0x9DF0C8),
+        gem("Sapphire", light: 0x2F5FD0, dark: 0x1F418F, facet: 0xA6C2FF),
+        gem("Topaz", light: 0xD99A1C, dark: 0x9A6C10, facet: 0xFFE19A),
     ]
 
     static let keycapThemes: [ThemeDefinition] = [
