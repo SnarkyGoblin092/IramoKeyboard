@@ -8,6 +8,7 @@ struct ContentView: View {
     /// The screens opened from the main list (ScreenRow pushes onto it).
     @State private var path: [Screen] = []
     @AppStorage(SettingKey.appLanguage, store: SharedStore.defaults) private var appLanguage = SettingDefault.appLanguage
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     /// The app language was just changed: the main list, built again from the top, goes back to its row.
     @State private var returnToLanguageRow = false
 
@@ -47,6 +48,8 @@ struct ContentView: View {
         .onChange(of: appLanguage) { _ in returnToLanguageRow = true }
         .modifier(AccentTint())
         .roundedType()
+        // The Themes screen's light / dark switch sets the mode of the whole app ("auto": the system's).
+        .preferredColorScheme(appearance == "light" ? .light : (appearance == "dark" ? .dark : nil))
         .onAppear {
             Feedback.prepare()
             // The enabled languages' data is unpacked now, so the keyboard finds it ready.
@@ -836,14 +839,15 @@ private struct AddLanguageView: View {
 /// Words the keyboard learned (ones no dictionary has, used at least twice), one list for every language, with a
 /// search field and swipe to remove.
 struct LearnedWordsView: View {
-    @State private var words: [String] = []
+    /// The stored (lower-case) word, and how it is written.
+    @State private var words: [(word: String, shown: String)] = []
     @State private var query = ""
 
     /// The words that match the search.
-    private var matches: [String] {
+    private var matches: [(word: String, shown: String)] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return words }
-        return words.filter { $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        return words.filter { $0.shown.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
     }
 
     // A Liquid Glass list like the main screen's; a word swipes left to delete.
@@ -855,9 +859,9 @@ struct LearnedWordsView: View {
                 } else if matches.isEmpty {
                     Text(tr("No matching words")).foregroundColor(.secondary)
                 } else {
-                    ForEach(matches, id: \.self) { word in
-                        Text(word)
-                            .swipeToDelete { remove(word) }
+                    ForEach(matches, id: \.word) { entry in
+                        Text(entry.shown)
+                            .swipeToDelete { remove(entry.word) }
                     }
                 }
             } footer: {
@@ -876,13 +880,13 @@ struct LearnedWordsView: View {
         .navigationTitle(tr("Learned words"))
         .navigationBarTitleDisplayMode(.inline)
         // Reloaded on every visit: a NavigationLink builds this view's initial state only once.
-        .onAppear { words = Settings.shared.learnedWordList() }
+        .onAppear { words = Settings.shared.learnedWordEntries() }
     }
 
     private func remove(_ word: String) {
         Settings.shared.removeLearnedWord(word)
         Feedback.delete()
-        withAnimation(.easeOut(duration: 0.2)) { words.removeAll { $0 == word } }
+        withAnimation(.easeOut(duration: 0.2)) { words.removeAll { $0.word == word } }
     }
 }
 

@@ -15,11 +15,7 @@ struct GesturesView: View {
     @AppStorage(SettingKey.swipeTrailLength, store: SharedStore.defaults) private var trailLength = SettingDefault.swipeTrailLength
     @ObservedObject private var languages = EnabledLanguages.shared
 
-    // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(height: 260, fills: true) {
-            LiveKeyboard()
-        } content: {
         GlassList {
             Section {
                 GlassToggle(title: tr("Swipe typing"),
@@ -104,8 +100,7 @@ struct GesturesView: View {
             }
             .glassRows()
         }
-        .scrollContentBackground(.hidden)
-        }
+        .glassScreen()
         .navigationTitle(tr("Gestures"))
         .navigationBarTitleDisplayMode(.inline)
     }

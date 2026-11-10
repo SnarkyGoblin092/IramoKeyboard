@@ -147,8 +147,15 @@ extension View {
     }
 
     /// The rows of a list section, drawn as glass.
+    @ViewBuilder
     func glassRows() -> some View {
-        return self.listRowBackground(GlassRowFill())
+        // Separators run the full width of the list, not inset from the leading edge.
+        if #available(iOS 16.0, *) {
+            self.listRowBackground(GlassRowFill())
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+        } else {
+            self.listRowBackground(GlassRowFill())
+        }
     }
 }
 
@@ -592,7 +599,7 @@ private struct GlassCardSection: View {
                     row.glassRowPadding()
                 }
                 if index < rows.count - 1 {
-                    Divider().padding(.leading, 16)
+                    Divider()
                 }
             }
         }
@@ -865,6 +872,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
 
     @State private var offset: CGFloat = 0
     @State private var settled: CGFloat = 0
+    @State private var deleting = false
     private let buttonWidth: CGFloat = 84
     /// How far the Delete button may grow: a long swipe that reaches it deletes at once.
     private let maxReveal: CGFloat = 200
@@ -896,6 +904,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
     }
 
     private func changed(_ dx: CGFloat) {
+        guard !deleting else { return }
         let target = min(0, settled + dx)
         // Past the full-delete point the button resists instead of stopping dead.
         let resisted = target < -maxReveal ? -maxReveal + (target + maxReveal) * 0.25 : target
@@ -904,6 +913,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
     }
 
     private func ended(_ dx: CGFloat, _ velocity: CGFloat) {
+        guard !deleting else { return }
         let end = min(0, settled + dx)
         if end <= -maxReveal {
             delete()
@@ -923,9 +933,13 @@ private struct SwipeToDeleteRow<Content: View>: View {
     }
 
     private func delete() {
+        // Once only: removing the row cancels its pan, which reports the end of the drag again (a full swipe
+        // then deleted over and over and froze the app).
+        guard !deleting else { return }
+        deleting = true
         offset = 0
         settled = 0
-        onDelete()
+        DispatchQueue.main.async { onDelete() }
     }
 }
 

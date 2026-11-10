@@ -31,8 +31,8 @@ struct SuggestionsView: View {
 
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(height: 260, fills: true) {
-            LiveKeyboard()
+        PinnedPreview(height: 110, fills: true, minimumHeight: 90) {
+            LiveKeyboard(barOnly: true)
         } content: {
         GlassList {
             Section {

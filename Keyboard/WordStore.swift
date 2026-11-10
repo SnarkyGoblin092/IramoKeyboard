@@ -838,6 +838,11 @@ final class WordStore {
         // Taking back an auto-correction is a deliberate choice: the word counts as the user's own at once.
         // Learned once, it is the user's word in every language.
         LearnedWords.shared.add(lower, key: key, by: asTyped ? WordStore.learnAfter : 1)
+        // Its capitals are learned with it ("Zsófi", "iOS"); a word written in ALL CAPS says nothing about them.
+        let written = TextFolding.normalizeApostrophes(word)
+        if written != lower, !(written.count > 1 && written == written.uppercased()) {
+            LearnedWords.shared.setForm(written, for: lower)
+        }
     }
 
     /// Counts that `next` followed `previous`. Old, unused pairs fade (by last-use date) when the list fills up.

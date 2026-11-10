@@ -28,11 +28,7 @@ struct HapticsView: View {
         return feels.firstIndex { abs($0.sharpness - sharpness) < 0.001 && abs($0.strength - strength) < 0.001 }
     }
 
-    // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(height: 260, fills: true) {
-            LiveKeyboard()
-        } content: {
         GlassList {
             Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
@@ -90,8 +86,7 @@ struct HapticsView: View {
             }
             .glassRows()
         }
-        .scrollContentBackground(.hidden)
-        }
+        .glassScreen()
         .navigationTitle(tr("Haptics"))
         .navigationBarTitleDisplayMode(.inline)
     }

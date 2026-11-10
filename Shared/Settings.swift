@@ -704,6 +704,12 @@ final class Settings {
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    /// The learned words as the user writes them ("Zsófi", "iOS"): the stored (lower-case) word and the form to show.
+    func learnedWordEntries(learnAfter: Int = 2) -> [(word: String, shown: String)] {
+        let forms = writtenForms()
+        return learnedWordList(learnAfter: learnAfter).map { (word: $0, shown: forms[$0] ?? $0) }
+    }
+
     /// Removes one learned word (from the app's list), in every language; the keyboard picks the change up when it
     /// opens.
     func removeLearnedWord(_ word: String) {

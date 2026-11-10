@@ -57,12 +57,14 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private static var topPadding: CGFloat { return 12 }
     private static var bottomPadding: CGFloat { return 6 }
     /// The keyboard preview's smallest pane.
-    private static var keyboardMinimum: CGFloat { return 150 }
+    private let minimumFills: CGFloat
 
     /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
     init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = false,
+         minimumHeight: CGFloat = 150,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
+        self.minimumFills = minimumHeight
         self.edgeToEdge = edgeToEdge
         self.preview = preview
         self.content = content
@@ -73,7 +75,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
 
     /// The smallest pane that still shows the whole preview.
     private var minimum: CGFloat {
-        if fills { return PinnedPreview.keyboardMinimum }
+        if fills { return minimumFills }
         let content = naturalHeight > 0 ? naturalHeight : 90
         return content + PinnedPreview.topPadding + PinnedPreview.bottomPadding
     }

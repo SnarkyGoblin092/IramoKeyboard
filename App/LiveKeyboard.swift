@@ -10,6 +10,8 @@ import UIKit.UIGestureRecognizerSubclass
 struct LiveKeyboard: View {
     /// The Effects screen's settings as they are being edited (nil: the stored ones).
     var effects: EffectsConfig? = nil
+    /// Only the suggestion bar, cycling through a few words (the Suggestions screen).
+    var barOnly = false
     // Its proportions (LiveKeyboardView.naturalSize): read here so a change redraws it at once.
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
     @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
@@ -30,10 +32,11 @@ struct LiveKeyboard: View {
         GeometryReader { geometry in
             let size = LiveKeyboardView.naturalSize(keyHeight: keyHeight, rowGap: rowGap, numberRow: numberRow,
                                                     barHeight: barHeight,
-                                                    language: LiveKeyboardView.openingLanguage(code: languageCode))
+                                                    language: LiveKeyboardView.openingLanguage(code: languageCode),
+                                                    barOnly: barOnly)
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
-                LiveKeyboardHost(effects: effects)
+                LiveKeyboardHost(effects: effects, barOnly: barOnly)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(
                         ZStack {
@@ -74,9 +77,11 @@ struct LiveKeyboard: View {
 
 private struct LiveKeyboardHost: UIViewRepresentable {
     let effects: EffectsConfig?
+    let barOnly: Bool
 
     func makeUIView(context: Context) -> LiveKeyboardView {
         let view = LiveKeyboardView()
+        view.barOnly = barOnly
         view.effectsOverride = effects
         return view
     }
@@ -84,6 +89,7 @@ private struct LiveKeyboardHost: UIViewRepresentable {
     func updateUIView(_ view: LiveKeyboardView, context: Context) {
         // Read by the keys at every press (KeyView.syncEffects), so a change shows on the next one.
         view.effectsOverride = effects
+        view.barOnly = barOnly
     }
 }
 
@@ -103,6 +109,16 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var builtSignature = ""
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
+    /// Only the bar is shown, and it changes its words every little while to show off its animation.
+    var barOnly = false {
+        didSet {
+            guard oldValue != barOnly else { return }
+            rebuild()
+            updateCycle()
+        }
+    }
+    private var cycleTimer: Timer?
+    private var cycleStep = 0
     /// The keyboard on screen, for the Themes screen to have it covered before anything changes.
     static weak var current: LiveKeyboardView?
     /// The pictures of the old keys, each under its wave's circle.
@@ -127,7 +143,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// The keyboard's size (KeyboardViewController.applyHeight), upright: the screen's width, and the bar above its
     /// rows of keys with the gap between them. An iPad's keys are taller than an iPhone's.
     static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
-                            language: Language) -> CGSize {
+                            language: Language, barOnly: Bool = false) -> CGSize {
+        if barOnly { return CGSize(width: CGFloat(DeviceMetrics.keyboardWidth), height: CGFloat(barHeight)) }
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
         let height = isPad ? CGFloat(keyHeight) * 61 / 45 : CGFloat(keyHeight)
         let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
@@ -201,9 +218,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         keyboard.delegate = self
         keyboard.popupHost = stage
         stage.addSubview(bar)
-        stage.addSubview(keyboard)
+        if !barOnly { stage.addSubview(keyboard) }
         layoutStage()
-        loadRows()
+        if !barOnly { loadRows() }
         showWords()
     }
 
@@ -212,7 +229,27 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         if !Prefs.suggestions {
             bar.update([])
         } else {
-            bar.update(starters.map { Suggestion(text: $0, kind: .word) })
+            bar.update(shownWords.map { Suggestion(text: $0, kind: .word) })
+        }
+    }
+
+    /// The words on show: the same few, or (bar only) a new set each time round.
+    private var shownWords: [String] {
+        guard barOnly else { return starters }
+        let sets: [[String]] = language == .hungarian
+            ? [["Szia", "Nem", "Igen"], ["Köszönöm", "Jó", "De"], ["Hogy", "Az", "Ez"], ["Én", "A", "Szia"]]
+            : [["Hello", "Thanks", "The"], ["It", "My", "So"], ["You", "We", "This"], ["I", "Hello", "Thanks"]]
+        return sets[cycleStep % sets.count]
+    }
+
+    private func updateCycle() {
+        cycleTimer?.invalidate()
+        cycleTimer = nil
+        guard barOnly, window != nil else { return }
+        cycleTimer = Timer.scheduledTimer(withTimeInterval: 2.2, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.cycleStep += 1
+            self.showWords()
         }
     }
 
@@ -334,6 +371,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if window != nil { LiveKeyboardView.current = self }
+        updateCycle()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -373,7 +411,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private func layoutStage() {
         let size = LiveKeyboardView.naturalSize(keyHeight: Prefs.keyHeight, rowGap: Prefs.rowGap,
                                                 numberRow: Prefs.numberRow, barHeight: Prefs.suggestionHeight,
-                                                language: language)
+                                                language: language, barOnly: barOnly)
         // The bar and the keys are always laid out at the keyboard's size, also before this view has one (it is
         // built in init): at 0×0 every key's frame would come out null and Core Animation would throw.
         stage.bounds = CGRect(origin: .zero, size: size)
