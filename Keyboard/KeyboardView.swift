@@ -281,12 +281,19 @@ final class KeyboardView: UIView {
             }
         }
         let keptIDs = Set(kept.values.flatMap { $0.values }.map { ObjectIdentifier($0) })
+        // What the old keys sent out over the keyboard (sparks, the echo of a label, confetti) goes with them, at
+        // once: it would otherwise float on over the new page until its animation ended. (A glass key's handover
+        // was taken above, and is put back on its new key below.)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        effectsLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         for row in oldRows {
             for key in row where !keptIDs.contains(ObjectIdentifier(key)) {
                 key.detachHalo()
                 key.removeFromSuperview()
             }
         }
+        CATransaction.commit()
         rows = newRows
         page = newPage
         shift = newShift
