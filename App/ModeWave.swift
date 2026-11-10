@@ -386,31 +386,72 @@ private struct WaveGlass: View {
     var body: some View {
         let line = rim.path(in: CGRect(origin: .zero, size: size))
         let blue = WaveGlass.blue
-        let shine = GraphicsContext.Shading.conicGradient(
-            Gradient(colors: WaveGlass.colors),
-            center: CGPoint(x: wave.center.x - origin.x, y: wave.center.y - origin.y),
-            angle: .degrees(Double(progress) * 300))
         return glass
             .background(Canvas { context, _ in
                 for stroke in WaveGlass.glow {
                     context.stroke(line, with: .color(blue.opacity(stroke.opacity)), lineWidth: stroke.width)
                 }
             })
-            .overlay(Canvas { context, _ in
-                context.stroke(line, with: .color(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95)), lineWidth: 2)
-            })
-            .overlay(Canvas { context, _ in
-                for stroke in WaveGlass.shine {
-                    context.opacity = stroke.opacity
-                    context.stroke(line, with: shine, lineWidth: stroke.width)
+            // The rim splits into the colours of a spectrum, red inside to violet outside, as light does at the edge of a
+            // thick lens.
+            .overlay(Canvas { context, canvas in
+                let rect = CGRect(origin: .zero, size: canvas)
+                for band in WaveGlass.spectrum {
+                    let path = WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: band.grow).path(in: rect)
+                    context.stroke(path, with: .color(band.color.opacity(0.9)), lineWidth: 2.4)
+                }
+            }.blendMode(.plusLighter))
+            // Streaks of light across the front, as a lens flares: they swell in the middle of the wave and fade
+            // at its ends.
+            .overlay(Canvas { context, canvas in
+                guard progress > 0, progress < ModeWave.doneShare else { return }
+                let envelope = sin(Double(progress / ModeWave.doneShare) * .pi)
+                let edge = wave.ring(progress, relativeTo: origin).outer
+                guard !edge.isEmpty else { return }
+                for flare in WaveGlass.flares {
+                    let angle = (flare.angle + flare.drift * Double(progress)).truncatingRemainder(dividingBy: 2 * .pi)
+                    let turn = angle < 0 ? angle + 2 * .pi : angle
+                    let point = edge[min(edge.count - 1, Int(turn / (2 * .pi) * Double(edge.count)))]
+                    let length = min(canvas.width, 420) * flare.size * (0.55 + 0.45 * envelope)
+                    var layer = context
+                    layer.opacity = min(1, envelope * 1.4) * flare.strength
+                    layer.translateBy(x: point.x, y: point.y)
+                    layer.rotate(by: .radians(flare.tilt))
+                    // The long streak: a round glow flattened to a thin sliver, white at its heart and blue at its fringe.
+                    var streak = layer
+                    streak.scaleBy(x: 1, y: 0.06)
+                    streak.fill(Path(ellipseIn: CGRect(x: -length, y: -length, width: length * 2, height: length * 2)),
+                                with: .radialGradient(WaveGlass.streak, center: .zero, startRadius: 0, endRadius: length))
+                    // The hot heart.
+                    layer.fill(Path(ellipseIn: CGRect(x: -26, y: -26, width: 52, height: 52)),
+                               with: .radialGradient(WaveGlass.heart, center: .zero, startRadius: 0, endRadius: 26))
                 }
             }.blendMode(.plusLighter))
     }
 
     private static let blue = Color(red: 0.30, green: 0.50, blue: 1.0)
 
+    /// The rim's colours from inside to out (a spectrum a few points wide), by how far each lies from the front.
+    private static let spectrum: [(grow: CGFloat, color: Color)] = [
+        (-10, Color(red: 0.85, green: 0.10, blue: 0.05)), (-7.5, Color(red: 1.0, green: 0.40, blue: 0.05)),
+        (-5, Color(red: 1.0, green: 0.78, blue: 0.15)), (-2.5, Color(red: 0.30, green: 0.85, blue: 0.25)),
+        (0, Color(red: 0.15, green: 0.70, blue: 0.85)), (2.5, Color(red: 0.15, green: 0.35, blue: 1.0)),
+        (5, Color(red: 0.55, green: 0.20, blue: 0.95))
+    ]
+
+    /// Where the streaks sit on the front (angle round it, how far they travel round, tilt, size and strength).
+    private static let flares: [(angle: Double, drift: Double, tilt: Double, size: CGFloat, strength: Double)] = [
+        (-0.35, 0.9, -0.22, 0.95, 1.0), (2.75, -1.1, 0.30, 1.0, 1.0), (4.55, 0.6, 0.12, 0.6, 0.8)
+    ]
+
+    private static let streak = Gradient(stops: [
+        .init(color: Color.white.opacity(0.95), location: 0), .init(color: Color(red: 0.85, green: 0.90, blue: 1.0).opacity(0.7), location: 0.12),
+        .init(color: Color(red: 0.25, green: 0.45, blue: 1.0).opacity(0.45), location: 0.4), .init(color: .clear, location: 1)
+    ])
+    private static let heart = Gradient(colors: [Color.white, Color(red: 0.6, green: 0.75, blue: 1.0).opacity(0.5), .clear])
+
     /// The blue glow under the glass, and the shine's own glow of colours over it: widest and faintest first.
-    private static let glow: [(width: CGFloat, opacity: Double)] = [(26, 0.07), (18, 0.12), (11, 0.20), (5, 0.40)]
+    private static let glow: [(width: CGFloat, opacity: Double)] = [(40, 0.07), (26, 0.12), (14, 0.20), (6, 0.35)]
     private static let shine: [(width: CGFloat, opacity: Double)] = [(22, 0.16), (11, 0.36), (3.5, 0.95)]
 
     /// The colours of the shine, turning round the front as it spreads.
