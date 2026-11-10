@@ -256,7 +256,21 @@ final class KeyboardView: UIView {
         fatalError("init(coder:) is not supported")
     }
 
+    /// Builds the keys of a new page. Everything about them is drawn at once, in the same frame as the old keys go:
+    /// no implicit animation (a layer's frame, colour, shadow or light easing in over a quarter of a second) is
+    /// allowed to run, and the change is committed to the screen before this returns.
     func configure(rows newRows: [[KeySpec]], page newPage: KeyboardPage, shift newShift: ShiftState) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            buildKeys(rows: newRows, page: newPage, shift: newShift)
+            layoutIfNeeded()
+        }
+        CATransaction.commit()
+        CATransaction.flush()
+    }
+
+    private func buildKeys(rows newRows: [[KeySpec]], page newPage: KeyboardPage, shift newShift: ShiftState) {
         endGesturesForRebuild()
         let oldRows = keyViews
         // A page key (123, ABC, #+=) in the place of one on the old page stays the same key with its new title: the
@@ -289,8 +303,7 @@ final class KeyboardView: UIView {
         effectsLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         for row in oldRows {
             for key in row where !keptIDs.contains(ObjectIdentifier(key)) {
-                key.detachHalo()
-                key.removeFromSuperview()
+                key.retire()
             }
         }
         CATransaction.commit()

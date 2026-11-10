@@ -387,7 +387,10 @@ private struct ThemeThumbnail: View {
 
     /// What the picture depends on: the theme with its edits, light or dark, and every setting the preview reads.
     fileprivate static func key(theme: ThemeDefinition, dark: Bool) -> String {
-        return "\(theme.id)|\(theme.hashValue)|\(dark)|\(ThumbnailCache.settingsSignature())"
+        // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
+        // it is seeded anew each run, so pictures saved on disk would never be found again).
+        let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -450,6 +453,14 @@ private struct ThemeThumbnail: View {
 @MainActor
 final class ThumbnailCache {
     static let shared = ThumbnailCache()
+    static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys   // the same text on every run
+        return encoder
+    }()
+    /// Part of every key: a new build (new themes, a changed look) draws its pictures afresh.
+    static let version = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0") + "." +
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0")
 
     private let images = NSCache<NSString, UIImage>()
     private var queue: [(key: String, make: () async -> UIImage?, done: (UIImage?) -> Void)] = []
@@ -519,7 +530,7 @@ final class ThumbnailCache {
     /// Every setting the previews draw with (ThemePreview's), so a change made on another screen redraws them.
     static func settingsSignature() -> String {
         let keys = [SettingKey.keyRoundness, SettingKey.keySurface, SettingKey.keyBorderStyle, SettingKey.keyGlow,
-                    SettingKey.keyHints, SettingKey.keyGap, SettingKey.rowGap, SettingKey.keyboardWidth,
+                    SettingKey.keyHints, SettingKey.keyGap, SettingKey.rowGap, SettingKey.keyHeight, SettingKey.keyboardWidth,
                     SettingKey.splitKeyboard, SettingKey.oneHanded, SettingKey.letterSize, SettingKey.hintPosition,
                     SettingKey.hintSize, SettingKey.spaceTextSize, SettingKey.spaceLanguageCode,
                     SettingKey.numberRow, SettingKey.autoCapitalize, SettingKey.alwaysCapitals, SettingKey.keyFont,

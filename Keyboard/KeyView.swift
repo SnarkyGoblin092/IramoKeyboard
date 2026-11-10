@@ -376,6 +376,28 @@ final class KeyView: UIView {
         syncHalo()
     }
 
+    /// Takes the key off the keyboard at once, with nothing of it left to fade out: not its glass (a glass piece taken
+    /// out of its container melts away over a moment otherwise), its light, its shadow or what was still playing.
+    func retire() {
+        UIView.performWithoutAnimation {
+            isHidden = true
+            alpha = 0
+            glassView?.effect = nil
+            glassView?.isHidden = true
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        halo.opacity = 0
+        halo.isHidden = true
+        halo.sublayers?.forEach { $0.removeFromSuperlayer() }
+        halo.removeAllAnimations()
+        layer.sublayers?.forEach { $0.removeAllAnimations() }
+        layer.removeAllAnimations()
+        detachHalo()
+        CATransaction.commit()
+        removeFromSuperview()
+    }
+
     func detachHalo() {
         halo.removeFromSuperlayer()
         haloAttached = false
