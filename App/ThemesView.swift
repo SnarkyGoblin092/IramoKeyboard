@@ -70,33 +70,53 @@ struct ThemesView: View {
     /// The chosen theme's name and what it is, and the way into its editor.
     private var header: some View {
         VStack(spacing: 10) {
-            VStack(spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(selected.name).font(.title3.weight(.semibold))
-                    if selected.isEdited {
-                        StatusChip(text: tr("Edited"), symbol: "slider.horizontal.3", color: accent)
+            layered { theme in
+                VStack(spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(theme.name).font(.title3.weight(.semibold))
+                        if theme.isEdited {
+                            StatusChip(text: tr("Edited"), symbol: "slider.horizontal.3", color: accent)
+                        }
                     }
+                    Text(theme.summaryValue.map { tr(theme.summary, $0) } ?? tr(theme.summary))
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                Text(selected.summaryValue.map { tr(selected.summary, $0) } ?? tr(selected.summary))
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
             }
             Button {
                 Feedback.tap()
                 openScreen(.themeEditor)
             } label: {
-                Label(tr("Customize %@", "\(selected.name)"), systemImage: "paintbrush.pointed.fill")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .foregroundColor(.white)
-                    .glassTile(Capsule(), isOn: true)
-                    .contentShape(Capsule())
+                layered { theme in
+                    Label(tr("Customize %@", "\(theme.name)"), systemImage: "paintbrush.pointed.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .foregroundColor(.white)
+                }
+                .glassTile(Capsule(), isOn: true)
+                .contentShape(Capsule())
             }
             .buttonStyle(PressableStyle())
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
+    }
+
+    /// `content` for the chosen theme; while a wave crosses, the old theme's at the bottom and each wave's new
+    /// theme's over it inside that wave's circle, as the previews are.
+    @ViewBuilder private func layered<Content: View>(@ViewBuilder _ content: @escaping (ThemeDefinition) -> Content) -> some View {
+        if let first = waves.first {
+            let edits = SystemEdits.decode(systemEdits)
+            ZStack {
+                content(edited(ThemeCatalog.theme(id: first.oldTheme), edits))
+                ForEach(waves) { wave in
+                    content(edited(ThemeCatalog.theme(id: wave.newTheme), edits)).revealedByWave(wave)
+                }
+            }
+        } else {
+            content(selected)
+        }
     }
 
     /// Switches the previews to the other mode behind a wave of glass (at once with Reduce Motion, where the
