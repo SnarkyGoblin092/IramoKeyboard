@@ -276,38 +276,22 @@ private struct WaveGlass: View {
     let progress: CGFloat
     let origin: CGPoint
 
-    private var shape: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin) }
-    private func edge(_ grow: CGFloat) -> WaveDiscShape {
-        return WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: grow)
-    }
+    private var ring: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin) }
+    private var rim: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin) }
 
-    /// A lens of Liquid Glass over everything the wave has passed. Its rim is a thin bright blue line in a blue
-    /// glow, and just outside it a soft milky halo with pastel fringes (as light splits at a lens's edge).
+    /// A thin ring of Liquid Glass at the front (what it covers, the inside of the circle, is left clear: the new
+    /// look shows there as it is), with a bright blue line and a blue glow on its outer edge. The shader
+    /// (WaveLens.metal) bends the colours around it.
     var body: some View {
         glass
-            // The glow, and the halo with its fringes of colour.
-            .background(
-                ZStack {
-                    edge(6).stroke(Color(red: 0.30, green: 0.50, blue: 1.0), lineWidth: 9).blur(radius: 8).opacity(0.8)
-                    edge(14).stroke(Color.white, lineWidth: 22).blur(radius: 10).opacity(0.35)
-                    edge(10).stroke(AngularGradient(colors: fringe, center: .center), lineWidth: 8)
-                        .blur(radius: 5).opacity(0.55)
-                }
-            )
-            .overlay(edge(0).stroke(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95), lineWidth: 2.5).blur(radius: 1.2))
-    }
-
-    /// The pastel colours around the rim.
-    private var fringe: [Color] {
-        return [Color(red: 1.0, green: 0.55, blue: 0.85), Color(red: 1.0, green: 0.90, blue: 0.45),
-                Color(red: 0.55, green: 0.95, blue: 0.80), Color(red: 0.50, green: 0.75, blue: 1.0),
-                Color(red: 0.75, green: 0.55, blue: 1.0), Color(red: 1.0, green: 0.55, blue: 0.85)]
+            .background(rim.stroke(Color(red: 0.30, green: 0.50, blue: 1.0), lineWidth: 8).blur(radius: 5).opacity(0.75))
+            .overlay(rim.stroke(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95), lineWidth: 2))
     }
 
     @ViewBuilder private var glass: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(.clear, in: shape)
+            Color.clear.glassEffect(.clear, in: ring)
         } else {
             frosted
         }
@@ -317,17 +301,43 @@ private struct WaveGlass: View {
     }
 
     private var frosted: some View {
-        return shape.fill(.ultraThinMaterial)
-            .overlay(shape.fill(Color.white.opacity(0.08)))
+        return ring.fill(.ultraThinMaterial)
+            .overlay(ring.fill(Color.white.opacity(0.08)))
     }
 }
 
-/// Everything inside the wave's front, with the edge half a band beyond it (so the cut is under the rim).
+/// A ring whose two edges follow the wave's front, half a band inside it and half a band outside.
+private struct WaveRingShape: Shape {
+    let wave: ModeWave
+    let progress: CGFloat
+    let origin: CGPoint
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard progress > 0, progress < 1 else { return path }
+        let ring = wave.ring(progress, relativeTo: origin)
+        // What lies beyond the screen is not drawn: points out there are pulled in to just outside it.
+        let bounds = rect.insetBy(dx: -40, dy: -40)
+        func held(_ point: CGPoint) -> CGPoint {
+            return CGPoint(x: min(bounds.maxX, max(bounds.minX, point.x)), y: min(bounds.maxY, max(bounds.minY, point.y)))
+        }
+        guard let first = ring.outer.first, let start = ring.inner.last else { return path }
+        path.move(to: held(first))
+        for point in ring.outer.dropFirst() { path.addLine(to: held(point)) }
+        path.closeSubpath()
+        // The inner edge runs the other way round, so the middle is left open.
+        path.move(to: held(start))
+        for point in ring.inner.reversed().dropFirst() { path.addLine(to: held(point)) }
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The wave's outer edge, half a band beyond its front (for the rim's line and glow).
 private struct WaveDiscShape: Shape {
     let wave: ModeWave
     let progress: CGFloat
     let origin: CGPoint
-    /// How far beyond the front the edge lies (the halo and glow are drawn from wider edges).
     var grow: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
@@ -395,7 +405,7 @@ private struct WaveLens: ViewModifier {
         let shader = ShaderLibrary.waveLens(
             .float2(CGPoint(x: wave.center.x - place.origin.x, y: wave.center.y - place.origin.y)),
             .float(Float(progress)), .float(Float(wave.endRadius)), .float(Float(wave.shift)),
-            .float(Float(ModeWave.band * 2.6)), .float(14))
-        return AnyView(inner.layerEffect(shader, maxSampleOffset: CGSize(width: 40, height: 40)))
+            .float(Float(ModeWave.band * 2.0)), .float(10))
+        return AnyView(inner.layerEffect(shader, maxSampleOffset: CGSize(width: 24, height: 24)))
     }
 }
