@@ -523,15 +523,41 @@ struct ThemePreview: View {
     }
 }
 
+private struct StaticGlassKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// Draw Liquid Glass as a flat look, for pictures (the theme cards).
+    var staticGlass: Bool {
+        get { self[StaticGlassKey.self] }
+        set { self[StaticGlassKey.self] = newValue }
+    }
+}
+
 /// A key of the Liquid Glass theme: real Liquid Glass on iOS 26 and later; before that a frosted pane with the
 /// glass's bright rim and sheen, as the keyboard's fallback blur looks.
 private struct GlassKeyShape: View {
     let radius: CGFloat
     let tint: Color?
     let dark: Bool
+    @Environment(\.staticGlass) private var staticGlass
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        if staticGlass {
+            // For a picture (ImageRenderer can't draw live glass or blur): a flat pane with the glass's rim and sheen.
+            shape
+                .fill((tint ?? Color.clear).opacity(0.55))
+                .overlay(shape.fill(Color.white.opacity(dark ? 0.14 : 0.55)))
+                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.18 : 0.45), Color.white.opacity(0)],
+                                                   startPoint: .top, endPoint: .center)))
+                .overlay(shape.strokeBorder(Color.white.opacity(dark ? 0.35 : 0.8), lineWidth: 0.8))
+                .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+        } else {
+            live(shape)
+        }
+    }
+
+    @ViewBuilder private func live(_ shape: RoundedRectangle) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             Color.clear.glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: shape)

@@ -30,7 +30,13 @@ struct ThemesView: View {
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
         PinnedPreview(height: 240, fills: true, edgeToEdge: true) {
-            LiveKeyboard()
+            VStack(spacing: 8) {
+                SnapshotKeyboard(theme: selected, accent: accent, scheme: previewScheme)
+                SegmentedChoice(names: [tr("Light"), tr("Dark")],
+                                selected: previewScheme == .dark ? 1 : 0) {
+                    switchMode(dark: $0 == 1)
+                }
+            }
         } content: {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
@@ -74,10 +80,6 @@ struct ThemesView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
-            }
-            SegmentedChoice(names: [tr("Light"), tr("Dark")],
-                            selected: previewScheme == .dark ? 1 : 0) {
-                switchMode(dark: $0 == 1)
             }
             Button {
                 Feedback.tap()
@@ -236,7 +238,7 @@ private struct ThemeCard: View {
 
 /// A card's miniature keyboard as a picture, drawn once when the card first comes into view and kept
 /// (ThumbnailCache) until the theme, the look settings or light/dark mode change. Liquid Glass is a live system
-/// material that can't be drawn into a picture, so that card stays live.
+/// material that can't be drawn into a picture, so its card is a picture of a flat glass look (staticGlass).
 @MainActor
 private struct ThemeThumbnail: View {
     let theme: ThemeDefinition
@@ -269,9 +271,6 @@ private struct ThemeThumbnail: View {
                         layer(dark: wave.oldScheme != .dark).revealedByWave(wave)
                     }
                 }
-            } else if theme.kind == .liquidGlass {
-                ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                    .animation(ThemeThumbnail.fadeAnimation, value: scheme)
             } else if let image = image {
                 ZStack {
                     if let previous = previous {
@@ -310,10 +309,7 @@ private struct ThemeThumbnail: View {
 
     /// The card in one mode, for the wave's layers.
     @ViewBuilder private func layer(dark: Bool) -> some View {
-        if theme.kind == .liquidGlass {
-            ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
-                .environment(\.colorScheme, dark ? .dark : .light)
-        } else if let picture = picture(dark: dark) {
+        if let picture = picture(dark: dark) {
             Image(uiImage: picture).resizable().interpolation(.high)
         } else {
             placeholder(dark: dark)
@@ -360,29 +356,39 @@ private struct ThemeThumbnail: View {
     private func queue(theme: ThemeDefinition, dark: Bool, key: String, idle: Bool = false,
                        done: @escaping (UIImage?) -> Void) {
         let accent = self.accent, scale = displayScale
-        ThumbnailCache.shared.render(key: key, idle: idle) {
-            let width = ThemeThumbnail.renderWidth
+        let width = ThemeThumbnail.renderWidth
+        let flat: () -> UIImage? = {
             let preview = ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
                 .frame(width: width, height: width / ThemePreview.aspectKeysOnly)
                 .environment(\.colorScheme, dark ? .dark : .light)
+                .environment(\.staticGlass, true)
             let renderer = ImageRenderer(content: preview)
             renderer.scale = scale
             return renderer.uiImage
-        } done: { rendered in
-            done(rendered)
+        }
+        do {
+            // Every card is a snapshot taken once of the theme drawn live off screen (GlassSnapshot; Liquid Glass
+            // can't go through ImageRenderer), and shows that picture from then on.
+            Task { @MainActor in
+                let content = AnyView(ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+                    .environment(\.colorScheme, dark ? .dark : .light))
+                let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
+                let shot = await GlassSnapshot.take(content, size: size, dark: dark, scale: scale,
+                                                    settle: theme.kind == .liquidGlass ? 250_000_000 : 50_000_000)
+                if let shot = shot { ThumbnailCache.shared.store(shot, key: key) }
+                done(shot ?? flat())
+            }
         }
     }
 
     /// Draws the picture for `dark` ahead of the wave that needs it (`idle`: after everything that is wanted now).
     private func prepare(theme: ThemeDefinition, dark: Bool, idle: Bool = false) {
-        guard theme.kind != .liquidGlass else { return }
         let key = ThemeThumbnail.key(theme: theme, dark: dark)
         guard ThumbnailCache.shared.image(for: key) == nil else { return }
         queue(theme: theme, dark: dark, key: key, idle: idle) { _ in arrived += 1 }
     }
 
     private func load(theme: ThemeDefinition, dark: Bool) {
-        guard theme.kind != .liquidGlass else { return }
         let key = ThemeThumbnail.key(theme: theme, dark: dark)
         wantedKey = key
         guard key != shownKey || image == nil else { return }
@@ -416,6 +422,8 @@ final class ThumbnailCache {
     }
 
     func image(for key: String) -> UIImage? { return images.object(forKey: key as NSString) }
+
+    func store(_ image: UIImage, key: String) { images.setObject(image, forKey: key as NSString) }
 
     func render(key: String, idle: Bool = false, make: @escaping () -> UIImage?, done: @escaping (UIImage?) -> Void) {
         if idle { self.idle.append((key, make, done)) } else { queue.append((key, make, done)) }
@@ -452,6 +460,101 @@ final class ThumbnailCache {
                     SettingKey.accent, SettingKey.accentHex, SettingKey.enabledLanguages, SettingKey.language]
         let defaults = SharedStore.defaults
         return keys.map { "\(defaults.object(forKey: $0) ?? "")" }.joined(separator: "|")
+    }
+}
+
+/// Takes a picture of a view with live Liquid Glass in it: the view is put in the key window just off the screen
+/// (where the glass is drawn for real) and snapshotted once.
+@MainActor
+enum GlassSnapshot {
+    private static var busy = false
+    private static var waiters: [CheckedContinuation<Void, Never>] = []
+
+    /// One snapshot at a time (each takes the main thread for a moment).
+    static func take(_ content: AnyView, size: CGSize, dark: Bool, scale: CGFloat,
+                     settle: UInt64 = 250_000_000) async -> UIImage? {
+        if busy {
+            await withCheckedContinuation { waiters.append($0) }
+        } else {
+            busy = true
+        }
+        defer {
+            if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() }
+        }
+        return await shoot(content, size: size, dark: dark, scale: scale, settle: settle)
+    }
+
+    private static func shoot(_ content: AnyView, size: CGSize, dark: Bool, scale: CGFloat, settle: UInt64) async -> UIImage? {
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
+        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
+        let host = UIHostingController(rootView: content)
+        host.overrideUserInterfaceStyle = dark ? .dark : .light
+        host.view.backgroundColor = .clear
+        host.view.frame = CGRect(x: window.bounds.maxX + 40, y: 0, width: size.width, height: size.height)
+        window.addSubview(host.view)
+        host.view.layoutIfNeeded()
+        // Long enough for the glass to be laid out and drawn.
+        try? await Task.sleep(nanoseconds: settle)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        }
+        host.view.removeFromSuperview()
+        return image
+    }
+}
+
+/// The main preview: a snapshot of the keyboard (GlassSnapshot) instead of the live one,
+/// taken again when the theme, the mode or a look setting changes.
+private struct SnapshotKeyboard: View {
+    let theme: ThemeDefinition
+    let accent: Color
+    let scheme: ColorScheme
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: UIImage?
+
+    private var size: CGSize {
+        let defaults = SharedStore.defaults
+        return LiveKeyboardView.naturalSize(keyHeight: defaults.double(forKey: SettingKey.keyHeight),
+                                            rowGap: defaults.double(forKey: SettingKey.rowGap),
+                                            numberRow: defaults.bool(forKey: SettingKey.numberRow),
+                                            barHeight: defaults.double(forKey: SettingKey.suggestionHeight),
+                                            language: ThemePreview.openingLanguage)
+    }
+
+    var body: some View {
+        let key = "main|\(theme.id)|\(theme.hashValue)|\(scheme == .dark)|\(ThumbnailCache.settingsSignature())"
+        GeometryReader { geometry in
+            let natural = size
+            let fit = min(geometry.size.width / natural.width, geometry.size.height / natural.height)
+            Group {
+                if let image = image {
+                    Image(uiImage: image).resizable().interpolation(.high)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: natural.width * fit, height: natural.height * fit)
+            .background(GeometryReader { box in
+                Color.clear
+                    .onAppear { ModeWave.previewBox = box.frame(in: .global) }
+                    .onChange(of: box.frame(in: .global)) { ModeWave.previewBox = $0 }
+            })
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .frame(minHeight: 60)
+        .task(id: key) {
+            if let cached = ThumbnailCache.shared.image(for: key) { image = cached; return }
+            let natural = size
+            let content = AnyView(ThemePreview(theme: theme, accent: accent, showsStrip: true, cornerRadius: 14)
+                .environment(\.colorScheme, scheme)
+                .frame(width: natural.width, height: natural.height))
+            if let shot = await GlassSnapshot.take(content, size: natural, dark: scheme == .dark, scale: displayScale) {
+                ThumbnailCache.shared.store(shot, key: key)
+                image = shot
+            }
+        }
     }
 }
 
