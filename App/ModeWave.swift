@@ -115,13 +115,13 @@ struct ModeWave: Equatable, Identifiable {
     }
 
     /// The ring: the inner and the outer edge at every step around, relative to `origin`.
-    func ring(_ progress: CGFloat, relativeTo origin: CGPoint, grow: CGFloat = 0) -> (inner: [CGPoint], outer: [CGPoint]) {
+    func ring(_ progress: CGFloat, relativeTo origin: CGPoint) -> (inner: [CGPoint], outer: [CGPoint]) {
         var inner: [CGPoint] = [], outer: [CGPoint] = []
         for index in 0..<ModeWave.steps {
             let angle = Double(index) / Double(ModeWave.steps) * 2 * .pi
             let r = radius(progress, angle: angle)
             let half = self.half(angle: angle)
-            let near = max(0, r - half - grow), far = r + min(half, r) + grow
+            let near = max(0, r - half), far = r + min(half, r)
             let direction = CGPoint(x: CGFloat(cos(angle)), y: CGFloat(sin(angle)))
             inner.append(CGPoint(x: center.x + near * direction.x - origin.x, y: center.y + near * direction.y - origin.y))
             outer.append(CGPoint(x: center.x + far * direction.x - origin.x, y: center.y + far * direction.y - origin.y))
@@ -265,25 +265,25 @@ struct GlassWaveBand: View {
     }
 }
 
-/// Liquid Glass in the ring's shape (a frosted material before iOS 26), with a rim of light on its edges.
+/// Liquid Glass over the circle the wave has covered (a frosted material before iOS 26).
 private struct WaveGlass: View {
     let wave: ModeWave
     let progress: CGFloat
     let origin: CGPoint
 
-    private var shape: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin) }
-    /// The glass is made a little wider than the ring and cut back to it, so the bright edge the system draws on
-    /// Liquid Glass falls outside what is seen.
-    private var wider: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin, grow: 5) }
+    private var shape: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin) }
 
+    /// A lens of Liquid Glass over everything the wave has passed, with a glowing blue rim.
     var body: some View {
         glass
+            .background(shape.stroke(Color(red: 0.30, green: 0.50, blue: 1.0), lineWidth: 7).blur(radius: 7).opacity(0.85))
+            .overlay(shape.stroke(Color(red: 0.55, green: 0.70, blue: 1.0).opacity(0.9), lineWidth: 2.5).blur(radius: 1.5))
     }
 
     @ViewBuilder private var glass: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(.clear, in: wider).mask(shape)
+            Color.clear.glassEffect(.clear, in: shape)
         } else {
             frosted
         }
@@ -294,34 +294,29 @@ private struct WaveGlass: View {
 
     private var frosted: some View {
         return shape.fill(.ultraThinMaterial)
-            .overlay(shape.fill(Color.white.opacity(0.12)))
+            .overlay(shape.fill(Color.white.opacity(0.08)))
     }
 }
 
-/// A ring whose two edges follow the wave's front, half a band inside it and half a band outside.
-private struct WaveRingShape: Shape {
+/// Everything inside the wave's front, with the edge half a band beyond it (so the cut is under the rim).
+private struct WaveDiscShape: Shape {
     let wave: ModeWave
     let progress: CGFloat
     let origin: CGPoint
-    var grow: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
         guard progress > 0, progress < 1 else { return path }
-        let ring = wave.ring(progress, relativeTo: origin, grow: grow)
-        // What lies beyond the screen is not drawn: the glass costs more the more it covers, and a big ring is mostly
-        // off the screen. Points out there are pulled in to just outside it (the ring pinches shut there).
+        let edge = wave.ring(progress, relativeTo: origin).outer
+        // What lies beyond the screen is not drawn (the glass costs more the more it covers): points out there are
+        // pulled in to just outside it.
         let bounds = rect.insetBy(dx: -40, dy: -40)
         func held(_ point: CGPoint) -> CGPoint {
             return CGPoint(x: min(bounds.maxX, max(bounds.minX, point.x)), y: min(bounds.maxY, max(bounds.minY, point.y)))
         }
-        guard let first = ring.outer.first, let start = ring.inner.last else { return path }
+        guard let first = edge.first else { return path }
         path.move(to: held(first))
-        for point in ring.outer.dropFirst() { path.addLine(to: held(point)) }
-        path.closeSubpath()
-        // The inner edge runs the other way round, so the middle is left open.
-        path.move(to: held(start))
-        for point in ring.inner.reversed().dropFirst() { path.addLine(to: held(point)) }
+        for point in edge.dropFirst() { path.addLine(to: held(point)) }
         path.closeSubpath()
         return path
     }
