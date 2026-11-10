@@ -396,9 +396,11 @@ private struct WaveGlass: View {
             // thick lens.
             .overlay(Canvas { context, canvas in
                 let rect = CGRect(origin: .zero, size: canvas)
+                // Many overlapping wide, faint strokes, so the colours run into each other (a blur, without the cost of
+                // blurring the whole screen every frame).
                 for band in WaveGlass.spectrum {
                     let path = WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: band.grow).path(in: rect)
-                    context.stroke(path, with: .color(band.color.opacity(0.9)), lineWidth: 2.4)
+                    context.stroke(path, with: .color(band.color.opacity(0.34)), lineWidth: 5)
                 }
             }.blendMode(.plusLighter))
             // Streaks of light across the front, as a lens flares: they swell in the middle of the wave and fade
@@ -416,15 +418,15 @@ private struct WaveGlass: View {
                     var layer = context
                     layer.opacity = min(1, envelope * 1.4) * flare.strength
                     layer.translateBy(x: point.x, y: point.y)
-                    layer.rotate(by: .radians(flare.tilt))
+                    layer.rotate(by: .radians(flare.tilt + flare.spin * Double(progress) + wave.shift))
                     // The long streak: a round glow flattened to a thin sliver, white at its heart and blue at its fringe.
                     var streak = layer
                     streak.scaleBy(x: 1, y: 0.06)
                     streak.fill(Path(ellipseIn: CGRect(x: -length, y: -length, width: length * 2, height: length * 2)),
                                 with: .radialGradient(WaveGlass.streak, center: .zero, startRadius: 0, endRadius: length))
                     // The hot heart.
-                    layer.fill(Path(ellipseIn: CGRect(x: -26, y: -26, width: 52, height: 52)),
-                               with: .radialGradient(WaveGlass.heart, center: .zero, startRadius: 0, endRadius: 26))
+                    layer.fill(Path(ellipseIn: CGRect(x: -14, y: -14, width: 28, height: 28)),
+                               with: .radialGradient(WaveGlass.heart, center: .zero, startRadius: 0, endRadius: 14))
                 }
             }.blendMode(.plusLighter))
     }
@@ -432,16 +434,22 @@ private struct WaveGlass: View {
     private static let blue = Color(red: 0.30, green: 0.50, blue: 1.0)
 
     /// The rim's colours from inside to out (a spectrum a few points wide), by how far each lies from the front.
-    private static let spectrum: [(grow: CGFloat, color: Color)] = [
-        (-10, Color(red: 0.85, green: 0.10, blue: 0.05)), (-7.5, Color(red: 1.0, green: 0.40, blue: 0.05)),
-        (-5, Color(red: 1.0, green: 0.78, blue: 0.15)), (-2.5, Color(red: 0.30, green: 0.85, blue: 0.25)),
-        (0, Color(red: 0.15, green: 0.70, blue: 0.85)), (2.5, Color(red: 0.15, green: 0.35, blue: 1.0)),
-        (5, Color(red: 0.55, green: 0.20, blue: 0.95))
-    ]
+    private static let spectrum: [(grow: CGFloat, color: Color)] = {
+        let stops: [(CGFloat, CGFloat, CGFloat)] = [(0.85, 0.10, 0.05), (1.0, 0.40, 0.05), (1.0, 0.78, 0.15), (0.30, 0.85, 0.25),
+                                                    (0.15, 0.70, 0.85), (0.15, 0.35, 1.0), (0.55, 0.20, 0.95)]
+        let count = 15
+        return (0..<count).map { index in
+            let t = CGFloat(index) / CGFloat(count - 1) * CGFloat(stops.count - 1)
+            let low = min(stops.count - 2, Int(t)), f = t - CGFloat(low)
+            let a = stops[low], b = stops[low + 1]
+            return (-10 + CGFloat(index) * 1.1,
+                    Color(red: a.0 + (b.0 - a.0) * f, green: a.1 + (b.1 - a.1) * f, blue: a.2 + (b.2 - a.2) * f))
+        }
+    }()
 
     /// Where the streaks sit on the front (angle round it, how far they travel round, tilt, size and strength).
-    private static let flares: [(angle: Double, drift: Double, tilt: Double, size: CGFloat, strength: Double)] = [
-        (-0.35, 0.9, -0.22, 0.95, 1.0), (2.75, -1.1, 0.30, 1.0, 1.0), (4.55, 0.6, 0.12, 0.6, 0.8)
+    private static let flares: [(angle: Double, drift: Double, tilt: Double, spin: Double, size: CGFloat, strength: Double)] = [
+        (-0.35, 0.9, -0.5, 1.6, 0.5, 1.0), (2.75, -1.1, 1.1, -2.1, 0.55, 1.0), (4.55, 0.6, 2.4, 1.3, 0.32, 0.8)
     ]
 
     private static let streak = Gradient(stops: [
