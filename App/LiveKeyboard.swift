@@ -186,7 +186,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private func signature() -> String {
         let s = Settings.shared
         return [
-            Theme.storedID(), s.accentName, s.appearance, SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
+            Theme.storedID(), s.accentName, String(LiveKeyboardView.effectiveStyle.rawValue), SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
@@ -195,6 +195,13 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             s.systemEditsJSON
         ].joined(separator: "|")
+    }
+
+    /// The mode the keys are drawn in: the picked one, or (auto) the system's. Picking auto while the system is in
+    /// the mode already shown changes nothing about how the keyboard looks, so it is not built again for it.
+    static var effectiveStyle: UIUserInterfaceStyle {
+        let picked = Theme.appearanceStyle
+        return picked != .unspecified ? picked : UIScreen.main.traitCollection.userInterfaceStyle
     }
 
     /// A new bar and KeyboardView, as the controller makes them in buildInterface (they read the theme as they are
@@ -208,7 +215,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         builtSignature = signature()
         // The picked mode is the one built even if the view's traits have not caught up yet (a second build for
         // them would cut the fade short).
-        builtStyle = overrideUserInterfaceStyle != .unspecified ? overrideUserInterfaceStyle : traitCollection.userInterfaceStyle
+        builtStyle = LiveKeyboardView.effectiveStyle
         language = LiveKeyboardView.openingLanguage(code: Settings.shared.languageCode)
         bar.removeFromSuperview()
         keyboard.removeFromSuperview()
@@ -221,11 +228,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         if !barOnly { stage.addSubview(keyboard) }
         layoutStage()
         if !barOnly { loadRows() }
-        showWords()
+        showWords(animated: false)
     }
 
     /// The bar: always the same few words.
-    private func showWords() {
+    private func showWords(animated: Bool = true) {
+        // A bar that was just built shows its words at once (not sliding in as new words do).
+        let saved = Prefs.suggestionTransition
+        if !animated { Prefs.suggestionTransition = "instant" }
+        defer { Prefs.suggestionTransition = saved }
         if !Prefs.suggestions {
             bar.update([])
         } else {
@@ -289,10 +300,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Settings.shared.refresh()
             Prefs.refresh()
             self.applyEffects()
+            let target = LiveKeyboardView.effectiveStyle
+            // Auto to the mode already shown (or back): only the follow-the-system setting changes, not the look.
+            if target == self.builtStyle, self.overrideUserInterfaceStyle != Theme.appearanceStyle {
+                self.overrideUserInterfaceStyle = Theme.appearanceStyle
+            }
             guard self.signature() != self.builtSignature else { return }
             // Light to dark (the Themes screen's switch): the new keys fade in over the old ones where there is no wave
             // (with a wave, the picture of the old keys that it took (cover) hides the change until it gets there).
-            if self.window != nil, ModeWave.running.isEmpty, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
+            if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
                                   animations: { self.rebuild() })

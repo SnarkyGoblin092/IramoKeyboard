@@ -14,6 +14,8 @@ struct ThemesView: View {
     @State private var waves: [ModeWave] = []
     /// Where this screen is in the window: the wave crosses exactly it.
     @State private var screenFrame = CGRect.zero
+    /// Where the mode switch is: it shows its new choice at once, not under the old picture of the window.
+    @State private var toggleFrame = CGRect.zero
     /// Where the finger last touched the screen: the light / dark wave spreads out from there.
     @State private var touches = TouchPoint()
 
@@ -36,6 +38,11 @@ struct ThemesView: View {
                                 selected: previewMode == "light" ? 1 : (previewMode == "dark" ? 2 : 0)) {
                     switchMode(["auto", "light", "dark"][$0])
                 }
+                .background(GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { toggleFrame = geometry.frame(in: .global) }
+                        .onChange(of: geometry.frame(in: .global)) { toggleFrame = $0 }
+                })
             }
         } content: {
         ScrollView {
@@ -155,7 +162,7 @@ struct ThemesView: View {
         // The keyboard's picture of itself is taken now, before the setting changes anything on it.
         LiveKeyboardView.current?.cover(for: new)
         // The whole app changes mode with the previews: a picture of the window is wiped away by the same wave.
-        if newScheme != previewScheme { WindowWaveCover.start(for: new) }
+        if newScheme != previewScheme { WindowWaveCover.start(for: new, leaving: toggleFrame) }
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
