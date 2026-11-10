@@ -119,16 +119,19 @@ struct SystemThemeSections: View {
         .glassRows()
 
         Section {
+            // Never disabled: a button that turns disabled under the finger (the reset is what disables it) is laid
+            // out again mid-press and the row jumps. It dims and does nothing instead.
+            let edited = SystemEdits.decode(systemEdits)[theme.id] != nil
             Button(role: .destructive) {
+                guard edited else { return }
                 Feedback.delete()
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    systemEdits = SystemEdits.setting(nil, for: theme.id, in: systemEdits)
-                }
+                systemEdits = SystemEdits.setting(nil, for: theme.id, in: systemEdits)
             } label: {
                 Label(tr("Reset %@", "\(theme.name)"), systemImage: "arrow.counterclockwise")
+                    .opacity(edited ? 1 : 0.4)
             }
             .buttonStyle(ActionButtonStyle())   // its red glass capsule, standing on the backdrop without a card
-            .disabled(SystemEdits.decode(systemEdits)[theme.id] == nil)
+            .transaction { $0.animation = nil }
             .glassOutsideCard()
         } footer: {
             Text(tr("Puts the theme back as it came, with the corners and key style set on the old Keys screen."))

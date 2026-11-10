@@ -145,7 +145,6 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        LiveKeyboardView.current = self
         backgroundColor = .clear
         isMultipleTouchEnabled = true
         stage.backgroundColor = .clear
@@ -328,6 +327,13 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         CATransaction.commit()
         covers.removeAll { time >= $0.ends }
         if covers.isEmpty { coverDriver.stop() }
+    }
+
+    /// The keyboard the screen shows is the one that is in the window now (not the last one made: a screen
+    /// pushed on top and left again made one after this).
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil { LiveKeyboardView.current = self }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
