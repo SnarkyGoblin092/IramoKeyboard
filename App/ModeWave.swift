@@ -365,7 +365,7 @@ struct GlassWaveBand: View {
     }
 }
 
-/// The wave's front: a rim of colours with a glow and flares of light (no glass: only the colours show).
+/// The wave's front: a rainbow rim with a glow (no glass: only the colours show).
 private struct WaveGlass: View {
     let wave: ModeWave
     let progress: CGFloat
@@ -376,36 +376,73 @@ private struct WaveGlass: View {
     /// The rim's centre line lies on the front itself (the outer edge is half a band beyond it).
     private var rim: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: -ModeWave.band / 2) }
 
-    /// A thin ring of Liquid Glass at the front (what it covers, the inside of the circle, is left clear: the new
-    /// look shows there as it is), with a bright blue line and a blue glow on its outer edge, and a shine of
-    /// colours running round the line. The shader (WaveLens.metal) bends the colours around it.
+    /// The front's line at `offset` points from the front (negative: inside), the same all round except that the
+    /// rainbow's width swells and narrows as it goes round, and moves, so it never looks like a ruled ring.
+    private func line(offset: CGFloat, around base: [CGPoint], from center: CGPoint) -> Path {
+        var path = Path()
+        for (index, point) in base.enumerated() {
+            let angle = Double(index) / Double(base.count) * 2 * .pi
+            let swell = 1 + 0.4 * sin(2 * angle + wave.shift) + 0.2 * sin(5 * angle - Double(progress) * 6 + wave.shift * 2)
+            let dx = point.x - center.x, dy = point.y - center.y
+            let length = max(0.001, hypot(dx, dy))
+            let moved = CGPoint(x: point.x + dx / length * offset * CGFloat(swell), y: point.y + dy / length * offset * CGFloat(swell))
+            if index == 0 { path.move(to: moved) } else { path.addLine(to: moved) }
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    /// A rainbow rim on the front: a spectrum of wide, faint strokes that run into each other (red inside, violet
+    /// outside, wider in some places than in others), a thin bright line in its heart with hot places that travel
+    /// round it, a hue-shifting wake of colour just inside, and a blue glow outside. The shader (WaveLens.metal) bends
+    /// the colours around it. It fades in as the wave sets off and out as it leaves.
     ///
-    /// The glow is a few strokes of falling strength, not a blur: a blur of the whole screen's size every frame
-    /// is what made it slow. The outline is worked out once a frame and all its strokes are drawn in three
-    /// canvases (under the glass, the line, the shine), not a layer of the screen's size for each stroke.
+    /// No blur of the whole screen's size: that made every frame slow. The glow and the strokes are a few canvases.
     var body: some View {
-        let line = rim.path(in: CGRect(origin: .zero, size: size))
+        let glowLine = rim.path(in: CGRect(origin: .zero, size: size))
         let palette = WavePalette.of(wave)
         let blue = palette.tint
-        // No glass under the rim: only the colours show.
+        let center = CGPoint(x: wave.center.x - origin.x, y: wave.center.y - origin.y)
+        let base = wave.outline(progress, relativeTo: origin)
+        let fade = Double(min(1, progress / 0.05) * min(1, max(0, (ModeWave.doneShare - progress) / 0.08)))
+        let turn = Angle.radians(Double(progress) * 5 + wave.shift)
         return Color.clear
             .background(Canvas { context, _ in
+                context.opacity = fade
                 for stroke in WaveGlass.glow {
-                    context.stroke(line, with: .color(blue.opacity(stroke.opacity)), lineWidth: stroke.width)
+                    context.stroke(glowLine, with: .color(blue.opacity(stroke.opacity)), lineWidth: stroke.width)
+                }
+                // The wake: soft colour that drifts round just inside the front.
+                let hues = GraphicsContext.Shading.conicGradient(palette.conic, center: center, angle: turn)
+                for (offset, width, opacity) in [(-20.0, 26.0, 0.07), (-13.0, 14.0, 0.10), (-8.0, 6.0, 0.14)] {
+                    var layer = context
+                    layer.opacity = fade * opacity * 6
+                    layer.stroke(line(offset: CGFloat(offset), around: base, from: center), with: hues, lineWidth: CGFloat(width))
                 }
             })
-            // The rim splits into the colours of a spectrum, red inside to violet outside, as light does at the edge of a
-            // thick lens.
-            .overlay(Canvas { context, canvas in
-                let rect = CGRect(origin: .zero, size: canvas)
+            .overlay(Canvas { context, _ in
+                context.opacity = fade
                 // Many overlapping wide, faint strokes, so the colours run into each other (a blur, without the cost of
                 // blurring the whole screen every frame).
                 for band in palette.spectrum {
-                    let path = WaveDiscShape(wave: wave, progress: progress, origin: origin, grow: band.grow - ModeWave.band / 2).path(in: rect)
-                    context.stroke(path, with: .color(band.color.opacity(0.34)), lineWidth: 5.25)
+                    context.stroke(line(offset: band.grow, around: base, from: center),
+                                   with: .color(band.color.opacity(0.34)), lineWidth: 5.25)
                 }
+                // The bright line in its heart, hot in a few places that travel round it.
+                let hot = GraphicsContext.Shading.conicGradient(WaveGlass.hot, center: center, angle: turn * -0.7)
+                let heart = line(offset: 0, around: base, from: center)
+                context.stroke(heart, with: hot, lineWidth: 7)
+                context.stroke(heart, with: hot, lineWidth: 1.6)
             }.blendMode(.plusLighter))
     }
+
+    /// White along the heart line: bright in a few places, faint between.
+    private static let hot = Gradient(stops: [
+        .init(color: Color.white.opacity(0.08), location: 0), .init(color: Color.white.opacity(0.85), location: 0.1),
+        .init(color: Color.white.opacity(0.08), location: 0.24), .init(color: Color.white.opacity(0.12), location: 0.5),
+        .init(color: Color.white.opacity(0.7), location: 0.63), .init(color: Color.white.opacity(0.08), location: 0.78),
+        .init(color: Color.white.opacity(0.08), location: 1)
+    ])
 
     /// The blue glow under the glass, and the shine's own glow of colours over it: widest and faintest first.
     private static let glow: [(width: CGFloat, opacity: Double)] = [(42, 0.07), (28, 0.12), (17, 0.20), (7, 0.35)]
@@ -573,7 +610,7 @@ enum WindowWaveCover {
             let path = CGMutablePath()
             path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
             // Cut out to the ring's outer edge, so the glass ring itself is not hidden.
-            let points = cover.wave.ring(cover.wave.progress(atMediaTime: time), relativeTo: .zero).outer
+            let points = cover.wave.ring(cover.wave.progress(atMediaTime: time), relativeTo: .zero, grow: 4).outer
             if let first = points.first {
                 path.move(to: first)
                 for point in points.dropFirst() { path.addLine(to: point) }
@@ -593,6 +630,8 @@ private struct WavePalette {
     let spectrum: [(grow: CGFloat, color: Color)]
     /// The glow's colour.
     let tint = Color(red: 0.30, green: 0.50, blue: 1.0)
+    /// The rainbow turned into a ring of colour, for the wake.
+    let conic: Gradient
 
     private static let stops: [(r: CGFloat, g: CGFloat, b: CGFloat)] = [
         (0.85, 0.10, 0.05), (1.0, 0.40, 0.05), (1.0, 0.78, 0.15), (0.30, 0.85, 0.25),
@@ -614,5 +653,8 @@ private struct WavePalette {
                           Color(red: a.r + (b.r - a.r) * f, green: a.g + (b.g - a.g) * f, blue: a.b + (b.b - a.b) * f)))
         }
         spectrum = bands
+        var ring = WavePalette.stops.map { Color(red: $0.r, green: $0.g, blue: $0.b) }
+        ring.append(ring[0])
+        conic = Gradient(colors: ring)
     }
 }
