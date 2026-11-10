@@ -120,7 +120,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// rows of keys with the gap between them. An iPad's keys are taller than an iPhone's.
     static func naturalSize(keyHeight: Double, rowGap: Double, numberRow: Bool, barHeight: Double,
                             language: Language, barOnly: Bool = false) -> CGSize {
-        if barOnly { return CGSize(width: CGFloat(DeviceMetrics.keyboardWidth), height: CGFloat(barHeight)) }
+        // The bar draws its glass 4.5 points low (SuggestionBar.layoutSubviews: inset 3, moved down 4.5), so the strip
+        // spans 7.5 ... height + 1.5: the room is made 9 taller, which centres the strip in it.
+        if barOnly { return CGSize(width: CGFloat(DeviceMetrics.keyboardWidth), height: CGFloat(barHeight) + 9) }
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
         let height = isPad ? CGFloat(keyHeight) * 61 / 45 : CGFloat(keyHeight)
         let rows = CGFloat(language.letterRows.count + 1 + (numberRow ? 1 : 0))
