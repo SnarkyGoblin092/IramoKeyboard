@@ -564,3 +564,52 @@ private struct WaveLens: ViewModifier {
             .float(Float(ModeWave.band * 2.0)), .float(10))
     }
 }
+
+/// Carries the whole app across a light / dark change: a picture of the window as it was lies over it, cut away
+/// outside the wave's front as the wave spreads, so the app's new mode shows only where the wave has passed.
+/// Started before the setting changes.
+enum WindowWaveCover {
+    private static let driver = WaveDriver()
+    private static var covers: [(wave: ModeWave, view: UIView, mask: CAShapeLayer, ends: CFTimeInterval)] = []
+
+    static func start(for wave: ModeWave) {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }),
+              let picture = window.snapshotView(afterScreenUpdates: false) else { return }
+        picture.frame = window.bounds
+        picture.isUserInteractionEnabled = false
+        let mask = CAShapeLayer()
+        mask.fillRule = .evenOdd
+        mask.fillColor = UIColor.black.cgColor
+        mask.frame = window.bounds
+        picture.layer.mask = mask
+        window.addSubview(picture)
+        covers.append((wave, picture, mask, wave.started + wave.lifetime))
+        update(at: CACurrentMediaTime())
+        driver.start { update(at: $0) }
+    }
+
+    private static func update(at time: CFTimeInterval) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for cover in covers {
+            if time >= cover.ends {
+                cover.view.removeFromSuperview()
+                continue
+            }
+            let path = CGMutablePath()
+            path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
+            // Cut out to the ring's outer edge, so the glass ring itself is not hidden.
+            let points = cover.wave.ring(cover.wave.progress(atMediaTime: time), relativeTo: .zero).outer
+            if let first = points.first {
+                path.move(to: first)
+                for point in points.dropFirst() { path.addLine(to: point) }
+                path.closeSubpath()
+            }
+            cover.mask.path = path
+        }
+        CATransaction.commit()
+        covers.removeAll { time >= $0.ends }
+        if covers.isEmpty { driver.stop() }
+    }
+}

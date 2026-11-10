@@ -32,9 +32,9 @@ struct ThemesView: View {
         PinnedPreview(height: 240, fills: true, edgeToEdge: true) {
             VStack(spacing: 8) {
                 LiveKeyboard()
-                SegmentedChoice(names: [tr("Light"), tr("Dark")],
-                                selected: previewScheme == .dark ? 1 : 0) {
-                    switchMode(dark: $0 == 1)
+                SegmentedChoice(names: [tr("Auto"), tr("Light"), tr("Dark")],
+                                selected: previewMode == "light" ? 1 : (previewMode == "dark" ? 2 : 0)) {
+                    switchMode(["auto", "light", "dark"][$0])
                 }
             }
         } content: {
@@ -121,9 +121,10 @@ struct ThemesView: View {
 
     /// Switches the previews to the other mode behind a wave of glass (at once with Reduce Motion, where the
     /// previews fade instead).
-    private func switchMode(dark: Bool) {
-        guard waves.isEmpty else { return }
-        let mode = dark ? "dark" : "light"
+    private func switchMode(_ mode: String) {
+        guard waves.isEmpty, mode != previewMode else { return }
+        // Auto follows the system's mode (the screen's traits, which the app's own override does not touch).
+        let dark = mode == "auto" ? UIScreen.main.traitCollection.userInterfaceStyle == .dark : mode == "dark"
         guard (previewScheme == .dark) != dark, screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled else {
             previewMode = mode
             return
@@ -153,6 +154,8 @@ struct ThemesView: View {
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         // The keyboard's picture of itself is taken now, before the setting changes anything on it.
         LiveKeyboardView.current?.cover(for: new)
+        // The whole app changes mode with the previews: a picture of the window is wiped away by the same wave.
+        if newScheme != previewScheme { WindowWaveCover.start(for: new) }
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
