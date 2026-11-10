@@ -124,7 +124,10 @@ final class AlternatesPopupView: UIView {
     private let highlight = UIView()
     private let glassView: UIVisualEffectView? = Theme.usesRealGlass ? GlassSupport.makeEffectView(clear: false) : nil
     private var labels: [UILabel] = []
+    private var icons: [UIImageView] = []
     private let displayItems: [String]
+    /// The popup holds one button drawn from this SF Symbol (the emoji key's settings button) in place of characters.
+    let symbol: String?
     private let itemWidth: CGFloat
     private let inset: CGFloat = 5
     private(set) var highlightedIndex = 0
@@ -134,7 +137,8 @@ final class AlternatesPopupView: UIView {
     /// The character that will be inserted if the finger lifts now.
     var selectedItem: String { return displayItems[highlightedIndex] }
 
-    init(alternates: [String], keyFrame: CGRect, hostBounds: CGRect) {
+    init(alternates: [String], keyFrame: CGRect, hostBounds: CGRect, symbol: String? = nil) {
+        self.symbol = symbol
         let startsAtKey = keyFrame.midX <= hostBounds.midX
         // On the right half of the keyboard the strip grows to the left and is reversed, so the
         // first alternate is always the one closest to the key.
@@ -186,13 +190,22 @@ final class AlternatesPopupView: UIView {
                                               y: inset,
                                               width: itemWidth,
                                               height: height - inset * 2))
-            label.text = item
+            label.text = symbol == nil ? item : nil
             label.textAlignment = .center
             label.font = Theme.keyFont(ofSize: 24)
             label.adjustsFontSizeToFitWidth = true
             label.minimumScaleFactor = 0.6
             host.addSubview(label)
             labels.append(label)
+            if let symbol = symbol {
+                let icon = UIImageView(image: UIImage(systemName: symbol,
+                                                      withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)))
+                icon.contentMode = .center
+                icon.frame = label.bounds
+                icon.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                label.addSubview(icon)
+                icons.append(icon)
+            }
         }
 
         highlightedIndex = startsAtKey ? 0 : max(displayItems.count - 1, 0)
@@ -222,6 +235,9 @@ final class AlternatesPopupView: UIView {
         highlight.backgroundColor = Theme.accent
         for (index, label) in labels.enumerated() {
             label.textColor = (index == highlightedIndex) ? Theme.onAccent : Theme.keyText
+        }
+        for (index, icon) in icons.enumerated() {
+            icon.tintColor = (index == highlightedIndex) ? Theme.onAccent : Theme.keyText
         }
     }
 }

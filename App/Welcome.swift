@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// A short tour of the app, shown the first time it opens and again from the About section: a few pages on what the
+/// A welcome page for the app, shown the first time it opens and again from the About section: a few pages on what the
 /// keyboard does, how to turn it on, the themes and the settings. Swipe through, or skip at any time.
-struct TutorialView: View {
+struct WelcomeView: View {
     let finish: () -> Void
     @State private var page = 0
 
@@ -17,7 +17,7 @@ struct TutorialView: View {
     private var pages: [Page] {
         return [
             Page(symbol: "keyboard", color: .blue, title: tr("Welcome to Iramo"),
-                 text: tr("A keyboard that is yours to shape. This short tour shows what it can do."),
+                 text: tr("A keyboard that is yours to shape. Here is what it can do."),
                  points: [("character.bubble.fill", tr("Many languages, one keyboard")),
                           ("hand.tap.fill", tr("Gestures, swipe typing and suggestions")),
                           ("paintpalette.fill", tr("Themes and settings for every detail"))]),
@@ -43,7 +43,7 @@ struct TutorialView: View {
                           ("circle.lefthalf.filled", tr("Switch between light, dark and auto")),
                           ("sparkles", tr("Add key effects, haptics and sounds"))]),
             Page(symbol: "checkmark.seal.fill", color: .indigo, title: tr("All set"),
-                 text: tr("Try the keyboard in the box at the top of the main list. You can replay this tour at the bottom of the app."),
+                 text: tr("Try the keyboard in the box at the top of the main list. You can see this page again at the bottom of the app."),
                  points: [])
         ]
     }

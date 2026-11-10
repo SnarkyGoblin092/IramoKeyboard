@@ -11,6 +11,7 @@ protocol KeyboardViewDelegate: AnyObject {
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView)
     func keyboardViewDidRequestRestoreWord(_ view: KeyboardView)
     func keyboardViewDidEndWordDelete(_ view: KeyboardView)
+    /// The finger lifted on the settings button the emoji key's hold offers.
     func keyboardViewDidHoldEmoji(_ view: KeyboardView)
     /// A quick horizontal swipe on the space bar: +1 = next language, -1 = previous.
     func keyboardView(_ view: KeyboardView, didSwipeSpaceBy direction: Int)
@@ -884,10 +885,9 @@ final class KeyboardView: UIView {
                 beginCursorMode(state, at: state.path.last ?? state.startPoint)
             }
         case .emoji:
-            // Holding the emoji key opens the app.
-            state.handledByHold = true
-            Haptics.shared.keyPress()
-            delegate?.keyboardViewDidHoldEmoji(self)
+            // Holding the emoji key offers the settings, as a held letter offers its accents: lifting the finger
+            // on the button opens the app.
+            showSettingsPopup(for: key, state: state)
         default:
             if !key.spec.alternates.isEmpty {
                 showAlternates(for: key, state: state)
@@ -973,7 +973,11 @@ final class KeyboardView: UIView {
         }
         if state.popupActive {
             if !cancelled, let popup = alternatesPopup {
-                delegate?.keyboardView(self, didSelectAlternate: popup.selectedItem)
+                if popup.symbol != nil {
+                    delegate?.keyboardViewDidHoldEmoji(self)
+                } else {
+                    delegate?.keyboardView(self, didSelectAlternate: popup.selectedItem)
+                }
             }
             hideAlternates()
             return
@@ -1444,6 +1448,18 @@ final class KeyboardView: UIView {
         let popup = AlternatesPopupView(alternates: items,
                                         keyFrame: convert(key.frame, to: host),
                                         hostBounds: host.bounds)
+        host.addSubview(popup)
+        alternatesPopup = popup
+        state.popupActive = true
+        Haptics.shared.keyPress()
+    }
+
+    /// The popup of the emoji key's hold: one button, the settings.
+    private func showSettingsPopup(for key: KeyView, state: TouchState) {
+        guard let host = popupHost else { return }
+        hidePreview()
+        let popup = AlternatesPopupView(alternates: ["settings"], keyFrame: convert(key.frame, to: host),
+                                        hostBounds: host.bounds, symbol: "gearshape.fill")
         host.addSubview(popup)
         alternatesPopup = popup
         state.popupActive = true
