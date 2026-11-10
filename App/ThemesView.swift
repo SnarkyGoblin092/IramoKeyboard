@@ -132,7 +132,7 @@ struct ThemesView: View {
             previewMode = mode
             return
         }
-        // The switch is drawn with its new choice first, then (once it has settled) the picture of the window is taken and the mode changes.
+        // The switch is drawn with its new choice first, then (once it has settled) the wave sets off and the mode changes.
         pendingMode = mode
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
         // Once the switch has played its little slide to the new choice.
@@ -164,8 +164,6 @@ struct ThemesView: View {
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         // The keyboard's picture of itself is taken now, before the setting changes anything on it.
         LiveKeyboardView.current?.cover(for: new)
-        // The whole app changes mode with the previews: a picture of the window is wiped away by the same wave.
-        if newScheme != previewScheme { WindowWaveCover.start(for: new) }
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).

@@ -574,58 +574,6 @@ private struct WaveLens: ViewModifier {
     }
 }
 
-/// Carries the whole app across a light / dark change: a picture of the window as it was lies over it, cut away
-/// outside the wave's front as the wave spreads, so the app's new mode shows only where the wave has passed.
-/// Started before the setting changes.
-enum WindowWaveCover {
-    private static let driver = WaveDriver()
-    private static var covers: [(wave: ModeWave, view: UIView, mask: CAShapeLayer, ends: CFTimeInterval)] = []
-
-    static func start(for wave: ModeWave) {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }),
-              let picture = window.snapshotView(afterScreenUpdates: false) else { return }
-        picture.frame = window.bounds
-        // The container is cut to the outside of the wave.
-        let container = UIView(frame: window.bounds)
-        container.isUserInteractionEnabled = false
-        container.addSubview(picture)
-        let mask = CAShapeLayer()
-        mask.fillRule = .evenOdd
-        mask.fillColor = UIColor.black.cgColor
-        mask.frame = window.bounds
-        container.layer.mask = mask
-        window.addSubview(container)
-        covers.append((wave, container, mask, wave.started + wave.lifetime))
-        update(at: CACurrentMediaTime())
-        driver.start { update(at: $0) }
-    }
-
-    private static func update(at time: CFTimeInterval) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for cover in covers {
-            if time >= cover.ends {
-                cover.view.removeFromSuperview()
-                continue
-            }
-            let path = CGMutablePath()
-            path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
-            // Cut out to the ring's outer edge, so the glass ring itself is not hidden.
-            let points = cover.wave.ring(cover.wave.progress(atMediaTime: time), relativeTo: .zero, grow: 4).outer
-            if let first = points.first {
-                path.move(to: first)
-                for point in points.dropFirst() { path.addLine(to: point) }
-                path.closeSubpath()
-            }
-            cover.mask.path = path
-        }
-        CATransaction.commit()
-        covers.removeAll { time >= $0.ends }
-        if covers.isEmpty { driver.stop() }
-    }
-}
-
 /// The colours of a wave's rim: a rainbow, red inside to violet outside, run softly into one another.
 private struct WavePalette {
     /// The rim's colours from the inside out, as offsets from the rim's centre line.
