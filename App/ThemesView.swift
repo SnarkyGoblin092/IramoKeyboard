@@ -60,7 +60,7 @@ struct ThemesView: View {
             if !waves.isEmpty { Color.clear.contentShape(Rectangle()).onTapGesture {}.gesture(DragGesture()) }
         }
         .overlay {
-            if waves.contains(where: { $0.kind == .mode }) { GlassWaveBand(waves: waves.filter { $0.kind == .mode }) }
+            if !waves.isEmpty { GlassWaveBand(waves: waves) }
         }
         .onAppear { prewarm() }
         .navigationTitle(tr("Themes"))
@@ -108,27 +108,27 @@ struct ThemesView: View {
             previewMode = mode
             return
         }
-        launch(kind: .mode, frame: screenFrame, source: touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY), newScheme: dark ? .dark : .light, newTheme: themeID)
+        launch(source: touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY), newScheme: dark ? .dark : .light, newTheme: themeID)
         previewMode = mode
     }
 
-    /// Plays a theme wave in the main preview's box, then switches to `id` (at once where there is no box or with
-    /// Reduce Motion).
+    /// Switches to the theme `id` behind the same wave of glass, spreading out from the tap (at once with Reduce
+    /// Motion).
     private func chooseTheme(_ id: String) {
         guard waves.isEmpty else { return }
-        let box = ModeWave.previewBox
-        if box.width > 0, !UIAccessibility.isReduceMotionEnabled {
-            launch(kind: .theme, frame: box, source: CGPoint(x: box.midX, y: box.maxY), newScheme: previewScheme, newTheme: id)
+        if screenFrame.width > 0, !UIAccessibility.isReduceMotionEnabled {
+            launch(source: touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY), newScheme: previewScheme, newTheme: id)
         }
         themeID = id
     }
 
     /// Starts a wave across `frame` (before the setting itself changes: what that sets going, the keyboard's
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
-    private func launch(kind: ModeWave.Kind, frame: CGRect, source: CGPoint, newScheme: ColorScheme, newTheme: String) {
+    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) {
+        let frame = screenFrame
         ModeWave.count += 1
         let id = ModeWave.count
-        let new = ModeWave(id: id, kind: kind, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
+        let new = ModeWave(id: id, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
                            newTheme: newTheme, source: source, minX: frame.minX, minY: frame.minY,
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         // The keyboard's picture of itself is taken now, before the setting changes anything on it.
@@ -163,7 +163,7 @@ struct ThemesView: View {
     /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
     private var grid: some View {
         let edits = SystemEdits.decode(systemEdits)
-        let modeWaves = waves.filter { $0.kind == .mode }
+        let modeWaves = waves
         return LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
             ForEach(ThemeCatalog.pickerSections, id: \.title) { section in
                 Section {
@@ -277,7 +277,7 @@ private struct ThemeThumbnail: View {
     private static let renderWidth: CGFloat = 200
 
     /// The light / dark waves (the theme waves are the main preview's).
-    private var waves: [ModeWave] { return allWaves.filter { $0.kind == .mode } }
+    private var waves: [ModeWave] { return allWaves }
 
     var body: some View {
         Group {
@@ -286,7 +286,7 @@ private struct ThemeThumbnail: View {
                 ZStack {
                     layer(dark: waves[0].oldScheme == .dark)
                     ForEach(waves) { wave in
-                        layer(dark: wave.oldScheme != .dark).revealedByWave(wave)
+                        layer(dark: wave.newScheme == .dark).revealedByWave(wave)
                     }
                 }
             } else if let image = image {
@@ -350,7 +350,7 @@ private struct ThemeThumbnail: View {
     /// crosses (the wave shows the change); over the picture it replaces otherwise, faded in.
     private func show(_ new: UIImage?, key: String) {
         guard let new = new else { return }
-        let replaces = image != nil && shownKey != key && !ModeWave.running.contains { $0.kind == .mode }
+        let replaces = image != nil && shownKey != key && ModeWave.running.isEmpty
         previous = replaces ? image : nil
         image = new
         shownKey = key

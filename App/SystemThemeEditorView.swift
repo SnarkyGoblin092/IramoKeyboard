@@ -121,7 +121,9 @@ struct SystemThemeSections: View {
         Section {
             Button(role: .destructive) {
                 Feedback.delete()
-                systemEdits = SystemEdits.setting(nil, for: theme.id, in: systemEdits)
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    systemEdits = SystemEdits.setting(nil, for: theme.id, in: systemEdits)
+                }
             } label: {
                 Label(tr("Reset %@", "\(theme.name)"), systemImage: "arrow.counterclockwise")
             }

@@ -60,19 +60,6 @@ struct LiveKeyboard: View {
             // be lost on a dark backdrop.
             .environment(\.colorScheme, scheme)
             .frame(width: size.width * scale, height: size.height * scale)
-            // The theme waves spread over this box only.
-            .overlay {
-                let own = waves.filter { $0.kind == .theme }
-                if !own.isEmpty {
-                    GlassWaveBand(waves: own, fullScreen: false)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-            }
-            .background(GeometryReader { box in
-                Color.clear
-                    .onAppear { ModeWave.previewBox = box.frame(in: .global) }
-                    .onChange(of: box.frame(in: .global)) { ModeWave.previewBox = $0 }
-            })
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
