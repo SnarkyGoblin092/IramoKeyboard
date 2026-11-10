@@ -123,6 +123,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         let wave: ModeWave
         let view: UIView
         let mask: CAShapeLayer
+        /// When its wave has left the keyboard (ModeWave.lifetime).
+        let ends: CFTimeInterval
     }
     private var covers: [Cover] = []
     private let coverDriver = WaveDriver()
@@ -310,7 +312,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         mask.fillColor = UIColor.black.cgColor
         mask.frame = bounds
         old.layer.mask = mask
-        covers.append(Cover(wave: wave, view: old, mask: mask))
+        covers.append(Cover(wave: wave, view: old, mask: mask, ends: wave.started + wave.lifetime))
         updateCovers(at: CACurrentMediaTime())
         if covers.isEmpty { return }
         coverDriver.start { [weak self] time in self?.updateCovers(at: time) }
@@ -322,7 +324,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for cover in covers {
-            if time - cover.wave.started >= ModeWave.lifetime {
+            if time >= cover.ends {
                 cover.view.removeFromSuperview()
                 continue
             }
@@ -337,7 +339,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             cover.mask.path = path
         }
         CATransaction.commit()
-        covers.removeAll { time - $0.wave.started >= ModeWave.lifetime }
+        covers.removeAll { time >= $0.ends }
         if covers.isEmpty { coverDriver.stop() }
     }
 

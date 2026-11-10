@@ -51,15 +51,49 @@ struct ModeWave: Equatable, Identifiable {
 
     /// The share of the way at which the whole ring has left the frame (the radius runs 15% past what that takes).
     static let doneShare: CGFloat = 1 / 1.15
-    /// How long a wave lives: until it has left the frame, not until its curve runs out.
-    static let lifetime: TimeInterval = {
+    /// How far from the front the lens (WaveLens.metal) still bends what is under it: 2.2 reaches, and a little.
+    static let lensReach: CGFloat = band * 2 * 2.2 + 2
+    /// How far past a point the front must be before the lens's bend there is too faint to see go.
+    private static let lensFade: CGFloat = 64
+
+    /// How long the wave takes to go `share` of its way (the curve, turned round).
+    static func time(reaching share: CGFloat) -> TimeInterval {
         var low: CGFloat = 0, high: CGFloat = 1
         for _ in 0..<30 {
             let mid = (low + high) / 2
-            if ease(mid) < doneShare { low = mid } else { high = mid }
+            if ease(mid) < share { low = mid } else { high = mid }
         }
         return TimeInterval(high) * duration
-    }()
+    }
+
+    /// How long this wave lives: until its ring has left its frame, wherever it started and whatever its edge is
+    /// like, not until the slowest edge there could be would have (which is `doneShare`, the latest it can be).
+    /// Worked out once, as the wave sets off.
+    var lifetime: TimeInterval {
+        let margin = kind == .mode ? ModeWave.lensFade : ModeWave.band
+        // The frame's edge, as seen from where the wave starts: the wave is past the frame when it is past these.
+        var edge: [(distance: CGFloat, angle: Double)] = []
+        let perSide = 16
+        for index in 0..<perSide {
+            let share = CGFloat(index) / CGFloat(perSide)
+            let points = [CGPoint(x: minX + share * width, y: minY), CGPoint(x: minX + width, y: minY + share * height),
+                          CGPoint(x: minX + width - share * width, y: minY + height),
+                          CGPoint(x: minX, y: minY + height - share * height)]
+            for point in points {
+                let dx = point.x - center.x, dy = point.y - center.y
+                edge.append((hypot(dx, dy), atan2(Double(dy), Double(dx))))
+            }
+        }
+        // Back from the latest it can be, to the last share of the way at which some of the frame is not passed.
+        var done = ModeWave.doneShare
+        var share = done - 0.01
+        while share > 0 {
+            if edge.contains(where: { $0.distance > radius(share, angle: $0.angle) - margin }) { break }
+            done = share
+            share -= 0.01
+        }
+        return ModeWave.time(reaching: done)
+    }
 
     /// The main preview's box in the window, for the theme waves (set by LiveKeyboard).
     static var previewBox = CGRect.zero
@@ -104,10 +138,10 @@ struct ModeWave: Equatable, Identifiable {
     enum Relation { case passed, ahead, crossing }
 
     /// Whether the wave at `progress` has passed all of `frame`, not reached any of it, or is crossing it. (Judged
-    /// by points of the frame and a margin, so a view is only called passed or ahead when it surely is.)
-    func relation(of frame: CGRect, progress: CGFloat) -> Relation {
+    /// by points of the frame and a margin, so a view is only called passed or ahead when it surely is: `reach`
+    /// is how far from the front still counts as crossing.)
+    func relation(of frame: CGRect, progress: CGFloat, within reach: CGFloat = 12 + ModeWave.band) -> Relation {
         guard frame.width > 0, frame.height > 0 else { return .crossing }
-        let margin: CGFloat = 12
         var inside = 0, outside = 0
         let xs = [frame.minX, frame.midX, frame.maxX], ys = [frame.minY, frame.midY, frame.maxY]
         for x in xs {
@@ -115,7 +149,7 @@ struct ModeWave: Equatable, Identifiable {
                 let dx = x - center.x, dy = y - center.y
                 let distance = hypot(dx, dy)
                 let r = radius(progress, angle: atan2(Double(dy), Double(dx)).truncatingRemainder(dividingBy: 2 * .pi))
-                if distance < r - margin - ModeWave.band { inside += 1 } else if distance > r + margin + ModeWave.band { outside += 1 }
+                if distance < r - reach { inside += 1 } else if distance > r + reach { outside += 1 }
             }
         }
         if inside == 9 { return .passed }
@@ -416,50 +450,70 @@ extension View {
     /// Bends and splits the colours of what is drawn around the light / dark waves' fronts (WaveLens.metal), as
     /// light is at the edge of a thick lens. (Needs iOS 17; earlier the glass ring alone is the effect. Views the
     /// system draws itself, as the keyboard's keys, cannot be reached by a shader.)
+    ///
+    /// For small views (a card), not a whole screen of them: a view under the shader is drawn again into a
+    /// picture of its own every frame, so only the ones the front is near are (the others stay as they are).
     func waveLensed(_ waves: [ModeWave]) -> some View {
         return modifier(WaveLens(waves: waves))
     }
 }
 
+/// The view is always the same one, wave or no wave (the shader is only switched on and off, and the clock
+/// stopped): were it wrapped in something else while a wave is out, it would be built anew as each wave sets off
+/// and again as it ends.
 private struct WaveLens: ViewModifier {
     let waves: [ModeWave]
-    /// Where the view is in the window (not state: scrolling would redraw it for nothing; the clock redraws it
-    /// while a wave is out).
+    /// Where the view is in the window (not state: nothing is to be redrawn for it; the clock redraws the view
+    /// while a wave is out). Only measured while a wave is out.
     @State private var place = Place()
 
     private final class Place {
-        var origin = CGPoint.zero
+        var frame = CGRect.zero
     }
 
     func body(content: Content) -> some View {
         Group {
-            if #available(iOS 17.0, *), !waves.isEmpty {
-                TimelineView(.animation(minimumInterval: ModeWave.frame)) { context in
-                    lensed(content, at: context.date, from: 0)
+            if #available(iOS 17.0, *) {
+                TimelineView(.animation(minimumInterval: ModeWave.frame, paused: waves.isEmpty)) { context in
+                    let lens = self.lens(at: context.date)
+                    content.layerEffect(lens ?? WaveLens.shader(center: .zero, progress: 0, endRadius: 0, shift: 0),
+                                        maxSampleOffset: CGSize(width: 24, height: 24), isEnabled: lens != nil)
                 }
             } else {
                 content
             }
         }
-        .background(GeometryReader { geometry in
-            Color.clear
-                .onAppear { place.origin = geometry.frame(in: .global).origin }
-                .onChange(of: geometry.frame(in: .global)) { place.origin = $0.origin }
-        })
+        .background {
+            if !waves.isEmpty {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { place.frame = geometry.frame(in: .global) }
+                        .onChange(of: geometry.frame(in: .global)) { place.frame = $0 }
+                }
+            }
+        }
     }
 
-    /// The content with the waves from `index` on applied, one over the other.
+    /// The lens of the wave whose front is near the view at `date` (nil: none is, and the view is left alone).
+    /// Only one wave is out at a time (ThemesView).
     @available(iOS 17.0, *)
-    private func lensed(_ content: Content, at date: Date, from index: Int) -> AnyView {
-        guard index < waves.count else { return AnyView(content) }
-        let wave = waves[index]
-        let progress = wave.progress(at: date)
-        let inner = lensed(content, at: date, from: index + 1)
-        guard progress > 0, progress < ModeWave.doneShare else { return inner }
-        let shader = ShaderLibrary.waveLens(
-            .float2(CGPoint(x: wave.center.x - place.origin.x, y: wave.center.y - place.origin.y)),
-            .float(Float(progress)), .float(Float(wave.endRadius)), .float(Float(wave.shift)),
+    private func lens(at date: Date) -> Shader? {
+        let frame = place.frame
+        guard frame.width > 0, frame.height > 0 else { return nil }
+        for wave in waves {
+            let progress = wave.progress(at: date)
+            guard progress > 0, progress < ModeWave.doneShare,
+                  wave.relation(of: frame, progress: progress, within: ModeWave.lensReach) == .crossing else { continue }
+            return WaveLens.shader(center: CGPoint(x: wave.center.x - frame.minX, y: wave.center.y - frame.minY),
+                                   progress: progress, endRadius: wave.endRadius, shift: wave.shift)
+        }
+        return nil
+    }
+
+    @available(iOS 17.0, *)
+    private static func shader(center: CGPoint, progress: CGFloat, endRadius: CGFloat, shift: Double) -> Shader {
+        return ShaderLibrary.waveLens(
+            .float2(center), .float(Float(progress)), .float(Float(endRadius)), .float(Float(shift)),
             .float(Float(ModeWave.band * 2.0)), .float(10))
-        return AnyView(inner.layerEffect(shader, maxSampleOffset: CGSize(width: 24, height: 24)))
     }
 }

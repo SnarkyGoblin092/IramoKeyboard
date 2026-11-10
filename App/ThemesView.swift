@@ -36,8 +36,7 @@ struct ThemesView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 header
 
-                // (Not the header: its toggles are views the system draws, which a shader cannot reach.)
-                grid.waveLensed(waves.filter { $0.kind == .mode })
+                grid
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
@@ -135,7 +134,7 @@ struct ThemesView: View {
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64((ModeWave.lifetime + 0.05) * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
         }
@@ -144,6 +143,7 @@ struct ThemesView: View {
     /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
     private var grid: some View {
         let edits = SystemEdits.decode(systemEdits)
+        let modeWaves = waves.filter { $0.kind == .mode }
         return LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
             ForEach(ThemeCatalog.pickerSections, id: \.title) { section in
                 Section {
@@ -154,6 +154,9 @@ struct ThemesView: View {
                             Feedback.choose()
                             chooseTheme(theme.id)
                         }
+                        // Each card on its own, not the grid: only the cards the front is near are drawn through
+                        // the shader. (Not the header: its toggles are views the system draws, which it cannot reach.)
+                        .waveLensed(modeWaves)
                     }
                 } header: {
                     HStack(spacing: 10) {
@@ -282,16 +285,24 @@ private struct ThemeThumbnail: View {
         }
         .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onAppear { load(theme: theme, dark: scheme == .dark) }
+        // The other mode's picture is drawn too, when nothing else is to be: a wave then has both ready, and none
+        // is drawn while it crosses (each takes the main thread, and the wave's frames with it).
+        .onAppear {
+            load(theme: theme, dark: scheme == .dark)
+            prepare(theme: theme, dark: scheme != .dark, idle: true)
+        }
         // onChange's closure sees the view as it was before the change, so the new value is passed in rather
         // than read from `scheme` / `theme` (which would still be the old ones and draw the wrong look).
         .onChange(of: scheme) { newScheme in load(theme: theme, dark: newScheme == .dark) }
-        .onChange(of: theme) { newTheme in load(theme: newTheme, dark: scheme == .dark) }
+        .onChange(of: theme) { newTheme in
+            load(theme: newTheme, dark: scheme == .dark)
+            prepare(theme: newTheme, dark: scheme != .dark, idle: true)
+        }
         // A wave shows both modes at once: the other one's picture is made too.
         .onChange(of: waves.count) { count in
             guard count > 0 else { return }
-            prepare(dark: true)
-            prepare(dark: false)
+            prepare(theme: theme, dark: true)
+            prepare(theme: theme, dark: false)
         }
     }
 
@@ -346,9 +357,10 @@ private struct ThemeThumbnail: View {
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache).
-    private func queue(theme: ThemeDefinition, dark: Bool, key: String, done: @escaping (UIImage?) -> Void) {
+    private func queue(theme: ThemeDefinition, dark: Bool, key: String, idle: Bool = false,
+                       done: @escaping (UIImage?) -> Void) {
         let accent = self.accent, scale = displayScale
-        ThumbnailCache.shared.render(key: key) {
+        ThumbnailCache.shared.render(key: key, idle: idle) {
             let width = ThemeThumbnail.renderWidth
             let preview = ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
                 .frame(width: width, height: width / ThemePreview.aspectKeysOnly)
@@ -361,12 +373,12 @@ private struct ThemeThumbnail: View {
         }
     }
 
-    /// Draws the picture for `dark` ahead of the wave that needs it.
-    private func prepare(dark: Bool) {
+    /// Draws the picture for `dark` ahead of the wave that needs it (`idle`: after everything that is wanted now).
+    private func prepare(theme: ThemeDefinition, dark: Bool, idle: Bool = false) {
         guard theme.kind != .liquidGlass else { return }
         let key = ThemeThumbnail.key(theme: theme, dark: dark)
         guard ThumbnailCache.shared.image(for: key) == nil else { return }
-        queue(theme: theme, dark: dark, key: key) { _ in arrived += 1 }
+        queue(theme: theme, dark: dark, key: key, idle: idle) { _ in arrived += 1 }
     }
 
     private func load(theme: ThemeDefinition, dark: Bool) {
@@ -395,6 +407,8 @@ final class ThumbnailCache {
 
     private let images = NSCache<NSString, UIImage>()
     private var queue: [(key: String, make: () -> UIImage?, done: (UIImage?) -> Void)] = []
+    /// The pictures nothing shows yet (the other mode's, for the next wave): drawn when `queue` is empty.
+    private var idle: [(key: String, make: () -> UIImage?, done: (UIImage?) -> Void)] = []
     private var draining = false
 
     init() {
@@ -403,17 +417,23 @@ final class ThumbnailCache {
 
     func image(for key: String) -> UIImage? { return images.object(forKey: key as NSString) }
 
-    func render(key: String, make: @escaping () -> UIImage?, done: @escaping (UIImage?) -> Void) {
-        queue.append((key, make, done))
+    func render(key: String, idle: Bool = false, make: @escaping () -> UIImage?, done: @escaping (UIImage?) -> Void) {
+        if idle { self.idle.append((key, make, done)) } else { queue.append((key, make, done)) }
         drain()
     }
 
     private func drain() {
-        guard !draining, !queue.isEmpty else { return }
+        guard !draining, !(queue.isEmpty && idle.isEmpty) else { return }
         draining = true
         Task { @MainActor in
             await Task.yield()   // let the scroll draw a frame between pictures
-            let job = self.queue.removeFirst()
+            // The idle ones are spaced out (a scroll stays smooth), and wait for a wave to end.
+            if self.queue.isEmpty {
+                repeat {
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                } while self.queue.isEmpty && !ModeWave.running.isEmpty
+            }
+            let job = self.queue.isEmpty ? self.idle.removeFirst() : self.queue.removeFirst()
             let image = self.image(for: job.key) ?? job.make()
             if let image = image { self.images.setObject(image, forKey: job.key as NSString) }
             job.done(image)
