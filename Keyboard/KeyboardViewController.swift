@@ -124,6 +124,10 @@ final class KeyboardViewController: UIInputViewController {
 
         // Everything we draw lives in `container`, so the system's own backdrop views stay untouched.
         container.translatesAutoresizingMaskIntoConstraints = false
+        // Never fully see-through: the system does not deliver a keyboard extension's touches that land on
+        // completely transparent pixels, so taps in the gaps between keys (and between the Functions tiles) were
+        // lost. A tint this faint cannot be seen.
+        container.backgroundColor = UIColor(white: 0, alpha: 0.011)
         view.addSubview(container)
         NSLayoutConstraint.activate([
             container.topAnchor.constraint(equalTo: view.topAnchor),

@@ -195,8 +195,12 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         leavingTools?.removeFromSuperview()
         leavingTools = nil
         let old = toolsStrip
+        if let old = old { removeGestureRecognizer(old.panGestureRecognizer) }
         toolsStrip = panel
         toolsOpen = panel != nil
+        // The strip's scroll gesture lives on the whole bar, so a drag that starts anywhere on it (between the
+        // tiles, above or below them, at the ends) moves the tools, whichever view the touch itself lands on.
+        if let panel = panel { addGestureRecognizer(panel.panGestureRecognizer) }
         if panel == nil, let old = old, window != nil {
             // Closing: the tiles slide back into the button; the suggestions come back only once they are gone.
             leavingTools = old
@@ -661,6 +665,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // The Functions strip's own scroll gesture (moved onto the bar) decides for itself.
+        if let tools = toolsStrip, gestureRecognizer === tools.panGestureRecognizer { return tools.isUserInteractionEnabled }
         // The swipe down that hides the keyboard stays out of the Functions strip, which scrolls sideways.
         if toolsStrip != nil && gestureRecognizer is UIPanGestureRecognizer && gestureRecognizer.view === self { return false }
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }

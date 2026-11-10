@@ -13,7 +13,6 @@ MARKS = "\u0300-\u036F\u0591-\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED
         "\u0951-\u0957\u0962\u0963\u0E31\u0E34-\u0E3A\u0E47-\u0E4E"
 WORD = rf"[^\W\d_](?:[^\W\d_]|[{MARKS}])*"
 TOKENS = re.compile(rf"{WORD}(?:['’]{WORD})*|[.!?…।॥؟]+|,|\S")
-LN10 = math.log(10)
 
 
 def _ids24(raw):
@@ -102,13 +101,6 @@ class LanguageModel:
                 bo = 0.0
             return bo + (self.p2[b] if b is not None else self.bo1[v] + self.p1[w])
         return self.p2[b] if b is not None else self.bo1[v] + self.p1[w]
-
-    def word_logp(self, word, history):
-        """log10 P(word | history ids); unknown words get <unk>'s tiny probability."""
-        w = self.ids.get(word, UNKNOWN)
-        v = history[-1]
-        u = history[-2] if len(history) >= 2 else None
-        return self.logp(w, v, u)
 
     def candidates(self, history):
         """Word ids worth scoring as the next word: stored continuations plus the most common words."""

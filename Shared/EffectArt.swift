@@ -325,8 +325,6 @@ struct EffectTint: Hashable {
 /// Where on the key the effects start: the Effects screen's position setting moves the effects that leave the key
 /// (specks, sparks, confetti, bubbles, the echo, the shockwave, the bolt) and the ripple.
 enum EffectPosition {
-    static let choices = ["auto", "top", "bottom", "left", "right", "random"]
-
     /// How far from the middle of a key of `size` the effects start. `random` gives two numbers in 0..<1, taken afresh.
     static func offset(_ mode: String, size: CGSize, random: () -> CGFloat) -> CGPoint {
         let dx = size.width * 0.38
@@ -345,8 +343,6 @@ enum EffectPosition {
 /// Where the effects go: the Effects screen's direction setting turns each effect that has a way of its own (up,
 /// down, sideways) to the chosen direction; effects that spread evenly in every direction stay as they are.
 enum EffectDirection {
-    static let choices = ["auto", "up", "down", "left", "right", "random"]
-
     /// The angle the effects should go at, from straight up, clockwise (up 0, right a quarter turn, down half),
     /// nil to leave them as designed. `random` is a number in 0..<1, taken afresh for "random".
     static func target(_ mode: String, random: () -> CGFloat) -> CGFloat? {
