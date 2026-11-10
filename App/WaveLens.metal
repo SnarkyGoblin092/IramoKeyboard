@@ -8,8 +8,8 @@ using namespace metal;
 
 // The crests of the front (the same as ModeWave.crests): how many round the circle, how high, where they start
 // and how far they travel round as the wave spreads.
-constant float crestCount[5] = {2.0, 3.0, 5.0, 8.0, 13.0};
-constant float crestHeight[5] = {0.050, 0.045, 0.030, 0.018, 0.010};
+constant float crestCount[5] = {2.0, 3.0, 5.0, 7.0, 11.0};
+constant float crestHeight[5] = {0.110, 0.090, 0.060, 0.035, 0.020};
 constant float crestPhase[5] = {0.4, 2.1, 4.0, 1.1, 5.3};
 constant float crestDrift[5] = {1.7, -2.3, 3.1, -4.2, 5.0};
 
@@ -33,7 +33,8 @@ static float frontRadius(float angle, float progress, float endRadius, float shi
     // How far outside the front this point is (negative: inside).
     float signedDistance = distance - frontRadius(atan2(offset.y, offset.x), progress, endRadius, shift);
     float spread = reach;
-    float profile = exp(-pow(signedDistance / spread, 2.0));
+    float scaled = signedDistance / spread;
+    float profile = exp(-scaled * scaled);
     if (profile < 0.01) {
         return layer.sample(position);
     }
@@ -47,7 +48,8 @@ static float frontRadius(float angle, float progress, float endRadius, float shi
     half alpha = layer.sample(position + toward).a;
     half4 color = half4(red, green, blue, alpha);
     // A little darker just inside the front, as the thick edge of the glass would be.
-    float edge = step(signedDistance, 0.0) * exp(-pow(signedDistance / (spread * 0.35), 2.0));
+    float sharp = signedDistance / (spread * 0.35);
+    float edge = step(signedDistance, 0.0) * exp(-sharp * sharp);
     color.rgb *= half(1.0 - 0.28 * edge);
     return color;
 }

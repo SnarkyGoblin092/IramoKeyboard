@@ -39,7 +39,7 @@ struct LiveKeyboard: View {
                         ZStack {
                             // The Themes screen's waves (ModeWave): the first one's old backdrop at the bottom, each
                             // wave's new one over it inside that wave's circle, as the keys
-                            // (LiveKeyboardView.rebuildBehindWave).
+                            // (LiveKeyboardView.cover).
                             if waves.isEmpty {
                                 // Without a wave it fades with the keys (LiveKeyboardView.modeFade).
                                 look.backdrop(scale: scale)
@@ -116,8 +116,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var builtSignature = ""
     private var refreshQueued = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
-    /// The wave (ModeWave.id) whose cover of old keys has been made.
-    private var coveredWave = 0
+    /// The keyboard on screen, for the Themes screen to have it covered before anything changes.
+    static weak var current: LiveKeyboardView?
     /// The pictures of the old keys, each under its wave's circle.
     private struct Cover {
         let wave: ModeWave
@@ -156,6 +156,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        LiveKeyboardView.current = self
         backgroundColor = .clear
         isMultipleTouchEnabled = true
         stage.backgroundColor = .clear
@@ -264,12 +265,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             Prefs.refresh()
             self.applyEffects()
             guard self.signature() != self.builtSignature else { return }
-            // Light to dark (the Themes screen's switch): the new keys are uncovered by the screen's wave, or
-            // fade in over the old ones where there is none.
-            if self.window != nil, let wave = ModeWave.running.last,
-               wave.kind == .theme || Theme.appearanceStyle != self.overrideUserInterfaceStyle {
-                self.rebuildBehindWave(wave)
-            } else if self.window != nil, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
+            // Light to dark (the Themes screen's switch): the new keys fade in over the old ones where there is no wave
+            // (with a wave, the picture of the old keys that it took (cover) hides the change until it gets there).
+            if self.window != nil, ModeWave.running.isEmpty, Theme.appearanceStyle != self.overrideUserInterfaceStyle {
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
                                   animations: { self.rebuild() })
@@ -279,19 +277,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         }
     }
 
-    /// Builds the new keys under a picture of the old ones, which the wave then uncovers: the picture is masked to
-    /// everything outside the wave's irregular circle, and the circle follows the wave's own clock and curve, frame
-    /// by frame. A second wave takes a picture of the first one's half-done work, and covers it the same way.
-    private func rebuildBehindWave(_ wave: ModeWave) {
-        // (Both the trait change and the settings change come here for one wave; the second finds the new keys.)
-        guard coveredWave != wave.id else { return }
-        coveredWave = wave.id
-        guard let old = snapshotView(afterScreenUpdates: false) else {
-            rebuild()
-            return
-        }
-        rebuild()
+    /// Takes a picture of the keys as they are, and lays it over them: the wave (called as it sets off, before anything
+    /// has changed) then wipes the picture away, so the new keys, the accent colours and all, show only where the
+    /// wave has passed. The picture is masked to everything outside the wave's irregular circle, and the circle
+    /// follows the wave's own clock and curve, frame by frame. A second wave takes a picture of the first one's
+    /// half-done work, and covers it the same way.
+    func cover(for wave: ModeWave) {
+        guard window != nil, let old = snapshotView(afterScreenUpdates: false) else { return }
         old.frame = bounds
+        old.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         old.isUserInteractionEnabled = false
         addSubview(old)
         let mask = CAShapeLayer()
@@ -311,7 +305,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for cover in covers {
-            if time - cover.wave.started >= ModeWave.duration {
+            if time - cover.wave.started >= ModeWave.lifetime {
                 cover.view.removeFromSuperview()
                 continue
             }
@@ -326,20 +320,13 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             cover.mask.path = path
         }
         CATransaction.commit()
-        covers.removeAll { time - $0.wave.started >= ModeWave.duration }
+        covers.removeAll { time - $0.wave.started >= ModeWave.lifetime }
         if covers.isEmpty { coverDriver.stop() }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        guard traitCollection.userInterfaceStyle != builtStyle else { return }
-        // The screen's switch reaches this view's traits before its settings are read: the wave's cover has to be
-        // made now, or the new keys would show before the wave gets to them.
-        if window != nil, let wave = ModeWave.running.last {
-            rebuildBehindWave(wave)
-        } else {
-            rebuild()
-        }
+        if traitCollection.userInterfaceStyle != builtStyle { rebuild() }
     }
 
     // MARK: The bar

@@ -36,11 +36,11 @@ struct ThemesView: View {
             LazyVStack(alignment: .leading, spacing: 22) {
                 header
 
-                grid
+                // (Not the header: its toggles are views the system draws, which a shader cannot reach.)
+                grid.waveLensed(waves.filter { $0.kind == .mode })
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
-            .waveLensed(waves.filter { $0.kind == .mode })
         }
         }
         .environment(\.modeWaves, waves)
@@ -129,11 +129,13 @@ struct ThemesView: View {
         let new = ModeWave(id: id, kind: kind, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
                            newTheme: newTheme, source: source, minX: frame.minX, minY: frame.minY,
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
+        // The keyboard's picture of itself is taken now, before the setting changes anything on it.
+        LiveKeyboardView.current?.cover(for: new)
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64((ModeWave.duration + 0.1) * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64((ModeWave.lifetime + 0.05) * 1_000_000_000))
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
         }

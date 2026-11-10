@@ -30,10 +30,12 @@ struct ModeWave: Equatable, Identifiable {
     let started: CFTimeInterval
     let startedDate: Date
 
-    static let duration: TimeInterval = 1.2
+    static let duration: TimeInterval = 1.4
     /// The ring's thickness.
     static let band: CGFloat = 19
-    private static let steps = 64
+    /// The longest the wave's drawings wait between frames (60 a second).
+    static let frame: TimeInterval = 1.0 / 60
+    private static let steps = 80
 
     /// The waves now crossing the screen, for the code that learns of the new mode outside SwiftUI's updates (the
     /// keyboard's rebuild, a card's picture arriving from the queue).
@@ -43,9 +45,21 @@ struct ModeWave: Equatable, Identifiable {
     /// The crests of the edge: how many around, how high (as a share of the radius), where they start and how far
     /// they travel round as the wave spreads. No two are alike, so the edge never repeats itself.
     private static let crests: [(count: Double, height: CGFloat, phase: Double, drift: Double)] = [
-        (2, 0.050, 0.4, 1.7), (3, 0.045, 2.1, -2.3), (5, 0.030, 4.0, 3.1), (8, 0.018, 1.1, -4.2), (13, 0.010, 5.3, 5.0)
+        (2, 0.110, 0.4, 1.7), (3, 0.090, 2.1, -2.3), (5, 0.060, 4.0, 3.1), (7, 0.035, 1.1, -4.2), (11, 0.020, 5.3, 5.0)
     ]
-    private static let reach: CGFloat = 0.153
+    private static let reach: CGFloat = 0.315
+
+    /// The share of the way at which the whole ring has left the frame (the radius runs 15% past what that takes).
+    static let doneShare: CGFloat = 1 / 1.15
+    /// How long a wave lives: until it has left the frame, not until its curve runs out.
+    static let lifetime: TimeInterval = {
+        var low: CGFloat = 0, high: CGFloat = 1
+        for _ in 0..<30 {
+            let mid = (low + high) / 2
+            if ease(mid) < doneShare { low = mid } else { high = mid }
+        }
+        return TimeInterval(high) * duration
+    }()
 
     /// The main preview's box in the window, for the theme waves (set by LiveKeyboard).
     static var previewBox = CGRect.zero
@@ -223,7 +237,7 @@ private struct WaveReveal: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if let wave = wave {
-                TimelineView(.animation) { context in
+                TimelineView(.animation(minimumInterval: ModeWave.frame)) { context in
                     let progress = wave.progress(at: context.date)
                     switch wave.relation(of: frame, progress: progress) {
                     case .passed:
@@ -256,10 +270,10 @@ struct GlassWaveBand: View {
     var body: some View {
         GeometryReader { geometry in
             let origin = geometry.frame(in: .global).origin
-            TimelineView(.animation) { context in
+            TimelineView(.animation(minimumInterval: ModeWave.frame)) { context in
                 ZStack {
                     ForEach(waves) { wave in
-                        WaveGlass(wave: wave, progress: wave.progress(at: context.date), origin: origin)
+                        WaveGlass(wave: wave, progress: wave.progress(at: context.date), origin: origin, size: geometry.size)
                     }
                 }
             }
@@ -276,16 +290,43 @@ private struct WaveGlass: View {
     let progress: CGFloat
     let origin: CGPoint
 
+    let size: CGSize
+
     private var ring: WaveRingShape { return WaveRingShape(wave: wave, progress: progress, origin: origin) }
     private var rim: WaveDiscShape { return WaveDiscShape(wave: wave, progress: progress, origin: origin) }
 
     /// A thin ring of Liquid Glass at the front (what it covers, the inside of the circle, is left clear: the new
-    /// look shows there as it is), with a bright blue line and a blue glow on its outer edge. The shader
-    /// (WaveLens.metal) bends the colours around it.
+    /// look shows there as it is), with a bright blue line and a blue glow on its outer edge, and a shine of
+    /// colours running round the line. The shader (WaveLens.metal) bends the colours around it.
+    ///
+    /// The glow is a few strokes of falling strength, not a blur: a blur of the whole screen's size every frame
+    /// is what made it slow.
     var body: some View {
-        glass
-            .background(rim.stroke(Color(red: 0.30, green: 0.50, blue: 1.0), lineWidth: 8).blur(radius: 5).opacity(0.75))
-            .overlay(rim.stroke(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95), lineWidth: 2))
+        // (Strokes are computed once: the shape's outline is the same for every one of them.)
+        let line = rim
+        return glass
+            .background(
+                ZStack {
+                    line.stroke(blue, lineWidth: 16).opacity(0.10)
+                    line.stroke(blue, lineWidth: 10).opacity(0.18)
+                    line.stroke(blue, lineWidth: 5).opacity(0.35)
+                }
+            )
+            .overlay(line.stroke(Color(red: 0.62, green: 0.75, blue: 1.0).opacity(0.95), lineWidth: 2))
+            .overlay(line.stroke(shine, lineWidth: 3.5).blendMode(.plusLighter).opacity(0.85))
+            .overlay(line.stroke(shine, lineWidth: 11).blendMode(.plusLighter).opacity(0.22))
+    }
+
+    private var blue: Color { return Color(red: 0.30, green: 0.50, blue: 1.0) }
+
+    /// The colours of the shine, turning round the front as it spreads.
+    private var shine: AngularGradient {
+        let colors = [Color(red: 1.0, green: 0.45, blue: 0.75), Color(red: 1.0, green: 0.85, blue: 0.40),
+                      Color(red: 0.45, green: 1.0, blue: 0.75), Color(red: 0.40, green: 0.75, blue: 1.0),
+                      Color(red: 0.70, green: 0.50, blue: 1.0), Color(red: 1.0, green: 0.45, blue: 0.75)]
+        let center = UnitPoint(x: (wave.center.x - origin.x) / max(size.width, 1),
+                               y: (wave.center.y - origin.y) / max(size.height, 1))
+        return AngularGradient(colors: colors, center: center, angle: .degrees(Double(progress) * 300))
     }
 
     @ViewBuilder private var glass: some View {
@@ -314,7 +355,7 @@ private struct WaveRingShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        guard progress > 0, progress < 1 else { return path }
+        guard progress > 0, progress < ModeWave.doneShare else { return path }
         let ring = wave.ring(progress, relativeTo: origin)
         // What lies beyond the screen is not drawn: points out there are pulled in to just outside it.
         let bounds = rect.insetBy(dx: -40, dy: -40)
@@ -342,7 +383,7 @@ private struct WaveDiscShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        guard progress > 0, progress < 1 else { return path }
+        guard progress > 0, progress < ModeWave.doneShare else { return path }
         let edge = wave.ring(progress, relativeTo: origin, grow: grow).outer
         // What lies beyond the screen is not drawn (the glass costs more the more it covers): points out there are
         // pulled in to just outside it.
@@ -380,7 +421,7 @@ private struct WaveLens: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if #available(iOS 17.0, *), !waves.isEmpty {
-                TimelineView(.animation) { context in
+                TimelineView(.animation(minimumInterval: ModeWave.frame)) { context in
                     lensed(content, at: context.date, from: 0)
                 }
             } else {
@@ -401,7 +442,7 @@ private struct WaveLens: ViewModifier {
         let wave = waves[index]
         let progress = wave.progress(at: date)
         let inner = lensed(content, at: date, from: index + 1)
-        guard progress > 0, progress < 1 else { return inner }
+        guard progress > 0, progress < ModeWave.doneShare else { return inner }
         let shader = ShaderLibrary.waveLens(
             .float2(CGPoint(x: wave.center.x - place.origin.x, y: wave.center.y - place.origin.y)),
             .float(Float(progress)), .float(Float(wave.endRadius)), .float(Float(wave.shift)),
