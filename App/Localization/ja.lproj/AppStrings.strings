@@ -348,7 +348,6 @@
 "Switches to your next language" = "次の言語に切り替えます";
 "iPad: the keys in two halves, on or off" = "iPad：キーを2つに分ける機能を、オン／オフします";
 "Puts the keyboard away" = "キーボードを閉じます";
-"Opens the Iramo app" = "Iramoアプリを開きます";
 "Rounded" = "丸ゴシック";
 "Serif" = "セリフ";
 "Monospaced" = "等幅";
@@ -821,10 +820,7 @@
 "Tink" = "ティンク";
 "Tock" = "トック";
 "Tone" = "トーン";
-"Types the time now" = "現在の時刻を入力します";
-"Types today's date" = "今日の日付を入力します";
 "Warm caps in coral, amber and sun" = "コーラル、アンバー、サンのウォームキャップ";
 "White caps with ink-black modifiers" = "インクブラックの修飾キーを使ったホワイトキャップ";
-"Wraps the selected text in quotation marks, or types a pair" = "選択したテキストを引用符で囲むか、引用符のペアを入力します";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "iPhone（横向き）：キーを2つに分ける機能を、オン／オフします";
 "Pick a setting on the left." = "左側から設定を選んでください。";

@@ -348,7 +348,6 @@
 "Switches to your next language" = "Sonraki diline geçer";
 "iPad: the keys in two halves, on or off" = "iPad: tuşlar iki yarıda, açık veya kapalı";
 "Puts the keyboard away" = "Klavyeyi kaldırır";
-"Opens the Iramo app" = "Iramo uygulamasını açar";
 "Rounded" = "Yuvarlak hatlı";
 "Serif" = "Serifli";
 "Monospaced" = "Eş aralıklı";
@@ -821,10 +820,7 @@
 "Tink" = "Tink";
 "Tock" = "Tok";
 "Tone" = "Ton";
-"Types the time now" = "Şu anki saati yazar";
-"Types today's date" = "Bugünün tarihini yazar";
 "Warm caps in coral, amber and sun" = "Mercan, kehribar ve güneş sarısı sıcak tuşlar";
 "White caps with ink-black modifiers" = "Beyaz tuşlar, mürekkep siyahı değiştiriciler";
-"Wraps the selected text in quotation marks, or types a pair" = "Seçili metni tırnak işaretleri içine alır veya bir çift yazar";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Tuşlar iki yarıda (iPhone'da yatayda), açık veya kapalı";
 "Pick a setting on the left." = "Soldan bir ayar seçin.";

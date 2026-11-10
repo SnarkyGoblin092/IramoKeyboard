@@ -348,7 +348,6 @@
 "Switches to your next language" = "Vaihtaa seuraavaan kieleen";
 "iPad: the keys in two halves, on or off" = "iPad: näppäimet kahdessa osassa, päällä tai pois";
 "Puts the keyboard away" = "Piilottaa näppäimistön";
-"Opens the Iramo app" = "Avaa Iramo-appin";
 "Rounded" = "Pyöristetty";
 "Serif" = "Serif";
 "Monospaced" = "Tasalevyinen";
@@ -822,10 +821,7 @@
 "Tink" = "Tink";
 "Tock" = "Tok";
 "Tone" = "Ääni";
-"Types the time now" = "Kirjoittaa kellonajan nyt";
-"Types today's date" = "Kirjoittaa tämän päivän päivämäärän";
 "Warm caps in coral, amber and sun" = "Lämpimät näppäimet korallin, meripihkan ja auringon sävyin";
 "White caps with ink-black modifiers" = "Valkoiset näppäimet ja mustepurkin mustat erikoisnäppäimet";
-"Wraps the selected text in quotation marks, or types a pair" = "Kietoo valitun tekstin lainausmerkkeihin tai kirjoittaa parin";
 "The keys in two halves (on an iPhone, in landscape), on or off" = "Näppäimet kahdessa osassa (iPhonessa vaakatilassa), päällä tai pois";
 "Pick a setting on the left." = "Valitse asetus vasemmalta.";

@@ -1860,9 +1860,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
             keyboardView.setNeedsLayout()
             builtSignature = settingsSignature()
             toolsPanel?.refresh()
-        case .openApp:
-            hideTools()
-            openApp()
         case .changeCase:
             // The text proxy cannot select, so the result is remembered: while the caret is still right after it,
             // the next press cycles it again.
@@ -1895,22 +1892,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
         case .lineEnd:
             let line = (textDocumentProxy.documentContextAfterInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).first ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: line.count)
-            refreshToolsSoon()
-            scheduleRefresh()
-        case .quotes:
-            if let selected = textDocumentProxy.selectedText, !selected.isEmpty {
-                textDocumentProxy.insertText("\"" + selected + "\"")
-            } else {
-                textDocumentProxy.insertText("\"\"")
-                textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
-            }
-            refreshToolsSoon()
-            scheduleRefresh()
-        case .insertDate, .insertTime:
-            let formatter = DateFormatter()
-            formatter.dateStyle = tool == .insertDate ? .medium : .none
-            formatter.timeStyle = tool == .insertTime ? .short : .none
-            textDocumentProxy.insertText(formatter.string(from: Date()))
             refreshToolsSoon()
             scheduleRefresh()
         }

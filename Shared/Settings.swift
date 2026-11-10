@@ -45,6 +45,8 @@ enum SettingKey {
     static let theme = "hunkeys.theme"
     /// The app's own language: "system" (the phone's) or a Language code (AppLanguage). Kept by "Reset settings".
     static let appLanguage = "hunkeys.appLanguage"
+    /// The first-run tutorial has been seen (not in `preferenceKeys`: "Reset settings" does not bring it back).
+    static let tutorialSeen = "hunkeys.tutorialSeen"
     static let accent = "hunkeys.accent"
     static let accentHex = "hunkeys.accentHex"
     /// Which mode the keyboard uses: "auto" (the open app's), "light" or "dark".

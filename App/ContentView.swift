@@ -11,6 +11,8 @@ struct ContentView: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     /// The app language was just changed: the main list, built again from the top, goes back to its row.
     @State private var returnToLanguageRow = false
+    /// The first-run tutorial (Tutorial.swift); the About section's button shows it again by clearing this.
+    @AppStorage(SettingKey.tutorialSeen, store: SharedStore.defaults) private var tutorialSeen = false
 
     /// The window's full size (the keyboard showing doesn't change it): wide enough, it shows two columns.
     @State private var windowSize: CGSize = .zero
@@ -50,6 +52,13 @@ struct ContentView: View {
         .roundedType()
         // The Themes screen's light / dark switch sets the mode of the whole app ("auto": the system's).
         .preferredColorScheme(appearance == "light" ? .light : (appearance == "dark" ? .dark : nil))
+        .fullScreenCover(isPresented: Binding(get: { !tutorialSeen }, set: { tutorialSeen = !$0 })) {
+            TutorialView { tutorialSeen = true }
+                .environment(\.locale, AppLanguage.locale)
+                .environment(\.layoutDirection, AppLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
+                .modifier(AccentTint())
+                .roundedType()
+        }
         .onAppear {
             Feedback.prepare()
             // The enabled languages' data is unpacked now, so the keyboard finds it ready.
@@ -458,8 +467,19 @@ private struct DataSection: View {
 
 /// Credits and licences for the word data, emoji data and icons the app ships (LicensesView).
 private struct AboutSection: View {
+    @AppStorage(SettingKey.tutorialSeen, store: SharedStore.defaults) private var tutorialSeen = false
+
     var body: some View {
         Section {
+            Button {
+                Feedback.tap()
+                tutorialSeen = false
+            } label: {
+                SettingsRow(title: tr("Replay tutorial"), symbol: "play.circle.fill", color: .blue)
+                    .foregroundColor(.primary)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
             ScreenRow(.licences) {
                 SettingsRow(title: tr("Licences"), symbol: "doc.text.fill", color: .gray)
             }

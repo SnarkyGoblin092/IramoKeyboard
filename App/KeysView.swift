@@ -409,7 +409,8 @@ struct KeysView: View {
             .glassRows()
 
             Section {
-                GlassToggle(title: tr("Emoji key"), subtitle: tr("Opens the emoji picker"),
+                GlassToggle(title: tr("Emoji key"), subtitle: tr("Opens the emoji picker. Touch and hold it for the settings.") + " "
+                                + tr("With the key off, the settings cannot be opened from the keyboard."),
                             isOn: $emojiKey)
                 GlassToggle(title: tr("Comma key"),
                             subtitle: !commaKey && blocksReturn(comma: true)
