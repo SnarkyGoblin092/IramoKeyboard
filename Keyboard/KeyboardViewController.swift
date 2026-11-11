@@ -1682,7 +1682,7 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
-        // A calculation ("12*3=") or a measurement ("5 km") at the end of the text: its result in the bar.
+        // A calculation ("12*3") or a measurement ("5 km") at the end of the text: its result in the bar.
         if !isPlainTextField || textDocumentProxy.keyboardType == .numbersAndPunctuation {
             let decimals = Prefs.resultDecimals
             if Prefs.inlineMath, let result = InlineCalculator.result(before: before, language: language, decimals: decimals) {

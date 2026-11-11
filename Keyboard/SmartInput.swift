@@ -59,8 +59,8 @@ enum SmartNumbers {
 
 // MARK: - Calculator
 
-/// "12*3=" -> 36, "(2+3)^2/5=" -> 5, "√2·π=" -> 4.443, "sin(30)=" -> 0.5, "200+15%=" -> 230. A calculation is offered
-/// once "=" ends it (so a date or a phone number never turns into a sum). It knows + - * / × ÷ ^ ! %, brackets
+/// "12*3" -> 36, "(2+3)^2/5" -> 5, "√2·π" -> 4.443, "sin(30)" -> 0.5, "200+15%" -> 230. A calculation is offered
+/// as it stands, or once "=" ends it (dates and phone numbers are left alone). It knows + - * / × ÷ ^ ! %, brackets
 /// (also implied: "2(3+4)", "2π"), the constants π and e, and sqrt, cbrt, sin, cos, tan, asin, acos, atan, log, ln,
 /// log2, exp, abs, floor, ceil and round. Angles are in degrees.
 enum InlineCalculator {

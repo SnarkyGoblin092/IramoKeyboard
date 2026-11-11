@@ -822,6 +822,31 @@ struct ShortcutsView: View {
             .glassRows()
 
             Section {
+                ForEach(ShortcutTemplate.offsetExamples, id: \.self) { example in
+                    Button {
+                        Feedback.tick()
+                        phrase += (phrase.isEmpty || phrase.hasSuffix(" ") ? "" : " ") + example
+                    } label: {
+                        HStack {
+                            Text(example).font(.subheadline.monospaced().weight(.semibold))
+                            Spacer()
+                            Text(ShortcutTemplate.expand(example, locale: locale) { nil })
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .foregroundColor(.primary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text(tr("Days, months and times ahead"))
+            } footer: {
+                Text(tr("Add + or - and a number to a placeholder. Tap an example to add it; the answers are for today."))
+            }
+            .glassRows()
+
+            Section {
                 Button(action: add) {
                     Text(tr("Add shortcut"))
                         .font(.body.weight(.semibold))
