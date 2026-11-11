@@ -23,12 +23,24 @@ protocol KeyboardViewDelegate: AnyObject {
     /// Whether a swipe could be decoded right now; if not, every touch stays an ordinary tap (a swipe nobody can
     /// decode would swallow the letters).
     func keyboardViewCanSwipe(_ view: KeyboardView) -> Bool
+    /// The space bar is a trackpad (held): the cursor moves from here.
+    func keyboardViewDidBeginCursorMode(_ view: KeyboardView)
+    /// A second finger touched the keys while the space bar was a trackpad: the cursor's moves select text from here.
+    func keyboardViewDidBeginSelecting(_ view: KeyboardView)
+    /// The finger on the trackpad lifted (what it selected stays selected).
+    func keyboardViewDidEndCursorMode(_ view: KeyboardView)
+}
+
+extension KeyboardViewDelegate {
+    func keyboardViewDidBeginCursorMode(_ view: KeyboardView) {}
+    func keyboardViewDidBeginSelecting(_ view: KeyboardView) {}
+    func keyboardViewDidEndCursorMode(_ view: KeyboardView) {}
 }
 
 /// Draws the keys and owns ALL touch handling, so that
 ///  - several fingers can type at once,
 ///  - holding a key shows its accents / alternatives (after the user's hold delay),
-///  - holding the space bar and sliding moves the text cursor,
+///  - holding the space bar and sliding moves the text cursor (a second finger on the keys selects text as it moves),
 ///  - sliding left from backspace deletes word by word (and sliding back right puts the words back), with the
 ///    other keys faded and backspace stretched across its row while the finger is down,
 ///  - dragging across the letter keys is recognised as swipe typing (handed between thumbs, and committed word by
@@ -86,6 +98,10 @@ final class KeyboardView: UIView {
         var popupActive = false
         var handledByHold = false
         var isCursorMode = false
+        /// Cursor mode: a second finger touched the keys, so the moves select text.
+        var isSelecting = false
+        /// The second finger that started selecting: it types nothing and presses no key.
+        var isSelectionFinger = false
         var languageSwiped = false
         var cursorMoved = false
         var cursorLastX: CGFloat = 0
@@ -220,22 +236,17 @@ final class KeyboardView: UIView {
             glassContainer = container
         }
 
-        trailLayer.strokeColor = Theme.swipeTrail.withAlphaComponent(0.55).cgColor
         trailLayer.fillColor = nil
-        trailLayer.lineWidth = 7
         trailLayer.lineCap = .round
         trailLayer.lineJoin = .round
         trailLayer.zPosition = 100
-        for (index, piece) in trailPieces.enumerated() {
+        for piece in trailPieces {
             piece.fillColor = nil
-            piece.lineWidth = 7
             piece.lineJoin = .round
-            // Butt ends where stretches meet (round ones would overlap there as darker dots); round at the finger.
-            piece.lineCap = index == trailPieces.count - 1 ? .round : .butt
-            piece.opacity = Float(index + 1) / Float(trailPieces.count)
             trailLayer.addSublayer(piece)
         }
         layer.addSublayer(trailLayer)
+        styleTrail()
 
         sideButton.tintColor = Theme.secondaryText
         sideButton.addTarget(self, action: #selector(switchHand), for: .touchUpInside)
@@ -673,6 +684,18 @@ final class KeyboardView: UIView {
             let state = TouchState(start: point, order: nextTouchOrder)
             nextTouchOrder += 1
             states[touch] = state
+            // A second finger while the space bar is a trackpad selects text from the cursor (and types nothing).
+            if Prefs.spaceSelect, let trackpad = states.values.first(where: { $0 !== state && $0.isCursorMode }) {
+                state.isSelectionFinger = true
+                state.handledByHold = true
+                if !trackpad.isSelecting {
+                    trackpad.isSelecting = true
+                    Haptics.shared.keyPress()
+                    setSelectingAppearance(true)
+                    delegate?.keyboardViewDidBeginSelecting(self)
+                }
+                continue
+            }
             // The key is chosen from where this user's thumbs tend to land (TapBias), not from the raw point.
             let aimed = page == .letters ? TapBias.shared.corrected(point, in: bounds, keySize: letterKeySize()) : point
             guard let index = keyIndex(at: aimed) else { continue }
@@ -703,6 +726,7 @@ final class KeyboardView: UIView {
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
             guard let state = states[touch] else { continue }
+            if state.isSelectionFinger { continue }
             let point = touch.location(in: self)
             state.path.append(point)
             if state.startedOnLetter && !state.isSwiping, let index = keyIndex(at: point) {
@@ -869,7 +893,7 @@ final class KeyboardView: UIView {
             Haptics.shared.keyPress()
             self.delegate?.keyboardView(self, didTap: .backspace)
             state.repeatTimer?.invalidate()
-            state.repeatTimer = self.makeTimer(after: 0.06, repeats: true) { [weak self] in
+            state.repeatTimer = self.makeTimer(after: Prefs.deleteRepeatInterval, repeats: true) { [weak self] in
                 guard let self = self else { return }
                 Haptics.shared.keyPress()
                 self.delegate?.keyboardView(self, didTap: .backspace)
@@ -913,6 +937,7 @@ final class KeyboardView: UIView {
     private func finish(_ state: TouchState, cancelled: Bool) {
         // Whatever this finger did, taps that waited for it can go now.
         defer { flushDeferredTaps() }
+        if state.isSelectionFinger { return }
         state.holdTimer?.invalidate()
         state.repeatTimer?.invalidate()
         state.key?.isPressed = false
@@ -929,8 +954,10 @@ final class KeyboardView: UIView {
         }
         if state.isCursorMode {
             setCursorAppearance(false)
+            setSelectingAppearance(false)
+            delegate?.keyboardViewDidEndCursorMode(self)
             // Held past the hold delay but never slid: it was an ordinary (slow) tap on the space bar.
-            if !state.cursorMoved, !cancelled, let key = state.key, key.spec.action == .space {
+            if !state.cursorMoved, !state.isSelecting, !cancelled, let key = state.key, key.spec.action == .space {
                 delegate?.keyboardView(self, didTap: .space)
             }
             return
@@ -1024,6 +1051,8 @@ final class KeyboardView: UIView {
         hidePreview()
         hideAlternates()
         setCursorAppearance(false)
+        setSelectingAppearance(false)
+        if ending.values.contains(where: { $0.isCursorMode }) { delegate?.keyboardViewDidEndCursorMode(self) }
         for piece in trailPieces { piece.path = nil }
     }
 
@@ -1038,10 +1067,12 @@ final class KeyboardView: UIView {
         hidePreview()
         setCursorAppearance(true)
         if Prefs.cursorStartHaptic { Haptics.shared.keyPress() }
+        delegate?.keyboardViewDidBeginCursorMode(self)
     }
 
     private func moveCursor(_ state: TouchState, to point: CGPoint) {
-        let step = max(6, bounds.width / 40)
+        // The Cursor speed setting: a faster cursor goes a character for a shorter slide.
+        let step = max(3, max(6, bounds.width / 40) / CGFloat(Prefs.cursorSpeed))
         state.cursorRemainder += point.x - state.cursorLastX
         state.cursorLastX = point.x
         let steps = Int(state.cursorRemainder / step)       // rounds toward zero
@@ -1049,6 +1080,17 @@ final class KeyboardView: UIView {
             state.cursorMoved = true
             state.cursorRemainder -= CGFloat(steps) * step
             delegate?.keyboardView(self, didMoveCursorBy: steps)   // which ticks, when that is switched on
+        }
+    }
+
+    /// While text is being selected the space bar dims a little, so the second finger's effect shows.
+    private func setSelectingAppearance(_ on: Bool) {
+        UIView.animate(withDuration: 0.12) {
+            for row in self.keyViews {
+                for key in row where key.spec.action == .space {
+                    key.alpha = on ? 0.6 : 1
+                }
+            }
         }
     }
 
@@ -1174,21 +1216,54 @@ final class KeyboardView: UIView {
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
     }
 
-    /// The trail's colour, and with the Effects screen's trail glow, its colour and a halo.
+    /// The trail's look (the Gestures screen): shown or not, its colour (its own, the Effects screen's trail glow
+    /// colour, or the theme's accent), width, opacity and style; with the trail glow, a halo too.
     private func styleTrail() {
         let effects = Prefs.effects
+        let base: UIColor
+        if let rgb = HexColor.parse(Prefs.swipeTrailColor) {
+            base = UIColor(red: CGFloat(rgb.red), green: CGFloat(rgb.green), blue: CGFloat(rgb.blue), alpha: 1)
+        } else if effects.trail {
+            base = KeyView.effectColor(traits: traitCollection)
+        } else {
+            base = Theme.swipeTrail
+        }
+        trailLayer.isHidden = !Prefs.swipeTrailShown
+        trailLayer.strokeColor = base.withAlphaComponent(CGFloat(Prefs.swipeTrailOpacity)).cgColor
         if effects.trail {
-            let color = KeyView.effectColor(traits: traitCollection)
-            trailLayer.strokeColor = color.withAlphaComponent(0.7).cgColor
-            trailLayer.shadowColor = color.cgColor
+            trailLayer.shadowColor = base.cgColor
             trailLayer.shadowOpacity = Float(effects.trailGlow)
             trailLayer.shadowRadius = 8
             trailLayer.shadowOffset = .zero
         } else {
-            trailLayer.strokeColor = Theme.swipeTrail.withAlphaComponent(0.55).cgColor
             trailLayer.shadowOpacity = 0
         }
+        let width = CGFloat(Prefs.swipeTrailWidth)
+        let style = Prefs.swipeTrailStyle
+        for (index, piece) in trailPieces.enumerated() {
+            piece.lineWidth = width
+            if style == "dotted" {
+                piece.lineCap = .round
+                piece.lineDashPattern = [NSNumber(value: 0.01), NSNumber(value: Double(width) * 1.9)]
+            } else {
+                // Butt ends where stretches meet (round ones would overlap there as darker dots); round at the finger.
+                piece.lineCap = index == trailPieces.count - 1 ? .round : .butt
+                piece.lineDashPattern = nil
+            }
+            // Fading: each stretch more opaque than the one before; solid: the whole line alike.
+            piece.opacity = style == "solid" ? 1 : Float(index + 1) / Float(trailPieces.count)
+        }
     }
+
+    /// The colour of one stretch of the trail: the trail's own, or (rainbow) a hue that runs along it.
+    private func trailColor(piece index: Int) -> CGColor? {
+        guard Prefs.swipeTrailStyle == "rainbow" else { return trailLayer.strokeColor }
+        let hue = (CGFloat(index) / CGFloat(trailPieces.count) + trailHueShift).truncatingRemainder(dividingBy: 1)
+        return UIColor(hue: hue, saturation: 0.8, brightness: 1, alpha: CGFloat(Prefs.swipeTrailOpacity)).cgColor
+    }
+
+    /// Moves the rainbow trail's colours along as the finger goes.
+    private var trailHueShift: CGFloat = 0
 
     /// The swiping finger moved. Gliding onto the space bar (with "space commits") ends the word there; the next
     /// word starts when the finger is back on the letters.
@@ -1386,7 +1461,7 @@ final class KeyboardView: UIView {
         }
         kept.reverse()
 
-        let color = trailLayer.strokeColor
+        trailHueShift = (trailHueShift + 0.004).truncatingRemainder(dividingBy: 1)
         let count = trailPieces.count
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -1403,7 +1478,7 @@ final class KeyboardView: UIView {
             path.move(to: kept[from])
             for point in kept[from...to].dropFirst() { path.addLine(to: point) }
             if to == from { path.addLine(to: kept[from]) }
-            piece.strokeColor = color
+            piece.strokeColor = trailColor(piece: index)
             piece.path = path.cgPath
         }
     }

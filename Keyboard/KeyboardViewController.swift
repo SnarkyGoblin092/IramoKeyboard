@@ -88,6 +88,22 @@ final class KeyboardViewController: UIInputViewController {
     /// Korean: the syllable being built from jamo (the last character in the field).
     private var hangul = HangulComposer()
 
+    /// Text selected with the space bar's trackpad (a second finger on the keys): where the selection's other end is,
+    /// in characters from the cursor (negative: before it). Nil: nothing is selected that way.
+    private var selectionAnchor: Int?
+    /// The trackpad is selecting (the second finger touched): its moves grow the selection.
+    private var selectingWithCursor = false
+    /// The calculation or conversion the bar offers for the end of the text.
+    private var shownSmart: (result: SmartResult, isCalculation: Bool)?
+    /// An emoji the bar offers for the words that end the text ("red heart"), and how many characters it replaces.
+    private var shownEmojiPhrase: (emoji: String, length: Int)?
+    /// The shortcut the bar offers, filled in ({date}...), with its cursor mark, and as it is shown.
+    private var shownShortcut: (expanded: String, shown: String)?
+    /// The text before the cursor right after a space was added behind a punctuation mark (the Typing setting).
+    private var punctuationSpaceMarker: String?
+    /// The letter layouts the dictionaries were loaded with (their typo model knows which keys are neighbours).
+    private var loadedLayouts: [String: String] = [:]
+
     // MARK: Lifecycle
 
     /// True when the root view uses the system keyboard backdrop. The Liquid Glass theme asks for a plain
@@ -138,6 +154,7 @@ final class KeyboardViewController: UIInputViewController {
         language = Language(rawValue: settings.languageCode) ?? .english
 
         buildInterface()
+        loadedLayouts = Prefs.letterLayouts
         ensureStores()
         // Unpacked data of languages turned off in the app since (LanguageData) is removed.
         LanguageData.removeUnpackedInBackground(keeping: Set(settings.enabledLanguages))
@@ -236,6 +253,19 @@ final class KeyboardViewController: UIInputViewController {
         if settingsSignature() != builtSignature {
             buildInterface()
         }
+        // A language given another letter layout: its dictionary is loaded again, so its typo model knows the new
+        // neighbouring keys.
+        if Prefs.letterLayouts != loadedLayouts {
+            let changed = Set(Prefs.letterLayouts.keys).union(loadedLayouts.keys)
+                .filter { Prefs.letterLayouts[$0] != loadedLayouts[$0] }
+            loadedLayouts = Prefs.letterLayouts
+            for code in changed {
+                guard let changedLanguage = Language(rawValue: code), let store = stores[changedLanguage] else { continue }
+                store.saveNow()
+                stores[changedLanguage] = nil
+            }
+            ensureStores()
+        }
         applyHeight()
         updateAutoShift()
         scheduleRefresh()
@@ -270,6 +300,7 @@ final class KeyboardViewController: UIInputViewController {
         LearnedWords.shared.saveNow()
         for store in stores.values { store.saveNow() }
         saveLanguageUsage()
+        TypingStats.shared.save()
     }
 
     private var usageNotes = 0
@@ -299,6 +330,7 @@ final class KeyboardViewController: UIInputViewController {
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
         refreshToolsSoon()   // copy, cut and the case tool follow the selection while the functions stay open
+        scheduleRefresh()    // text selected in the app: the bar offers copy, cut and the rest
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
@@ -322,7 +354,9 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             "\(s.splitKeyboard)", s.oneHanded, s.keyboardTools.map { $0.rawValue }.joined(separator: ","),
-            s.effectsJSON, s.systemEditsJSON
+            s.effectsJSON, s.systemEditsJSON,
+            s.letterLayouts.sorted { $0.key < $1.key }.map { $0.key + ":" + $0.value }.joined(separator: ","),
+            s.customHolds.sorted { $0.key < $1.key }.map { $0.key + ":" + $0.value }.joined(separator: ",")
         ].joined(separator: "|")
     }
 
@@ -651,6 +685,8 @@ final class KeyboardViewController: UIInputViewController {
 
     private func insert(_ text: String) {
         clearSwipeState()
+        // Text selected with the trackpad is replaced by what is typed.
+        deleteSelection()
         var output = text
         if page == .letters && text.count == 1 && text.first?.isLetter == true {
             switch shift {
@@ -662,6 +698,7 @@ final class KeyboardViewController: UIInputViewController {
             // Letters build up the spelling; anything else first turns all the letters so far into words.
             if page == .letters, text.count == 1, let letter = text.first, letter.isASCII, letter.isLetter {
                 composing += text.lowercased()
+                TypingStats.shared.keystroke()
                 showComposing()
                 return
             }
@@ -676,6 +713,7 @@ final class KeyboardViewController: UIInputViewController {
         if language == .korean && textDocumentProxy.isSecureTextEntry != true {
             // Jamo build up the syllable being typed; anything else ends it.
             if text.count == 1, let jamo = text.first, HangulComposer.isJamo(jamo) {
+                TypingStats.shared.keystroke()
                 applyHangul(hangul.type(jamo))
                 autoSpaceMarker = nil
                 lastSpaceTime = Date.distantPast
@@ -686,6 +724,31 @@ final class KeyboardViewController: UIInputViewController {
         }
         if language == .hindi, let independent = independentVowel(for: text) {
             output = independent
+        }
+        // The space added after a punctuation mark goes again when what comes next belongs right after the mark:
+        // another mark, a closing bracket or quote, or the digits of "3.5" and "10:30".
+        // (The proxy's text is read once: it changes a moment after an edit. `punctuationBefore` follows the edits.)
+        var punctuationBefore = textDocumentProxy.documentContextBeforeInput ?? ""
+        if let marker = punctuationSpaceMarker {
+            punctuationSpaceMarker = nil
+            let characters = Array(punctuationBefore)
+            if text.count == 1, punctuationBefore.hasSuffix(marker), punctuationBefore.hasSuffix(" "), characters.count >= 2 {
+                let mark = characters[characters.count - 2]
+                let beforeMark: Character = characters.count >= 3 ? characters[characters.count - 3] : " "
+                let closes = ".,!?;:)]}%\u{2026}\u{00BB}\u{201D}\u{060C}\u{061F}\u{061B}\u{0964}".contains(text)
+                    // A quote closes one that is open ("hello." -> "hello.\"), else it opens the next one.
+                    || (text == "\"" && insideQuote(String(punctuationBefore.dropLast())))
+                let digitGoesOn = text.first?.isNumber == true && beforeMark.isNumber && ".,:".contains(mark)
+                if closes || digitGoesOn {
+                    textDocumentProxy.deleteBackward()
+                    punctuationBefore.removeLast()
+                    if autoSpaceMarker == marker { autoSpaceMarker = nil }
+                }
+            }
+        }
+        // Smart quotes: " and ' become the language's own quotation marks, opening or closing by what is before them.
+        if text == "\"" || text == "'", let curly = smartQuote(for: text, before: punctuationBefore) {
+            output = curly
         }
         // Punctuation that normally ends a word goes right after the word when the space in front of it was
         // added automatically (by a swipe or a picked suggestion) and nothing was typed since.
@@ -710,14 +773,174 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         textDocumentProxy.insertText(output)
+        TypingStats.shared.keystroke(characters: output.count)
+        // A space after . , ! ? ; : (the Typing setting) when it ends a word at the end of the text.
+        if shouldAddSpace(after: text, before: punctuationBefore) {
+            textDocumentProxy.insertText(" ")
+            let marker = String((punctuationBefore + output + " ").suffix(12))
+            punctuationSpaceMarker = marker
+            autoSpaceMarker = marker   // a space typed next is not doubled
+        }
         lastSpaceTime = Date.distantPast
         afterTyping()
     }
 
+    /// The fields where typing is not prose: web addresses, e-mail addresses, numbers and passwords.
+    private var isPlainTextField: Bool {
+        if textDocumentProxy.isSecureTextEntry == true { return true }
+        let type = textDocumentProxy.keyboardType ?? .default
+        return [.URL, .emailAddress, .numberPad, .phonePad, .decimalPad, .numbersAndPunctuation, .asciiCapableNumberPad,
+                .namePhonePad].contains(type)
+    }
+
+    /// The language's curly quote for a typed " or ' (nil: the field or the setting wants it straight).
+    private func smartQuote(for typed: String, before: String) -> String? {
+        guard Prefs.smartQuotes, !isPlainTextField, textDocumentProxy.smartQuotesType != .no else { return nil }
+        let previous = before.last
+        // Opening at the start, after a space or an opening bracket or quote; closing after anything else.
+        let opening = previous == nil || previous!.isWhitespace
+            || "([{\u{201C}\u{2018}\u{201E}\u{201A}\u{00AB}\u{2039}\u{300C}\u{300E}-\u{2013}\u{2014}/".contains(previous!)
+        if typed == "'" {
+            // After a letter it is an apostrophe ("don't", "it's"): the closing single quote.
+            if !opening { return "\u{2019}" }
+            switch language {
+            case .german, .czech, .slovak, .lithuanian, .bulgarian, .croatian, .hungarian, .polish, .romanian:
+                return "\u{201A}"
+            default:
+                return "\u{2018}"
+            }
+        }
+        guard let pair = quotePair() else { return nil }
+        // Marks that are the same both ways (Swedish ”): the second of a pair closes.
+        if pair.open == pair.close { return pair.open }
+        return opening ? pair.open : pair.close
+    }
+
+    /// Whether the line ending `text` has a quotation open (more opening marks than closing ones).
+    private func insideQuote(_ text: String) -> Bool {
+        let line = text.split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
+        guard let pair = quotePair() else { return false }
+        let straight = line.filter { $0 == "\"" }.count
+        if pair.open == pair.close {
+            return (line.filter { String($0) == pair.open }.count + straight) % 2 == 1
+        }
+        let opens = line.filter { String($0) == pair.open }.count
+        let closes = line.filter { String($0) == pair.close }.count
+        return opens > closes || straight % 2 == 1
+    }
+
+    /// The language's double quotation marks (opening, closing).
+    private func quotePair() -> (open: String, close: String)? {
+        let marks = language.quoteMarks
+        if marks.count >= 2, language != .swedish, language != .finnish { return (marks[0], marks[1]) }
+        if let only = marks.first { return (only, only) }
+        return ("\u{201C}", "\u{201D}")
+    }
+
+    /// Whether a space goes after the mark just typed (the Space after punctuation setting): only at the end of the
+    /// text, after a word or a number, and never where typing is not prose.
+    private func shouldAddSpace(after text: String, before: String) -> Bool {
+        guard Prefs.spaceAfterPunctuation, !isPlainTextField, !language.usesPhoneticInput, language != .thai,
+              text.count == 1, ".,!?;:\u{060C}\u{061F}\u{061B}\u{0964}".contains(text) else { return false }
+        guard let previous = before.last, previous.isLetter || previous.isNumber
+                || "\u{201D}\u{2019}\u{00BB})]\"'".contains(previous) else { return false }
+        let after = textDocumentProxy.documentContextAfterInput ?? ""
+        return after.isEmpty || after.hasPrefix("\n")
+    }
+
+    // MARK: Selecting with the trackpad
+
+    /// The text selected with the trackpad, as it stands in the field.
+    private func trackpadSelection() -> String? {
+        guard let anchor = selectionAnchor, anchor != 0 else { return nil }
+        if anchor > 0 {
+            let after = textDocumentProxy.documentContextAfterInput ?? ""
+            return String(after.prefix(anchor))
+        }
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        return String(before.suffix(-anchor))
+    }
+
+    /// The selected text: the trackpad's, or what the app itself has selected.
+    private func currentSelection() -> String? {
+        if let selected = trackpadSelection(), !selected.isEmpty { return selected }
+        if let selected = textDocumentProxy.selectedText, !selected.isEmpty { return selected }
+        return nil
+    }
+
+    /// Deletes the text selected with the trackpad (true when there was some).
+    @discardableResult
+    private func deleteSelection() -> Bool {
+        guard let anchor = selectionAnchor else { return false }
+        selectionAnchor = nil
+        selectingWithCursor = false
+        guard anchor != 0 else { return false }
+        if anchor > 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: anchor) }
+        for _ in 0..<abs(anchor) { textDocumentProxy.deleteBackward() }
+        return true
+    }
+
+    /// The selection bar's buttons: copy, cut and paste need Full Access (the pasteboard).
+    private func selectionCommands() -> [Suggestion] {
+        var names: [String] = []
+        if hasFullAccess {
+            names = ["copy", "cut"]
+            if UIPasteboard.general.hasStrings { names.append("paste") }
+        }
+        names += ["case", "delete"]
+        return names.prefix(SuggestionBar.capacity).map { Suggestion(text: $0, kind: .command) }
+    }
+
+    private func perform(command: String) {
+        let selected = currentSelection() ?? ""
+        let fromTrackpad = trackpadSelection() != nil
+        switch command {
+        case "copy":
+            if !selected.isEmpty { UIPasteboard.general.string = selected }
+            selectionAnchor = nil
+        case "cut":
+            if !selected.isEmpty { UIPasteboard.general.string = selected }
+            if fromTrackpad { deleteSelection() } else { textDocumentProxy.deleteBackward() }
+        case "paste":
+            let pasted = UIPasteboard.general.string ?? ""
+            if fromTrackpad { deleteSelection() }
+            if !pasted.isEmpty { textDocumentProxy.insertText(pasted) }
+        case "delete":
+            if fromTrackpad { deleteSelection() } else { textDocumentProxy.deleteBackward() }
+        case "case":
+            guard !selected.isEmpty else { return }
+            let next = nextCase(of: selected)
+            if fromTrackpad { deleteSelection() }
+            textDocumentProxy.insertText(next)
+            // The new text stays selected, so the case can be changed again.
+            selectionAnchor = -next.count
+        default:
+            break
+        }
+        selectingWithCursor = false
+        clearSwipeState()
+        lastSpaceTime = Date.distantPast
+        refreshToolsSoon()
+        scheduleRefresh()
+    }
+
+    /// UPPERCASE, then lowercase, then Capitalized, then round again.
+    private func nextCase(of text: String) -> String {
+        if text == text.uppercased() && text != text.lowercased() { return text.lowercased() }
+        if text == text.lowercased() { return text.capitalized }
+        return text.uppercased()
+    }
+
     private func handleSpace() {
         hangul.reset()
+        if deleteSelection() {
+            textDocumentProxy.insertText(" ")
+            afterTyping()
+            return
+        }
         let pendingMarker = autoSpaceMarker
         autoSpaceMarker = nil
+        punctuationSpaceMarker = nil
         if language.usesPhoneticInput {
             // Space writes the best word for the letters (no spaces between words); with nothing typed, a space.
             if !composing.isEmpty {
@@ -756,7 +979,8 @@ final class KeyboardViewController: UIInputViewController {
 
         // A text shortcut ("omw" -> "On my way!") expands when space is pressed.
         if let phrase = shortcutExpansion(in: before) {
-            replacePrefix(with: phrase)
+            TypingStats.shared.note(.shortcut)
+            replacePrefix(with: phrase, typed: currentPrefix(in: before).count)
             clearSwipeState()
             afterTyping()
             return
@@ -781,6 +1005,8 @@ final class KeyboardViewController: UIInputViewController {
                 let replacement = matchCase(of: typedWord, for: fixed)
                 recordBigram(contextBefore: before, next: fixed)
                 noteWordUse(fixed)
+                TypingStats.shared.word(language)
+                TypingStats.shared.note(.autoCorrection)
                 for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
                 textDocumentProxy.insertText(replacement + " ")
                 clearSwipeState()
@@ -798,6 +1024,7 @@ final class KeyboardViewController: UIInputViewController {
             let lower = TextFolding.normalizeApostrophes(typedWord).lowercased()
             if !typedWord.isEmpty, typedWord == typedWord.lowercased(), let form = LearnedWords.shared.forms[lower],
                form != typedWord, form.count == typedWord.count {
+                TypingStats.shared.word(language)
                 for _ in 0..<typedWord.count { textDocumentProxy.deleteBackward() }
                 textDocumentProxy.insertText(form + " ")
                 clearSwipeState()
@@ -809,6 +1036,7 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         clearSwipeState()
+        if !currentPrefix(in: before).isEmpty { TypingStats.shared.word(language) }
         textDocumentProxy.insertText(" ")
         lastSpaceTime = Date()
         afterTyping()
@@ -859,6 +1087,12 @@ final class KeyboardViewController: UIInputViewController {
 
     private func handleEnter() {
         hangul.reset()
+        punctuationSpaceMarker = nil
+        if deleteSelection() {
+            textDocumentProxy.insertText("\n")
+            afterTyping()
+            return
+        }
         if !composing.isEmpty {
             // Return keeps the letters as typed (for a name or an English word; the kana for Japanese), like the
             // system's keyboards.
@@ -867,20 +1101,35 @@ final class KeyboardViewController: UIInputViewController {
             return
         }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        var cursorBack = 0
         if let phrase = shortcutExpansion(in: before) {
             let prefix = currentPrefix(in: before)
+            let written = ShortcutTemplate.split(phrase)
             for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
-            textDocumentProxy.insertText(phrase)
+            textDocumentProxy.insertText(written.text)
+            cursorBack = written.cursorBack
+            TypingStats.shared.note(.shortcut)
+            TypingStats.shared.saved(written.text.count - prefix.count, writing: written.text.count - prefix.count)
         } else {
+            if !currentPrefix(in: before).isEmpty { TypingStats.shared.word(language) }
             DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
         }
         clearSwipeState()
         textDocumentProxy.insertText("\n")
+        if cursorBack > 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: -(cursorBack + 1)) }
         lastSpaceTime = Date.distantPast
         afterTyping()
     }
 
     private func handleBackspace() {
+        punctuationSpaceMarker = nil
+        TypingStats.shared.delete()
+        if deleteSelection() {
+            lastSpaceTime = Date.distantPast
+            updateAutoShift()
+            scheduleRefresh()
+            return
+        }
         if !composing.isEmpty {
             composing.removeLast()
             showComposing()
@@ -895,6 +1144,7 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         if let fix = lastAutoFix, before.hasSuffix(fix.inserted) {
             // Right after an auto-fix, backspace puts back what was typed, and that spelling is kept from now on.
+            TypingStats.shared.note(.correctionUndone)
             for _ in 0..<fix.inserted.count { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(fix.typed)
             stores[language]?.learn(fix.typed, asTyped: true)
@@ -1097,10 +1347,18 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    /// The phrase of the shortcut typed before the cursor, its placeholders ({date}, {time}...) filled in; a
+    /// {cursor} is still in it as `ShortcutTemplate.cursorMark`.
     private func shortcutExpansion(in before: String) -> String? {
         let prefix = currentPrefix(in: before)
-        guard !prefix.isEmpty else { return nil }
-        return settings.shortcutPhrase(for: prefix) ?? systemShortcuts[prefix.lowercased()]
+        guard !prefix.isEmpty, let phrase = settings.shortcutPhrase(for: prefix) ?? systemShortcuts[prefix.lowercased()] else {
+            return nil
+        }
+        guard ShortcutTemplate.hasPlaceholders(phrase) else { return phrase }
+        let access = hasFullAccess
+        return ShortcutTemplate.expand(phrase, locale: Locale(identifier: language.localeIdentifier)) {
+            access ? UIPasteboard.general.string : nil
+        }
     }
 
     // MARK: Words
@@ -1187,6 +1445,7 @@ final class KeyboardViewController: UIInputViewController {
         textDocumentProxy.setMarkedText(candidate.word, selectedRange: NSRange(location: (candidate.word as NSString).length, length: 0))
         textDocumentProxy.unmarkText()
         PhoneticInput.shared(for: language).learn(candidate)
+        TypingStats.shared.word(language)
         composing = rest
         if !rest.isEmpty {
             showComposing()
@@ -1280,6 +1539,14 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshSuggestions() {
         shownFix = nil
+        shownSmart = nil
+        shownEmojiPhrase = nil
+        shownShortcut = nil
+        // Selected text: the bar offers what can be done with it.
+        if composing.isEmpty, currentSelection() != nil {
+            suggestionBar.update(selectionCommands())
+            return
+        }
         // Chinese and Japanese need the bar to pick their words, whatever the suggestion settings say.
         if language.usesPhoneticInput && textDocumentProxy.isSecureTextEntry != true {
             if !composing.isEmpty && phoneticCandidates.isEmpty && PhoneticInput.shared(for: language).isLoaded { updatePhoneticCandidates() }
@@ -1289,7 +1556,7 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
 
         if textDocumentProxy.isSecureTextEntry == true
-            || (!Prefs.suggestions && !Prefs.emojiSuggestions) {
+            || (!Prefs.suggestions && !Prefs.emojiSuggestions && !Prefs.inlineMath && !Prefs.unitConversion) {
             suggestionBar.update([])
             return
         }
@@ -1311,8 +1578,16 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         var emojis: [String] = []
+        let emojiLanguages = ([language] + enabledLanguages).reduce(into: [Language]()) { list, item in
+            if !list.contains(item) { list.append(item) }
+        }
         if Prefs.emojiSuggestions, let emoticon = Emoticons.match(atEndOf: before) {
             emojis = [emoticon.emoji]   // ":)" -> the emoji, in place of the word's
+        } else if Prefs.emojiSuggestions, !emojiWord.isEmpty,
+                  let phrase = EmojiStore.shared.phraseSuggestion(before: before, languages: emojiLanguages) {
+            // A name of several words ("red heart", "thumbs up") wins over its last word's.
+            emojis = [phrase.emoji]
+            shownEmojiPhrase = phrase
         } else if Prefs.emojiSuggestions && !emojiWord.isEmpty {
             // The word's own language first ("hat" is six in Hungarian, a hat in English), then the others.
             let owners = Predictor.owners(of: emojiWord, stores: stores)
@@ -1355,10 +1630,30 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
+        // A calculation ("12*3=") or a measurement ("5 km") at the end of the text: its result in the bar.
+        if !isPlainTextField || textDocumentProxy.keyboardType == .numbersAndPunctuation {
+            let decimals = Prefs.resultDecimals
+            if Prefs.inlineMath, let result = InlineCalculator.result(before: before, language: language, decimals: decimals) {
+                shownSmart = (result, true)
+            } else if Prefs.unitConversion,
+                      let result = UnitConverter.result(before: before, language: language, decimals: decimals, target: Prefs.unitTarget) {
+                shownSmart = (result, false)
+            }
+        }
+        if let smart = shownSmart, smart.isCalculation {
+            // "3+4=": the answer alone, in the middle.
+            suggestionBar.update([Suggestion(text: "", kind: .word), Suggestion(text: smart.result.shown, kind: .result)])
+            return
+        }
+
         // Layout is [left, CENTRE, right]; the most probable word sits in the centre (as on iOS).
         var ranked: [String] = []
-        let phrase = shortcutExpansion(in: before)
-        if let phrase = phrase { ranked.append(phrase) }
+        let expanded = shortcutExpansion(in: before)
+        let phrase = expanded.map { ShortcutTemplate.split($0).text }
+        if let expanded = expanded, let phrase = phrase {
+            ranked.append(phrase)
+            shownShortcut = (expanded, phrase)
+        }
         for word in words where word != prefix && !ranked.contains(word) { ranked.append(word) }
         var result: [Suggestion] = []
         var highlighted: Int? = nil
@@ -1399,18 +1694,34 @@ final class KeyboardViewController: UIInputViewController {
                 if result.count > capacity { result.removeLast() }
             }
         }
+        // A conversion ("5 km" -> miles) takes the right-hand slot, before an emoji.
+        if let smart = shownSmart {
+            while result.count < 2 { result.append(Suggestion(text: "", kind: .word)) }
+            result.removeAll { $0.kind == .emoji }
+            result.insert(Suggestion(text: smart.result.shown, kind: .result), at: min(2, result.count))
+            while result.count > capacity { result.removeLast() }
+        }
         suggestionBar.update(result, highlighted: highlighted)
     }
 
-    private func replacePrefix(with replacement: String) {
+    /// Writes `replacement` and a space in place of the word being typed. A shortcut's {cursor} puts the cursor there.
+    private func replacePrefix(with replacement: String, typed: Int? = nil) {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         let prefix = currentPrefix(in: before)
-        recordBigram(contextBefore: before, next: replacement)
-        noteWordUse(replacement)
+        let written = ShortcutTemplate.split(replacement)
+        recordBigram(contextBefore: before, next: written.text)
+        noteWordUse(written.text)
+        TypingStats.shared.word(language)
+        TypingStats.shared.saved(written.text.count - (typed ?? prefix.count), writing: written.text.count - prefix.count)
         for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
-        textDocumentProxy.insertText(replacement + " ")
+        textDocumentProxy.insertText(written.text + " ")
         lastSpaceTime = Date()
-        autoSpaceMarker = String((String(before.dropLast(prefix.count)) + replacement + " ").suffix(12))
+        if written.cursorBack > 0 {
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: -(written.cursorBack + 1))
+            autoSpaceMarker = nil
+        } else {
+            autoSpaceMarker = String((String(before.dropLast(prefix.count)) + written.text + " ").suffix(12))
+        }
     }
 
     // MARK: Swipe typing
@@ -1428,8 +1739,13 @@ final class KeyboardViewController: UIInputViewController {
             leadingSpace = " "
         }
         let inserted = word + " "
+        deleteSelection()
         textDocumentProxy.insertText(leadingSpace + inserted)
         autoSpaceMarker = String((before + leadingSpace + inserted).suffix(12))
+        punctuationSpaceMarker = nil
+        TypingStats.shared.word(language)
+        TypingStats.shared.note(.swipe)
+        TypingStats.shared.saved(word.count - 1, writing: word.count)
 
         lastSwipeInserted = inserted
         swipeAlternatives = words.prefix(3).map { applyShift(to: $0) }
@@ -1507,7 +1823,20 @@ extension KeyboardViewController: KeyboardViewDelegate {
         guard offset != 0 else { return }
         finishComposing()
         // In right-to-left text, sliding right goes back towards the start of the text.
-        textDocumentProxy.adjustTextPosition(byCharacterOffset: language.isRightToLeft ? -offset : offset)
+        var move = language.isRightToLeft ? -offset : offset
+        if selectingWithCursor {
+            // The selection only grows over text the keyboard can see, so it always knows what is selected.
+            if move < 0 {
+                move = max(move, -(textDocumentProxy.documentContextBeforeInput ?? "").count)
+            } else {
+                move = min(move, (textDocumentProxy.documentContextAfterInput ?? "").count)
+            }
+            guard move != 0 else { return }
+            selectionAnchor = (selectionAnchor ?? 0) - move
+        } else {
+            selectionAnchor = nil
+        }
+        textDocumentProxy.adjustTextPosition(byCharacterOffset: move)
         if Prefs.cursorTickHaptic { Haptics.shared.tick() }
         clearSwipeState()
         lastSpaceTime = Date.distantPast
@@ -1516,6 +1845,28 @@ extension KeyboardViewController: KeyboardViewDelegate {
 
     func keyboardViewDidBeginWordDelete(_ view: KeyboardView) {
         wordDeleteStack = []
+        deleteSelection()
+    }
+
+    func keyboardViewDidBeginCursorMode(_ view: KeyboardView) {
+        // A new trip of the cursor: what was selected before is let go.
+        selectingWithCursor = false
+        if selectionAnchor != nil {
+            selectionAnchor = nil
+            scheduleRefresh()
+        }
+    }
+
+    func keyboardViewDidBeginSelecting(_ view: KeyboardView) {
+        finishComposing()
+        selectingWithCursor = true
+        selectionAnchor = 0
+    }
+
+    func keyboardViewDidEndCursorMode(_ view: KeyboardView) {
+        selectingWithCursor = false
+        if selectionAnchor == 0 { selectionAnchor = nil }
+        scheduleRefresh()
     }
 
     func keyboardViewDidRequestDeleteWord(_ view: KeyboardView) {
@@ -1747,12 +2098,30 @@ extension KeyboardViewController: SuggestionBarDelegate {
             return
         }
         switch suggestion.kind {
+        case .command:
+            perform(command: suggestion.text)
+        case .result:
+            guard let smart = shownSmart, smart.result.shown == suggestion.text else { return }
+            for _ in 0..<smart.result.replaceCount { textDocumentProxy.deleteBackward() }
+            textDocumentProxy.insertText(smart.result.insert)
+            TypingStats.shared.note(smart.isCalculation ? .calculation : .conversion)
+            shownSmart = nil
+            lastSpaceTime = Date.distantPast
+            clearSwipeState()
+            afterTyping()
         case .literal, .word:
             guard !suggestion.text.isEmpty else { return }
             if suggestion.kind == .literal { learnTappedWord(suggestion.text, pin: true) }
-            // A learned word picked in the bar is kept for good and ranked first from now on.
-            LearnedWords.shared.pin(TextFolding.normalizeApostrophes(suggestion.text).lowercased())
-            replacePrefix(with: suggestion.text)
+            if let shortcut = shownShortcut, shortcut.shown == suggestion.text {
+                // A shortcut picked in the bar: its filled-in phrase, with the cursor where {cursor} is.
+                TypingStats.shared.note(.shortcut)
+                replacePrefix(with: shortcut.expanded)
+            } else {
+                // A learned word picked in the bar is kept for good and ranked first from now on.
+                LearnedWords.shared.pin(TextFolding.normalizeApostrophes(suggestion.text).lowercased())
+                TypingStats.shared.note(.suggestion)
+                replacePrefix(with: suggestion.text)
+            }
             clearSwipeState()
             afterTyping()
         case .swipeAlternative:
@@ -1766,6 +2135,8 @@ extension KeyboardViewController: SuggestionBarDelegate {
             var replaced = 0
             if let emoticon = Emoticons.match(atEndOf: before), emoticon.emoji == suggestion.text {
                 replaced = emoticon.length   // ":)" or ":) " becomes the emoji
+            } else if let phrase = shownEmojiPhrase, phrase.emoji == suggestion.text, before.count >= phrase.length {
+                replaced = phrase.length     // "red heart" becomes the heart
             } else if !typing.isEmpty {
                 replaced = typing.count
             } else if before.hasSuffix(" ") {
@@ -1775,6 +2146,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
             for _ in 0..<replaced { textDocumentProxy.deleteBackward() }
             let needsSpace = replaced == 0 && (before.last?.isWhitespace == false)
             textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
+            TypingStats.shared.note(.emoji)
             lastSpaceTime = Date.distantPast
             clearSwipeState()
             afterTyping()
@@ -1867,6 +2239,10 @@ extension KeyboardViewController: ToolsPanelDelegate {
         case .changeCase:
             // The text proxy cannot select, so the result is remembered: while the caret is still right after it,
             // the next press cycles it again.
+            if trackpadSelection() != nil {
+                perform(command: "case")
+                return
+            }
             var source = textDocumentProxy.selectedText ?? ""
             var again = false
             if source.isEmpty, let last = lastCased, (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) {
@@ -1889,11 +2265,13 @@ extension KeyboardViewController: ToolsPanelDelegate {
             refreshToolsSoon()
             scheduleRefresh()
         case .lineStart:
+            selectionAnchor = nil
             let line = (textDocumentProxy.documentContextBeforeInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: -line.count)
             refreshToolsSoon()
             scheduleRefresh()
         case .lineEnd:
+            selectionAnchor = nil
             let line = (textDocumentProxy.documentContextAfterInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).first ?? ""
             textDocumentProxy.adjustTextPosition(byCharacterOffset: line.count)
             refreshToolsSoon()
@@ -1917,7 +2295,7 @@ extension KeyboardViewController: ToolsPanelDelegate {
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {
         switch tool {
         case .changeCase:
-            if !(textDocumentProxy.selectedText ?? "").isEmpty { return true }
+            if !(textDocumentProxy.selectedText ?? "").isEmpty || trackpadSelection() != nil { return true }
             if let last = lastCased { return (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) }
             return false
         default: return true

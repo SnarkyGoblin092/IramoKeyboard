@@ -37,6 +37,7 @@ struct HapticsView: View {
                 })) {
                     Label(tr("Vibrate on key presses"), systemImage: "iphone.radiowaves.left.and.right")
                 }
+                .searchAnchor("haptics.vibration")
                 if isOn {
                     SegmentedChoice(title: tr("Feel"), names: feels.map { $0.name }, selected: feelIndex, knock: false) { index in
                         sharpness = feels[index].sharpness
@@ -62,6 +63,7 @@ struct HapticsView: View {
                 GlassToggle(title: tr("When cursor mode starts"),
                             subtitle: tr("One tick when holding the space bar turns it into a trackpad."),
                             isOn: $cursorStart)
+                    .searchAnchor("haptics.cursor")
                 GlassToggle(title: tr("For each character"),
                             subtitle: tr("A light tick for every character the cursor moves past."),
                             isOn: $cursorTick)
@@ -73,6 +75,7 @@ struct HapticsView: View {
             Section {
                 GlassToggle(title: tr("Key clicks"), subtitle: tr("The system key sound, muted by the silent switch."),
                             isOn: $clicks)
+                    .searchAnchor("haptics.sound")
                 if clicks {
                     GlassChoiceLink(title: tr("Click sound"), symbol: "music.note",
                                     options: KeySound.allCases.map { (value: $0.rawValue, name: tr($0.displayName)) },

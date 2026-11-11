@@ -54,8 +54,13 @@ struct ThemePreview: View {
 
     private var letterRows: [[String]] { return ThemePreview.letterRows(for: shownLanguage) }
 
-    // Mirrors `Language.letterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
+    /// The rows as the keyboard has them: the language's own, or the layout picked for it (LetterLayout).
     static func letterRows(for language: Language) -> [[String]] {
+        return LetterLayout.stored(in: Settings.shared.letterLayouts, for: language.rawValue).apply(to: ownLetterRows(for: language))
+    }
+
+    // Mirrors `Language.defaultLetterRows` / `accents` in Keyboard/Layouts.swift (keyboard-only code, so copied here).
+    static func ownLetterRows(for language: Language) -> [[String]] {
         func split(_ rows: String...) -> [[String]] { return rows.map { $0.map { String($0) } } }
         switch language {
         case .english, .italian: return split("qwertyuiop", "asdfghjkl", "zxcvbnm")

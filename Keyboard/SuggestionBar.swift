@@ -6,6 +6,8 @@ struct Suggestion {
         case word              // dictionary completion or shortcut expansion
         case emoji             // emoji that matches the word
         case swipeAlternative  // another reading of the word that was just swiped
+        case result            // a calculation's answer or a converted measurement ("36", "3.107 mi")
+        case command           // something to do with selected text: its text names it ("copy", "cut"...)
     }
     let text: String
     let kind: Kind
@@ -386,6 +388,28 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         labels[index].font = suggestions[index].kind == .emoji ? UIFont.systemFont(ofSize: 26)
             : Theme.keyFont(ofSize: 17, weight: onPill ? .semibold : .regular)
         labels[index].textColor = onPill ? Theme.onPill : textColor
+        if suggestions[index].kind == .command {
+            labels[index].attributedText = SuggestionBar.commandLabel(suggestions[index].text,
+                                                                      color: onPill ? Theme.onPill : textColor)
+            labels[index].accessibilityLabel = suggestions[index].text
+        } else {
+            labels[index].accessibilityLabel = nil
+        }
+    }
+
+    /// The symbols of the selection's commands.
+    private static let commandSymbols: [String: String] = [
+        "copy": "doc.on.doc", "cut": "scissors", "paste": "doc.on.clipboard", "case": "textformat", "delete": "delete.left"
+    ]
+
+    /// A command as its symbol, in the bar's text colour.
+    private static func commandLabel(_ command: String, color: UIColor) -> NSAttributedString {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+        guard let image = UIImage(systemName: commandSymbols[command] ?? "questionmark", withConfiguration: configuration)?
+            .withTintColor(color, renderingMode: .alwaysOriginal) else {
+            return NSAttributedString(string: command)
+        }
+        return NSAttributedString(attachment: NSTextAttachment(image: image))
     }
 
     private func addSlot() {

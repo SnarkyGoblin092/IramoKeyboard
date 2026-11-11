@@ -139,6 +139,32 @@ final class EmojiStore {
         return result
     }
 
+    /// An emoji whose name is the last two to five words typed ("red heart" -> ❤️, "thumbs up" -> 👍), and how many
+    /// characters before the cursor it takes the place of (the words and a space after them). The longest name wins.
+    func phraseSuggestion(before: String, languages: [Language]) -> (emoji: String, length: Int)? {
+        var text = Substring(before.suffix(80))
+        var trailing = 0
+        if text.hasSuffix(" ") {
+            text = text.dropLast()
+            trailing = 1
+        }
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
+        guard words.count >= 2 else { return nil }
+        for count in stride(from: min(5, words.count), through: 2, by: -1) {
+            let tail = words.suffix(count)
+            guard tail.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isLetter } }) else { continue }
+            // The first word must start there (not be the end of a longer word cut off by the 80 characters).
+            if count == words.count && before.count > 80 { continue }
+            let phrase = tail.joined(separator: " ")
+            for language in languages {
+                if let emoji = suggestions(for: phrase, language: language, limit: 1).first {
+                    return (emoji, phrase.count + trailing)
+                }
+            }
+        }
+        return nil
+    }
+
     private static func loadKeywords(_ language: Language) -> [String: [String]] {
         guard let url = LanguageData.url(forResource: "emoji_keywords_\(language.rawValue)", withExtension: "json"),
               let data = try? Data(contentsOf: url),

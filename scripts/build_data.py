@@ -368,6 +368,9 @@ def load_annotations(*paths):
 
 
 WORD_ONLY = re.compile(r"^[^\W\d_]+$", re.UNICODE)
+# Names of two to five words ("red heart", "face with tears of joy"): the keyboard matches them against the last
+# words typed (EmojiStore.phraseSuggestion).
+PHRASE = re.compile(r"^[^\W\d_]+(?: [^\W\d_]+){1,4}$", re.UNICODE)
 
 
 def build_keywords(groups, annotations, per_keyword=6):
@@ -384,8 +387,8 @@ def build_keywords(groups, annotations, per_keyword=6):
                 continue
             names = [n.lower() for n in annotation.get("tts", [])]
             for keyword in [k.lower() for k in annotation.get("default", [])] + names:
-                if not WORD_ONLY.match(keyword):
-                    continue  # multi-word phrases can never match a single typed word
+                if not WORD_ONLY.match(keyword) and not PHRASE.match(keyword):
+                    continue  # names with digits or marks ("1st place", "t-shirt") are never typed as words
                 priority = 0 if keyword in names else 1
                 index.setdefault(fold(keyword), []).append((priority, order, base))
 

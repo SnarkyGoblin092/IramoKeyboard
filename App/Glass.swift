@@ -507,25 +507,38 @@ struct SegmentedChoice: View {
 /// Takes the same `Section { } header: { } footer: { }` content as a List.
 struct GlassList<Content: View>: View {
     private let content: Content
+    /// The screen this list is on (the settings search takes the user to a row of it: SearchFocus).
+    @Environment(\.searchScope) private var scope
+    /// A setting picked in the search is on this screen: every card is built at once, so its row can be scrolled to.
+    /// (Decided when the list first appears, and kept: switching would build every row again.)
+    @State private var eager: Bool
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
+        self._eager = State(initialValue: SearchFocus.shared.request != nil)
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            lists
+                .onAppear { SearchFocus.shared.consume(in: scope, proxy: proxy) }
+        }
+    }
+
+    @ViewBuilder private var lists: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             ScrollView {
-                // Lazy: a long screen (the Effects screen's hundred-odd cards) only builds the cards on screen.
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    Group(sections: content) { sections in
-                        ForEach(sections) { section in
-                            GlassCardSection(section: section)
-                        }
-                    }
+                if eager {
+                    VStack(alignment: .leading, spacing: 0) { cards }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                } else {
+                    // Lazy: a long screen (the Effects screen's hundred-odd cards) only builds the cards on screen.
+                    LazyVStack(alignment: .leading, spacing: 0) { cards }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
             .environment(\.inGlassCards, true)
             .buttonStyle(GlassPressStyle())   // a press on any row lights a lens of glass under it
@@ -536,6 +549,17 @@ struct GlassList<Content: View>: View {
         list
         #endif
     }
+
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    private var cards: some View {
+        Group(sections: content) { sections in
+            ForEach(sections) { section in
+                GlassCardSection(section: section)
+            }
+        }
+    }
+    #endif
 
     private var list: some View {
         List { content }

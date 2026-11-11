@@ -16,6 +16,8 @@ struct ContentView: View {
 
     /// The window's full size (the keyboard showing doesn't change it): wide enough, it shows two columns.
     @State private var windowSize: CGSize = .zero
+    /// What is typed in the main list's search field.
+    @State private var query = 
 
     /// Landscape on an iPhone or iPad: the main list on the left and the open screen beside it.
     private static func isWide(_ size: CGSize) -> Bool {
@@ -29,7 +31,7 @@ struct ContentView: View {
             } else {
                 NavigationStack(path: $path) {
                     mainList
-                        .navigationDestination(for: Screen.self) { $0.view }
+                        .navigationDestination(for: Screen.self) { $0.scopedView }
                 }
                 .environment(\.openScreen, { screen in
                     returnToLanguageRow = false
@@ -66,23 +68,32 @@ struct ContentView: View {
         }
     }
 
-    /// The main list of settings: the whole screen upright, the left column in landscape.
+    /// The main list of settings: the whole screen upright, the left column in landscape. Its search field finds any
+    /// setting and takes the user to it.
     private var mainList: some View {
         ScrollViewReader { proxy in
-            // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
-            GlassList {
-                HeaderSection()
-                TestFieldSection().glassRows()
-                // From what the keyboard offers, through how it types and feels, to the data and the app itself.
-                KeyboardSection().glassRows()
-                TypingSection().glassRows()
-                TouchSection().glassRows()
-                LookSection().glassRows()
-                DataSection().glassRows()
-                AppLanguageSection().glassRows()
-                AboutSection().glassRows()
+            Group {
+                if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
+                    GlassList {
+                        HeaderSection()
+                        TestFieldSection().glassRows()
+                        // From what the keyboard offers, through how it types and feels, to the data and the app itself.
+                        KeyboardSection().glassRows()
+                        TypingSection().glassRows()
+                        TouchSection().glassRows()
+                        LookSection().glassRows()
+                        DataSection().glassRows()
+                        AppLanguageSection().glassRows()
+                        AboutSection().glassRows()
+                    }
+                    .glassScreen()
+                } else {
+                    SettingsSearchResults(query: query) { entry in open(entry) }
+                }
             }
-            .glassScreen()
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: tr("Search settings"))
+            .autocorrectionDisabled()
             .navigationTitle(tr("Iramo"))
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
@@ -91,6 +102,17 @@ struct ContentView: View {
                 DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
             }
         }
+    }
+
+    /// A setting picked in the search: its screen opens (in landscape, beside the list) and its row lights up.
+    private func open(_ entry: SearchEntry) {
+        if let anchor = entry.anchor {
+            SearchFocus.shared.request = SearchFocus.Request(screen: entry.screen, anchor: anchor)
+        }
+        query = ""
+        returnToLanguageRow = false
+        guard let screen = entry.screen else { return }
+        path = [screen]
     }
 
     /// Landscape: the main list as a column on the left; a row tapped there opens its screen on the right, where
@@ -109,7 +131,7 @@ struct ContentView: View {
                                           set: { path = Array(path.prefix(1)) + $0 })) {
                 Group {
                     if let screen = path.first {
-                        screen.view
+                        screen.scopedView
                     } else {
                         VStack(spacing: 12) {
                             Image(systemName: "keyboard")
@@ -121,7 +143,7 @@ struct ContentView: View {
                         .glassScreen()
                     }
                 }
-                .navigationDestination(for: Screen.self) { $0.view }
+                .navigationDestination(for: Screen.self) { $0.scopedView }
             }
             // Another screen picked on the left starts afresh.
             .id(path.first)
@@ -226,6 +248,7 @@ private struct TestFieldSection: View {
                 IconTile(symbol: "keyboard", color: .gray)
                 TextField(tr("Tap here and type to try it"), text: $text)
             }
+            .searchAnchor("main.test")
         } header: {
             SectionHeader(tr("Try it"), symbol: "text.cursor", color: .gray)
         }
@@ -297,6 +320,16 @@ private struct TypingSection: View {
     @AppStorage(SettingKey.suggestions, store: SharedStore.defaults) private var suggestions = SettingDefault.suggestions
     @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
     @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
+    @AppStorage(SettingKey.inlineMath, store: SharedStore.defaults) private var inlineMath = SettingDefault.inlineMath
+    @AppStorage(SettingKey.unitConversion, store: SharedStore.defaults) private var units = SettingDefault.unitConversion
+
+    private var smartSummary: String {
+        switch (inlineMath, units) {
+        case (true, true): return tr("On")
+        case (false, false): return tr("Off")
+        default: return tr("%@ on", "1")
+        }
+    }
 
     private var barSummary: String {
         if !suggestions { return tr("Off") }
@@ -312,12 +345,27 @@ private struct TypingSection: View {
             SettingToggle(tr("Auto-correction"), key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: tr("Fixes typos, accents and missing spaces on space"),
                           symbol: "checkmark.seal.fill", color: .green, feature: .autoCorrect)
+                .searchAnchor("main.autocorrect")
             SettingToggle(tr("Auto-capitalization"), key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
                           subtitle: tr("A capital at the start of each sentence"),
                           symbol: "textformat", color: .blue, feature: .capitals)
+                .searchAnchor("main.autocap")
             SettingToggle(tr("\u{201C}.\u{201D} shortcut"), key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
                           subtitle: tr("Tap the space bar twice to end a sentence"),
                           symbol: "circle.fill", color: .gray, feature: .sentencePeriod)
+                .searchAnchor("main.period")
+            SettingToggle(tr("Smart quotes"), key: SettingKey.smartQuotes, defaultValue: SettingDefault.smartQuotes,
+                          subtitle: tr("Curly quotes and apostrophes in your language's style"),
+                          symbol: "quote.opening", color: .teal)
+                .searchAnchor("main.smartQuotes")
+            SettingToggle(tr("Space after punctuation"), key: SettingKey.spaceAfterPunctuation,
+                          defaultValue: SettingDefault.spaceAfterPunctuation,
+                          subtitle: tr("A space goes after . , ! ? ; : by itself"),
+                          symbol: "space", color: .mint)
+                .searchAnchor("main.spaceAfter")
+            ScreenRow(.smartTyping) {
+                SettingsRow(title: tr("Calculator & units"), symbol: "function", color: .orange, value: smartSummary)
+            }
         } header: {
             SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }
@@ -375,6 +423,7 @@ private struct LookSection: View {
                 AccentPicker()
             }
             .padding(.vertical, 2)
+            .searchAnchor("main.accent")
         } header: {
             SectionHeader(tr("Look & feel"), symbol: "paintpalette.fill", color: .purple)
         }
@@ -412,9 +461,14 @@ private struct DataSection: View {
 
     var body: some View {
         Section {
+            ScreenRow(.stats) {
+                SettingsRow(title: tr("Typing stats"), symbol: "chart.bar.fill", color: .green)
+            }
             // Orange: they remove things (each asks first), short of red Reset, which undoes every setting.
             row(.learned, tr("Forget learned words"), symbol: "text.book.closed", color: .orange)
+                .searchAnchor("main.forget")
             row(.reset, tr("Reset all settings"), symbol: "arrow.counterclockwise", color: .red, role: .destructive)
+                .searchAnchor("main.reset")
             if let note = note {
                 Text(note).font(.footnote).foregroundColor(.secondary)
             }
@@ -480,6 +534,7 @@ private struct AboutSection: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .searchAnchor("main.welcome")
             ScreenRow(.licences) {
                 SettingsRow(title: tr("Licences"), symbol: "doc.text.fill", color: .gray)
             }
@@ -577,9 +632,21 @@ struct AppLanguageView: View {
 /// The screens the main list opens.
 enum Screen: Hashable {
     case languages, appLanguage, suggestions, gestures, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
+    case smartTyping, stats, longPress
+    /// The letter layout of one language (its code).
+    case languageLayout(String)
+
+    /// The screen, marked as itself for the settings search (SearchFocus).
+    var scopedView: some View {
+        return view.environment(\.searchScope, self)
+    }
 
     @ViewBuilder var view: some View {
         switch self {
+        case .smartTyping: SmartTypingView()
+        case .stats: StatsView()
+        case .longPress: LongPressCharactersView()
+        case .languageLayout(let code): LanguageLayoutView(language: Language(rawValue: code) ?? .english)
         case .languages: LanguagesView()
         case .appLanguage: AppLanguageView()
         case .suggestions: SuggestionsView()
@@ -672,6 +739,31 @@ struct ShortcutsView: View {
     @State private var items: [TextShortcut] = Settings.shared.shortcuts
     @State private var trigger = ""
     @State private var phrase = ""
+    @AppStorage(SettingKey.dateFormat, store: SharedStore.defaults) private var dateFormat = SettingDefault.dateFormat
+    @AppStorage(SettingKey.customDateFormat, store: SharedStore.defaults) private var customDate = SettingDefault.customDateFormat
+    @AppStorage(SettingKey.timeFormat, store: SharedStore.defaults) private var timeFormat = SettingDefault.timeFormat
+    @AppStorage(SettingKey.timeSeconds, store: SharedStore.defaults) private var timeSeconds = SettingDefault.timeSeconds
+
+    private let dateStyles = ["short", "medium", "long", "full", "iso", "custom"]
+    private let timeStyles = ["system", "24h", "12h"]
+
+    /// Dates are written in the words of the language the keyboard opens in.
+    private var locale: Locale {
+        return Locale(identifier: LiveKeyboardView.openingLanguage(code: Settings.shared.languageCode).localeIdentifier)
+    }
+
+    /// The phrase as typing its trigger writes it today ({cursor} shown as a thin bar).
+    private var filledPhrase: String {
+        let written = phrase.trimmingCharacters(in: .whitespaces)
+        guard ShortcutTemplate.hasPlaceholders(written) else { return written }
+        Settings.shared.refresh()   // the formats just picked, not the half-second-old copy
+        let expanded = ShortcutTemplate.expand(written, locale: locale) { tr("copied text") }
+        return expanded.replacingOccurrences(of: String(ShortcutTemplate.cursorMark), with: "\u{258F}")
+    }
+
+    private func dateExample(_ style: String) -> String {
+        return ShortcutTemplate.dateText(Date(), locale: locale, style: style, custom: customDate)
+    }
 
     private var canAdd: Bool {
         return !trigger.trimmingCharacters(in: .whitespaces).isEmpty
@@ -682,7 +774,7 @@ struct ShortcutsView: View {
     // typed stays pinned above it (PinnedPreview).
     var body: some View {
         PinnedPreview(height: 110) {
-            ShortcutPreview(trigger: trigger, phrase: phrase)
+            ShortcutPreview(trigger: trigger, phrase: filledPhrase)
         } content: {
         GlassList {
             Section {
@@ -692,6 +784,36 @@ struct ShortcutsView: View {
                 TextField(tr("Phrase (e.g. On my way!)"), text: $phrase)
             } header: {
                 Text(tr("New shortcut"))
+            }
+            .glassRows()
+
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(ShortcutTemplate.placeholders, id: \.token) { item in
+                            Button {
+                                Feedback.tick()
+                                phrase += (phrase.isEmpty || phrase.hasSuffix(" ") ? "" : " ") + item.token
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Text(item.token).font(.subheadline.monospaced().weight(.semibold))
+                                    Text(tr(item.note)).font(.caption2).foregroundColor(.secondary)
+                                }
+                                .foregroundColor(.primary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .glassShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .searchAnchor("shortcuts.placeholders")
+            } header: {
+                Text(tr("Placeholders"))
+            } footer: {
+                Text(tr("Tap one to add it to the phrase. They are filled in when you type the shortcut: \u{201C}Sent {date}\u{201D} writes today's date."))
             }
             .glassRows()
 
@@ -728,6 +850,37 @@ struct ShortcutsView: View {
                 Text(tr("Your shortcuts"))
             } footer: {
                 if !items.isEmpty { Text(tr("Swipe a shortcut left to remove it.")) }
+            }
+            .glassRows()
+
+            Section {
+                GlassChoiceLink(title: tr("Date format"), symbol: "calendar",
+                                options: dateStyles.map { (value: $0, name: $0 == "custom" ? tr("Custom") : dateExample($0)) },
+                                selected: dateFormat) { dateFormat = $0 }
+                    .searchAnchor("shortcuts.date")
+                if dateFormat == "custom" {
+                    HStack {
+                        Text(tr("Pattern"))
+                        Spacer()
+                        TextField("yyyy-MM-dd", text: $customDate)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .font(.body.monospaced())
+                    }
+                    Text(dateExample("custom")).font(.footnote).foregroundColor(.secondary)
+                }
+                SegmentedChoice(title: tr("Time format"), names: [tr("System"), tr("24-hour"), tr("12-hour")],
+                                selected: timeStyles.firstIndex(of: timeFormat)) { timeFormat = timeStyles[$0] }
+                    .searchAnchor("shortcuts.time")
+                GlassToggle(title: tr("Seconds"), subtitle: ShortcutTemplate.timeText(Date(), locale: locale, style: timeFormat, seconds: timeSeconds),
+                            isOn: $timeSeconds)
+            } header: {
+                Text(tr("Date and time"))
+            } footer: {
+                Text(dateFormat == "custom"
+                     ? tr("Letters stand for parts of the date: yyyy year, MM month, MMMM month's name, dd day, EEEE weekday.")
+                     : tr("How {date}, {time} and {datetime} are written, in the words of your keyboard's language."))
             }
             .glassRows()
         }
@@ -770,6 +923,8 @@ struct ShortcutsView: View {
 /// a language swipes left to delete, the Delete button inside its row.
 struct LanguagesView: View {
     @State private var enabled: [String] = Settings.shared.enabledLanguages
+    /// The layout picked for each language (read again on every visit, as the languages are).
+    @State private var layouts: [String: String] = Settings.shared.letterLayouts
 
     /// In alphabetical order (a list saved here is stored in that order too).
     private var languages: [Language] { return Language.byName(enabled.compactMap { Language(rawValue: $0) }) }
@@ -778,11 +933,12 @@ struct LanguagesView: View {
         GlassList {
             Section {
                 ForEach(languages, id: \.rawValue) { language in
-                    Text(language.localizedName)
-                    .swipeToDelete(enabled: languages.count > 1) { remove(language) }
+                    LanguageRow(language: language, layouts: layouts)
+                        .swipeToDelete(enabled: languages.count > 1) { remove(language) }
                 }
+                .searchAnchor("languages.list")
             } footer: {
-                Text(tr("Swipe the space bar left or right to switch. Swipe a language left to remove it."))
+                Text(tr("Swipe the space bar left or right to switch. Tap a language to change its keyboard layout; swipe it left to remove it."))
             }
             .glassRows()
 
@@ -809,7 +965,10 @@ struct LanguagesView: View {
         .navigationBarTitleDisplayMode(.inline)
         // Read again on every visit: the screen is built once with the parent, so the starting value above is
         // from when the app opened (reopening it showed the languages of that moment).
-        .onAppear { enabled = Settings.shared.enabledLanguages }
+        .onAppear {
+            enabled = Settings.shared.enabledLanguages
+            layouts = Settings.shared.letterLayouts
+        }
     }
 
     private func remove(_ language: Language) {
@@ -824,6 +983,29 @@ struct LanguagesView: View {
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
         LanguageData.prepareInBackground(enabled: ordered)
+    }
+}
+
+/// A language in the Languages list: its name and its letter layout, opening the layout screen (languages that are
+/// not written with a-z keep their own layout and open nothing).
+private struct LanguageRow: View {
+    let language: Language
+    let layouts: [String: String]
+
+    var body: some View {
+        if language.supportsOtherLayouts {
+            ScreenRow(.languageLayout(language.rawValue)) {
+                HStack {
+                    Text(language.localizedName)
+                    Spacer(minLength: 8)
+                    Text(tr(LetterLayout.stored(in: layouts, for: language.rawValue).displayName))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        } else {
+            Text(language.localizedName)
+        }
     }
 }
 

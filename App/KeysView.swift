@@ -46,6 +46,8 @@ struct KeysView: View {
     @AppStorage(SettingKey.emojiKey, store: SharedStore.defaults) private var emojiKey = SettingDefault.emojiKey
     @AppStorage(SettingKey.commaHold, store: SharedStore.defaults) private var commaHold = SettingDefault.commaHold
     @AppStorage(SettingKey.periodHold, store: SharedStore.defaults) private var periodHold = SettingDefault.periodHold
+    /// How many keys have characters of the user's own (read again on every visit).
+    @State private var customHoldCount = Settings.shared.customHolds.count
 
     // MARK: Presets
 
@@ -261,6 +263,7 @@ struct KeysView: View {
             Section {
                 SegmentedChoice(names: heights.map { "\(Int($0))" },
                                 selected: heights.firstIndex { same($0, keyHeight) }) { keyHeight = heights[$0] }
+                    .searchAnchor("keys.size")
                 GlassSlider(title: tr("Key height"), symbol: "arrow.up.and.down", value: $keyHeight,
                             range: Settings.keyHeightRange, step: 1) { "\(Int($0.rounded())) pt" }
                 GlassSlider(title: tr("Keyboard width"), symbol: "arrow.left.and.right", value: $keyboardWidth,
@@ -281,8 +284,7 @@ struct KeysView: View {
             Section {
                 SettingToggle(tr("Number row"), key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
                               subtitle: tr("Numbers above the letters"))
-                SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
-                              subtitle: tr("The letter shows above your finger"))
+                    .searchAnchor("keys.layout")
                 GlassToggle(title: tr("Split keyboard"),
                             subtitle: isPad
                                 ? tr("The keys in two halves, one under each thumb, in every language.")
@@ -309,6 +311,7 @@ struct KeysView: View {
                     keyGap = gaps[index].key
                     rowGap = gaps[index].row
                 }
+                .searchAnchor("keys.spacing")
                 GlassSlider(title: tr("Between keys"), symbol: "arrow.left.and.right", value: $keyGap,
                             range: Settings.keyGapRange, step: 1) { "\(Int($0.rounded())) pt" }
                 GlassSlider(title: tr("Between rows"), symbol: "arrow.up.and.down", value: $rowGap,
@@ -333,6 +336,7 @@ struct KeysView: View {
                     .foregroundColor(.primary)
                     .contentShape(Rectangle())
                 }
+                .searchAnchor("keys.letters")
                 VStack(alignment: .leading, spacing: 6) {
                     SegmentedChoice(names: [tr("Follow shift"), tr("Always capitals")], selected: alwaysCapitals ? 1 : 0) {
                         alwaysCapitals = $0 == 1
@@ -343,6 +347,9 @@ struct KeysView: View {
                 }
                 GlassSlider(title: tr("Letter size"), symbol: "textformat.size", value: $letterSize,
                             range: Settings.letterSizeRange, step: 0.05) { DeviceMetrics.points(23 * $0) }
+                SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
+                              subtitle: tr("The letter shows above your finger"))
+                    .searchAnchor("keys.popups")
             } header: {
                 SectionHeader(tr("Letters"), symbol: "textformat", color: .orange)
             } footer: {
@@ -375,6 +382,7 @@ struct KeysView: View {
                     .pickerStyle(.menu)
                     .labelsHidden()
                 }
+                .searchAnchor("keys.hints")
                 GlassSlider(title: tr("Hint size"), symbol: "textformat.size.smaller", value: $hintSize,
                             range: Settings.hintSizeRange, step: 0.05) { DeviceMetrics.points(10 * $0) }
                     .disabled(!keyHints)
@@ -387,8 +395,25 @@ struct KeysView: View {
             .glassRows()
 
             Section {
+                ScreenRow(.longPress) {
+                    HStack {
+                        Label(tr("Long-press characters"), systemImage: "hand.point.up.left")
+                        Spacer()
+                        Text(customHoldCount == 0 ? tr("None") : "\(customHoldCount)").foregroundColor(.secondary)
+                    }
+                }
+                .searchAnchor("keys.holds")
+            } header: {
+                SectionHeader(tr("Your own characters"), symbol: "character.textbox", color: .purple)
+            } footer: {
+                Text(tr("Add characters of your own to any letter or digit: touch and hold the key to type them."))
+            }
+            .glassRows()
+
+            Section {
                 GlassSlider(title: tr("Text size"), symbol: "textformat.size", value: $spaceTextSize,
                             range: Settings.spaceTextSizeRange, step: 1) { "\(Int($0.rounded())) pt" }
+                    .searchAnchor("keys.space")
                 GlassToggle(title: tr("Short language code"),
                             subtitle: tr("EN, HU... instead of the language's full name."),
                             isOn: $spaceLanguageCode)
@@ -401,6 +426,7 @@ struct KeysView: View {
 
             Section {
                 symbolSlots
+                    .searchAnchor("keys.symbols")
             } header: {
                 SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
             } footer: {
@@ -412,6 +438,7 @@ struct KeysView: View {
                 GlassToggle(title: tr("Emoji key"), subtitle: tr("Opens the emoji picker. Touch and hold it for the settings.") + " "
                                 + tr("With the key off, the settings cannot be opened from the keyboard."),
                             isOn: $emojiKey)
+                    .searchAnchor("keys.bottom")
                 GlassToggle(title: tr("Comma key"),
                             subtitle: !commaKey && blocksReturn(comma: true)
                                 ? tr("Remove a symbol key first: there is no room for the comma.")
@@ -438,6 +465,7 @@ struct KeysView: View {
         .scrollContentBackground(.hidden)
         }
         .scrollDismissesKeyboard(.interactively)
+        .onAppear { customHoldCount = Settings.shared.customHolds.count }
         .navigationTitle(tr("Keys"))
         .navigationBarTitleDisplayMode(.inline)
     }

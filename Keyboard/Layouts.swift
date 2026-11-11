@@ -8,8 +8,17 @@ import UIKit
 
 extension Language {
 
-    /// The letter rows. Rows may have different lengths (e.g. Russian 12/11/9); the key view scales each row to the full width.
+    /// The letter rows as typed: the language's own, or another layout picked for it (LetterLayout, the Languages
+    /// screen). Rows may have different lengths (e.g. Russian 12/11/9); the key view scales each row to the full width.
     var letterRows: [[String]] {
+        return Prefs.letterLayout(for: self).apply(to: defaultLetterRows)
+    }
+
+    /// Whether other letter layouts can be picked for the language (it is written with a-z on three rows).
+    var supportsOtherLayouts: Bool { return LetterLayout.supports(defaultLetterRows) }
+
+    /// The language's own letter rows.
+    var defaultLetterRows: [[String]] {
         func split(_ rows: String...) -> [[String]] {
             return rows.map { $0.map { String($0) } }
         }
@@ -456,7 +465,7 @@ enum LayoutBuilder {
         let accents = language.accents
 
         func letterKey(_ letter: String) -> KeySpec {
-            let alternates = accents[letter] ?? []
+            let alternates = withCustomHolds(accents[letter] ?? [], for: letter)
             return KeySpec(action: .character(letter),
                            title: letter,
                            alternates: alternates,
@@ -467,7 +476,11 @@ enum LayoutBuilder {
 
         if numberRow {
             let digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-            result.append(digits.map { KeySpec(action: .character($0), title: $0) })
+            result.append(digits.map { digit in
+                let alternates = withCustomHolds([], for: digit)
+                return KeySpec(action: .character(digit), title: digit, alternates: alternates,
+                               hint: showHints ? alternates.first : nil)
+            })
         }
 
         // Every row but the last is centred under the longest one (Thai has four rows of letters); the last has
@@ -524,6 +537,12 @@ enum LayoutBuilder {
         return result
     }
 
+    /// A key's long-press options with the user's own characters for it (the Keys screen) after them.
+    static func withCustomHolds(_ alternates: [String], for key: String) -> [String] {
+        guard let own = Prefs.customHolds[key.lowercased()], !own.isEmpty else { return alternates }
+        return alternates + own.filter { !alternates.contains($0) && $0 != key }
+    }
+
     /// Long-press options of the comma key.
     /// The comma's long-press: marks used inside a sentence.
     private static func commaAlternates(_ language: Language) -> [String] {
@@ -556,7 +575,8 @@ enum LayoutBuilder {
         // Arabic-Indic digits for Arabic, with the Western digit on long-press.
         let western = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
         let row1 = zip(language.digits, western).map { digit, plain in
-            KeySpec(action: .character(digit), title: digit, alternates: digit == plain ? [] : [plain])
+            KeySpec(action: .character(digit), title: digit,
+                    alternates: withCustomHolds(digit == plain ? [] : [plain], for: plain))
         }
 
         var row2: [KeySpec] = []

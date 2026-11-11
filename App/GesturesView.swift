@@ -9,11 +9,27 @@ struct GesturesView: View {
     @AppStorage(SettingKey.deleteSwipedWord, store: SharedStore.defaults) private var deleteSwiped = SettingDefault.deleteSwipedWord
     @AppStorage(SettingKey.deleteSwipe, store: SharedStore.defaults) private var deleteWords = SettingDefault.deleteSwipe
     @AppStorage(SettingKey.cursorControl, store: SharedStore.defaults) private var cursor = SettingDefault.cursorControl
+    @AppStorage(SettingKey.spaceSelect, store: SharedStore.defaults) private var spaceSelect = SettingDefault.spaceSelect
+    @AppStorage(SettingKey.cursorSpeed, store: SharedStore.defaults) private var cursorSpeed = SettingDefault.cursorSpeed
+    @AppStorage(SettingKey.deleteRepeatInterval, store: SharedStore.defaults) private var repeatInterval = SettingDefault.deleteRepeatInterval
     @AppStorage(SettingKey.swipeDownHide, store: SharedStore.defaults) private var swipeDownHide = SettingDefault.swipeDownHide
     @AppStorage(SettingKey.flickUpCapital, store: SharedStore.defaults) private var flickUp = SettingDefault.flickUpCapital
     @AppStorage(SettingKey.flickDownAccent, store: SharedStore.defaults) private var flickDown = SettingDefault.flickDownAccent
     @AppStorage(SettingKey.swipeTrailLength, store: SharedStore.defaults) private var trailLength = SettingDefault.swipeTrailLength
+    @AppStorage(SettingKey.swipeTrailShown, store: SharedStore.defaults) private var trailShown = SettingDefault.swipeTrailShown
+    @AppStorage(SettingKey.swipeTrailWidth, store: SharedStore.defaults) private var trailWidth = SettingDefault.swipeTrailWidth
+    @AppStorage(SettingKey.swipeTrailOpacity, store: SharedStore.defaults) private var trailOpacity = SettingDefault.swipeTrailOpacity
+    @AppStorage(SettingKey.swipeTrailColor, store: SharedStore.defaults) private var trailColor = SettingDefault.swipeTrailColor
+    @AppStorage(SettingKey.swipeTrailStyle, store: SharedStore.defaults) private var trailStyle = SettingDefault.swipeTrailStyle
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @ObservedObject private var languages = EnabledLanguages.shared
+
+    private let trailStyles = ["fade", "solid", "dotted", "rainbow"]
+    /// Ready-made trail colours (empty: the theme's accent).
+    private let trailColors = ["", "#FFFFFF", "#1C1C1E", "#FF375F", "#FF9F0A", "#FFD60A", "#30D158", "#64D2FF", "#BF5AF2"]
+
+    private var swipeOff: Bool { return !swipe || languages.lacking(.swipe).all }
 
     var body: some View {
         GlassList {
@@ -21,6 +37,7 @@ struct GesturesView: View {
                 GlassToggle(title: tr("Swipe typing"),
                             subtitle: tr("Slide across the letters to write a word; the bar offers the other readings."),
                             isOn: $swipe, feature: .swipe)
+                    .searchAnchor("gestures.swipe")
                 Group {
                     GlassToggle(title: tr("Thumb handoff"),
                                 subtitle: tr("Touch a letter with your other thumb while gliding, or just after lifting, and the same word goes on."),
@@ -34,14 +51,44 @@ struct GesturesView: View {
                     GlassToggle(title: tr("Undo a swipe with one delete"),
                                 subtitle: tr("Delete right after a swipe removes the whole word. Off: one letter at a time."),
                                 isOn: $deleteSwiped)
-                    GlassSlider(title: tr("Trail length"), symbol: "scribble", value: $trailLength,
-                                range: Settings.swipeTrailLengthRange, step: 10) { "\(Int($0.rounded())) pt" }
                 }
-                .disabled(!swipe || languages.lacking(.swipe).all)
+                .disabled(swipeOff)
             } header: {
                 SectionHeader(tr("Letters"), symbol: "hand.draw.fill", color: .blue)
             }
             .glassRows()
+
+            Section {
+                TrailPreview(shown: trailShown, width: trailWidth, opacity: trailOpacity, style: trailStyle,
+                             color: trailColor.isEmpty ? Color.currentAccent(name: accentName, hex: accentHex) : Color(hex: trailColor),
+                             length: trailLength)
+                    .frame(height: 96)
+                    .searchAnchor("gestures.trail")
+                GlassToggle(title: tr("Show the trail"),
+                            subtitle: tr("A line follows your finger while you swipe."),
+                            isOn: $trailShown)
+                Group {
+                    SegmentedChoice(title: tr("Style"), names: [tr("Fade"), tr("Solid"), tr("Dotted"), tr("Rainbow")],
+                                    selected: trailStyles.firstIndex(of: trailStyle)) { trailStyle = trailStyles[$0] }
+                    trailColorRow
+                        .disabled(trailStyle == "rainbow")
+                        .opacity(trailStyle == "rainbow" ? 0.45 : 1)
+                    GlassSlider(title: tr("Width"), symbol: "lineweight", value: $trailWidth,
+                                range: Settings.swipeTrailWidthRange, step: 1) { "\(Int($0.rounded())) pt" }
+                    GlassSlider(title: tr("Opacity"), symbol: "circle.lefthalf.filled", value: $trailOpacity,
+                                range: Settings.swipeTrailOpacityRange, step: 0.05) { "\(Int(($0 * 100).rounded()))%" }
+                    GlassSlider(title: tr("Trail length"), symbol: "scribble", value: $trailLength,
+                                range: Settings.swipeTrailLengthRange, step: 10) { "\(Int($0.rounded())) pt" }
+                }
+                .disabled(!trailShown)
+                .opacity(trailShown ? 1 : 0.45)
+            } header: {
+                SectionHeader(tr("Swipe trail"), symbol: "scribble", color: .purple)
+            } footer: {
+                Text(tr("The Effects screen's trail glow adds a halo around it."))
+            }
+            .glassRows()
+            .disabled(swipeOff)
 
             Section {
                 SettingSlider(tr("Hold delay"),
@@ -50,6 +97,7 @@ struct GesturesView: View {
                               range: Settings.holdDelayRange,
                               step: 0.05,
                               subtitle: tr("How long to hold a key before its accents appear")) { String(format: "%.2f s", $0) }
+                    .searchAnchor("gestures.accents")
                 GlassToggle(title: tr("Flick up for a capital"),
                             subtitle: tr("A short flick up on a letter types it as a capital."),
                             isOn: $flickUp, feature: .capitals)
@@ -67,6 +115,7 @@ struct GesturesView: View {
                 GlassToggle(title: tr("Swipe down to hide"),
                             subtitle: tr("Swipe down from the suggestion bar to hide the keyboard."),
                             isOn: $swipeDownHide)
+                    .searchAnchor("gestures.hide")
             } header: {
                 SectionHeader(tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo)
             }
@@ -76,6 +125,17 @@ struct GesturesView: View {
                 GlassToggle(title: tr("Move the cursor"),
                             subtitle: tr("Hold the space bar until the letters fade, then slide left or right."),
                             isOn: $cursor)
+                    .searchAnchor("gestures.space")
+                Group {
+                    GlassToggle(title: tr("Select text"),
+                                subtitle: tr("While moving the cursor, touch the keys with a second finger: the slide then selects. The bar offers copy, cut, paste and case; typing replaces the selection."),
+                                isOn: $spaceSelect)
+                    GlassSlider(title: tr("Cursor speed"), symbol: "speedometer", value: $cursorSpeed,
+                                range: Settings.cursorSpeedRange, step: 0.1) { speedName($0) }
+                        .searchAnchor("gestures.cursorSpeed")
+                }
+                .disabled(!cursor)
+                .opacity(cursor ? 1 : 0.45)
             } header: {
                 SectionHeader(tr("Space bar"), symbol: "space", color: .teal)
             } footer: {
@@ -87,12 +147,19 @@ struct GesturesView: View {
                 GlassToggle(title: tr("Delete whole words"),
                             subtitle: tr("Slide left from the delete key: each step removes one more word."),
                             isOn: $deleteWords)
+                    .searchAnchor("gestures.delete")
                 SettingSlider(tr("Repeat delay"),
                               key: SettingKey.deleteRepeatDelay,
                               defaultValue: SettingDefault.deleteRepeatDelay,
                               range: Settings.deleteRepeatDelayRange,
                               step: 0.05,
                               subtitle: tr("How long to hold delete before it repeats letter by letter")) { String(format: "%.2f s", $0) }
+                GlassSlider(title: tr("Repeat speed"), symbol: "hare", value: Binding(
+                    get: { 1 / max(repeatInterval, 0.001) },
+                    set: { repeatInterval = 1 / max($0, 1) }),
+                            range: (1 / Settings.deleteRepeatIntervalRange.upperBound)...(1 / Settings.deleteRepeatIntervalRange.lowerBound),
+                            step: 1) { tr("%@ a second", "\(Int($0.rounded()))") }
+                    .searchAnchor("gestures.repeatSpeed")
             } header: {
                 SectionHeader(tr("Delete key"), symbol: "delete.left.fill", color: .red)
             } footer: {
@@ -103,5 +170,139 @@ struct GesturesView: View {
         .glassScreen()
         .navigationTitle(tr("Gestures"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The cursor's speed in words: slower, normal, faster.
+    private func speedName(_ value: Double) -> String {
+        if abs(value - 1) < 0.05 { return tr("Normal") }
+        return String(format: "%.1f\u{00D7}", value)
+    }
+
+    /// The trail's colour: the theme's accent or one of a few, or any colour from the picker.
+    private var trailColorRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(tr("Colour")).font(.subheadline).foregroundColor(.secondary)
+                Spacer()
+                ColorPicker(tr("Colour"), selection: Binding(
+                    get: { trailColor.isEmpty ? Color.currentAccent(name: accentName, hex: accentHex) : Color(hex: trailColor) },
+                    set: { trailColor = $0.hexString }), supportsOpacity: false)
+                    .labelsHidden()
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(trailColors, id: \.self) { hex in
+                        let swatch = hex.isEmpty ? Color.currentAccent(name: accentName, hex: accentHex) : Color(hex: hex)
+                        Button {
+                            Feedback.choose()
+                            trailColor = hex
+                        } label: {
+                            ZStack {
+                                Circle().fill(swatch).frame(width: 30, height: 30)
+                                    .overlay(Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 1))
+                                if hex.isEmpty {
+                                    Text(tr("Theme")).font(.system(size: 8, weight: .bold)).foregroundColor(.white)
+                                }
+                                if trailColor.uppercased() == hex.uppercased() {
+                                    Circle().strokeBorder(Color.primary, lineWidth: 2).frame(width: 38, height: 38)
+                                }
+                            }
+                            .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(hex.isEmpty ? tr("Theme") : hex)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// A swipe drawn over a few keys again and again, in the trail's look, so its settings can be seen.
+private struct TrailPreview: View {
+    let shown: Bool
+    let width: Double
+    let opacity: Double
+    let style: String
+    let color: Color
+    let length: Double
+
+    /// The word the finger glides through ("hello" on a keyboard row), as points in a unit square.
+    private static let path: [CGPoint] = [
+        CGPoint(x: 0.62, y: 0.55), CGPoint(x: 0.28, y: 0.2), CGPoint(x: 0.86, y: 0.55),
+        CGPoint(x: 0.86, y: 0.55), CGPoint(x: 0.82, y: 0.2), CGPoint(x: 0.46, y: 0.85)
+    ]
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let cycle = 2.4
+                let time = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)
+                let progress = min(1, time / (cycle * 0.75))
+                let points = TrailPreview.sampled(size: size)
+                let headIndex = max(1, Int(Double(points.count - 1) * progress))
+                // The keys behind the trail.
+                let rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+                for (row, letters) in rows.enumerated() {
+                    let count = CGFloat(letters.count)
+                    let keyWidth = size.width / 10
+                    let start = (size.width - keyWidth * count) / 2
+                    for (column, letter) in letters.enumerated() {
+                        let rect = CGRect(x: start + CGFloat(column) * keyWidth + 2, y: CGFloat(row) * size.height / 3 + 2,
+                                          width: keyWidth - 4, height: size.height / 3 - 4)
+                        context.fill(Path(roundedRect: rect, cornerRadius: 5), with: .color(Color.primary.opacity(0.07)))
+                        context.draw(Text(String(letter)).font(.system(size: 11)).foregroundColor(.secondary),
+                                     at: CGPoint(x: rect.midX, y: rect.midY))
+                    }
+                }
+                guard shown, time < cycle * 0.92 else { return }
+                // The newest stretch of the path, Trail length long (in the preview's scale).
+                var kept: [CGPoint] = [points[headIndex]]
+                var travelled: CGFloat = 0
+                let limit = CGFloat(length) * size.width / 360
+                var index = headIndex
+                while index > 0, travelled < limit {
+                    let a = points[index], b = points[index - 1]
+                    travelled += hypot(a.x - b.x, a.y - b.y)
+                    kept.append(b)
+                    index -= 1
+                }
+                kept.reverse()
+                let pieces = 10
+                for piece in 0..<pieces {
+                    let from = kept.count * piece / pieces
+                    let to = min(kept.count - 1, kept.count * (piece + 1) / pieces)
+                    guard to > from else { continue }
+                    var line = Path()
+                    line.move(to: kept[from])
+                    for point in kept[from...to].dropFirst() { line.addLine(to: point) }
+                    let fade = style == "solid" ? 1 : Double(piece + 1) / Double(pieces)
+                    let shade: Color = style == "rainbow"
+                        ? Color(hue: (Double(piece) / Double(pieces) + time / cycle).truncatingRemainder(dividingBy: 1), saturation: 0.8, brightness: 1)
+                        : color
+                    let lineWidth = CGFloat(width)
+                    let stroke = style == "dotted"
+                        ? StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: [0.01, lineWidth * 1.9])
+                        : StrokeStyle(lineWidth: lineWidth, lineCap: piece == pieces - 1 ? .round : .butt, lineJoin: .round)
+                    context.stroke(line, with: .color(shade.opacity(opacity * fade)), style: stroke)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// The path as many close points across the preview, for a smooth line.
+    private static func sampled(size: CGSize) -> [CGPoint] {
+        var result: [CGPoint] = []
+        for index in 0..<(path.count - 1) {
+            let a = path[index], b = path[index + 1]
+            for step in 0..<12 {
+                let t = CGFloat(step) / 12
+                result.append(CGPoint(x: (a.x + (b.x - a.x) * t) * size.width, y: (a.y + (b.y - a.y) * t) * size.height))
+            }
+        }
+        if let last = path.last { result.append(CGPoint(x: last.x * size.width, y: last.y * size.height)) }
+        return result
     }
 }

@@ -68,6 +68,28 @@ final class Prefs {
     static var oneHanded = SettingDefault.oneHanded
     static var flickUpCapital = SettingDefault.flickUpCapital
     static var flickDownAccent = SettingDefault.flickDownAccent
+    static var swipeTrailShown = SettingDefault.swipeTrailShown
+    static var swipeTrailWidth = SettingDefault.swipeTrailWidth
+    static var swipeTrailOpacity = SettingDefault.swipeTrailOpacity
+    static var swipeTrailColor = SettingDefault.swipeTrailColor
+    static var swipeTrailStyle = SettingDefault.swipeTrailStyle
+    static var spaceSelect = SettingDefault.spaceSelect
+    static var cursorSpeed = SettingDefault.cursorSpeed
+    static var deleteRepeatInterval = SettingDefault.deleteRepeatInterval
+    static var letterLayouts: [String: String] = [:]
+    static var customHolds: [String: [String]] = [:]
+    static var inlineMath = SettingDefault.inlineMath
+    static var unitConversion = SettingDefault.unitConversion
+    static var unitTarget = SettingDefault.unitTarget
+    static var resultDecimals = Int(SettingDefault.resultDecimals)
+    static var smartQuotes = SettingDefault.smartQuotes
+    static var spaceAfterPunctuation = SettingDefault.spaceAfterPunctuation
+    static var statsEnabled = SettingDefault.statsEnabled
+
+    /// The letter layout picked for a language (its own when none is).
+    static func letterLayout(for language: Language) -> LetterLayout {
+        return LetterLayout.stored(in: letterLayouts, for: language.rawValue)
+    }
 
     /// 0 = square key corners ... 1 = fully round. Read from the shared defaults directly so this
     /// file works whichever way the Settings class exposes it.
@@ -142,6 +164,28 @@ final class Prefs {
         oneHanded = s.oneHanded
         flickUpCapital = s.flickUpCapital
         flickDownAccent = s.flickDownAccent
+        swipeTrailShown = s.swipeTrailShown
+        swipeTrailWidth = s.swipeTrailWidth
+        swipeTrailOpacity = s.swipeTrailOpacity
+        swipeTrailColor = s.swipeTrailColor
+        swipeTrailStyle = s.swipeTrailStyle
+        spaceSelect = s.spaceSelect
+        cursorSpeed = s.cursorSpeed
+        deleteRepeatInterval = s.deleteRepeatInterval
+        letterLayouts = s.letterLayouts
+        var holds: [String: [String]] = [:]
+        for (key, symbols) in s.customHolds {
+            let list = Settings.holdSymbols(symbols)
+            if !key.isEmpty, !list.isEmpty { holds[key.lowercased()] = list }
+        }
+        customHolds = holds
+        inlineMath = s.inlineMath
+        unitConversion = s.unitConversion
+        unitTarget = s.unitTarget
+        resultDecimals = s.resultDecimals
+        smartQuotes = s.smartQuotes
+        spaceAfterPunctuation = s.spaceAfterPunctuation
+        statsEnabled = s.statsEnabled
         if let stored = SharedStore.defaults.object(forKey: keyRoundnessKey) as? Double {
             keyRoundness = min(max(stored, 0), 1)
         } else {

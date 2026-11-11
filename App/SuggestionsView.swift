@@ -39,8 +39,9 @@ struct SuggestionsView: View {
                 GlassToggle(title: tr("Word suggestions"),
                             subtitle: tr("Words to finish or fix what you're typing, above the keys."),
                             isOn: $enabled)
+                    .searchAnchor("suggestions.words")
                 GlassToggle(title: tr("Emoji suggestions"),
-                            subtitle: tr("An emoji that matches the word you typed"),
+                            subtitle: tr("An emoji for the word or the words you typed (\u{201C}red heart\u{201D} \u{2192} \u{2764}\u{FE0F})"),
                             isOn: $emojiSuggestions)
                     .disabled(!enabled)
             }
@@ -52,6 +53,7 @@ struct SuggestionsView: View {
                         fit = index == 1
                         scroll = index == 2
                     }
+                    .searchAnchor("suggestions.count")
                     if scroll {
                         GlassToggle(title: tr("Three at a time"),
                                     subtitle: tr("Three equal places, and a swipe moves on to the next three."),
@@ -69,6 +71,7 @@ struct SuggestionsView: View {
                 Section {
                     SegmentedChoice(title: tr("Between words"), names: [tr("Lines"), tr("Tiles")],
                                     selected: style == "segments" ? 1 : 0) { style = $0 == 1 ? "segments" : "separators" }
+                        .searchAnchor("suggestions.look")
                     if style != "segments" {
                         SegmentedChoice(title: tr("Line"), names: [tr("Solid"), tr("Dashed"), tr("Dotted"), tr("None")],
                                         selected: separators.firstIndex(of: separator)) { separator = separators[$0] }
@@ -86,6 +89,7 @@ struct SuggestionsView: View {
                 Section {
                     SegmentedChoice(names: [tr("Instant"), tr("Fade"), tr("Rise"), tr("Slide"), tr("Pop")],
                                     selected: transitions.firstIndex(of: transition)) { transition = transitions[$0] }
+                        .searchAnchor("suggestions.switching")
                     GlassSlider(title: tr("Duration"), symbol: "timer", value: $duration,
                                 range: Settings.suggestionTransitionDurationRange, step: 0.05) { String(format: "%.2f s", $0) }
                         .disabled(transition == "instant")
@@ -99,6 +103,7 @@ struct SuggestionsView: View {
                 Section {
                     SegmentedChoice(names: [tr("Very slow"), tr("Slow"), tr("Normal"), tr("Fast"), tr("Very fast")],
                                     selected: delays.firstIndex { abs($0 - delay) < 0.001 }) { delay = delays[$0] }
+                        .searchAnchor("suggestions.speed")
                     GlassSlider(title: tr("Wait after typing"), symbol: "timer", value: $delay,
                                 range: Settings.suggestionDelayRange, step: 0.01) { "\(Int(($0 * 1000).rounded())) ms" }
                 } header: {

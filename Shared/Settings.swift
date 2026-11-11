@@ -79,6 +79,38 @@ enum SettingKey {
     static let suggestionTransition = "hunkeys.suggestionTransition"
     static let suggestionTransitionDuration = "hunkeys.suggestionTransitionDuration"
     static let swipeTrailLength = "hunkeys.swipeTrailLength"
+    /// The swipe trail's look (the Gestures screen): shown at all, its width, opacity, colour ("" = the theme's) and
+    /// style ("fade", "solid", "dotted" or "rainbow").
+    static let swipeTrailShown = "hunkeys.swipeTrailShown"
+    static let swipeTrailWidth = "hunkeys.swipeTrailWidth"
+    static let swipeTrailOpacity = "hunkeys.swipeTrailOpacity"
+    static let swipeTrailColor = "hunkeys.swipeTrailColor"
+    static let swipeTrailStyle = "hunkeys.swipeTrailStyle"
+    /// The space bar's trackpad: a second finger selects text; how far the cursor goes for a slide.
+    static let spaceSelect = "hunkeys.spaceSelect"
+    static let cursorSpeed = "hunkeys.cursorSpeed"
+    /// How fast a held delete key repeats: seconds between two letters.
+    static let deleteRepeatInterval = "hunkeys.deleteRepeatInterval"
+    /// Letter layouts by language code (LetterLayout raw values; missing: the language's own).
+    static let letterLayouts = "hunkeys.letterLayouts"
+    /// The user's own long-press characters: key -> the characters a hold adds to it.
+    static let customHolds = "hunkeys.customHolds"
+    /// Smart typing: "12*3=" offers 36, "5 km" offers miles; the decimals shown and which units are offered.
+    static let inlineMath = "hunkeys.inlineMath"
+    static let unitConversion = "hunkeys.unitConversion"
+    static let unitTarget = "hunkeys.unitTarget"
+    static let resultDecimals = "hunkeys.resultDecimals"
+    /// Curly quotes in the language's style, and a space typed after . , ! ? ; :
+    static let smartQuotes = "hunkeys.smartQuotes"
+    static let spaceAfterPunctuation = "hunkeys.spaceAfterPunctuation"
+    /// The {date} and {time} placeholders of text shortcuts.
+    static let dateFormat = "hunkeys.dateFormat"
+    static let customDateFormat = "hunkeys.customDateFormat"
+    static let timeFormat = "hunkeys.timeFormat"
+    static let timeSeconds = "hunkeys.timeSeconds"
+    /// Typing stats are kept (the app's Stats screen), and the stats themselves (TypingStatsData, as JSON).
+    static let statsEnabled = "hunkeys.statsEnabled"
+    static let typingStats = "hunkeys.typingStats"
     /// The Functions panel's tools, in order (KeyboardTool raw values).
     static let keyboardTools = "hunkeys.keyboardTools"
     static let keyRoundness = "hunkeys.keyRoundness"
@@ -131,6 +163,10 @@ enum SettingKey {
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, accent, accentHex, appearance, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
+        swipeTrailShown, swipeTrailWidth, swipeTrailOpacity, swipeTrailColor, swipeTrailStyle,
+        spaceSelect, cursorSpeed, deleteRepeatInterval, letterLayouts,
+        inlineMath, unitConversion, unitTarget, resultDecimals, smartQuotes, spaceAfterPunctuation,
+        dateFormat, customDateFormat, timeFormat, timeSeconds, statsEnabled,
         keyboardTools,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
         splitKeyboard, oneHanded,
@@ -220,6 +256,29 @@ enum SettingDefault {
     static let suggestionTransitionDuration: Double = 0.25
     /// How long the swipe line stays behind the finger, in points of path (the older part fades out).
     static let swipeTrailLength: Double = 220
+    static let swipeTrailShown = true
+    static let swipeTrailWidth: Double = 7
+    static let swipeTrailOpacity: Double = 0.55
+    static let swipeTrailColor = ""
+    static let swipeTrailStyle = "fade"
+    static let spaceSelect = true
+    /// 1 = the cursor moves a character for every fortieth of the keyboard's width.
+    static let cursorSpeed: Double = 1.0
+    static let deleteRepeatInterval: Double = 0.06
+    static let inlineMath = true
+    static let unitConversion = true
+    /// "auto" (to the other system), "metric" or "imperial".
+    static let unitTarget = "auto"
+    static let resultDecimals: Double = 3
+    static let smartQuotes = true
+    static let spaceAfterPunctuation = false
+    /// "short", "medium", "long", "full", "iso" or "custom" (customDateFormat).
+    static let dateFormat = "medium"
+    static let customDateFormat = "yyyy-MM-dd"
+    /// "system", "24h" or "12h".
+    static let timeFormat = "system"
+    static let timeSeconds = false
+    static let statsEnabled = true
     static let keyboardTools: [String] = KeyboardTool.standard.map { $0.rawValue }
     static let keyRoundness = 0.26
     static let language = "en"
@@ -411,6 +470,25 @@ final class Settings {
             SettingKey.suggestionTransition: SettingDefault.suggestionTransition,
             SettingKey.suggestionTransitionDuration: SettingDefault.suggestionTransitionDuration,
             SettingKey.swipeTrailLength: SettingDefault.swipeTrailLength,
+            SettingKey.swipeTrailShown: SettingDefault.swipeTrailShown,
+            SettingKey.swipeTrailWidth: SettingDefault.swipeTrailWidth,
+            SettingKey.swipeTrailOpacity: SettingDefault.swipeTrailOpacity,
+            SettingKey.swipeTrailColor: SettingDefault.swipeTrailColor,
+            SettingKey.swipeTrailStyle: SettingDefault.swipeTrailStyle,
+            SettingKey.spaceSelect: SettingDefault.spaceSelect,
+            SettingKey.cursorSpeed: SettingDefault.cursorSpeed,
+            SettingKey.deleteRepeatInterval: SettingDefault.deleteRepeatInterval,
+            SettingKey.inlineMath: SettingDefault.inlineMath,
+            SettingKey.unitConversion: SettingDefault.unitConversion,
+            SettingKey.unitTarget: SettingDefault.unitTarget,
+            SettingKey.resultDecimals: SettingDefault.resultDecimals,
+            SettingKey.smartQuotes: SettingDefault.smartQuotes,
+            SettingKey.spaceAfterPunctuation: SettingDefault.spaceAfterPunctuation,
+            SettingKey.dateFormat: SettingDefault.dateFormat,
+            SettingKey.customDateFormat: SettingDefault.customDateFormat,
+            SettingKey.timeFormat: SettingDefault.timeFormat,
+            SettingKey.timeSeconds: SettingDefault.timeSeconds,
+            SettingKey.statsEnabled: SettingDefault.statsEnabled,
             SettingKey.keyboardTools: SettingDefault.keyboardTools,
             SettingKey.keyRoundness: SettingDefault.keyRoundness,
             SettingKey.language: SettingDefault.language
@@ -638,6 +716,52 @@ final class Settings {
     var suggestionTransitionDuration: Double { return clamp(readDouble(SettingKey.suggestionTransitionDuration), Settings.suggestionTransitionDurationRange) }
     var suggestionTransition: String { return readString(SettingKey.suggestionTransition) ?? SettingDefault.suggestionTransition }
     var swipeTrailLength: Double { return clamp(readDouble(SettingKey.swipeTrailLength), Settings.swipeTrailLengthRange) }
+
+    static let swipeTrailWidthRange: ClosedRange<Double> = 2...16
+    static let swipeTrailOpacityRange: ClosedRange<Double> = 0.15...1
+    static let cursorSpeedRange: ClosedRange<Double> = 0.4...2.5
+    static let deleteRepeatIntervalRange: ClosedRange<Double> = 0.025...0.2
+    static let resultDecimalsRange: ClosedRange<Double> = 0...6
+
+    var swipeTrailShown: Bool { return readBool(SettingKey.swipeTrailShown) }
+    var swipeTrailWidth: Double { return clamp(readDouble(SettingKey.swipeTrailWidth), Settings.swipeTrailWidthRange) }
+    var swipeTrailOpacity: Double { return clamp(readDouble(SettingKey.swipeTrailOpacity), Settings.swipeTrailOpacityRange) }
+    var swipeTrailColor: String { return readString(SettingKey.swipeTrailColor) ?? SettingDefault.swipeTrailColor }
+    var swipeTrailStyle: String { return readString(SettingKey.swipeTrailStyle) ?? SettingDefault.swipeTrailStyle }
+    var spaceSelect: Bool { return readBool(SettingKey.spaceSelect) }
+    var cursorSpeed: Double { return clamp(readDouble(SettingKey.cursorSpeed), Settings.cursorSpeedRange) }
+    var deleteRepeatInterval: Double {
+        return clamp(readDouble(SettingKey.deleteRepeatInterval), Settings.deleteRepeatIntervalRange)
+    }
+    var inlineMath: Bool { return readBool(SettingKey.inlineMath) }
+    var unitConversion: Bool { return readBool(SettingKey.unitConversion) }
+    var unitTarget: String { return readString(SettingKey.unitTarget) ?? SettingDefault.unitTarget }
+    var resultDecimals: Int { return Int(clamp(readDouble(SettingKey.resultDecimals), Settings.resultDecimalsRange).rounded()) }
+    var smartQuotes: Bool { return readBool(SettingKey.smartQuotes) }
+    var spaceAfterPunctuation: Bool { return readBool(SettingKey.spaceAfterPunctuation) }
+    var dateFormat: String { return readString(SettingKey.dateFormat) ?? SettingDefault.dateFormat }
+    var customDateFormat: String { return readString(SettingKey.customDateFormat) ?? SettingDefault.customDateFormat }
+    var timeFormat: String { return readString(SettingKey.timeFormat) ?? SettingDefault.timeFormat }
+    var timeSeconds: Bool { return readBool(SettingKey.timeSeconds) }
+    var statsEnabled: Bool { return readBool(SettingKey.statsEnabled) }
+
+    /// Letter layouts by language code; a language missing from it types on its own layout.
+    var letterLayouts: [String: String] {
+        get { return value(SettingKey.letterLayouts) as? [String: String] ?? [:] }
+        set { put(newValue, SettingKey.letterLayouts) }
+    }
+
+    /// The user's own long-press characters: a key (one lower-case character) -> the characters a hold on it adds.
+    var customHolds: [String: String] {
+        get { return value(SettingKey.customHolds) as? [String: String] ?? [:] }
+        set { put(newValue, SettingKey.customHolds) }
+    }
+
+    /// The typing stats as stored (the keyboard adds to them; the app shows and resets them).
+    var typingStatsJSON: String {
+        get { return readString(SettingKey.typingStats) ?? "" }
+        set { put(newValue, SettingKey.typingStats) }
+    }
 
     /// The Functions panel's tools, in order.
     var keyboardTools: [KeyboardTool] {
