@@ -333,6 +333,7 @@ struct KeysView: View {
                         Text(tr(KeyFont.named(keyFont).displayName)).foregroundColor(.secondary)
                         DisclosureChevron()
                     }
+                    .waveSource()
                     .foregroundColor(.primary)
                     .contentShape(Rectangle())
                 }

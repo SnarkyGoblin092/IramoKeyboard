@@ -24,6 +24,8 @@ struct ModeWave: Equatable, Identifiable {
     /// When the wave set off, on the two clocks that are read.
     let started: CFTimeInterval
     let startedDate: Date
+    /// How long this wave takes to cross (the theme switch's is `duration`; a screen change's is shorter).
+    var length: TimeInterval = ModeWave.duration
 
     static let duration: TimeInterval = 1.4
     /// The ring's thickness.
@@ -50,7 +52,7 @@ struct ModeWave: Equatable, Identifiable {
     private static let lensFade: CGFloat = 64
 
     /// How long the wave takes to go `share` of its way (the curve, turned round).
-    static func time(reaching share: CGFloat) -> TimeInterval {
+    static func time(reaching share: CGFloat, duration: TimeInterval = ModeWave.duration) -> TimeInterval {
         var low: CGFloat = 0, high: CGFloat = 1
         for _ in 0..<30 {
             let mid = (low + high) / 2
@@ -85,7 +87,7 @@ struct ModeWave: Equatable, Identifiable {
             done = share
             share -= 0.01
         }
-        return ModeWave.time(reaching: done)
+        return ModeWave.time(reaching: done, duration: length)
     }
 
     var center: CGPoint { return source }
@@ -95,11 +97,11 @@ struct ModeWave: Equatable, Identifiable {
 
     /// The share of the wave's way it has gone at `date`, on the animation's curve.
     func progress(at date: Date) -> CGFloat {
-        return ModeWave.ease(CGFloat(date.timeIntervalSince(startedDate) / ModeWave.duration))
+        return ModeWave.ease(CGFloat(date.timeIntervalSince(startedDate) / length))
     }
 
     func progress(atMediaTime time: CFTimeInterval) -> CGFloat {
-        return ModeWave.ease(CGFloat((time - started) / ModeWave.duration))
+        return ModeWave.ease(CGFloat((time - started) / length))
     }
 
     /// The radius the cut has at the end, when the ring's inner edge has passed the screen's farthest corner.

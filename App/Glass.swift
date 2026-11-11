@@ -977,6 +977,7 @@ struct GlassChoiceLink<Value: Hashable>: View {
                 Text(currentName).foregroundColor(.secondary)
                 DisclosureChevron()
             }
+            .waveSource()
             .foregroundColor(.primary)
             .contentShape(Rectangle())
         }

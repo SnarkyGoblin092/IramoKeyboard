@@ -94,6 +94,7 @@ struct ContentView: View {
             .modifier(PullDownSearch(text: $query, prompt: tr("Search settings")))
             .toolbar(.hidden, for: .navigationBar)   // no title, no bar behind it
             .scrollDismissesKeyboard(.interactively)
+            .background(NavigationWaveHook())
             .onAppear {
                 guard returnToLanguageRow else { return }
                 DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
@@ -145,6 +146,7 @@ struct ContentView: View {
                         .glassScreen()
                     }
                 }
+                .background(NavigationWaveHook())
                 .navigationDestination(for: Screen.self) { $0.scopedView }
             }
             // Another screen picked on the left starts afresh.
@@ -718,6 +720,7 @@ struct ScreenRow<Label: View>: View {
             .foregroundColor(.primary)
             .contentShape(Rectangle())
         }
+        .waveSource()
     }
 }
 
@@ -849,6 +852,7 @@ struct ShortcutsView: View {
                         DisclosureChevron()
                     }
                     .contentShape(Rectangle())
+                    .waveSource()
                 }
             }
             .glassRows()
@@ -988,6 +992,7 @@ struct LanguagesView: View {
                             DisclosureChevron()
                         }
                         .contentShape(Rectangle())
+                        .waveSource()
                     }
                 }
                 .glassRows()
