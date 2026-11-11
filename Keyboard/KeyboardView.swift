@@ -1238,9 +1238,9 @@ final class KeyboardView: UIView {
             trailLayer.shadowOpacity = 0
         }
         trailCanvas.color = base
-        trailCanvas.opacity = CGFloat(Prefs.swipeTrailOpacity)
+        trailCanvas.headOpacity = CGFloat(Prefs.swipeTrailOpacity)
         trailCanvas.width = CGFloat(Prefs.swipeTrailWidth)
-        trailCanvas.style = Prefs.swipeTrailStyle
+        trailCanvas.trailStyle = Prefs.swipeTrailStyle
     }
 
     /// Moves the rainbow trail's colours along as the finger goes.
@@ -1511,17 +1511,13 @@ final class KeyboardView: UIView {
     }
 }
 
-/// Where this user's thumbs land relative to the keys they mean. Every letter press shows how far from the key's
-/// centre it was; the running average, kept separately for the left and right half of the keyboard and for portrait
-/// and landscape (the thumbs reach differently), shifts the point a press is resolved with. Small (a fifth of a
-/// key at most), slow to change, and saved so it is there the next time.
 /// The layer the swipe trail is drawn on: a smooth ribbon (TrailGeometry) redrawn as the finger moves.
 final class TrailCanvas: CALayer {
     var points: [CGPoint] = [] { didSet { setNeedsDisplay() } }
     var color: UIColor = .systemBlue
-    var opacity: CGFloat = 1
+    var headOpacity: CGFloat = 1
     var width: CGFloat = 8
-    var style = "fade"
+    var trailStyle = "fade"
     var hueShift: CGFloat = 0
 
     override init() {
@@ -1539,11 +1535,15 @@ final class TrailCanvas: CALayer {
         // A plain layer's context has its origin at the bottom left: flipped, the points (top left) land upright.
         ctx.translateBy(x: 0, y: bounds.height)
         ctx.scaleBy(x: 1, y: -1)
-        TrailGeometry.draw(in: ctx, points: points, width: width, style: style, color: color, opacity: opacity,
+        TrailGeometry.draw(in: ctx, points: points, width: width, style: trailStyle, color: color, opacity: headOpacity,
                            hueShift: hueShift, soften: 2)
     }
 }
 
+/// Where this user's thumbs land relative to the keys they mean. Every letter press shows how far from the key's
+/// centre it was; the running average, kept separately for the left and right half of the keyboard and for portrait
+/// and landscape (the thumbs reach differently), shifts the point a press is resolved with. Small (a fifth of a
+/// key at most), slow to change, and saved so it is there the next time.
 final class TapBias {
     static let shared = TapBias()
 
