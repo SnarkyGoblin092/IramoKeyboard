@@ -2,13 +2,15 @@ import SwiftUI
 import UIKit
 import ObjectiveC
 
-/// The theme switch's wave (ModeWave, WindowWave) used between the app's screens, in place of the slide: going into a
-/// screen, the wave spreads out from the centre of the element tapped; going back, from the centre of the screen's
-/// left edge. A quarter faster than the theme switch's.
+/// The theme switch's wave used between the app's screens, in place of the slide: going into a screen, the wave
+/// spreads out from the centre of the element tapped; going back, from the centre of the screen's left edge.
 ///
-/// Every push and pop of a navigation stack asks its delegate for the animation; the one set here (NavigationWaveDelegate)
-/// photographs the window as it is, lets the screens change at once, and the wave carries the window across to the new
-/// picture. Reduce Motion keeps the system's slide.
+/// No pictures of the screen are taken. Both screens are live: the new one is put over the old one and cut to the
+/// wave's irregular circle (a mask the render server animates on its own, nothing is drawn for each frame), so the old
+/// screen shows outside the front and the new one inside it, and the rim (GlassWaveBand) is laid over the window.
+/// Every animated change of a navigation stack asks its delegate for the animation (NavigationWaveDelegate, put in
+/// place whoever sets the delegate), so pushes, pops, a path changed in code and the edge swipe back all play it.
+/// Reduce Motion keeps the system's slide.
 /// What the touches have told: kept apart from the (main actor's) wave so a gesture can write it at once.
 enum WaveNote {
     /// The centre of the element just tapped (window coordinates), noted by `waveSource()` when it was tapped.
@@ -19,27 +21,17 @@ enum WaveNote {
 
 @MainActor
 enum NavigationWave {
-    /// Faster than the theme switch's wave: a quarter, and a quarter again.
+    /// A quarter faster than the theme switch's wave, and a quarter again.
     static let length: TimeInterval = ModeWave.duration / 1.25 / 1.25
-    /// How long a tap to a screen waits before the change starts: the pressed look of the element settles first.
-    static let settle: TimeInterval = 0.12
-    /// The same for a change in the look (the accent colour), whose swatches have a ring that takes longer to settle.
+    /// How long a change in the look (the accent colour) waits: the ring round a swatch settles first, so the picture
+    /// of the window the wave carries is of a window at rest.
     static let changeSettle: TimeInterval = 0.3
-    /// When the last wave started: a screen change made in the same breath is already covered by it.
-    static var lastStart: CFTimeInterval = 0
 
     /// Whether the wave plays at all (Reduce Motion keeps the system's own changes).
     static var canPlay: Bool {
         return !UIAccessibility.isReduceMotionEnabled && WindowWave.window != nil
     }
     private static var recording = false
-
-    /// Starts the wave: the window is photographed now, before the screens change.
-    static func start(push: Bool) {
-        guard WindowWave.window != nil else { return }
-        WaveNote.nextSource = nil
-        start(from: source(push: push))
-    }
 
     /// Where the wave sets off: into a screen, the centre of the list element under the last touch (every element that
     /// opens a screen is marked with `waveSource()`), else the touch itself; back, the centre of the left edge.
@@ -50,40 +42,14 @@ enum NavigationWave {
         return CGPoint(x: size.width / 2, y: size.height / 2)
     }
 
-    /// Plays the wave across a screen change made by the app's own state (the path of a stack): once the tap has
-    /// settled, the window is photographed and `change` is made without the slide.
-    static func navigate(push: Bool = true, _ change: @escaping () -> Void) {
-        guard canPlay else {
-            change()
-            return
-        }
-        let origin = source(push: push)
-        DispatchQueue.main.asyncAfter(deadline: .now() + settle) {
-            start(from: origin)
-            applyAtOnce(change)
-        }
-    }
-
-    /// Makes a change with every animation off, so the picture taken of it is of the finished look.
-    private static func applyAtOnce(_ change: () -> Void) {
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
-        UIView.performWithoutAnimation {
-            withTransaction(transaction, change)
-        }
-    }
-
-    /// Starts the wave from `source` (window coordinates): the window is photographed now, before anything changes.
-    static func start(from source: CGPoint) {
-        guard let window = WindowWave.window else { return }
-        let size = window.bounds.size
+    /// A wave over the whole window, set off from `source` now.
+    static func makeWave(from source: CGPoint) -> ModeWave {
+        let size = WindowWave.window?.bounds.size ?? UIScreen.main.bounds.size
         ModeWave.count += 1
-        lastStart = CACurrentMediaTime()
-        let scheme: ColorScheme = window.traitCollection.userInterfaceStyle == .dark ? .dark : .light
-        let wave = ModeWave(id: ModeWave.count, oldScheme: scheme, newScheme: scheme, oldTheme: "", newTheme: "",
-                            source: source, minX: 0, minY: 0, width: size.width, height: size.height,
-                            started: CACurrentMediaTime(), startedDate: Date(), length: length)
-        WindowWave.start(for: wave)
+        let scheme: ColorScheme = WindowWave.window?.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+        return ModeWave(id: ModeWave.count, oldScheme: scheme, newScheme: scheme, oldTheme: "", newTheme: "",
+                        source: source, minX: 0, minY: 0, width: size.width, height: size.height,
+                        started: CACurrentMediaTime(), startedDate: Date(), length: length)
     }
 
     /// Plays the wave across a change that is not a screen change (the accent colour): the window is photographed,
@@ -96,12 +62,15 @@ enum NavigationWave {
         }
         let size = window.bounds.size
         let origin = source ?? WaveNote.lastTouch ?? CGPoint(x: size.width / 2, y: size.height / 2)
-        // After the animations of the tap (the element's press, the ring round a swatch) have finished.
+        // After the animations of the tap (the ring round a swatch) have finished.
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            start(from: origin)
-            // With every animation off, so the new picture is of the finished look (glass fading between tints is
-            // what showed as a reflection).
-            applyAtOnce(apply)
+            WindowWave.start(for: makeWave(from: origin))
+            // With every animation off, so the new picture is of the finished look.
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            UIView.performWithoutAnimation {
+                withTransaction(transaction, apply)
+            }
         }
     }
 
@@ -134,27 +103,49 @@ enum NavigationWave {
             state = .failed
         }
     }
+
+    /// The rim, over the window, for as long as `wave` lives (it takes no touches).
+    static func showRim(of wave: ModeWave, lasting duration: TimeInterval) {
+        guard let window = WindowWave.window else { return }
+        let host = UIHostingController(rootView: GlassWaveBand(waves: [wave]))
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        if #available(iOS 16.4, *) { host.safeAreaRegions = [] }
+        host.view.frame = window.bounds
+        host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        window.addSubview(host.view)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { host.view.removeFromSuperview() }
+    }
 }
 
 /// The navigation controller's delegate while the wave is in use: it supplies the transition and passes everything
 /// else on to the delegate that was there (the one SwiftUI's stack set).
 @MainActor
 final class NavigationWaveDelegate: NSObject, UINavigationControllerDelegate {
-    private weak var original: UINavigationControllerDelegate?
+    fileprivate weak var original: UINavigationControllerDelegate?
     private static var associationKey: UInt8 = 0
 
     static func install(on navigation: UINavigationController) {
         if navigation.delegate is NavigationWaveDelegate { return }
+        wrap(navigation.delegate, on: navigation)
+    }
+
+    /// Makes the delegate `original` (or none) the one this proxy passes things on to, and sets the proxy.
+    fileprivate static func wrap(_ original: UINavigationControllerDelegate?, on navigation: UINavigationController) {
         let proxy = NavigationWaveDelegate()
-        proxy.original = navigation.delegate
+        proxy.original = original
         objc_setAssociatedObject(navigation, &associationKey, proxy, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        navigation.delegate = proxy
+        navigation.wave_setDelegate(proxy)
     }
 
     func navigationController(_ navigationController: UINavigationController,
                               animationControllerFor operation: UINavigationController.Operation,
                               from fromVC: UIViewController, to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
-        guard operation != .none, !UIAccessibility.isReduceMotionEnabled else { return nil }
+        // The app's own screens only (not a stack inside a system sheet, such as the colour picker's).
+        guard operation != .none, NavigationWave.canPlay, navigationController.presentingViewController == nil,
+              navigationController.view.window === WindowWave.window else {
+            return original?.navigationController?(navigationController, animationControllerFor: operation, from: fromVC, to: toVC)
+        }
         return WaveTransition(push: operation == .push)
     }
 
@@ -174,37 +165,82 @@ final class NavigationWaveDelegate: NSObject, UINavigationControllerDelegate {
         -> UIViewControllerInteractiveTransitioning? {
         return original?.navigationController?(navigationController, interactionControllerFor: animationController)
     }
+
+    // Anything else the stack's own delegate answers.
+    override func responds(to selector: Selector!) -> Bool {
+        return super.responds(to: selector) || (original?.responds(to: selector) ?? false)
+    }
+
+    override func forwardingTarget(for selector: Selector!) -> Any? {
+        if let original = original, original.responds(to: selector) { return original }
+        return super.forwardingTarget(for: selector)
+    }
 }
 
-/// The transition itself: the window's picture is taken, the new screen is put in place at once, and the wave over
-/// the window (WindowWave) shows the change.
+/// The transition itself: the new screen goes over the old one, cut to the wave's circle, which grows (the cut is a
+/// mask whose outline is animated by Core Animation: the render server does the work, every frame is ready before it
+/// is wanted), and the rim travels with it.
 @MainActor
 private final class WaveTransition: NSObject, UIViewControllerAnimatedTransitioning {
     let push: Bool
+    private let wave: ModeWave
+    private let duration: TimeInterval
 
     init(push: Bool) {
         self.push = push
+        wave = NavigationWave.makeWave(from: NavigationWave.source(push: push))
+        duration = wave.lifetime
+        WaveNote.nextSource = nil
     }
 
     func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        return 0.01
+        return duration
     }
 
     func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
-        guard let from = transitionContext.viewController(forKey: .from),
-              let to = transitionContext.viewController(forKey: .to) else {
+        guard let to = transitionContext.viewController(forKey: .to) else {
             transitionContext.completeTransition(false)
             return
         }
-        NavigationWave.start(push: push)
         let container = transitionContext.containerView
-        to.view.frame = transitionContext.finalFrame(for: to)
-        if push {
-            container.addSubview(to.view)
-        } else {
-            container.insertSubview(to.view, belowSubview: from.view)
+        let toView = to.view!
+        toView.frame = transitionContext.finalFrame(for: to)
+        container.addSubview(toView)
+        toView.layoutIfNeeded()
+
+        // The outline at each step of the way, relative to the new screen's corner.
+        let origin = toView.convert(CGPoint.zero, to: nil)
+        let steps = max(24, Int(duration * 60))
+        let paths: [CGPath] = (0...steps).map { index in
+            let elapsed = Double(index) / Double(steps) * duration
+            let share = ModeWave.ease(CGFloat(elapsed / wave.length))
+            let path = CGMutablePath()
+            let points = wave.outline(share, relativeTo: origin)
+            if let first = points.first {
+                path.move(to: first)
+                for point in points.dropFirst() { path.addLine(to: point) }
+                path.closeSubpath()
+            }
+            return path
         }
-        transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+        let mask = CAShapeLayer()
+        mask.frame = toView.bounds
+        mask.fillColor = UIColor.black.cgColor
+        mask.path = paths.last
+        toView.layer.mask = mask
+        let animation = CAKeyframeAnimation(keyPath: "path")
+        animation.values = paths
+        animation.duration = duration
+        animation.calculationMode = .linear
+        animation.isRemovedOnCompletion = false
+        animation.fillMode = .forwards
+        mask.add(animation, forKey: "wave")
+
+        NavigationWave.showRim(of: wave, lasting: duration)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            toView.layer.mask = nil
+            transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+        }
     }
 }
 
@@ -326,79 +362,23 @@ extension View {
     }
 }
 
-// MARK: - Every push and pop
+// MARK: - Every delegate a stack is given
 
 extension UINavigationController {
-    /// Swaps in versions of the push and pop calls that play the wave in place of the slide: the window is
-    /// photographed, then the change is made without animation. (The edge swipe back is the system's own gesture; it
-    /// goes through the delegate's transition, NavigationWaveDelegate.) Done once.
+    /// Swaps in a setter for the delegate that puts the wave's delegate between the stack and whatever it sets, so
+    /// the wave plays however the stack's owner (SwiftUI) arranges it. Done once.
     static let installWave: Void = {
-        func swap(_ original: Selector, _ replacement: Selector) {
-            guard let a = class_getInstanceMethod(UINavigationController.self, original),
-                  let b = class_getInstanceMethod(UINavigationController.self, replacement) else { return }
-            method_exchangeImplementations(a, b)
-        }
-        swap(#selector(UINavigationController.pushViewController(_:animated:)), #selector(UINavigationController.wave_push(_:animated:)))
-        swap(#selector(UINavigationController.popViewController(animated:)), #selector(UINavigationController.wave_pop(animated:)))
-        swap(#selector(UINavigationController.popToRootViewController(animated:)), #selector(UINavigationController.wave_popToRoot(animated:)))
-        swap(#selector(UINavigationController.popToViewController(_:animated:)), #selector(UINavigationController.wave_popTo(_:animated:)))
-        swap(#selector(UINavigationController.setViewControllers(_:animated:)), #selector(UINavigationController.wave_set(_:animated:)))
+        guard let a = class_getInstanceMethod(UINavigationController.self, #selector(setter: UINavigationController.delegate)),
+              let b = class_getInstanceMethod(UINavigationController.self, #selector(UINavigationController.wave_setDelegate(_:))) else { return }
+        method_exchangeImplementations(a, b)
     }()
 
-    /// The app's own screens only (not a stack inside a system sheet, such as the colour picker's).
-    private var playsWave: Bool {
-        return NavigationWave.canPlay && presentingViewController == nil && view.window != nil && view.window === WindowWave.window
-            && CACurrentMediaTime() - NavigationWave.lastStart > 0.6   // not one already covered by a wave
-    }
-
-    private static var pendingKey: UInt8 = 0
-
-    /// Makes the change after the tap's own animations have finished (a later change replaces one still waiting), with
-    /// the wave started first.
-    private func afterSettling(push: Bool, _ change: @escaping () -> Void) {
-        (objc_getAssociatedObject(self, &UINavigationController.pendingKey) as? DispatchWorkItem)?.cancel()
-        let item = DispatchWorkItem {
-            NavigationWave.start(push: push)
-            change()
+    /// (After the swap this is the original setter, and the original setter is this.)
+    @objc fileprivate func wave_setDelegate(_ delegate: UINavigationControllerDelegate?) {
+        if let delegate = delegate, !(delegate is NavigationWaveDelegate) {
+            NavigationWaveDelegate.wrap(delegate, on: self)
+        } else {
+            wave_setDelegate(delegate)
         }
-        objc_setAssociatedObject(self, &UINavigationController.pendingKey, item, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        DispatchQueue.main.asyncAfter(deadline: .now() + NavigationWave.settle, execute: item)
-    }
-
-    @objc fileprivate func wave_push(_ viewController: UIViewController, animated: Bool) {
-        guard animated, playsWave else { return wave_push(viewController, animated: animated) }
-        afterSettling(push: true) { self.wave_push(viewController, animated: false) }
-    }
-
-    @objc fileprivate func wave_pop(animated: Bool) -> UIViewController? {
-        guard animated, playsWave, viewControllers.count > 1 else { return wave_pop(animated: animated) }
-        let leaving = viewControllers.last
-        afterSettling(push: false) { _ = self.wave_pop(animated: false) }
-        return leaving
-    }
-
-    @objc fileprivate func wave_popToRoot(animated: Bool) -> [UIViewController]? {
-        guard animated, playsWave, viewControllers.count > 1 else { return wave_popToRoot(animated: animated) }
-        let leaving = Array(viewControllers.dropFirst())
-        afterSettling(push: false) { _ = self.wave_popToRoot(animated: false) }
-        return leaving
-    }
-
-    @objc fileprivate func wave_popTo(_ viewController: UIViewController, animated: Bool) -> [UIViewController]? {
-        guard animated, playsWave, viewControllers.last !== viewController,
-              let index = viewControllers.firstIndex(of: viewController) else {
-            return wave_popTo(viewController, animated: animated)
-        }
-        let leaving = Array(viewControllers.suffix(from: index + 1))
-        afterSettling(push: false) { _ = self.wave_popTo(viewController, animated: false) }
-        return leaving
-    }
-
-    @objc fileprivate func wave_set(_ controllers: [UIViewController], animated: Bool) {
-        guard animated, playsWave, controllers.last !== viewControllers.last else {
-            return wave_set(controllers, animated: animated)
-        }
-        let push = controllers.count >= viewControllers.count
-        afterSettling(push: push) { self.wave_set(controllers, animated: false) }
     }
 }

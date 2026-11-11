@@ -34,10 +34,8 @@ struct ContentView: View {
                         .navigationDestination(for: Screen.self) { $0.scopedView }
                 }
                 .environment(\.openScreen, { screen in
-                    NavigationWave.navigate {
-                        returnToLanguageRow = false
-                        path.append(screen)
-                    }
+                    returnToLanguageRow = false
+                    path.append(screen)
                 })
             }
         }
@@ -113,14 +111,11 @@ struct ContentView: View {
         if let anchor = entry.anchor {
             SearchFocus.shared.request = SearchFocus.Request(screen: entry.screen, anchor: anchor)
         }
-        func finish() {
-            query = ""
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            returnToLanguageRow = false
-            if let screen = entry.screen { path = [screen] }
-        }
-        // The results stay on screen until the wave has the picture of them.
-        if entry.screen != nil { NavigationWave.navigate { finish() } } else { finish() }
+        query = ""
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        returnToLanguageRow = false
+        guard let screen = entry.screen else { return }
+        path = [screen]
     }
 
     /// Landscape: the main list as a column on the left; a row tapped there opens its screen on the right, where
@@ -130,10 +125,8 @@ struct ContentView: View {
             NavigationStack { mainList }
                 .frame(width: min(400, max(300, windowSize.width * 0.38)))
                 .environment(\.openScreen, { screen in
-                    NavigationWave.navigate {
-                        returnToLanguageRow = false
-                        path = [screen]
-                    }
+                    returnToLanguageRow = false
+                    path = [screen]
                 })
                 .environment(\.shownScreen, path.first)
             Divider().ignoresSafeArea()
@@ -158,7 +151,7 @@ struct ContentView: View {
             }
             // Another screen picked on the left starts afresh.
             .id(path.first)
-            .environment(\.openScreen, { screen in NavigationWave.navigate { path.append(screen) } })
+            .environment(\.openScreen, { screen in path.append(screen) })
         }
     }
 }
