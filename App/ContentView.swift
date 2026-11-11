@@ -18,6 +18,8 @@ struct ContentView: View {
     @State private var windowSize: CGSize = .zero
     /// What is typed in the main list's search field.
     @State private var query = ""
+    /// The main list is scrolled down: its search bar is away until the user scrolls up.
+    @State private var searchHidden = false
 
     /// Landscape on an iPhone or iPad: the main list on the left and the open screen beside it.
     private static func isWide(_ size: CGSize) -> Bool {
@@ -92,7 +94,8 @@ struct ContentView: View {
                     SettingsSearchResults(query: query) { entry in open(entry) }
                 }
             }
-            .glassSearchable(text: $query, prompt: tr("Search settings"))
+            .environment(\.scrollHidesSearch, $searchHidden)
+            .glassPinnedSearch(text: $query, prompt: tr("Search settings"), hidden: searchHidden && query.isEmpty)
             .navigationTitle(tr("Iramo"))
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
@@ -990,6 +993,7 @@ struct LanguagesView: View {
 private struct LanguageRow: View {
     let language: Language
     let layouts: [String: String]
+    @Environment(\.swipeFade) private var swipeFade
 
     var body: some View {
         if language.supportsOtherLayouts {
@@ -1000,6 +1004,7 @@ private struct LanguageRow: View {
                     Text(tr(LetterLayout.stored(in: layouts, for: language.rawValue).displayName))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
+                        .opacity(swipeFade)   // fades as the Delete button comes over it; the name stays
                 }
             }
         } else {

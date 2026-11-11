@@ -65,11 +65,10 @@ final class KeyboardView: UIView {
 
     private let preview = KeyPreviewView()
     private var alternatesPopup: AlternatesPopupView?
-    /// Holds the swipe line (its colour and the fade when it ends); the line itself is drawn by `trailPieces`.
+    /// Holds the swipe line (its glow and the fade when it ends); the line itself is drawn by `trailCanvas`.
     private let trailLayer = CAShapeLayer()
-    /// The swipe line in stretches, oldest first, each more opaque than the one before: it fades out behind the
-    /// finger, over the Trail length setting.
-    private let trailPieces: [CAShapeLayer] = (0..<32).map { _ in CAShapeLayer() }
+    /// The swipe line: one smooth curve that thins and fades towards its tail (TrailGeometry).
+    private let trailCanvas = TrailCanvas()
     /// Liquid Glass theme: every key's glass lives inside this shared container (see GlassSupport.makeContainer).
     private var glassContainer: UIVisualEffectView?
     /// One-handed keyboard: the arrow in the empty side that moves the keys over to it.
@@ -240,11 +239,8 @@ final class KeyboardView: UIView {
         trailLayer.lineCap = .round
         trailLayer.lineJoin = .round
         trailLayer.zPosition = 100
-        for piece in trailPieces {
-            piece.fillColor = nil
-            piece.lineJoin = .round
-            trailLayer.addSublayer(piece)
-        }
+        trailCanvas.contentsScale = UIScreen.main.scale
+        trailLayer.addSublayer(trailCanvas)
         layer.addSublayer(trailLayer)
         styleTrail()
 
@@ -495,6 +491,10 @@ final class KeyboardView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         trailLayer.frame = bounds
+        if trailCanvas.frame != trailLayer.bounds {
+            trailCanvas.frame = trailLayer.bounds
+            trailCanvas.setNeedsDisplay()
+        }
         haloLayer.frame = bounds
         effectsLayer.frame = bounds
         haloMask.frame = bounds
@@ -1053,7 +1053,7 @@ final class KeyboardView: UIView {
         setCursorAppearance(false)
         setSelectingAppearance(false)
         if ending.values.contains(where: { $0.isCursorMode }) { delegate?.keyboardViewDidEndCursorMode(self) }
-        for piece in trailPieces { piece.path = nil }
+        trailCanvas.points = []
     }
 
     // MARK: Cursor control (hold + slide on the space bar)
@@ -1229,7 +1229,6 @@ final class KeyboardView: UIView {
             base = Theme.swipeTrail
         }
         trailLayer.isHidden = !Prefs.swipeTrailShown
-        trailLayer.strokeColor = base.withAlphaComponent(CGFloat(Prefs.swipeTrailOpacity)).cgColor
         if effects.trail {
             trailLayer.shadowColor = base.cgColor
             trailLayer.shadowOpacity = Float(effects.trailGlow)
@@ -1238,31 +1237,10 @@ final class KeyboardView: UIView {
         } else {
             trailLayer.shadowOpacity = 0
         }
-        let width = CGFloat(Prefs.swipeTrailWidth)
-        let style = Prefs.swipeTrailStyle
-        for (index, piece) in trailPieces.enumerated() {
-            // The trail thins towards its tail as it fades.
-            let along = CGFloat(index + 1) / CGFloat(trailPieces.count)
-            piece.lineWidth = style == "solid" ? width : width * (0.3 + 0.7 * along)
-            if style == "dotted" {
-                piece.lineCap = .round
-                piece.lineDashPattern = [NSNumber(value: 0.01), NSNumber(value: Double(width) * 1.9)]
-            } else {
-                // Butt ends where stretches meet (round ones would overlap there as darker dots); round at the finger.
-                piece.lineCap = index == trailPieces.count - 1 ? .round : .butt
-                piece.lineDashPattern = nil
-            }
-            // Fading: each stretch more opaque than the one before; solid: the whole line alike.
-            // (An eased curve: the tail is nearly gone, the head fully there.)
-            piece.opacity = style == "solid" ? 1 : Float(pow(Double(along), 1.8))
-        }
-    }
-
-    /// The colour of one stretch of the trail: the trail's own, or (rainbow) a hue that runs along it.
-    private func trailColor(piece index: Int) -> CGColor? {
-        guard Prefs.swipeTrailStyle == "rainbow" else { return trailLayer.strokeColor }
-        let hue = (CGFloat(index) / CGFloat(trailPieces.count) + trailHueShift).truncatingRemainder(dividingBy: 1)
-        return UIColor(hue: hue, saturation: 0.8, brightness: 1, alpha: CGFloat(Prefs.swipeTrailOpacity)).cgColor
+        trailCanvas.color = base
+        trailCanvas.opacity = CGFloat(Prefs.swipeTrailOpacity)
+        trailCanvas.width = CGFloat(Prefs.swipeTrailWidth)
+        trailCanvas.style = Prefs.swipeTrailStyle
     }
 
     /// Moves the rainbow trail's colours along as the finger goes.
@@ -1463,45 +1441,10 @@ final class KeyboardView: UIView {
             newest = point
         }
         kept.reverse()
-        kept = KeyboardView.smoothed(kept)
 
         trailHueShift = (trailHueShift + 0.004).truncatingRemainder(dividingBy: 1)
-        let count = trailPieces.count
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-        for (index, piece) in trailPieces.enumerated() {
-            // Each stretch shares its first point with the one before, so the line has no gaps.
-            let from = kept.count * index / count
-            let to = min(kept.count - 1, kept.count * (index + 1) / count)
-            guard to > from || (index == count - 1 && kept.count == 1) else {
-                piece.path = nil
-                continue
-            }
-            let path = UIBezierPath()
-            path.move(to: kept[from])
-            for point in kept[from...to].dropFirst() { path.addLine(to: point) }
-            if to == from { path.addLine(to: kept[from]) }
-            piece.strokeColor = trailColor(piece: index)
-            piece.path = path.cgPath
-        }
-    }
-
-    /// The points rounded into a curve (corner cutting, twice), keeping both ends where they are.
-    private static func smoothed(_ points: [CGPoint]) -> [CGPoint] {
-        guard points.count > 2 else { return points }
-        var current = points
-        for _ in 0..<3 {
-            var next = [current[0]]
-            for index in 0..<(current.count - 1) {
-                let a = current[index], b = current[index + 1]
-                next.append(CGPoint(x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25))
-                next.append(CGPoint(x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75))
-            }
-            next.append(current[current.count - 1])
-            current = next
-        }
-        return current
+        trailCanvas.hueShift = trailHueShift
+        trailCanvas.points = kept
     }
 
     private func fadeTrail() {
@@ -1572,6 +1515,35 @@ final class KeyboardView: UIView {
 /// centre it was; the running average, kept separately for the left and right half of the keyboard and for portrait
 /// and landscape (the thumbs reach differently), shifts the point a press is resolved with. Small (a fifth of a
 /// key at most), slow to change, and saved so it is there the next time.
+/// The layer the swipe trail is drawn on: a smooth ribbon (TrailGeometry) redrawn as the finger moves.
+final class TrailCanvas: CALayer {
+    var points: [CGPoint] = [] { didSet { setNeedsDisplay() } }
+    var color: UIColor = .systemBlue
+    var opacity: CGFloat = 1
+    var width: CGFloat = 8
+    var style = "fade"
+    var hueShift: CGFloat = 0
+
+    override init() {
+        super.init()
+        contentsScale = UIScreen.main.scale
+        actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+    }
+
+    override init(layer: Any) { super.init(layer: layer) }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func draw(in ctx: CGContext) {
+        guard !points.isEmpty else { return }
+        // A plain layer's context has its origin at the bottom left: flipped, the points (top left) land upright.
+        ctx.translateBy(x: 0, y: bounds.height)
+        ctx.scaleBy(x: 1, y: -1)
+        TrailGeometry.draw(in: ctx, points: points, width: width, style: style, color: color, opacity: opacity,
+                           hueShift: hueShift, soften: 2)
+    }
+}
+
 final class TapBias {
     static let shared = TapBias()
 

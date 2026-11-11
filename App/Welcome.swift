@@ -295,47 +295,20 @@ private struct TurnOnDemo: View {
     }
 }
 
-/// The keyboard's swipe trail: the finger's points rounded into a curve, drawn in short stretches that fade and thin
-/// towards the tail (the same corner cutting as KeyboardView's trail).
+/// The keyboard's swipe trail (TrailGeometry): the finger's points as one smooth curve that thins and fades towards
+/// its tail.
 private struct SmoothTrail: View {
     let points: [CGPoint]
     let color: Color
 
-    private var curve: [CGPoint] {
-        guard points.count > 2 else { return points }
-        var current = points
-        for _ in 0..<3 {
-            var next = [current[0]]
-            for index in 0..<(current.count - 1) {
-                let a = current[index], b = current[index + 1]
-                next.append(CGPoint(x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25))
-                next.append(CGPoint(x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75))
-            }
-            next.append(current[current.count - 1])
-            current = next
-        }
-        return current
-    }
-
     var body: some View {
-        let curve = self.curve
-        let count = 32
-        ZStack {
-            ForEach(0..<count, id: \.self) { piece in
-                let from = (curve.count - 1) * piece / count
-                let to = min(curve.count - 1, (curve.count - 1) * (piece + 1) / count)
-                let along = Double(piece + 1) / Double(count)
-                if to > from {
-                    Path { path in
-                        path.move(to: curve[from])
-                        for point in curve[from...to].dropFirst() { path.addLine(to: point) }
-                    }
-                    .stroke(color.opacity(0.7 * pow(along, 1.8)),
-                            style: StrokeStyle(lineWidth: CGFloat(7 * (0.3 + 0.7 * along)),
-                                               lineCap: piece == count - 1 ? .round : .butt, lineJoin: .round))
-                }
+        Canvas { context, _ in
+            let shade = UIColor(color)
+            context.withCGContext { cg in
+                TrailGeometry.draw(in: cg, points: points, width: 8, style: "fade", color: shade, opacity: 0.85)
             }
         }
+        .allowsHitTesting(false)
     }
 }
 
@@ -577,11 +550,9 @@ private struct StatsDemo: View {
                         }
                         Spacer(minLength: 0)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
             .frame(height: 3 * 34, alignment: .top)
-            .animation(.easeOut(duration: 0.2), value: results.map { $0.id })
         }
         .padding(.horizontal, 22)
     }

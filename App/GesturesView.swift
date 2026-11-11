@@ -269,40 +269,21 @@ private struct TrailPreview: View {
                     index -= 1
                 }
                 kept.reverse()
-                let pieces = 10
-                for piece in 0..<pieces {
-                    let from = kept.count * piece / pieces
-                    let to = min(kept.count - 1, kept.count * (piece + 1) / pieces)
-                    guard to > from else { continue }
-                    var line = Path()
-                    line.move(to: kept[from])
-                    for point in kept[from...to].dropFirst() { line.addLine(to: point) }
-                    let fade = style == "solid" ? 1 : Double(piece + 1) / Double(pieces)
-                    let shade: Color = style == "rainbow"
-                        ? Color(hue: (Double(piece) / Double(pieces) + time / cycle).truncatingRemainder(dividingBy: 1), saturation: 0.8, brightness: 1)
-                        : color
-                    let lineWidth = CGFloat(width)
-                    let stroke = style == "dotted"
-                        ? StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: [0.01, lineWidth * 1.9])
-                        : StrokeStyle(lineWidth: lineWidth, lineCap: piece == pieces - 1 ? .round : .butt, lineJoin: .round)
-                    context.stroke(line, with: .color(shade.opacity(opacity * fade)), style: stroke)
+                // The same curved, smoothly fading ribbon as on the keyboard.
+                let shade = UIColor(color)
+                let hueShift = CGFloat(time / cycle)
+                context.withCGContext { cg in
+                    TrailGeometry.draw(in: cg, points: kept, width: CGFloat(width), style: style, color: shade,
+                                       opacity: CGFloat(opacity), hueShift: hueShift)
                 }
             }
         }
         .accessibilityHidden(true)
     }
 
-    /// The path as many close points across the preview, for a smooth line.
+    /// The path as a smooth curve through the word's points, as many close points across the preview.
     private static func sampled(size: CGSize) -> [CGPoint] {
-        var result: [CGPoint] = []
-        for index in 0..<(path.count - 1) {
-            let a = path[index], b = path[index + 1]
-            for step in 0..<12 {
-                let t = CGFloat(step) / 12
-                result.append(CGPoint(x: (a.x + (b.x - a.x) * t) * size.width, y: (a.y + (b.y - a.y) * t) * size.height))
-            }
-        }
-        if let last = path.last { result.append(CGPoint(x: last.x * size.width, y: last.y * size.height)) }
-        return result
+        let scaled = path.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
+        return TrailGeometry.curve(scaled, spacing: 3)
     }
 }
