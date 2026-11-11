@@ -51,6 +51,18 @@ enum NavigationWave {
         start(from: source)
     }
 
+    /// Starts the wave from `source` (window coordinates): the window is photographed now, before anything changes.
+    static func start(from source: CGPoint) {
+        guard let window = WindowWave.window else { return }
+        let size = window.bounds.size
+        ModeWave.count += 1
+        let scheme: ColorScheme = window.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+        let wave = ModeWave(id: ModeWave.count, oldScheme: scheme, newScheme: scheme, oldTheme: "", newTheme: "",
+                            source: source, minX: 0, minY: 0, width: size.width, height: size.height,
+                            started: CACurrentMediaTime(), startedDate: Date(), length: length)
+        WindowWave.start(for: wave)
+    }
+
     /// Plays the wave across a change that is not a screen change (the accent colour): the window is photographed,
     /// `apply` makes the change, and the wave carries the window over to its new look. `source` is the centre of
     /// the element that asked for it (the last touch, without one). With Reduce Motion the change is just made.
