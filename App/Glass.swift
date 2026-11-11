@@ -711,8 +711,7 @@ private struct GlassCardSection: View {
                 .padding(.bottom, 7)
             }
             VStack(spacing: 12) {
-                ForEach(runs.indices, id: \.self) { index in
-                    let run = runs[index]
+                ForEach(runs) { run in
                     if run.outside {
                         ForEach(run.rows) { $0 }
                     } else {
@@ -736,15 +735,16 @@ private struct GlassCardSection: View {
 
     private func card(_ rows: [Subview]) -> some View {
         let shape = RoundedRectangle(cornerRadius: GlassMetrics.cardRadius, style: .continuous)
+        // By the rows' own identity, not by position: a row that is deleted must not leave a stale index behind.
+        let lastID = rows.last?.id
         return VStack(spacing: 0) {
-            ForEach(rows.indices, id: \.self) { index in
-                let row = rows[index]
+            ForEach(rows) { row in
                 if row.containerValues.glassBareRow {
                     row
                 } else {
                     row.glassRowPadding()
                 }
-                if index < rows.count - 1 {
+                if row.id != lastID {
                     Divider()
                 }
             }
@@ -754,9 +754,10 @@ private struct GlassCardSection: View {
         .glassEdge(shape)
     }
 
-    private struct Run {
+    private struct Run: Identifiable {
         var outside: Bool
         var rows: [Subview]
+        var id: Subview.ID { return rows[0].id }
     }
 
     private static func runs(_ rows: [Subview]) -> [Run] {

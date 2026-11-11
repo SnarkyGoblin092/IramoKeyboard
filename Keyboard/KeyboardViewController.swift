@@ -12,7 +12,6 @@ final class KeyboardViewController: UIInputViewController {
     /// The Functions panel, shown in place of the keys (the suggestion bar's left button).
     private var toolsPanel: ToolsPanel?
     /// What the case tool last wrote (it cannot re-select it, so it finds it again before the caret).
-    private var lastCased: String?
     private var totalHeight: NSLayoutConstraint?
     private var suggestionHeight: NSLayoutConstraint?
 
@@ -1005,7 +1004,7 @@ final class KeyboardViewController: UIInputViewController {
         // A text shortcut ("omw" -> "On my way!") expands when space is pressed.
         if let phrase = shortcutExpansion(in: before) {
             TypingStats.shared.note(.shortcut)
-            replacePrefix(with: phrase, typed: currentPrefix(in: before).count)
+            replacePrefix(with: phrase, length: shortcutLength(in: before))
             clearSwipeState()
             afterTyping()
             return
@@ -1128,13 +1127,13 @@ final class KeyboardViewController: UIInputViewController {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         var cursorBack = 0
         if let phrase = shortcutExpansion(in: before) {
-            let prefix = currentPrefix(in: before)
+            let typedLength = shortcutLength(in: before)
             let written = ShortcutTemplate.split(phrase)
-            for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
+            for _ in 0..<typedLength { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(written.text)
             cursorBack = written.cursorBack
             TypingStats.shared.note(.shortcut)
-            TypingStats.shared.saved(written.text.count - prefix.count, writing: written.text.count - prefix.count)
+            TypingStats.shared.saved(written.text.count - typedLength, writing: written.text.count - typedLength)
         } else {
             if !currentPrefix(in: before).isEmpty { TypingStats.shared.word(language) }
             DispatchQueue.main.async { [weak self] in self?.learnWord(endingAt: before) }
@@ -1374,11 +1373,37 @@ final class KeyboardViewController: UIInputViewController {
 
     /// The phrase of the shortcut typed before the cursor, its placeholders ({date}, {time}...) filled in; a
     /// {cursor} is still in it as `ShortcutTemplate.cursorMark`.
-    private func shortcutExpansion(in before: String) -> String? {
-        let prefix = currentPrefix(in: before)
-        guard !prefix.isEmpty, let phrase = settings.shortcutPhrase(for: prefix) ?? systemShortcuts[prefix.lowercased()] else {
-            return nil
+    /// The shortcut typed at the end of the text: its phrase and what was typed for it. A trigger may hold any
+    /// characters ("@d"), so the whole last stretch without spaces is tried first, then the same without its first
+    /// characters up to each symbol, then just the letters before the cursor.
+    private func shortcutMatch(in before: String) -> (phrase: String, typed: String)? {
+        var reversed: [Character] = []
+        for character in before.reversed() {
+            if character.isWhitespace { break }
+            reversed.append(character)
         }
+        let token = Array(reversed.reversed())
+        var candidates: [String] = []
+        for start in token.indices where start == 0 || !token[start].isLetter {
+            candidates.append(String(token[start...]))
+        }
+        candidates.append(currentPrefix(in: before))
+        for typed in candidates where !typed.isEmpty {
+            if let phrase = settings.shortcutPhrase(for: typed) ?? systemShortcuts[typed.lowercased()] {
+                return (phrase, typed)
+            }
+        }
+        return nil
+    }
+
+    /// How many characters the shortcut typed at the end of the text takes up (the word before the cursor when
+    /// there is none).
+    private func shortcutLength(in before: String) -> Int {
+        return shortcutMatch(in: before)?.typed.count ?? currentPrefix(in: before).count
+    }
+
+    private func shortcutExpansion(in before: String) -> String? {
+        guard let phrase = shortcutMatch(in: before)?.phrase else { return nil }
         guard ShortcutTemplate.hasPlaceholders(phrase) else { return phrase }
         let access = hasFullAccess
         return ShortcutTemplate.expand(phrase, locale: Locale(identifier: language.localeIdentifier)) {
@@ -1684,7 +1709,7 @@ final class KeyboardViewController: UIInputViewController {
         for word in words where word != prefix && !ranked.contains(word) { ranked.append(word) }
         var result: [Suggestion] = []
         var highlighted: Int? = nil
-        if !prefix.isEmpty {
+        if !prefix.isEmpty || phrase != nil {
             // Left: exactly what was typed (never auto-"corrected" away); centre: what space will write when it
             // corrects (highlighted), else the best word; right: runner-up or emoji.
             if phrase != nil {
@@ -1732,22 +1757,24 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     /// Writes `replacement` and a space in place of the word being typed. A shortcut's {cursor} puts the cursor there.
-    private func replacePrefix(with replacement: String, typed: Int? = nil) {
+    /// `length`: how many characters to take out (a shortcut's trigger can hold symbols); the word before the cursor
+    /// by default.
+    private func replacePrefix(with replacement: String, length: Int? = nil) {
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
-        let prefix = currentPrefix(in: before)
+        let removed = length ?? currentPrefix(in: before).count
         let written = ShortcutTemplate.split(replacement)
         recordBigram(contextBefore: before, next: written.text)
         noteWordUse(written.text)
         TypingStats.shared.word(language)
-        TypingStats.shared.saved(written.text.count - (typed ?? prefix.count), writing: written.text.count - prefix.count)
-        for _ in 0..<prefix.count { textDocumentProxy.deleteBackward() }
+        TypingStats.shared.saved(written.text.count - removed, writing: written.text.count - removed)
+        for _ in 0..<removed { textDocumentProxy.deleteBackward() }
         textDocumentProxy.insertText(written.text + " ")
         lastSpaceTime = Date()
         if written.cursorBack > 0 {
             textDocumentProxy.adjustTextPosition(byCharacterOffset: -(written.cursorBack + 1))
             autoSpaceMarker = nil
         } else {
-            autoSpaceMarker = String((String(before.dropLast(prefix.count)) + written.text + " ").suffix(12))
+            autoSpaceMarker = String((String(before.dropLast(removed)) + written.text + " ").suffix(12))
         }
     }
 
@@ -2142,7 +2169,8 @@ extension KeyboardViewController: SuggestionBarDelegate {
             if let shortcut = shownShortcut, shortcut.shown == suggestion.text {
                 // A shortcut picked in the bar: its filled-in phrase, with the cursor where {cursor} is.
                 TypingStats.shared.note(.shortcut)
-                replacePrefix(with: shortcut.expanded)
+                replacePrefix(with: shortcut.expanded,
+                              length: shortcutLength(in: textDocumentProxy.documentContextBeforeInput ?? ""))
             } else {
                 // A learned word picked in the bar is kept for good and ranked first from now on.
                 LearnedWords.shared.pin(TextFolding.normalizeApostrophes(suggestion.text).lowercased())
@@ -2263,34 +2291,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
             keyboardView.setNeedsLayout()
             builtSignature = settingsSignature()
             toolsPanel?.refresh()
-        case .changeCase:
-            // The text proxy cannot select, so the result is remembered: while the caret is still right after it,
-            // the next press cycles it again.
-            if trackpadSelection() != nil {
-                perform(command: "case")
-                return
-            }
-            var source = textDocumentProxy.selectedText ?? ""
-            var again = false
-            if source.isEmpty, let last = lastCased, (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) {
-                source = last
-                again = true
-            }
-            guard !source.isEmpty else { return }
-            // UPPERCASE, then lowercase, then Capitalized, then round again.
-            let next: String
-            if source == source.uppercased() && source != source.lowercased() {
-                next = source.lowercased()
-            } else if source == source.lowercased() {
-                next = source.capitalized
-            } else {
-                next = source.uppercased()
-            }
-            if again { for _ in 0..<source.count { textDocumentProxy.deleteBackward() } }
-            textDocumentProxy.insertText(next)
-            lastCased = next
-            refreshToolsSoon()
-            scheduleRefresh()
         case .lineStart:
             selectionAnchor = nil
             let line = (textDocumentProxy.documentContextBeforeInput ?? "").split(separator: "\n", omittingEmptySubsequences: false).last ?? ""
@@ -2320,12 +2320,6 @@ extension KeyboardViewController: ToolsPanelDelegate {
     }
 
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {
-        switch tool {
-        case .changeCase:
-            if !(textDocumentProxy.selectedText ?? "").isEmpty || trackpadSelection() != nil { return true }
-            if let last = lastCased { return (textDocumentProxy.documentContextBeforeInput ?? "").hasSuffix(last) }
-            return false
-        default: return true
-        }
+        return true
     }
 }

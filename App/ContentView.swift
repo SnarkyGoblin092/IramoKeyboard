@@ -912,7 +912,7 @@ struct ShortcutsView: View {
 
     private func remove(_ item: TextShortcut) {
         Feedback.delete()
-        withAnimation(.easeOut(duration: 0.2)) { items.removeAll { $0.id == item.id } }
+        items.removeAll { $0.id == item.id }
         save()
     }
 

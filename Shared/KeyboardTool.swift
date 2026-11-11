@@ -5,14 +5,13 @@ import Foundation
 /// Things the keyboard already has elsewhere (the globe key, the hide button) are not here.
 enum KeyboardTool: String, CaseIterable {
     case oneHanded, numberRow, split
-    case changeCase, lineStart, lineEnd
+    case lineStart, lineEnd
 
     var title: String {
         switch self {
         case .oneHanded: return "One-handed"
         case .numberRow: return "Number row"
         case .split: return "Split keyboard"
-        case .changeCase: return "Change case"
         case .lineStart: return "Line start"
         case .lineEnd: return "Line end"
         }
@@ -23,7 +22,6 @@ enum KeyboardTool: String, CaseIterable {
         case .oneHanded: return "hand.raised"
         case .numberRow: return "number"
         case .split: return "rectangle.split.2x1"
-        case .changeCase: return "textformat"
         case .lineStart: return "arrow.left.to.line"
         case .lineEnd: return "arrow.right.to.line"
         }
@@ -35,14 +33,13 @@ enum KeyboardTool: String, CaseIterable {
         case .oneHanded: return "One-handed keyboard on or off; the arrow beside the keys switches sides"
         case .numberRow: return "Numbers above the letters, on or off"
         case .split: return "The keys in two halves (on an iPhone, in landscape), on or off"
-        case .changeCase: return "Selected text: UPPERCASE, lowercase, Capitalized, in turn"
         case .lineStart: return "Moves the cursor to the start of the line"
         case .lineEnd: return "Moves the cursor to the end of the line"
         }
     }
 
     /// The tools a new install's panel shows (split only appears on an iPad).
-    static let standard: [KeyboardTool] = [.oneHanded, .split, .changeCase, .lineStart, .lineEnd, .numberRow]
+    static let standard: [KeyboardTool] = [.oneHanded, .split, .lineStart, .lineEnd, .numberRow]
 
     /// Stored names in order, unknown ones dropped.
     static func list(from names: [String]) -> [KeyboardTool] {

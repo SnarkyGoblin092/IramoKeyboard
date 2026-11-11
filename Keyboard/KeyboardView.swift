@@ -105,6 +105,9 @@ final class KeyboardView: UIView {
         var cursorMoved = false
         var cursorLastX: CGFloat = 0
         var cursorRemainder: CGFloat = 0
+        /// Selecting with the finger at the keyboard's edge: the cursor keeps going that way (-1 left, 1 right).
+        var edgeDirection = 0
+        var edgeTimer: Timer?
         var isWordDeleting = false
         /// Backspace was held long enough to repeat: it has deleted already, so lifting deletes nothing more.
         var backspaceRepeated = false
@@ -953,6 +956,7 @@ final class KeyboardView: UIView {
             return
         }
         if state.isCursorMode {
+            stopEdgeScroll(state)
             setCursorAppearance(false)
             setSelectingAppearance(false)
             delegate?.keyboardViewDidEndCursorMode(self)
@@ -1047,6 +1051,7 @@ final class KeyboardView: UIView {
             state.holdTimer = nil
             state.repeatTimer?.invalidate()
             state.repeatTimer = nil
+            stopEdgeScroll(state)
         }
         hidePreview()
         hideAlternates()
@@ -1081,6 +1086,33 @@ final class KeyboardView: UIView {
             state.cursorRemainder -= CGFloat(steps) * step
             delegate?.keyboardView(self, didMoveCursorBy: steps)   // which ticks, when that is switched on
         }
+        // Selecting with the finger at either edge: the cursor goes on by itself, so the selection keeps growing.
+        let margin: CGFloat = 28
+        let direction = !state.isSelecting ? 0 : (point.x <= margin ? -1 : (point.x >= bounds.width - margin ? 1 : 0))
+        startEdgeScroll(state, direction: direction)
+    }
+
+    private func startEdgeScroll(_ state: TouchState, direction: Int) {
+        guard direction != state.edgeDirection else { return }
+        stopEdgeScroll(state)
+        guard direction != 0 else { return }
+        state.edgeDirection = direction
+        state.cursorRemainder = 0
+        // The Cursor speed setting again: about ten characters a second at the middle speed.
+        let interval = 1 / (10 * max(0.2, Prefs.cursorSpeed))
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self, weak state] _ in
+            guard let self = self, let state = state, state.isCursorMode, state.isSelecting else { return }
+            state.cursorMoved = true
+            self.delegate?.keyboardView(self, didMoveCursorBy: direction)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        state.edgeTimer = timer
+    }
+
+    private func stopEdgeScroll(_ state: TouchState) {
+        state.edgeTimer?.invalidate()
+        state.edgeTimer = nil
+        state.edgeDirection = 0
     }
 
     /// While text is being selected the space bar dims a little, so the second finger's effect shows.
