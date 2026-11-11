@@ -19,11 +19,14 @@ enum WaveNote {
 
 @MainActor
 enum NavigationWave {
-    /// A quarter faster than the theme switch's wave.
-    static let length: TimeInterval = ModeWave.duration / 1.25
-    /// How long a tap waits before its change starts: the pressed look of the element, and whatever else was set
-    /// moving, settles first, so the picture of the window the wave carries is of a window at rest.
-    static let settle: TimeInterval = 0.4
+    /// Faster than the theme switch's wave: a quarter, and a quarter again.
+    static let length: TimeInterval = ModeWave.duration / 1.25 / 1.25
+    /// How long a tap to a screen waits before the change starts: the pressed look of the element settles first.
+    static let settle: TimeInterval = 0.12
+    /// The same for a change in the look (the accent colour), whose swatches have a ring that takes longer to settle.
+    static let changeSettle: TimeInterval = 0.3
+    /// When the last wave started: a screen change made in the same breath is already covered by it.
+    static var lastStart: CFTimeInterval = 0
 
     /// Whether the wave plays at all (Reduce Motion keeps the system's own changes).
     static var canPlay: Bool {
@@ -33,22 +36,41 @@ enum NavigationWave {
 
     /// Starts the wave: the window is photographed now, before the screens change.
     static func start(push: Bool) {
-        guard let window = WindowWave.window else { return }
-        let size = window.bounds.size
-        let source: CGPoint
-        if push {
-            // The centre of the list element under the last touch (every element that opens a screen is marked with
-            // `waveSource()`), else the touch itself.
-            if let touch = WaveNote.lastTouch {
-                source = ViewAnchor.centerOfElement(containing: touch) ?? touch
-            } else {
-                source = CGPoint(x: size.width / 2, y: size.height / 2)
-            }
-        } else {
-            source = CGPoint(x: 0, y: size.height / 2)
-        }
+        guard WindowWave.window != nil else { return }
         WaveNote.nextSource = nil
-        start(from: source)
+        start(from: source(push: push))
+    }
+
+    /// Where the wave sets off: into a screen, the centre of the list element under the last touch (every element that
+    /// opens a screen is marked with `waveSource()`), else the touch itself; back, the centre of the left edge.
+    static func source(push: Bool) -> CGPoint {
+        let size = WindowWave.window?.bounds.size ?? UIScreen.main.bounds.size
+        guard push else { return CGPoint(x: 0, y: size.height / 2) }
+        if let touch = WaveNote.lastTouch { return ViewAnchor.centerOfElement(containing: touch) ?? touch }
+        return CGPoint(x: size.width / 2, y: size.height / 2)
+    }
+
+    /// Plays the wave across a screen change made by the app's own state (the path of a stack): once the tap has
+    /// settled, the window is photographed and `change` is made without the slide.
+    static func navigate(push: Bool = true, _ change: @escaping () -> Void) {
+        guard canPlay else {
+            change()
+            return
+        }
+        let origin = source(push: push)
+        DispatchQueue.main.asyncAfter(deadline: .now() + settle) {
+            start(from: origin)
+            applyAtOnce(change)
+        }
+    }
+
+    /// Makes a change with every animation off, so the picture taken of it is of the finished look.
+    private static func applyAtOnce(_ change: () -> Void) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        UIView.performWithoutAnimation {
+            withTransaction(transaction, change)
+        }
     }
 
     /// Starts the wave from `source` (window coordinates): the window is photographed now, before anything changes.
@@ -56,6 +78,7 @@ enum NavigationWave {
         guard let window = WindowWave.window else { return }
         let size = window.bounds.size
         ModeWave.count += 1
+        lastStart = CACurrentMediaTime()
         let scheme: ColorScheme = window.traitCollection.userInterfaceStyle == .dark ? .dark : .light
         let wave = ModeWave(id: ModeWave.count, oldScheme: scheme, newScheme: scheme, oldTheme: "", newTheme: "",
                             source: source, minX: 0, minY: 0, width: size.width, height: size.height,
@@ -66,7 +89,7 @@ enum NavigationWave {
     /// Plays the wave across a change that is not a screen change (the accent colour): the window is photographed,
     /// `apply` makes the change, and the wave carries the window over to its new look. `source` is the centre of
     /// the element that asked for it (the last touch, without one). With Reduce Motion the change is just made.
-    static func change(from source: CGPoint?, delay: TimeInterval = NavigationWave.settle, apply: @escaping () -> Void) {
+    static func change(from source: CGPoint?, delay: TimeInterval = NavigationWave.changeSettle, apply: @escaping () -> Void) {
         guard canPlay, let window = WindowWave.window else {
             apply()
             return
@@ -76,7 +99,9 @@ enum NavigationWave {
         // After the animations of the tap (the element's press, the ring round a swatch) have finished.
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             start(from: origin)
-            apply()
+            // With every animation off, so the new picture is of the finished look (glass fading between tints is
+            // what showed as a reflection).
+            applyAtOnce(apply)
         }
     }
 
@@ -323,6 +348,7 @@ extension UINavigationController {
     /// The app's own screens only (not a stack inside a system sheet, such as the colour picker's).
     private var playsWave: Bool {
         return NavigationWave.canPlay && presentingViewController == nil && view.window != nil && view.window === WindowWave.window
+            && CACurrentMediaTime() - NavigationWave.lastStart > 0.6   // not one already covered by a wave
     }
 
     private static var pendingKey: UInt8 = 0

@@ -71,9 +71,12 @@ enum InlineCalculator {
             text.removeLast()
             spaceAfter = true
         }
-        guard text.hasSuffix("=") else { return nil }
-        text.removeLast()
-        if text.hasSuffix("=") { return nil }   // "==" is code, not a sum
+        // Without "=" the sum is offered as it stands, and writing it down adds "=" and the answer.
+        let endsWithEquals = text.hasSuffix("=")
+        if endsWithEquals {
+            text.removeLast()
+            if text.hasSuffix("=") { return nil }   // "==" is code, not a sum
+        }
         let spaceBefore = text.hasSuffix(" ")
         while text.hasSuffix(" ") { text.removeLast() }
         guard !text.isEmpty else { return nil }
@@ -95,14 +98,38 @@ enum InlineCalculator {
                 if previous.isLetter || previous.isNumber || previous == "." || previous == "," { continue }
             }
             let expression = String(candidate[index...])
+            if !endsWithEquals && !looksLikeSum(expression) { continue }
             guard var parser = ExpressionParser(expression, decimalComma: decimal == ",") else { continue }
             guard let value = parser.parse(), parser.operations > 0 else { continue }
             guard let formatted = SmartNumbers.format(value, decimals: decimals, language: language) else { return nil }
+            if !endsWithEquals {
+                // "3+4" gets "=7"; "3 + 4" gets " = 7"; "3 + 4 " gets "= 7".
+                let spaced = expression.contains(" ")
+                let insert = (spaceAfter ? "" : (spaced ? " " : "")) + "=" + (spaced || spaceAfter ? " " : "") + formatted
+                return SmartResult(shown: formatted, replaceCount: 0, insert: insert)
+            }
             // "3 + 4 =" gets " 7"; "3+4=" gets "7"; after "= " the result comes straight on.
             let insert = (spaceBefore && !spaceAfter ? " " : "") + formatted
             return SmartResult(shown: formatted, replaceCount: 0, insert: insert)
         }
         return nil
+    }
+
+    /// Whether text with no "=" after it is plainly a sum and not a date, a phone number or a range: it holds an
+    /// operator (or a bracket), is made of numbers and known functions, and a run of digits and dashes ("2024-05-01",
+    /// "555-1234") is left alone.
+    private static func looksLikeSum(_ expression: String) -> Bool {
+        let characters = Array(expression)
+        guard let last = characters.last(where: { !$0.isWhitespace }) else { return false }
+        guard last.isNumber || ")!%π²³°".contains(last) else { return false }
+        guard characters.contains(where: { "+-−*/×÷·^%!√(".contains($0) }) else { return false }
+        let compact = expression.filter { !$0.isWhitespace }
+        if compact.allSatisfy({ $0.isNumber || "-/.:".contains($0) }) {
+            let groups = compact.split(whereSeparator: { "-/.:".contains($0) })
+            if groups.count > 2 { return false }
+            if groups.count == 2, !expression.contains(" "), groups.allSatisfy({ $0.count >= 3 }) { return false }
+        }
+        return true
     }
 
     private static func isAllowed(_ character: Character) -> Bool {
