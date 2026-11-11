@@ -354,6 +354,10 @@ private struct CursorDemo: View {
             selection = (15 - grown)..<15
         }
         let selecting = phase >= 1.6
+        let fingerOffset: CGFloat = {
+            let shift: Double = phase < 1.6 ? -phase * 20.0 : -32.0 - (phase - 1.6) * 14.0
+            return CGFloat(-50.0 + shift)
+        }()
         return VStack(spacing: 16) {
             HStack(spacing: 0) {
                 ForEach(words.indices, id: \.self) { index in
@@ -385,7 +389,7 @@ private struct CursorDemo: View {
                     .fill(Color.primary.opacity(selecting ? 0.14 : 0.08))
                     .frame(width: 180, height: 32)
                 Circle().fill(color.opacity(0.3)).frame(width: 30, height: 30)
-                    .offset(x: CGFloat(-50 + (phase < 1.6 ? -phase * 20 : -32 - (phase - 1.6) * 14)))
+                    .offset(x: fingerOffset)
                 if selecting {
                     Circle().fill(color.opacity(0.3)).frame(width: 30, height: 30).offset(x: 110, y: -46)
                 }
