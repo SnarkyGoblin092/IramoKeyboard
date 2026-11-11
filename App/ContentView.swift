@@ -765,6 +765,15 @@ struct ShortcutsView: View {
         return expanded.replacingOccurrences(of: String(ShortcutTemplate.cursorMark), with: "\u{258F}")
     }
 
+    /// The placeholders, then the days, months and times ahead (each with what it writes today).
+    private var buttons: [(token: String, note: String, translated: Bool)] {
+        let plain = ShortcutTemplate.placeholders.map { (token: $0.token, note: $0.note, translated: true) }
+        let ahead = ShortcutTemplate.offsetExamples.map {
+            (token: $0, note: ShortcutTemplate.expand($0, locale: locale) { nil }, translated: false)
+        }
+        return plain + ahead
+    }
+
     private func dateExample(_ style: String) -> String {
         return ShortcutTemplate.dateText(Date(), locale: locale, style: style, custom: customDate)
     }
@@ -794,14 +803,14 @@ struct ShortcutsView: View {
             Section {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(ShortcutTemplate.placeholders, id: \.token) { item in
+                        ForEach(buttons, id: \.token) { item in
                             Button {
                                 Feedback.tick()
                                 phrase += (phrase.isEmpty || phrase.hasSuffix(" ") ? "" : " ") + item.token
                             } label: {
                                 VStack(spacing: 2) {
                                     Text(item.token).font(.subheadline.monospaced().weight(.semibold))
-                                    Text(tr(item.note)).font(.caption2).foregroundColor(.secondary)
+                                    Text(item.translated ? tr(item.note) : item.note).font(.caption2).foregroundColor(.secondary)
                                 }
                                 .foregroundColor(.primary)
                                 .padding(.horizontal, 10)
@@ -818,31 +827,6 @@ struct ShortcutsView: View {
                 Text(tr("Placeholders"))
             } footer: {
                 Text(tr("Tap one to add it to the phrase. They are filled in when you type the shortcut: \u{201C}Sent {date}\u{201D} writes today's date."))
-            }
-            .glassRows()
-
-            Section {
-                ForEach(ShortcutTemplate.offsetExamples, id: \.self) { example in
-                    Button {
-                        Feedback.tick()
-                        phrase += (phrase.isEmpty || phrase.hasSuffix(" ") ? "" : " ") + example
-                    } label: {
-                        HStack {
-                            Text(example).font(.subheadline.monospaced().weight(.semibold))
-                            Spacer()
-                            Text(ShortcutTemplate.expand(example, locale: locale) { nil })
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .foregroundColor(.primary)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text(tr("Days, months and times ahead"))
-            } footer: {
-                Text(tr("Add + or - and a number to a placeholder. Tap an example to add it; the answers are for today."))
             }
             .glassRows()
 

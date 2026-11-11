@@ -11,10 +11,6 @@ enum ShortcutTemplate {
         ("{day}", "The day of the week"),
         ("{month}", "The month's name"),
         ("{year}", "The year"),
-        ("{today+3}", "The weekday 3 days from now (-3: back; 2w: weeks)"),
-        ("{date+7}", "The date 7 days from now"),
-        ("{month+2}", "The month's name 2 months from now"),
-        ("{time+2h}", "The time 2 hours from now (30m: minutes)"),
         ("{clipboard}", "What you last copied"),
         ("{cursor}", "Where the cursor goes")
     ]
