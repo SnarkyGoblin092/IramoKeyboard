@@ -374,7 +374,7 @@ enum WindowWave {
     static func start(for wave: ModeWave) {
         end()
         guard let window = window, let root = window.rootViewController?.view,
-              let old = picture(of: root, afterScreenUpdates: false) else { return }
+              let old = picture(of: root, afterScreenUpdates: true) else { return }
         let model = WindowWaveModel(wave: wave, old: old)
         let host = UIHostingController(rootView: WindowWaveView(model: model))
         host.view.backgroundColor = .clear
@@ -389,12 +389,22 @@ enum WindowWave {
             guard current?.model === model else { return }
             // Of the app alone (the root view), not of this cover over it.
             model.new = picture(of: root, afterScreenUpdates: true)
+            // Both pictures cover the window now: the live app under them (its glass above all) need not be drawn
+            // for every frame of the wave.
+            if model.new != nil {
+                root.alpha = 0
+                hiddenRoot = root
+            }
             try? await Task.sleep(nanoseconds: UInt64(max(0, lifetime - settle) * 1_000_000_000))
             if current?.model === model { end() }
         }
     }
 
+    private static weak var hiddenRoot: UIView?
+
     private static func end() {
+        hiddenRoot?.alpha = 1
+        hiddenRoot = nil
         current?.host.view.removeFromSuperview()
         current = nil
     }

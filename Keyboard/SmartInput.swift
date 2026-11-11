@@ -71,7 +71,7 @@ enum InlineCalculator {
             text.removeLast()
             spaceAfter = true
         }
-        // Without "=" the sum is offered as it stands, and writing it down adds "=" and the answer.
+        // Without "=" the sum is offered as it stands, and writing it down replaces it with the answer.
         let endsWithEquals = text.hasSuffix("=")
         if endsWithEquals {
             text.removeLast()
@@ -103,10 +103,9 @@ enum InlineCalculator {
             guard let value = parser.parse(), parser.operations > 0 else { continue }
             guard let formatted = SmartNumbers.format(value, decimals: decimals, language: language) else { return nil }
             if !endsWithEquals {
-                // "3+4" gets "=7"; "3 + 4" gets " = 7"; "3 + 4 " gets "= 7".
-                let spaced = expression.contains(" ")
-                let insert = (spaceAfter ? "" : (spaced ? " " : "")) + "=" + (spaced || spaceAfter ? " " : "") + formatted
-                return SmartResult(shown: formatted, replaceCount: 0, insert: insert)
+                // The sum is replaced by its answer alone ("3+4" -> "7"), a space after it kept.
+                return SmartResult(shown: formatted, replaceCount: expression.count + (spaceAfter ? 1 : 0),
+                                   insert: formatted + (spaceAfter ? " " : ""))
             }
             // "3 + 4 =" gets " 7"; "3+4=" gets "7"; after "= " the result comes straight on.
             let insert = (spaceBefore && !spaceAfter ? " " : "") + formatted
