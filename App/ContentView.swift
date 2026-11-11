@@ -17,7 +17,7 @@ struct ContentView: View {
     /// The window's full size (the keyboard showing doesn't change it): wide enough, it shows two columns.
     @State private var windowSize: CGSize = .zero
     /// What is typed in the main list's search field.
-    @State private var query = 
+    @State private var query = ""
 
     /// Landscape on an iPhone or iPad: the main list on the left and the open screen beside it.
     private static func isWide(_ size: CGSize) -> Bool {
