@@ -343,7 +343,11 @@ final class KeyboardViewController: UIInputViewController {
 
     private func settingsSignature() -> String {
         let s = settings
-        return [
+        // (Worked out apart: in the list below they made the expression too slow for the compiler to type-check.)
+        let layouts: String = Settings.signature(of: s.letterLayouts)
+        let holds: String = Settings.signature(of: s.customHolds)
+        let tools: String = s.keyboardTools.map { $0.rawValue }.joined(separator: ",")
+        let parts: [String] = [
             "\(s.numberRow)", "\(s.keyHints)", Theme.storedID(), s.accentName,
             "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle, s.keyGlow, s.keyFont,
             s.enabledLanguages.joined(separator: ","),
@@ -353,11 +357,10 @@ final class KeyboardViewController: UIInputViewController {
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
             "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
-            "\(s.splitKeyboard)", s.oneHanded, s.keyboardTools.map { $0.rawValue }.joined(separator: ","),
-            s.effectsJSON, s.systemEditsJSON,
-            s.letterLayouts.sorted { $0.key < $1.key }.map { $0.key + ":" + $0.value }.joined(separator: ","),
-            s.customHolds.sorted { $0.key < $1.key }.map { $0.key + ":" + $0.value }.joined(separator: ",")
-        ].joined(separator: "|")
+            "\(s.splitKeyboard)", s.oneHanded, tools,
+            s.effectsJSON, s.systemEditsJSON, layouts, holds
+        ]
+        return parts.joined(separator: "|")
     }
 
     /// (Re)creates every view. Called at start and whenever a look-changing setting was edited.

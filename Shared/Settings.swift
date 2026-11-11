@@ -751,6 +751,12 @@ final class Settings {
         set { put(newValue, SettingKey.letterLayouts) }
     }
 
+    /// A dictionary setting as one line, in a fixed order (for the signatures that tell when to rebuild the keys).
+    static func signature(of values: [String: String]) -> String {
+        let keys: [String] = values.keys.sorted()
+        return keys.map { key -> String in key + ":" + (values[key] ?? "") }.joined(separator: ",")
+    }
+
     /// The user's own long-press characters: a key (one lower-case character) -> the characters a hold on it adds.
     var customHolds: [String: String] {
         get { return value(SettingKey.customHolds) as? [String: String] ?? [:] }

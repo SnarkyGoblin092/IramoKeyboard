@@ -163,7 +163,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// effects', which the keys read as they play).
     private func signature() -> String {
         let s = Settings.shared
-        return [
+        let layouts: String = Settings.signature(of: s.letterLayouts)
+        let holds: String = Settings.signature(of: s.customHolds)
+        let parts: [String] = [
             Theme.storedID(), s.accentName, String(LiveKeyboardView.effectiveStyle.rawValue), SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "",
             "\(s.numberRow)", "\(s.keyHints)", "\(s.keyPopups)", "\(Prefs.keyRoundness)", s.keySurface, s.keyBorderStyle,
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
@@ -171,10 +173,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", "\(KeyboardLayoutMode.split)", s.oneHanded,
             s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
-            s.systemEditsJSON,
-            s.letterLayouts.sorted { $0.key < $1.key }.map { $0.key + ":" + $0.value }.joined(separator: ","),
-            s.customHolds.sorted { $0.key < $1.key }.map { $0.key + ":" + $0.value }.joined(separator: ",")
-        ].joined(separator: "|")
+            s.systemEditsJSON, layouts, holds
+        ]
+        return parts.joined(separator: "|")
     }
 
     /// The mode the keys are drawn in: the picked one, or (auto) the system's. Picking auto while the system is in
