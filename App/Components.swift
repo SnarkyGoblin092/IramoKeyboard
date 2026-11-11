@@ -588,7 +588,7 @@ struct AccentPicker: View {
             guard let hex = pendingHex else { return }
             pendingHex = nil
             guard hex != accentHex else { return }
-            NavigationWave.change(from: anchors.anchor("custom").center) { accentHex = hex }
+            NavigationWave.change(from: anchors.anchor("custom").center, delay: 0) { accentHex = hex }
         }
     }
 }

@@ -95,6 +95,7 @@ struct ThemesView: View {
                     .foregroundColor(.white)
                     .glassTile(Capsule(), isOn: true)
                     .contentShape(Capsule())
+                    .waveSource()
             }
             .buttonStyle(PressableStyle())
         }

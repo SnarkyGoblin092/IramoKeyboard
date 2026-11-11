@@ -53,6 +53,7 @@ struct LicensesView: View {
                 DisclosureChevron()
             }
             .contentShape(Rectangle())
+            .waveSource()
         }
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 struct HunKeysApp: App {
     init() {
         _ = Settings.shared   // registers the default values
+        _ = UINavigationController.installWave   // screens change with the wave
         HunKeysApp.useRoundedBarFonts()
     }
 

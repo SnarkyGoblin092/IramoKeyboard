@@ -21,6 +21,14 @@ enum WaveNote {
 enum NavigationWave {
     /// A quarter faster than the theme switch's wave.
     static let length: TimeInterval = ModeWave.duration / 1.25
+    /// How long a tap waits before its change starts: the pressed look of the element, and whatever else was set
+    /// moving, settles first, so the picture of the window the wave carries is of a window at rest.
+    static let settle: TimeInterval = 0.4
+
+    /// Whether the wave plays at all (Reduce Motion keeps the system's own changes).
+    static var canPlay: Bool {
+        return !UIAccessibility.isReduceMotionEnabled && WindowWave.window != nil
+    }
     private static var recording = false
 
     /// Starts the wave: the window is photographed now, before the screens change.
@@ -29,10 +37,12 @@ enum NavigationWave {
         let size = window.bounds.size
         let source: CGPoint
         if push {
-            if let next = WaveNote.nextSource, CACurrentMediaTime() - next.time < 1.5 {
-                source = next.point
+            // The centre of the list element under the last touch (every element that opens a screen is marked with
+            // `waveSource()`), else the touch itself.
+            if let touch = WaveNote.lastTouch {
+                source = ViewAnchor.centerOfElement(containing: touch) ?? touch
             } else {
-                source = WaveNote.lastTouch ?? CGPoint(x: size.width / 2, y: size.height / 2)
+                source = CGPoint(x: size.width / 2, y: size.height / 2)
             }
         } else {
             source = CGPoint(x: 0, y: size.height / 2)
@@ -41,29 +51,21 @@ enum NavigationWave {
         start(from: source)
     }
 
-    /// Starts the wave from `source` (window coordinates): the window is photographed now, before anything changes.
-    static func start(from source: CGPoint) {
-        guard let window = WindowWave.window else { return }
-        let size = window.bounds.size
-        ModeWave.count += 1
-        let scheme: ColorScheme = window.traitCollection.userInterfaceStyle == .dark ? .dark : .light
-        let wave = ModeWave(id: ModeWave.count, oldScheme: scheme, newScheme: scheme, oldTheme: "", newTheme: "",
-                            source: source, minX: 0, minY: 0, width: size.width, height: size.height,
-                            started: CACurrentMediaTime(), startedDate: Date(), length: length)
-        WindowWave.start(for: wave)
-    }
-
     /// Plays the wave across a change that is not a screen change (the accent colour): the window is photographed,
     /// `apply` makes the change, and the wave carries the window over to its new look. `source` is the centre of
     /// the element that asked for it (the last touch, without one). With Reduce Motion the change is just made.
-    static func change(from source: CGPoint?, apply: () -> Void) {
-        guard !UIAccessibility.isReduceMotionEnabled, let window = WindowWave.window else {
+    static func change(from source: CGPoint?, delay: TimeInterval = NavigationWave.settle, apply: @escaping () -> Void) {
+        guard canPlay, let window = WindowWave.window else {
             apply()
             return
         }
         let size = window.bounds.size
-        start(from: source ?? WaveNote.lastTouch ?? CGPoint(x: size.width / 2, y: size.height / 2))
-        apply()
+        let origin = source ?? WaveNote.lastTouch ?? CGPoint(x: size.width / 2, y: size.height / 2)
+        // After the animations of the tap (the element's press, the ring round a swatch) have finished.
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            start(from: origin)
+            apply()
+        }
     }
 
     /// Whether the system is showing something over the app (the colour picker, while it is open).
@@ -205,6 +207,28 @@ struct NavigationWaveHook: UIViewControllerRepresentable {
 final class ViewAnchor {
     weak var view: UIView?
 
+    private struct Entry { weak var anchor: ViewAnchor? }
+    private static var registered: [Entry] = []
+
+    /// Makes this anchor one of the elements that open a screen (see `centerOfElement`).
+    func register() {
+        ViewAnchor.registered.removeAll { $0.anchor == nil }
+        if !ViewAnchor.registered.contains(where: { $0.anchor === self }) { ViewAnchor.registered.append(Entry(anchor: self)) }
+    }
+
+    /// The centre (window coordinates) of the smallest registered element on screen that holds `point`.
+    static func centerOfElement(containing point: CGPoint) -> CGPoint? {
+        var best: (area: CGFloat, center: CGPoint)?
+        for entry in registered {
+            guard let view = entry.anchor?.view, view.window != nil else { continue }
+            let frame = view.convert(view.bounds, to: nil)
+            guard frame.insetBy(dx: -2, dy: -2).contains(point) else { continue }
+            let area = frame.width * frame.height
+            if best == nil || area < best!.area { best = (area, CGPoint(x: frame.midX, y: frame.midY)) }
+        }
+        return best?.center
+    }
+
     var center: CGPoint? {
         guard let view = view, view.window != nil else { return nil }
         return view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
@@ -213,17 +237,21 @@ final class ViewAnchor {
 
 struct AnchorView: UIViewRepresentable {
     let anchor: ViewAnchor
+    /// An element that opens a screen: the wave into the screen starts from its centre.
+    var registers = false
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.isUserInteractionEnabled = false
         view.backgroundColor = .clear
         anchor.view = view
+        if registers { anchor.register() }
         return view
     }
 
     func updateUIView(_ view: UIView, context: Context) {
         anchor.view = view
+        if registers { anchor.register() }
     }
 }
 
@@ -231,11 +259,7 @@ private struct WaveSource: ViewModifier {
     @State private var anchor = ViewAnchor()
 
     func body(content: Content) -> some View {
-        content
-            .background(AnchorView(anchor: anchor))
-            .simultaneousGesture(TapGesture().onEnded {
-                if let center = anchor.center { WaveNote.nextSource = (center, CACurrentMediaTime()) }
-            })
+        content.background(AnchorView(anchor: anchor, registers: true))
     }
 }
 
@@ -262,5 +286,81 @@ extension View {
     /// Lets `anchor` find this view in the window.
     func waveAnchor(_ anchor: ViewAnchor) -> some View {
         return background(AnchorView(anchor: anchor))
+    }
+}
+
+// MARK: - Every push and pop
+
+extension UINavigationController {
+    /// Swaps in versions of the push and pop calls that play the wave in place of the slide: the window is
+    /// photographed, then the change is made without animation. (The edge swipe back is the system's own gesture; it
+    /// goes through the delegate's transition, NavigationWaveDelegate.) Done once.
+    static let installWave: Void = {
+        func swap(_ original: Selector, _ replacement: Selector) {
+            guard let a = class_getInstanceMethod(UINavigationController.self, original),
+                  let b = class_getInstanceMethod(UINavigationController.self, replacement) else { return }
+            method_exchangeImplementations(a, b)
+        }
+        swap(#selector(UINavigationController.pushViewController(_:animated:)), #selector(UINavigationController.wave_push(_:animated:)))
+        swap(#selector(UINavigationController.popViewController(animated:)), #selector(UINavigationController.wave_pop(animated:)))
+        swap(#selector(UINavigationController.popToRootViewController(animated:)), #selector(UINavigationController.wave_popToRoot(animated:)))
+        swap(#selector(UINavigationController.popToViewController(_:animated:)), #selector(UINavigationController.wave_popTo(_:animated:)))
+        swap(#selector(UINavigationController.setViewControllers(_:animated:)), #selector(UINavigationController.wave_set(_:animated:)))
+    }()
+
+    /// The app's own screens only (not a stack inside a system sheet, such as the colour picker's).
+    private var playsWave: Bool {
+        return NavigationWave.canPlay && presentingViewController == nil && view.window != nil && view.window === WindowWave.window
+    }
+
+    private static var pendingKey: UInt8 = 0
+
+    /// Makes the change after the tap's own animations have finished (a later change replaces one still waiting), with
+    /// the wave started first.
+    private func afterSettling(push: Bool, _ change: @escaping () -> Void) {
+        (objc_getAssociatedObject(self, &UINavigationController.pendingKey) as? DispatchWorkItem)?.cancel()
+        let item = DispatchWorkItem {
+            NavigationWave.start(push: push)
+            change()
+        }
+        objc_setAssociatedObject(self, &UINavigationController.pendingKey, item, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        DispatchQueue.main.asyncAfter(deadline: .now() + NavigationWave.settle, execute: item)
+    }
+
+    @objc fileprivate func wave_push(_ viewController: UIViewController, animated: Bool) {
+        guard animated, playsWave else { return wave_push(viewController, animated: animated) }
+        afterSettling(push: true) { self.wave_push(viewController, animated: false) }
+    }
+
+    @objc fileprivate func wave_pop(animated: Bool) -> UIViewController? {
+        guard animated, playsWave, viewControllers.count > 1 else { return wave_pop(animated: animated) }
+        let leaving = viewControllers.last
+        afterSettling(push: false) { _ = self.wave_pop(animated: false) }
+        return leaving
+    }
+
+    @objc fileprivate func wave_popToRoot(animated: Bool) -> [UIViewController]? {
+        guard animated, playsWave, viewControllers.count > 1 else { return wave_popToRoot(animated: animated) }
+        let leaving = Array(viewControllers.dropFirst())
+        afterSettling(push: false) { _ = self.wave_popToRoot(animated: false) }
+        return leaving
+    }
+
+    @objc fileprivate func wave_popTo(_ viewController: UIViewController, animated: Bool) -> [UIViewController]? {
+        guard animated, playsWave, viewControllers.last !== viewController,
+              let index = viewControllers.firstIndex(of: viewController) else {
+            return wave_popTo(viewController, animated: animated)
+        }
+        let leaving = Array(viewControllers.suffix(from: index + 1))
+        afterSettling(push: false) { _ = self.wave_popTo(viewController, animated: false) }
+        return leaving
+    }
+
+    @objc fileprivate func wave_set(_ controllers: [UIViewController], animated: Bool) {
+        guard animated, playsWave, controllers.last !== viewControllers.last else {
+            return wave_set(controllers, animated: animated)
+        }
+        let push = controllers.count >= viewControllers.count
+        afterSettling(push: push) { self.wave_set(controllers, animated: false) }
     }
 }
