@@ -1862,6 +1862,9 @@ extension KeyboardViewController: KeyboardViewDelegate {
         case .showSymbols:
             page = .symbols
             reloadKeyboardLayout()
+        case .showMoreSymbols:
+            page = .moreSymbols
+            reloadKeyboardLayout()
         case .emoji:
             // The system's emoji picker is the next keyboard (iOS has no call that opens it directly).
             advanceToNextInputMode()

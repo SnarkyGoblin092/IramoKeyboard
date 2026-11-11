@@ -209,7 +209,7 @@ final class KeyView: UIView {
         switch spec.action {
         case .shift: return .shift
         case .backspace: return .delete
-        case .showNumbers, .showSymbols, .showLetters: return .numbers
+        case .showNumbers, .showSymbols, .showMoreSymbols, .showLetters: return .numbers
         case .space: return .space
         case .enter: return .ret
         default: return nil

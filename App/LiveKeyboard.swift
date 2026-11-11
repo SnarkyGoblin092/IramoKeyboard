@@ -383,6 +383,9 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         case .showSymbols:
             page = .symbols
             loadRows()
+        case .showMoreSymbols:
+            page = .moreSymbols
+            loadRows()
         default:
             break
         }

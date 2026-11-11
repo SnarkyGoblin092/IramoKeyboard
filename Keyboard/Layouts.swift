@@ -295,6 +295,8 @@ enum KeyboardPage {
     case letters
     case numbers
     case symbols
+    /// The second symbols page: degree, pi, roots, arrows and other marks in common use.
+    case moreSymbols
 }
 
 enum ShiftState {
@@ -312,13 +314,14 @@ enum KeyAction: Equatable {
     case showLetters
     case showNumbers
     case showSymbols
+    case showMoreSymbols
     case emoji
     case spacer
 }
 
 extension KeyAction {
     /// The keys that change the page (123, ABC, #+=).
-    var switchesPage: Bool { return self == .showLetters || self == .showNumbers || self == .showSymbols }
+    var switchesPage: Bool { return self == .showLetters || self == .showNumbers || self == .showSymbols || self == .showMoreSymbols }
 }
 
 struct KeySpec {
@@ -452,6 +455,8 @@ enum LayoutBuilder {
             return numberPage(language: language, returnTitle: returnTitle)
         case .symbols:
             return symbolPage(language: language, returnTitle: returnTitle)
+        case .moreSymbols:
+            return moreSymbolPage(language: language, returnTitle: returnTitle)
         }
     }
 
@@ -604,7 +609,8 @@ enum LayoutBuilder {
             KeySpec(action: .character($0), title: $0)
         }
 
-        var row3: [KeySpec] = [KeySpec(action: .showNumbers, title: "123", weight: 1.5, isFunction: true)]
+        // The page key goes round the three pages: #+= (here), the second page of symbols, then 123 again.
+        var row3: [KeySpec] = [KeySpec(action: .showMoreSymbols, title: "\u{221A}\u{03C0}", weight: 1.5, isFunction: true)]
         for symbol in [language.fullStop, language.comma, language.questionMark, language.exclamation, "'"] {
             row3.append(KeySpec(action: .character(symbol), title: symbol, weight: 1.4))
         }
@@ -612,6 +618,40 @@ enum LayoutBuilder {
 
         return [row1, row2, row3, bottomRow(language: language, pageKeyTitle: "ABC", returnTitle: returnTitle)]
     }
+
+    /// The second page of symbols: the ones used in maths, units, text and notes. Some hold related marks.
+    private static func moreSymbolPage(language: Language, returnTitle: String) -> [[KeySpec]] {
+        func keys(_ symbols: [String]) -> [KeySpec] {
+            return symbols.map { symbol in
+                KeySpec(action: .character(symbol), title: symbol, alternates: moreSymbolHolds[symbol] ?? [])
+            }
+        }
+        let row1 = keys(["\u{00B0}", "\u{03C0}", "\u{221A}", "\u{221E}", "\u{2248}", "\u{2260}", "\u{00B1}", "\u{00D7}", "\u{00F7}", "\u{00B5}"])
+        let row2 = keys(["\u{00A9}", "\u{00AE}", "\u{2122}", "\u{00A7}", "\u{00B6}", "\u{2020}", "\u{2030}", "\u{00A2}", "\u{2190}", "\u{2192}"])
+
+        var row3: [KeySpec] = [KeySpec(action: .showNumbers, title: "123", weight: 1.5, isFunction: true)]
+        for var key in keys(["\u{2264}", "\u{2265}", "\u{00BF}", "\u{00A1}", "\u{2026}"]) {
+            key.weight = 1.4
+            row3.append(key)
+        }
+        row3.append(KeySpec(action: .backspace, symbol: "delete.left", weight: 1.5, isFunction: true))
+
+        return [row1, row2, row3, bottomRow(language: language, pageKeyTitle: "ABC", returnTitle: returnTitle)]
+    }
+
+    /// What holding a mark on the second symbols page offers.
+    private static let moreSymbolHolds: [String: [String]] = [
+        "\u{00B0}": ["\u{2032}", "\u{2033}", "\u{2103}", "\u{2109}"],
+        "\u{03C0}": ["\u{03A9}", "\u{03B8}", "\u{0394}", "\u{03BB}"],
+        "\u{221A}": ["\u{221B}", "\u{2211}", "\u{222B}"],
+        "\u{2248}": ["\u{2245}", "\u{223C}"],
+        "\u{00B1}": ["\u{2213}"],
+        "\u{2190}": ["\u{2191}", "\u{2193}", "\u{2194}"],
+        "\u{2192}": ["\u{2191}", "\u{2193}", "\u{21D2}"],
+        "\u{00A2}": ["\u{20AC}", "\u{00A3}", "\u{00A5}"],
+        "\u{2264}": ["\u{2266}"],
+        "\u{2265}": ["\u{2267}"]
+    ]
 
     private static func bottomRow(language: Language, pageKeyTitle: String, returnTitle: String) -> [KeySpec] {
         return [

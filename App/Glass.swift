@@ -219,12 +219,19 @@ extension EnvironmentValues {
 /// Reports a scroll view's offset to `scrollOffsetReport` (iOS 18 and later).
 private struct ReportScrollOffset: ViewModifier {
     let report: ((CGFloat) -> Void)?
+    /// The finger is on the list, dragging it (not a fling coming to rest, nor the bounce back at the top).
+    @State private var dragging = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let report = report, #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top },
-                                           action: { _, new in report(new) })
+            content
+                .onScrollPhaseChange { _, phase in dragging = phase == .interacting }
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top },
+                                        action: { _, new in
+                    // Past the top only counts while the finger is pulling.
+                    report(new < 0 && !dragging ? 0 : new)
+                })
         } else {
             content
         }
@@ -272,7 +279,7 @@ struct PullDownSearch: ViewModifier {
         // touched on every frame of a long scroll, which would draw the whole list again each time.
         let near = min(max(offset, 0), height)
         if shown, abs(scrolled - near) > 0.5 { scrolled = near }
-        if offset < -35, !shown {
+        if offset < -90, !shown {
             scrolled = 0
             shown = true
             shownAt = Date()
