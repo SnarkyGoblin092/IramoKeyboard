@@ -160,7 +160,7 @@ extension View {
 }
 
 /// A search field drawn as a capsule of Liquid Glass (a frosted material before iOS 26), pinned above a screen.
-private struct GlassSearchField: View {
+struct GlassSearchField: View {
     @Binding var text: String
     let prompt: String
 
@@ -182,8 +182,14 @@ private struct GlassSearchField: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .glassShape(Capsule(), interactive: true)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+    }
+}
+
+/// A button style with no press effect at all (a row that swipes as well as taps: no lens of glass lights up under
+/// the finger while it slides).
+struct NoPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
 
@@ -192,46 +198,9 @@ extension View {
     func glassSearchable(text: Binding<String>, prompt: String) -> some View {
         return self.safeAreaInset(edge: .top, spacing: 0) {
             GlassSearchField(text: text, prompt: prompt)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
         }
-    }
-}
-
-/// Hides the screen's search bar (`scrollHidesSearch`) while its list is scrolled down, shows it again on scrolling up
-/// and at the top.
-private struct HideSearchOnScroll: ViewModifier {
-    let hidden: Binding<Bool>?
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let hidden = hidden, #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top },
-                                           action: { old, new in
-                let next: Bool
-                if new <= 4 { next = false }
-                else if new > old + 3 { next = true }
-                else if new < old - 3 { next = false }
-                else { return }
-                if hidden.wrappedValue != next { hidden.wrappedValue = next }
-            })
-        } else {
-            content
-        }
-    }
-}
-
-extension View {
-    /// A search field pinned to the top of the screen, in glass, that goes away while the list is scrolled down and
-    /// comes back on scrolling up. The content leaves room for it even while it is away.
-    func glassPinnedSearch(text: Binding<String>, prompt: String, hidden: Bool) -> some View {
-        return self
-            .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 58) }
-            .overlay(alignment: .top) {
-                GlassSearchField(text: text, prompt: prompt)
-                    .offset(y: hidden ? -80 : 0)
-                    .opacity(hidden ? 0 : 1)
-                    .allowsHitTesting(!hidden)
-                    .animation(.easeOut(duration: 0.22), value: hidden)
-            }
     }
 }
 
@@ -585,7 +554,6 @@ struct GlassList<Content: View>: View {
     private let content: Content
     /// The screen this list is on (the settings search takes the user to a row of it: SearchFocus).
     @Environment(\.searchScope) private var scope
-    @Environment(\.scrollHidesSearch) private var hidesSearch
     /// A setting picked in the search is on this screen: every card is built at once, so its row can be scrolled to.
     /// (Decided when the list first appears, and kept: switching would build every row again.)
     @State private var eager: Bool
@@ -618,7 +586,6 @@ struct GlassList<Content: View>: View {
                 }
             }
             .environment(\.inGlassCards, true)
-            .modifier(HideSearchOnScroll(hidden: hidesSearch))
             .buttonStyle(GlassPressStyle())   // a press on any row lights a lens of glass under it
         } else {
             list
@@ -746,21 +713,11 @@ private struct SwipeFadeKey: EnvironmentKey {
     static let defaultValue: Double = 1
 }
 
-private struct HidesSearchKey: EnvironmentKey {
-    static let defaultValue: Binding<Bool>? = nil
-}
-
 extension EnvironmentValues {
     /// 1 at rest, down to 0 as a swipe-to-delete row's Delete button grows: the text under the button fades with it.
     var swipeFade: Double {
         get { return self[SwipeFadeKey.self] }
         set { self[SwipeFadeKey.self] = newValue }
-    }
-
-    /// Set by a screen with a search bar that hides while its list is scrolled down (see `glassPinnedSearch`).
-    var scrollHidesSearch: Binding<Bool>? {
-        get { return self[HidesSearchKey.self] }
-        set { self[HidesSearchKey.self] = newValue }
     }
 }
 

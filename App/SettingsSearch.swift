@@ -275,15 +275,15 @@ enum SettingsIndex {
 
 // MARK: - Results
 
-/// The main list while searching: the settings that match, each with where it is; a tap goes there.
+/// The main list while searching: the settings that match, each with where it is; a tap goes there. A section of the
+/// main list, under its search field.
 struct SettingsSearchResults: View {
     let query: String
     let open: (SearchEntry) -> Void
-    @Environment(\.dismissSearch) private var dismissSearch
 
     var body: some View {
         let results = SettingsIndex.search(query)
-        GlassList {
+        Group {
             Section {
                 if results.isEmpty {
                     VStack(spacing: 8) {
@@ -298,7 +298,6 @@ struct SettingsSearchResults: View {
                     ForEach(results) { entry in
                         Button {
                             Feedback.tap()
-                            dismissSearch()
                             open(entry)
                         } label: {
                             HStack(spacing: 12) {
@@ -323,6 +322,5 @@ struct SettingsSearchResults: View {
             }
             .glassRows()
         }
-        .glassScreen()
     }
 }

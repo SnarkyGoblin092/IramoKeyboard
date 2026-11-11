@@ -18,7 +18,7 @@ struct ContentView: View {
     @State private var windowSize: CGSize = .zero
     /// What is typed in the main list's search field.
     @State private var query = ""
-    /// The main list is scrolled down: its search bar is away until the user scrolls up.
+    /// The list has been scrolled past its search field (once, as it first appears).
     @State private var searchHidden = false
 
     /// Landscape on an iPhone or iPad: the main list on the left and the open screen beside it.
@@ -74,37 +74,50 @@ struct ContentView: View {
     /// setting and takes the user to it.
     private var mainList: some View {
         ScrollViewReader { proxy in
-            Group {
+            // Liquid Glass: glass cards on the tinted backdrop (Glass.swift). The search field is the list's first
+            // row: the list starts scrolled past it, and it is there when the user scrolls up to the top.
+            GlassList {
+                Section {
+                    GlassSearchField(text: $query, prompt: tr("Search settings"))
+                        .glassOutsideCard()
+                        .listRowSeparator(.hidden)
+                }
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
-                    GlassList {
-                        HeaderSection()
-                        TestFieldSection().glassRows()
-                        // From what the keyboard offers, through how it types and feels, to the data and the app itself.
-                        KeyboardSection().glassRows()
-                        TypingSection().glassRows()
-                        TouchSection().glassRows()
-                        LookSection().glassRows()
-                        DataSection().glassRows()
-                        AppLanguageSection().glassRows()
-                        AboutSection().glassRows()
-                    }
-                    .glassScreen()
+                    HeaderSection()
+                    TestFieldSection().glassRows()
+                    // From what the keyboard offers, through how it types and feels, to the data and the app itself.
+                    KeyboardSection().glassRows()
+                    TypingSection().glassRows()
+                    TouchSection().glassRows()
+                    LookSection().glassRows()
+                    DataSection().glassRows()
+                    AppLanguageSection().glassRows()
+                    AboutSection().glassRows()
                 } else {
                     SettingsSearchResults(query: query) { entry in open(entry) }
                 }
             }
-            .environment(\.scrollHidesSearch, $searchHidden)
-            .glassPinnedSearch(text: $query, prompt: tr("Search settings"), hidden: searchHidden && query.isEmpty)
-            .navigationTitle(tr("Iramo"))
-            .navigationBarTitleDisplayMode(.inline)
+            .glassScreen()
+            .toolbar(.hidden, for: .navigationBar)   // no title, no bar behind it
             .scrollDismissesKeyboard(.interactively)
             .onAppear {
-                guard returnToLanguageRow else { return }
-                DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
+                if returnToLanguageRow {
+                    DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
+                } else if !searchHidden {
+                    // The first time: past the search field, which waits above the logo.
+                    searchHidden = true
+                    DispatchQueue.main.async { proxy.scrollTo(ContentView.topID, anchor: .top) }
+                }
+            }
+            .onChange(of: query) { newValue in
+                // A setting picked in the search on this very list: its row is scrolled to once the list is whole again.
+                if newValue.isEmpty { SearchFocus.shared.consume(in: nil, proxy: proxy) }
             }
         }
     }
+
+    /// The first row under the search field (the logo): the list starts scrolled to it.
+    static let topID = "main.top"
 
     /// A setting picked in the search: its screen opens (in landscape, beside the list) and its row lights up.
     private func open(_ entry: SearchEntry) {
@@ -112,6 +125,7 @@ struct ContentView: View {
             SearchFocus.shared.request = SearchFocus.Request(screen: entry.screen, anchor: anchor)
         }
         query = ""
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         returnToLanguageRow = false
         guard let screen = entry.screen else { return }
         path = [screen]
@@ -183,6 +197,7 @@ private struct HeaderSection: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .glassOutsideCard()
+            .id(ContentView.topID)
 
             // Only what still needs setting up is shown.
             if !status.isReady {
@@ -696,6 +711,7 @@ struct ScreenRow<Label: View>: View {
     @ViewBuilder let label: () -> Label
     @Environment(\.openScreen) private var openScreen
     @Environment(\.shownScreen) private var shownScreen
+    @Environment(\.swipeFade) private var swipeFade
 
     init(_ screen: Screen, @ViewBuilder label: @escaping () -> Label) {
         self.screen = screen
@@ -712,6 +728,7 @@ struct ScreenRow<Label: View>: View {
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(shownScreen == screen ? .accentColor : Color(.tertiaryLabel))
+                    .opacity(swipeFade)
             }
             .foregroundColor(.primary)
             .contentShape(Rectangle())
@@ -1007,6 +1024,7 @@ private struct LanguageRow: View {
                         .opacity(swipeFade)   // fades as the Delete button comes over it; the name stays
                 }
             }
+            .buttonStyle(NoPressStyle())   // no lens of glass lights up while the row slides, as in the learned words
         } else {
             Text(language.localizedName)
         }
