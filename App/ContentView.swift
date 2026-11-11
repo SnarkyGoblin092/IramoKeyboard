@@ -18,8 +18,6 @@ struct ContentView: View {
     @State private var windowSize: CGSize = .zero
     /// What is typed in the main list's search field.
     @State private var query = ""
-    /// The list has been scrolled past its search field (once, as it first appears).
-    @State private var searchHidden = false
 
     /// Landscape on an iPhone or iPad: the main list on the left and the open screen beside it.
     private static func isWide(_ size: CGSize) -> Bool {
@@ -74,14 +72,8 @@ struct ContentView: View {
     /// setting and takes the user to it.
     private var mainList: some View {
         ScrollViewReader { proxy in
-            // Liquid Glass: glass cards on the tinted backdrop (Glass.swift). The search field is the list's first
-            // row: the list starts scrolled past it, and it is there when the user scrolls up to the top.
+            // Liquid Glass: glass cards on the tinted backdrop (Glass.swift).
             GlassList {
-                Section {
-                    GlassSearchField(text: $query, prompt: tr("Search settings"))
-                        .glassOutsideCard()
-                        .listRowSeparator(.hidden)
-                }
                 if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     HeaderSection()
                     TestFieldSection().glassRows()
@@ -98,16 +90,13 @@ struct ContentView: View {
                 }
             }
             .glassScreen()
+            // The search field is away until the list is pulled down at its top; scrolling down puts it away again.
+            .modifier(PullDownSearch(text: $query, prompt: tr("Search settings")))
             .toolbar(.hidden, for: .navigationBar)   // no title, no bar behind it
             .scrollDismissesKeyboard(.interactively)
             .onAppear {
-                if returnToLanguageRow {
-                    DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
-                } else if !searchHidden {
-                    // The first time: past the search field, which waits above the logo.
-                    searchHidden = true
-                    DispatchQueue.main.async { proxy.scrollTo(ContentView.topID, anchor: .top) }
-                }
+                guard returnToLanguageRow else { return }
+                DispatchQueue.main.async { proxy.scrollTo(AppLanguageSection.rowID, anchor: .center) }
             }
             .onChange(of: query) { newValue in
                 // A setting picked in the search on this very list: its row is scrolled to once the list is whole again.
@@ -115,9 +104,6 @@ struct ContentView: View {
             }
         }
     }
-
-    /// The first row under the search field (the logo): the list starts scrolled to it.
-    static let topID = "main.top"
 
     /// A setting picked in the search: its screen opens (in landscape, beside the list) and its row lights up.
     private func open(_ entry: SearchEntry) {
@@ -197,7 +183,6 @@ private struct HeaderSection: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .glassOutsideCard()
-            .id(ContentView.topID)
 
             // Only what still needs setting up is shown.
             if !status.isReady {

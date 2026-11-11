@@ -204,6 +204,81 @@ extension View {
     }
 }
 
+private struct ScrollOffsetReportKey: EnvironmentKey {
+    static let defaultValue: ((CGFloat) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Called with how far a GlassList is scrolled (0 at its top, negative when pulled down past it).
+    var scrollOffsetReport: ((CGFloat) -> Void)? {
+        get { return self[ScrollOffsetReportKey.self] }
+        set { self[ScrollOffsetReportKey.self] = newValue }
+    }
+}
+
+/// Reports a scroll view's offset to `scrollOffsetReport` (iOS 18 and later).
+private struct ReportScrollOffset: ViewModifier {
+    let report: ((CGFloat) -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let report = report, #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top },
+                                           action: { _, new in report(new) })
+        } else {
+            content
+        }
+    }
+}
+
+/// A search field that is away when the screen opens. Pulling the list down at its top brings it in (the list
+/// makes room for it); scrolling down puts it away again, and scrolling back up does not bring it back. (Before
+/// iOS 26 it is simply there above the list.)
+struct PullDownSearch: ViewModifier {
+    @Binding var text: String
+    let prompt: String
+    @State private var shown = false
+    /// How far the list is scrolled: the field moves up with it.
+    @State private var scrolled: CGFloat = 0
+    @State private var shownAt = Date.distantPast
+    private let height: CGFloat = 62
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            let visible = shown || !text.isEmpty
+            let away = min(max(scrolled, 0), height)
+            content
+                .contentMargins(.top, visible ? height : 0, for: .scrollContent)
+                .environment(\.scrollOffsetReport, { offset in handle(offset) })
+                .overlay(alignment: .top) {
+                    if visible {
+                        GlassSearchField(text: $text, prompt: prompt)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .offset(y: -away)
+                            .opacity(1 - Double(away / height))
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeOut(duration: 0.25), value: visible)
+        } else {
+            content.glassSearchable(text: $text, prompt: prompt)
+        }
+    }
+
+    private func handle(_ offset: CGFloat) {
+        if abs(scrolled - offset) > 0.5 { scrolled = offset }
+        if offset < -35, !shown {
+            shown = true
+            shownAt = Date()
+        } else if shown, text.isEmpty, offset >= height, Date().timeIntervalSince(shownAt) > 0.4 {
+            // Scrolled down past the field: it goes, and the room it took goes with it without moving the list.
+            shown = false
+        }
+    }
+}
+
 /// The rounded corner of the app's cards: larger on iOS 26, as the system's own.
 enum GlassMetrics {
     static var cardRadius: CGFloat {
@@ -554,6 +629,7 @@ struct GlassList<Content: View>: View {
     private let content: Content
     /// The screen this list is on (the settings search takes the user to a row of it: SearchFocus).
     @Environment(\.searchScope) private var scope
+    @Environment(\.scrollOffsetReport) private var scrollReport
     /// A setting picked in the search is on this screen: every card is built at once, so its row can be scrolled to.
     /// (Decided when the list first appears, and kept: switching would build every row again.)
     @State private var eager: Bool
@@ -586,6 +662,7 @@ struct GlassList<Content: View>: View {
                 }
             }
             .environment(\.inGlassCards, true)
+            .modifier(ReportScrollOffset(report: scrollReport))
             .buttonStyle(GlassPressStyle())   // a press on any row lights a lens of glass under it
         } else {
             list

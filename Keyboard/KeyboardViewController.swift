@@ -871,6 +871,28 @@ final class KeyboardViewController: UIInputViewController {
         return nil
     }
 
+    /// The selected text for the bar: a few characters of the line around it, and the selection itself, shortened in
+    /// the middle when it is long.
+    private func selectionPreview(of selected: String) -> SelectionPreview {
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        let after = textDocumentProxy.documentContextAfterInput ?? ""
+        var lead = before, trail = after
+        if let anchor = selectionAnchor, anchor != 0 {
+            // The trackpad's selection lies in the context the keyboard can see: cut it out of the text around it.
+            if anchor > 0 { trail = String(after.dropFirst(anchor)) } else { lead = String(before.dropLast(-anchor)) }
+        }
+        func flat(_ text: String) -> String {
+            return text.replacingOccurrences(of: "\n", with: " \u{21B5} ")
+        }
+        var leadShown = String(lead.split(separator: "\n", omittingEmptySubsequences: false).last ?? "")
+        if leadShown.count > 8 { leadShown = "\u{2026}" + String(leadShown.suffix(8)) }
+        var trailShown = String(trail.split(separator: "\n", omittingEmptySubsequences: false).first ?? "")
+        if trailShown.count > 8 { trailShown = String(trailShown.prefix(8)) + "\u{2026}" }
+        var middle = flat(selected)
+        if middle.count > 28 { middle = String(middle.prefix(13)) + "\u{2026}" + String(middle.suffix(13)) }
+        return SelectionPreview(lead: leadShown, selected: middle, trail: trailShown)
+    }
+
     /// Deletes the text selected with the trackpad (true when there was some).
     @discardableResult
     private func deleteSelection() -> Bool {
@@ -1545,11 +1567,13 @@ final class KeyboardViewController: UIInputViewController {
         shownSmart = nil
         shownEmojiPhrase = nil
         shownShortcut = nil
-        // Selected text: the bar offers what can be done with it.
-        if composing.isEmpty, currentSelection() != nil {
+        // Selected text: the bar shows it, and offers what can be done with it.
+        if composing.isEmpty, let selected = currentSelection() {
+            suggestionBar.selectionPreview = selectionPreview(of: selected)
             suggestionBar.update(selectionCommands())
             return
         }
+        suggestionBar.selectionPreview = nil
         // Chinese and Japanese need the bar to pick their words, whatever the suggestion settings say.
         if language.usesPhoneticInput && textDocumentProxy.isSecureTextEntry != true {
             if !composing.isEmpty && phoneticCandidates.isEmpty && PhoneticInput.shared(for: language).isLoaded { updatePhoneticCandidates() }

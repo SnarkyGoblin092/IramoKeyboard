@@ -13,6 +13,14 @@ struct Suggestion {
     let kind: Kind
 }
 
+/// The selected text with a little of what is around it, shown in the bar while text is selected (the app shows no
+/// selection of its own when the trackpad selects).
+struct SelectionPreview: Equatable {
+    let lead: String
+    let selected: String
+    let trail: String
+}
+
 protocol SuggestionBarDelegate: AnyObject {
     func suggestionBar(_ bar: SuggestionBar, didSelect suggestion: Suggestion)
     func suggestionBarDidTapDismiss(_ bar: SuggestionBar)
@@ -92,6 +100,30 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         didSet { refreshVisibility() }
     }
 
+    /// The selected text, on the left half of the bar with the commands beside it (nil: no selection).
+    var selectionPreview: SelectionPreview? {
+        didSet {
+            guard selectionPreview != oldValue else { return }
+            previewLabel.attributedText = selectionPreview.map { attributedPreview($0) }
+            previewLabel.isHidden = selectionPreview == nil
+            setNeedsLayout()
+        }
+    }
+    private let previewLabel = UILabel()
+
+    private func attributedPreview(_ preview: SelectionPreview) -> NSAttributedString {
+        let font = Theme.keyFont(ofSize: 14, weight: .regular)
+        let text = NSMutableAttributedString(string: preview.lead,
+                                             attributes: [.font: font, .foregroundColor: Theme.secondaryText])
+        text.append(NSAttributedString(string: preview.selected, attributes: [
+            .font: Theme.keyFont(ofSize: 14, weight: .semibold),
+            .foregroundColor: textColor,
+            .backgroundColor: Theme.pill.withAlphaComponent(0.4)]))
+        text.append(NSAttributedString(string: preview.trail,
+                                       attributes: [.font: font, .foregroundColor: Theme.secondaryText]))
+        return text
+    }
+
     override init(frame: CGRect) {
         layoutMode = Prefs.suggestionScroll ? .scroll : (Prefs.suggestionFit ? .fit : .equal)
         pagesOfThree = Prefs.suggestionScroll && Prefs.suggestionScrollThree
@@ -108,6 +140,12 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         hintLabel.adjustsFontSizeToFitWidth = true
         hintLabel.minimumScaleFactor = 0.7
         glass.contentView.addSubview(hintLabel)
+
+        previewLabel.numberOfLines = 2
+        previewLabel.lineBreakMode = .byTruncatingTail
+        previewLabel.isHidden = true
+        previewLabel.isUserInteractionEnabled = false
+        glass.contentView.addSubview(previewLabel)
 
         strip.showsHorizontalScrollIndicator = false
         strip.alwaysBounceHorizontal = layoutMode == .scroll
@@ -469,24 +507,28 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         toolsIcon.frame = CGRect(x: 0, y: 0, width: toolsWidth, height: area.height)
         hintLabel.frame = CGRect(x: toolsWidth, y: 0, width: contentWidth, height: area.height)
         // Bounds and centre rather than frame: the strip may be mid-switch with a transform.
-        strip.bounds.size = CGSize(width: contentWidth, height: area.height)
-        strip.center = CGPoint(x: toolsWidth + contentWidth / 2, y: area.height / 2)
+        // With a selection the left half of the bar shows it, and the commands share the rest.
+        let previewWidth: CGFloat = selectionPreview != nil && !toolsOpen ? (contentWidth * 0.5).rounded() : 0
+        previewLabel.frame = CGRect(x: toolsWidth + 4, y: 0, width: max(0, previewWidth - 8), height: area.height)
+        let stripWidth = contentWidth - previewWidth
+        strip.bounds.size = CGSize(width: stripWidth, height: area.height)
+        strip.center = CGPoint(x: toolsWidth + previewWidth + stripWidth / 2, y: area.height / 2)
         toolsStrip?.frame = CGRect(x: toolsWidth, y: 0, width: contentWidth, height: area.height)
 
         var frames: [CGRect] = []
-        let widths = slotWidths(contentWidth: contentWidth)
+        let widths = slotWidths(contentWidth: stripWidth)
         // One or two words: centred in the bar.
-        let start = max(0, (contentWidth - widths.reduce(0, +)) / 2)
+        let start = max(0, (stripWidth - widths.reduce(0, +)) / 2)
         for width in widths {
             frames.append(CGRect(x: frames.last?.maxX ?? start, y: 0, width: width, height: area.height))
         }
         slotFrames = frames
         var contentEnd = frames.last?.maxX ?? 0
-        if pagesOfThree, contentWidth > 0 {
+        if pagesOfThree, stripWidth > 0 {
             // Whole pages, so paging always stops with three slots in view.
-            contentEnd = (contentEnd / contentWidth - 0.01).rounded(.up) * contentWidth
+            contentEnd = (contentEnd / stripWidth - 0.01).rounded(.up) * stripWidth
         }
-        strip.contentSize = CGSize(width: max(contentWidth, contentEnd), height: area.height)
+        strip.contentSize = CGSize(width: max(stripWidth, contentEnd), height: area.height)
 
         let segmentRadius = Theme.keyCornerRadius(for: CGSize(width: 60, height: max(0, area.height - 6)))
         let separators = UIBezierPath()
@@ -636,7 +678,9 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         if x >= dismissMinX { return dismissIndex }
         if x < toolsMaxX { return toolsIndex }
         if toolsStrip != nil { return nil }
-        return slot(atContentX: x - stripRect.minX + strip.contentOffset.x)
+        let local = x - stripRect.minX + strip.contentOffset.x
+        if selectionPreview != nil && local < 0 { return nil }   // the selected text: not a button
+        return slot(atContentX: local)
     }
 
     private func setPressed(_ index: Int?) {
@@ -665,7 +709,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     @objc private func stripTapped(_ recognizer: UITapGestureRecognizer) {
-        guard let index = slot(atContentX: recognizer.location(in: strip).x), !suggestions[index].text.isEmpty else { return }
+        let tapX = recognizer.location(in: strip).x
+        guard tapX >= 0, let index = slot(atContentX: tapX), !suggestions[index].text.isEmpty else { return }
         let picked = suggestions[index]
         highlight(index, on: true)
         UIView.animate(withDuration: 0.25, animations: { self.highlights[index].alpha = 0 },
