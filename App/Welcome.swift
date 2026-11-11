@@ -150,6 +150,22 @@ struct WelcomeView: View {
                     }
                 }
                 .padding(.top, 4)
+                if item.demo == .turnOn {
+                    // The app's own page in the system Settings: Keyboards > Iramo, and Allow Full Access.
+                    Button {
+                        Feedback.tap()
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    } label: {
+                        Label(tr("Open Settings"), systemImage: "gearshape.fill")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .foregroundColor(.white)
+                            .glassTile(Capsule(), isOn: true)
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
@@ -279,6 +295,50 @@ private struct TurnOnDemo: View {
     }
 }
 
+/// The keyboard's swipe trail: the finger's points rounded into a curve, drawn in short stretches that fade and thin
+/// towards the tail (the same corner cutting as KeyboardView's trail).
+private struct SmoothTrail: View {
+    let points: [CGPoint]
+    let color: Color
+
+    private var curve: [CGPoint] {
+        guard points.count > 2 else { return points }
+        var current = points
+        for _ in 0..<3 {
+            var next = [current[0]]
+            for index in 0..<(current.count - 1) {
+                let a = current[index], b = current[index + 1]
+                next.append(CGPoint(x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25))
+                next.append(CGPoint(x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75))
+            }
+            next.append(current[current.count - 1])
+            current = next
+        }
+        return current
+    }
+
+    var body: some View {
+        let curve = self.curve
+        let count = 32
+        ZStack {
+            ForEach(0..<count, id: \.self) { piece in
+                let from = (curve.count - 1) * piece / count
+                let to = min(curve.count - 1, (curve.count - 1) * (piece + 1) / count)
+                let along = Double(piece + 1) / Double(count)
+                if to > from {
+                    Path { path in
+                        path.move(to: curve[from])
+                        for point in curve[from...to].dropFirst() { path.addLine(to: point) }
+                    }
+                    .stroke(color.opacity(0.7 * pow(along, 1.8)),
+                            style: StrokeStyle(lineWidth: CGFloat(7 * (0.3 + 0.7 * along)),
+                                               lineCap: piece == count - 1 ? .round : .butt, lineJoin: .round))
+                }
+            }
+        }
+    }
+}
+
 /// A finger gliding through "hello", its trail fading behind it, and the word landing in the bar.
 private struct SwipeDemo: View {
     let time: Double
@@ -319,12 +379,7 @@ private struct SwipeDemo: View {
                 MiniKeys(color: color)
                     .padding(.top, 74)
                 if !done {
-                    Path { path in
-                        path.move(to: points[0])
-                        for point in points[1..<(index + 1)] { path.addLine(to: point) }
-                        path.addLine(to: head)
-                    }
-                    .stroke(color.opacity(0.65), style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                    SmoothTrail(points: Array(points[0...index]) + [head], color: color)
                     Circle().fill(color.opacity(0.25)).frame(width: 34, height: 34).position(head)
                 }
             }
@@ -354,9 +409,11 @@ private struct CursorDemo: View {
             selection = (15 - grown)..<15
         }
         let selecting = phase >= 1.6
+        // The finger slides along the bar and never leaves it: from the right part to the left while the caret
+        // moves, then it rests while the second finger selects. (Bar 240 wide, finger 30: it stays within +-90.)
         let fingerOffset: CGFloat = {
-            let shift: Double = phase < 1.6 ? -phase * 20.0 : -32.0 - (phase - 1.6) * 14.0
-            return CGFloat(-50.0 + shift)
+            let x: Double = phase < 1.6 ? 70.0 - phase / 1.6 * 110.0 : -40.0 - min(1.0, (phase - 1.6) / 1.2) * 20.0
+            return CGFloat(min(90.0, max(-90.0, x)))
         }()
         return VStack(spacing: 16) {
             HStack(spacing: 0) {
@@ -387,7 +444,7 @@ private struct CursorDemo: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.primary.opacity(selecting ? 0.14 : 0.08))
-                    .frame(width: 180, height: 32)
+                    .frame(width: 240, height: 32)
                 Circle().fill(color.opacity(0.3)).frame(width: 30, height: 30)
                     .offset(x: fingerOffset)
                 if selecting {
@@ -420,7 +477,7 @@ private struct SmartDemo: View {
         let showResult = phase > 0.95
         return VStack(spacing: 18) {
             Text(String(example.typed.prefix(typedCount)))
-                .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .frame(height: 30)
             HStack(spacing: 0) {
                 slot(" ", highlighted: false)
@@ -481,18 +538,21 @@ private struct LookDemo: View {
     }
 }
 
-/// A search for a setting, then the week's typing growing in bars.
+/// A search for a setting, typed letter by letter, with the matching settings listed under it.
 private struct StatsDemo: View {
     let time: Double
     let color: Color
 
     var body: some View {
-        let phase = time.truncatingRemainder(dividingBy: 5)
-        let query = Array(tr("Swipe trail"))
-        let typed = String(query.prefix(min(query.count, Int(phase * 7))))
-        let heights: [Double] = [0.35, 0.6, 0.45, 0.8, 0.55, 0.95, 0.7]
-        let grow = min(1, max(0, (phase - 1.2) / 1.2))
-        return VStack(spacing: 14) {
+        // Typing into the search field: the real settings that match are listed under it as each letter goes in.
+        let queries = ["swipe", "haptic", "theme", "emoji"]
+        let length = 3.4
+        let round = Int(time / length)
+        let phase = time.truncatingRemainder(dividingBy: length)
+        let query = Array(queries[round % queries.count])
+        let typed = String(query.prefix(min(query.count, max(0, Int((phase - 0.3) * 5)))))
+        let results = typed.isEmpty ? [] : Array(SettingsIndex.search(typed).prefix(3))
+        return VStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundColor(.secondary)
                 Text(typed.isEmpty ? tr("Search settings") : typed)
@@ -503,17 +563,27 @@ private struct StatsDemo: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(Capsule().fill(Color.primary.opacity(0.07)))
-            .padding(.horizontal, 22)
-            HStack(alignment: .bottom, spacing: 10) {
-                ForEach(heights.indices, id: \.self) { index in
-                    let wave = 0.06 * sin(time * 2 + Double(index))
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(color.gradient)
-                        .frame(width: 22, height: CGFloat(max(4, 90 * (heights[index] + wave) * grow)))
+            VStack(spacing: 6) {
+                ForEach(results) { entry in
+                    HStack(spacing: 10) {
+                        Image(systemName: entry.symbol)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 26, height: 26)
+                            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(entry.color))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(entry.title).font(.subheadline).lineLimit(1)
+                            Text(entry.place).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .frame(height: 96, alignment: .bottom)
+            .frame(height: 3 * 34, alignment: .top)
+            .animation(.easeOut(duration: 0.2), value: results.map { $0.id })
         }
+        .padding(.horizontal, 22)
     }
 }
 

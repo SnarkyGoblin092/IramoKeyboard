@@ -69,7 +69,7 @@ final class KeyboardView: UIView {
     private let trailLayer = CAShapeLayer()
     /// The swipe line in stretches, oldest first, each more opaque than the one before: it fades out behind the
     /// finger, over the Trail length setting.
-    private let trailPieces: [CAShapeLayer] = (0..<10).map { _ in CAShapeLayer() }
+    private let trailPieces: [CAShapeLayer] = (0..<32).map { _ in CAShapeLayer() }
     /// Liquid Glass theme: every key's glass lives inside this shared container (see GlassSupport.makeContainer).
     private var glassContainer: UIVisualEffectView?
     /// One-handed keyboard: the arrow in the empty side that moves the keys over to it.
@@ -1241,7 +1241,9 @@ final class KeyboardView: UIView {
         let width = CGFloat(Prefs.swipeTrailWidth)
         let style = Prefs.swipeTrailStyle
         for (index, piece) in trailPieces.enumerated() {
-            piece.lineWidth = width
+            // The trail thins towards its tail as it fades.
+            let along = CGFloat(index + 1) / CGFloat(trailPieces.count)
+            piece.lineWidth = style == "solid" ? width : width * (0.3 + 0.7 * along)
             if style == "dotted" {
                 piece.lineCap = .round
                 piece.lineDashPattern = [NSNumber(value: 0.01), NSNumber(value: Double(width) * 1.9)]
@@ -1251,7 +1253,8 @@ final class KeyboardView: UIView {
                 piece.lineDashPattern = nil
             }
             // Fading: each stretch more opaque than the one before; solid: the whole line alike.
-            piece.opacity = style == "solid" ? 1 : Float(index + 1) / Float(trailPieces.count)
+            // (An eased curve: the tail is nearly gone, the head fully there.)
+            piece.opacity = style == "solid" ? 1 : Float(pow(Double(along), 1.8))
         }
     }
 
@@ -1460,6 +1463,7 @@ final class KeyboardView: UIView {
             newest = point
         }
         kept.reverse()
+        kept = KeyboardView.smoothed(kept)
 
         trailHueShift = (trailHueShift + 0.004).truncatingRemainder(dividingBy: 1)
         let count = trailPieces.count
@@ -1481,6 +1485,23 @@ final class KeyboardView: UIView {
             piece.strokeColor = trailColor(piece: index)
             piece.path = path.cgPath
         }
+    }
+
+    /// The points rounded into a curve (corner cutting, twice), keeping both ends where they are.
+    private static func smoothed(_ points: [CGPoint]) -> [CGPoint] {
+        guard points.count > 2 else { return points }
+        var current = points
+        for _ in 0..<3 {
+            var next = [current[0]]
+            for index in 0..<(current.count - 1) {
+                let a = current[index], b = current[index + 1]
+                next.append(CGPoint(x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25))
+                next.append(CGPoint(x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75))
+            }
+            next.append(current[current.count - 1])
+            current = next
+        }
+        return current
     }
 
     private func fadeTrail() {

@@ -159,6 +159,43 @@ extension View {
     }
 }
 
+/// A search field drawn as a capsule of Liquid Glass (a frosted material before iOS 26), pinned above a screen.
+private struct GlassSearchField: View {
+    @Binding var text: String
+    let prompt: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+            TextField(prompt, text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tr("Clear"))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassShape(Capsule(), interactive: true)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+}
+
+extension View {
+    /// The screen's search field, in glass: above the content, in place of the system's `searchable` bar.
+    func glassSearchable(text: Binding<String>, prompt: String) -> some View {
+        return self.safeAreaInset(edge: .top, spacing: 0) {
+            GlassSearchField(text: text, prompt: prompt)
+        }
+    }
+}
+
 /// The rounded corner of the app's cards: larger on iOS 26, as the system's own.
 enum GlassMetrics {
     static var cardRadius: CGFloat {
@@ -904,7 +941,20 @@ private struct SwipeToDeleteRow<Content: View>: View {
 
     var body: some View {
         // The row stays put (the name never slides off screen); the Delete button grows in from the right edge.
-        content()
+        let reveal = max(0, -offset)
+        // The text never runs under the button: it is cut off softly where the button starts, and fades out the
+        // further the button grows.
+        let fade = 1 - min(1, max(0, (reveal - buttonWidth) / (maxReveal - buttonWidth)))
+        return content()
+            .mask {
+                HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: min(16, reveal))
+                    Color.clear.frame(width: reveal)
+                }
+            }
+            .opacity(fade)
             .contentShape(Rectangle())   // the card's glass shows through; the whole row still takes taps
             .onTapGesture { close() }
             .overlay(alignment: .trailing) {

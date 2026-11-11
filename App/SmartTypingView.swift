@@ -118,7 +118,7 @@ private struct SmartBarPreview: View {
         CurrentThemeLook { look in
             HStack(spacing: 10) {
                 Text(typed)
-                    .font(.system(size: 15, design: .monospaced))
+                    .font(.system(size: 15, design: .rounded))
                     .foregroundColor(look.textColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)

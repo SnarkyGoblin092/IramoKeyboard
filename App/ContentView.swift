@@ -92,8 +92,7 @@ struct ContentView: View {
                     SettingsSearchResults(query: query) { entry in open(entry) }
                 }
             }
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: tr("Search settings"))
-            .autocorrectionDisabled()
+            .glassSearchable(text: $query, prompt: tr("Search settings"))
             .navigationTitle(tr("Iramo"))
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
@@ -1076,7 +1075,7 @@ struct LearnedWordsView: View {
             .glassRows()
         }
         .glassScreen()
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: tr("Search learned words"))
+        .glassSearchable(text: $query, prompt: tr("Search learned words"))
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)
         .navigationTitle(tr("Learned words"))
@@ -1105,7 +1104,7 @@ private struct ShortcutPreview: View {
             CurrentThemeLook { look in
                 HStack(spacing: 10) {
                     Text(typed.isEmpty ? "omw" : typed)
-                        .font(.system(size: 15, design: .monospaced))
+                        .font(.system(size: 15, design: .rounded))
                         .foregroundColor(look.textColor)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)

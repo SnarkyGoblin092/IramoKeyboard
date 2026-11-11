@@ -1146,7 +1146,7 @@ struct AddEffectView: View {
             .glassRows()
         }
         .glassScreen()
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: tr("Search effects"))
+        .glassSearchable(text: $query, prompt: tr("Search effects"))
         .navigationTitle(tr("Add effect"))
         .navigationBarTitleDisplayMode(.inline)
     }
