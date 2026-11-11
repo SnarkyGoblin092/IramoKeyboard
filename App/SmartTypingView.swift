@@ -20,8 +20,10 @@ struct SmartTypingView: View {
         if inlineMath, let result = InlineCalculator.result(before: text, language: language, decimals: places) {
             return result.shown
         }
-        if units, let result = UnitConverter.result(before: text, language: language, decimals: places, target: target) {
-            return result.shown
+        if units {
+            // The bar has every unit; the preview, room for the first few.
+            let all = UnitConverter.results(before: text, language: language, decimals: places, target: target)
+            if !all.isEmpty { return all.prefix(3).map { $0.shown }.joined(separator: "  \u{00B7}  ") }
         }
         return nil
     }

@@ -392,7 +392,7 @@ private struct ExpressionParser {
 /// "5 km" -> "3.107 mi", "70 kg" -> "154.324 lb", "20 °C" -> "68 °F", "60 mph" -> "96.561 km/h". Offered while a
 /// number and a unit end the text; picking it writes the converted measurement in their place.
 enum UnitConverter {
-    private enum Kind { case length, mass, volume, temperature, speed, area }
+    private enum Kind { case length, mass, volume, temperature, speed, area, data }
     private enum System { case metric, imperial }
 
     private struct Unit {
@@ -416,6 +416,8 @@ enum UnitConverter {
         Unit(symbol: "mg", names: ["mg", "milligram", "milligrams"], kind: .mass, system: .metric, factor: 0.000001),
         Unit(symbol: "g", names: ["g", "gram", "grams", "gramme", "grammes"], kind: .mass, system: .metric, factor: 0.001),
         Unit(symbol: "kg", names: ["kg", "kilogram", "kilograms", "kilo", "kilos"], kind: .mass, system: .metric, factor: 1),
+        Unit(symbol: "t", names: ["t", "tonne", "tonnes", "metric ton", "metric tons"], kind: .mass, system: .metric, factor: 1000),
+        Unit(symbol: "st", names: ["stone", "stones"], kind: .mass, system: .imperial, factor: 6.35029318),
         Unit(symbol: "oz", names: ["oz", "ounce", "ounces"], kind: .mass, system: .imperial, factor: 0.028349523125),
         Unit(symbol: "lb", names: ["lb", "lbs", "pound", "pounds"], kind: .mass, system: .imperial, factor: 0.45359237),
         Unit(symbol: "ml", names: ["ml", "milliliter", "milliliters", "millilitre", "millilitres"], kind: .volume, system: .metric, factor: 0.001),
@@ -426,38 +428,31 @@ enum UnitConverter {
         Unit(symbol: "cups", names: ["cup", "cups"], kind: .volume, system: .imperial, factor: 0.2365882365),
         Unit(symbol: "tbsp", names: ["tbsp", "tablespoon", "tablespoons"], kind: .volume, system: .imperial, factor: 0.01478676478125),
         Unit(symbol: "tsp", names: ["tsp", "teaspoon", "teaspoons"], kind: .volume, system: .imperial, factor: 0.00492892159375),
+        Unit(symbol: "pt", names: ["pt", "pint", "pints"], kind: .volume, system: .imperial, factor: 0.473176473),
         Unit(symbol: "qt", names: ["qt", "quart", "quarts"], kind: .volume, system: .imperial, factor: 0.946352946),
         Unit(symbol: "gal", names: ["gal", "gallon", "gallons"], kind: .volume, system: .imperial, factor: 3.785411784),
         Unit(symbol: "°C", names: ["°c", "ºc", "\u{2103}", "celsius", "degrees celsius"], kind: .temperature, system: .metric, factor: 1),
         Unit(symbol: "°F", names: ["°f", "ºf", "\u{2109}", "fahrenheit", "degrees fahrenheit"], kind: .temperature, system: .imperial, factor: 1),
+        Unit(symbol: "K", names: ["kelvin", "\u{00B0}k", "\u{212A}"], kind: .temperature, system: .metric, factor: 1),
+        Unit(symbol: "kn", names: ["kn", "knot", "knots"], kind: .speed, system: .imperial, factor: 0.514444),
+        Unit(symbol: "B", names: ["byte", "bytes"], kind: .data, system: .metric, factor: 1),
+        Unit(symbol: "kB", names: ["kb", "kilobyte", "kilobytes"], kind: .data, system: .metric, factor: 1e3),
+        Unit(symbol: "MB", names: ["mb", "megabyte", "megabytes"], kind: .data, system: .metric, factor: 1e6),
+        Unit(symbol: "GB", names: ["gb", "gigabyte", "gigabytes"], kind: .data, system: .metric, factor: 1e9),
+        Unit(symbol: "TB", names: ["tb", "terabyte", "terabytes"], kind: .data, system: .metric, factor: 1e12),
         Unit(symbol: "km/h", names: ["km/h", "kmh", "kph", "km/hr"], kind: .speed, system: .metric, factor: 1 / 3.6),
         Unit(symbol: "m/s", names: ["m/s"], kind: .speed, system: .metric, factor: 1),
         Unit(symbol: "mph", names: ["mph", "mi/h"], kind: .speed, system: .imperial, factor: 0.44704),
         Unit(symbol: "m²", names: ["m²", "m2", "sqm", "square meters", "square metres"], kind: .area, system: .metric, factor: 1),
+        Unit(symbol: "cm\u{00B2}", names: ["cm\u{00B2}", "cm2", "square centimeters", "square centimetres"], kind: .area, system: .metric, factor: 0.0001),
+        Unit(symbol: "in\u{00B2}", names: ["in\u{00B2}", "in2", "sq in", "square inches"], kind: .area, system: .imperial, factor: 0.00064516),
+        Unit(symbol: "yd\u{00B2}", names: ["yd\u{00B2}", "yd2", "sq yd", "square yards"], kind: .area, system: .imperial, factor: 0.83612736),
         Unit(symbol: "ha", names: ["ha", "hectare", "hectares"], kind: .area, system: .metric, factor: 10_000),
         Unit(symbol: "km²", names: ["km²", "km2", "square kilometers", "square kilometres"], kind: .area, system: .metric, factor: 1_000_000),
         Unit(symbol: "ft²", names: ["ft²", "ft2", "sq ft", "sqft", "square feet"], kind: .area, system: .imperial, factor: 0.09290304),
         Unit(symbol: "acres", names: ["acre", "acres"], kind: .area, system: .imperial, factor: 4046.8564224),
         Unit(symbol: "mi²", names: ["mi²", "mi2", "sq mi", "square miles"], kind: .area, system: .imperial, factor: 2_589_988.110336)
     ]
-
-    /// The units a conversion picks from, largest first: the first one the value is at least 1 of.
-    private static func targets(kind: Kind, system: System) -> [String] {
-        switch (kind, system) {
-        case (.length, .metric): return ["km", "m", "cm", "mm"]
-        case (.length, .imperial): return ["mi", "ft", "in"]
-        case (.mass, .metric): return ["kg", "g", "mg"]
-        case (.mass, .imperial): return ["lb", "oz"]
-        case (.volume, .metric): return ["l", "ml"]
-        case (.volume, .imperial): return ["gal", "fl oz"]
-        case (.temperature, .metric): return ["°C"]
-        case (.temperature, .imperial): return ["°F"]
-        case (.speed, .metric): return ["km/h"]
-        case (.speed, .imperial): return ["mph"]
-        case (.area, .metric): return ["km²", "ha", "m²"]
-        case (.area, .imperial): return ["mi²", "acres", "ft²"]
-        }
-    }
 
     /// Every way a unit can be written (lower case) -> the unit, longest first for the matcher.
     private static let byName: [(name: String, unit: Unit)] = {
@@ -466,8 +461,14 @@ enum UnitConverter {
         return list.sorted { $0.name.count > $1.name.count }
     }()
 
-    /// `target`: "auto" (to the other system), "metric" or "imperial" (only measurements in the other one convert).
+    /// The first conversion (the one `result` offers where only one fits).
     static func result(before: String, language: Language, decimals: Int, target: String) -> SmartResult? {
+        return results(before: before, language: language, decimals: decimals, target: target).first
+    }
+
+    /// Every unit of the same kind the measurement can be written in, the likeliest first. `target`: "auto" (all of
+    /// them), "metric" or "imperial" (only that system's).
+    static func results(before: String, language: Language, decimals: Int, target: String) -> [SmartResult] {
         var text = SmartNumbers.westernDigits(String(before.suffix(48)))
         var trailing = ""
         if text.hasSuffix(" ") {
@@ -475,7 +476,7 @@ enum UnitConverter {
             trailing = " "
         }
         let lower = text.lowercased()
-        guard lower.count == text.count else { return nil }
+        guard lower.count == text.count else { return [] }
         for (name, unit) in byName where lower.hasSuffix(name) {
             var rest = String(text.dropLast(name.count))
             // A unit spelled out needs a space before it ("5 miles"); a symbol may touch the number ("5km").
@@ -484,36 +485,49 @@ enum UnitConverter {
             if !spaced, name.count > 2, name.first?.isLetter == true { continue }
             // The unit is a whole word: "5 cm" but not "5 acm".
             guard let number = trailingNumber(in: rest, language: language) else { continue }
-            let value = number.value
-            let from = unit
-            let wanted: System
-            switch target {
-            case "metric": wanted = .metric
-            case "imperial": wanted = .imperial
-            default: wanted = from.system == .metric ? .imperial : .metric
-            }
-            guard wanted != from.system else { return nil }
-            guard let converted = convert(value, from: from, to: wanted) else { return nil }
-            guard let formatted = SmartNumbers.format(converted.value, decimals: decimals, language: language) else { return nil }
-            let shown = formatted + " " + converted.symbol
             let replaced = number.length + (spaced ? 1 : 0) + name.count + trailing.count
-            return SmartResult(shown: shown, replaceCount: replaced, insert: shown + trailing)
+            var converted: [(unit: Unit, value: Double)] = []
+            for other in units where other.kind == unit.kind && other.symbol != unit.symbol {
+                if unit.kind != .data {
+                    if target == "metric" && other.system != .metric { continue }
+                    if target == "imperial" && other.system != .imperial { continue }
+                }
+                converted.append((other, convert(number.value, from: unit, to: other)))
+            }
+            // The values nearest a few tens first: 30 m is 32.8 yd and 98.4 ft before 0.03 km and 30 000 mm.
+            func distance(_ value: Double) -> Double {
+                return value == 0 ? 0 : abs(log10(abs(value) / 30))
+            }
+            let ordered = converted.enumerated().sorted { first, second in
+                let (a, b) = (distance(first.element.value), distance(second.element.value))
+                return a == b ? first.offset < second.offset : a < b
+            }.map { $0.element }
+            var list: [SmartResult] = []
+            for item in ordered {
+                guard let formatted = SmartNumbers.format(item.value, decimals: decimals, language: language) else { continue }
+                let shown = formatted + " " + item.unit.symbol
+                list.append(SmartResult(shown: shown, replaceCount: replaced, insert: shown + trailing))
+            }
+            return list
         }
-        return nil
+        return []
     }
 
-    private static func convert(_ value: Double, from: Unit, to system: System) -> (value: Double, symbol: String)? {
+    private static func convert(_ value: Double, from: Unit, to: Unit) -> Double {
         if from.kind == .temperature {
-            if from.symbol == "°C" { return (value * 9 / 5 + 32, "°F") }
-            return ((value - 32) * 5 / 9, "°C")
+            let celsius: Double
+            switch from.symbol {
+            case "°F": celsius = (value - 32) * 5 / 9
+            case "K": celsius = value - 273.15
+            default: celsius = value
+            }
+            switch to.symbol {
+            case "°F": return celsius * 9 / 5 + 32
+            case "K": return celsius + 273.15
+            default: return celsius
+            }
         }
-        let base = value * from.factor
-        let choices = targets(kind: from.kind, system: system).compactMap { symbol in units.first { $0.symbol == symbol } }
-        guard let smallest = choices.last else { return nil }
-        for unit in choices where abs(base / unit.factor) >= 1 {
-            return (base / unit.factor, unit.symbol)
-        }
-        return (base / smallest.factor, smallest.symbol)
+        return value * from.factor / to.factor
     }
 
     /// The number that ends `text` ("-3", "2.5", "1,000"), standing on its own, and how many characters it takes.
