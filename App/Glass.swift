@@ -268,8 +268,12 @@ struct PullDownSearch: ViewModifier {
     }
 
     private func handle(_ offset: CGFloat) {
-        if abs(scrolled - offset) > 0.5 { scrolled = offset }
+        // Only the first stretch of the scroll moves the field (and only while it is there): the state is not
+        // touched on every frame of a long scroll, which would draw the whole list again each time.
+        let near = min(max(offset, 0), height)
+        if shown, abs(scrolled - near) > 0.5 { scrolled = near }
         if offset < -35, !shown {
+            scrolled = 0
             shown = true
             shownAt = Date()
         } else if shown, text.isEmpty, offset >= height, Date().timeIntervalSince(shownAt) > 0.4 {

@@ -516,6 +516,17 @@ private struct StatsDemo: View {
     let time: Double
     let color: Color
 
+    /// The first matches of a query, kept: the animation draws sixty times a second, and searching builds the whole
+    /// settings index each time.
+    private static var cache: [String: [SearchEntry]] = [:]
+
+    private static func matches(for query: String) -> [SearchEntry] {
+        if let known = cache[query] { return known }
+        let found = Array(SettingsIndex.search(query).prefix(3))
+        cache[query] = found
+        return found
+    }
+
     var body: some View {
         // Typing into the search field: the real settings that match are listed under it as each letter goes in.
         let queries = ["swipe", "haptic", "theme", "emoji"]
@@ -524,7 +535,7 @@ private struct StatsDemo: View {
         let phase = time.truncatingRemainder(dividingBy: length)
         let query = Array(queries[round % queries.count])
         let typed = String(query.prefix(min(query.count, max(0, Int((phase - 0.3) * 5)))))
-        let results = typed.isEmpty ? [] : Array(SettingsIndex.search(typed).prefix(3))
+        let results = typed.isEmpty ? [] : StatsDemo.matches(for: typed)
         return VStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundColor(.secondary)
