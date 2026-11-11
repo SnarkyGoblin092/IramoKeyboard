@@ -643,7 +643,6 @@ struct EffectsView: View {
                         Spacer()
                         DisclosureChevron()
                     }
-                    .waveSource()
                     .foregroundColor(.accentColor)
                     .contentShape(Rectangle())
                 }

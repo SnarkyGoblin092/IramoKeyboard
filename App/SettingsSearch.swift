@@ -312,7 +312,6 @@ struct SettingsSearchResults: View {
                                     .foregroundColor(Color(.tertiaryLabel))
                             }
                             .contentShape(Rectangle())
-                            .waveSource()
                         }
                     }
                 }

@@ -34,6 +34,8 @@ struct GlassBackdrop: View {
                 .blur(radius: 130)
                 .offset(x: -110, y: 460)
         }
+        // A new accent fades in over the old one.
+        .animation(.easeInOut(duration: 0.7), value: accentName + accentHex)
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
@@ -977,7 +979,6 @@ struct GlassChoiceLink<Value: Hashable>: View {
                 Text(currentName).foregroundColor(.secondary)
                 DisclosureChevron()
             }
-            .waveSource()
             .foregroundColor(.primary)
             .contentShape(Rectangle())
         }

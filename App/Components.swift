@@ -514,9 +514,7 @@ struct AccentPicker: View {
 
     private let columns = Array(repeating: GridItem(.flexible(minimum: 30), spacing: 8), count: 6)
     private let presets = AccentChoice.allCases.filter { $0 != .graphite }
-    /// Where each swatch is in the window: the wave spreads out from the one tapped.
-    @State private var anchors = AnchorBook()
-    /// A colour picked in the colour picker, held until the picker closes (then the wave carries the window over to it).
+    /// A colour picked in the colour picker, held until the picker closes (then the backdrop fades over to it).
     @State private var pendingHex: String?
     @State private var watching = false
 
@@ -529,10 +527,8 @@ struct AccentPicker: View {
                 Button {
                     guard isCustom || accentName != choice.rawValue else { return }
                     Feedback.choose()
-                    NavigationWave.change(from: anchors.anchor(choice.rawValue).center) {
-                        accentName = choice.rawValue
-                        accentHex = ""
-                    }
+                    accentName = choice.rawValue
+                    accentHex = ""
                 } label: {
                     Circle()
                         .fill(Color(accent: choice))
@@ -545,7 +541,6 @@ struct AccentPicker: View {
                         .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.9 : 0), lineWidth: 2).padding(-4))
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .contentShape(Rectangle())
-                        .waveAnchor(anchors.anchor(choice.rawValue))
                 }
                 .buttonStyle(PressableStyle())
                 .accessibilityLabel(tr(choice.displayName))
@@ -562,33 +557,42 @@ struct AccentPicker: View {
         return ColorPicker(tr("Custom colour"), selection: Binding(
             get: { pendingHex.map { Color(hex: $0) } ?? Color.currentAccent(name: accentName, hex: accentHex) },
             set: { newColor in
-                // Held while the picker is open; the accent changes, with the wave, once it has closed.
+                // Held while the picker is open; the accent changes once it has closed.
                 pendingHex = newColor.hexString
                 watchPicker()
             }), supportsOpacity: false)
             .labelsHidden()
-            .waveAnchor(anchors.anchor("custom"))
             .scaleEffect(1.2)
             .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.9 : 0), lineWidth: 2).frame(width: 42, height: 42))
             .frame(maxWidth: .infinity, minHeight: 44)
             .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// Waits for the colour picker to close, then, if the colour is not the one the accent already is, plays the wave
-    /// from the custom colour swatch and sets it. A colour left as it was changes nothing and plays nothing.
+    /// Whether the system is showing something over the app (the colour picker, while it is open).
+    private static var isPresenting: Bool {
+        func presenting(_ controller: UIViewController) -> Bool {
+            return controller.presentedViewController != nil || controller.children.contains(where: presenting)
+        }
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
+        guard let root = (windows.first(where: { $0.isKeyWindow }) ?? windows.first)?.rootViewController else { return false }
+        return presenting(root)
+    }
+
+    /// Waits for the colour picker to close, then, if the colour is not the one the accent already is, sets it. A
+    /// colour left as it was changes nothing.
     private func watchPicker() {
         guard !watching else { return }
         watching = true
         Task { @MainActor in
             // The picker is open while something is shown over the app.
-            while NavigationWave.isPresenting { try? await Task.sleep(nanoseconds: 150_000_000) }
-            // Its dismissal finishes before the window is photographed.
+            while AccentPicker.isPresenting { try? await Task.sleep(nanoseconds: 150_000_000) }
+            // Its dismissal finishes first.
             try? await Task.sleep(nanoseconds: 350_000_000)
             watching = false
             guard let hex = pendingHex else { return }
             pendingHex = nil
             guard hex != accentHex else { return }
-            NavigationWave.change(from: anchors.anchor("custom").center, delay: 0) { accentHex = hex }
+            accentHex = hex
         }
     }
 }
