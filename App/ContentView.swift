@@ -838,22 +838,18 @@ struct ShortcutsView: View {
             .glassRows()
 
             Section {
-                if items.isEmpty {
-                    Text(tr("None yet")).foregroundColor(.secondary)
-                } else {
-                    ForEach(items, id: \.id) { item in
-                        VStack(alignment: .leading) {
-                            Text(item.trigger).font(.headline)
-                            Text(item.phrase).font(.subheadline).foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                        .swipeToDelete { remove(item) }
+                // The list opens on a screen of its own, like the learned words.
+                NavigationLink {
+                    ShortcutListView()
+                } label: {
+                    HStack {
+                        Label(tr("Your shortcuts"), systemImage: "bolt.fill")
+                        Spacer()
+                        Text("\(items.count)").foregroundColor(.secondary)
+                        DisclosureChevron()
                     }
+                    .contentShape(Rectangle())
                 }
-            } header: {
-                Text(tr("Your shortcuts"))
-            } footer: {
-                if !items.isEmpty { Text(tr("Swipe a shortcut left to remove it.")) }
             }
             .glassRows()
 
@@ -910,13 +906,46 @@ struct ShortcutsView: View {
         phrase = ""
     }
 
+    private func save() {
+        Settings.shared.shortcuts = items
+    }
+}
+
+/// The shortcuts the user made, on a screen of their own: a Liquid Glass list like the learned words, a shortcut
+/// swipes left to delete.
+struct ShortcutListView: View {
+    @State private var items: [TextShortcut] = Settings.shared.shortcuts
+
+    var body: some View {
+        GlassList {
+            Section {
+                if items.isEmpty {
+                    Text(tr("None yet")).foregroundColor(.secondary)
+                } else {
+                    ForEach(items, id: \.id) { item in
+                        VStack(alignment: .leading) {
+                            Text(item.trigger).font(.headline)
+                            Text(item.phrase).font(.subheadline).foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                        .swipeToDelete { remove(item) }
+                    }
+                }
+            } footer: {
+                if !items.isEmpty { Text(tr("Swipe a shortcut left to remove it.")) }
+            }
+            .glassRows()
+        }
+        .glassScreen()
+        .navigationTitle(tr("Your shortcuts"))
+        .navigationBarTitleDisplayMode(.inline)
+        // Read again on every visit: a NavigationLink builds this view's initial state only once.
+        .onAppear { items = Settings.shared.shortcuts }
+    }
+
     private func remove(_ item: TextShortcut) {
         Feedback.delete()
         items.removeAll { $0.id == item.id }
-        save()
-    }
-
-    private func save() {
         Settings.shared.shortcuts = items
     }
 }
