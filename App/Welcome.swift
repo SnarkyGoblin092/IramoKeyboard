@@ -896,10 +896,13 @@ private struct StatsDemo: View {
 private struct ReadyDemo: View {
     let time: Double
     let color: Color
+    /// When the page came on screen: it plays once from there and stays done (it does not loop like the others).
+    @State private var start: Double = -1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let phase: Double = time.truncatingRemainder(dividingBy: 3.4)
-        let leaving: Double = 1 - Motion.ease(phase, 2.9, 3.35)
+        let phase: Double = reduceMotion ? 2.0 : (start < 0 ? 0 : min(2.0, time - start))
+        let leaving: Double = 1
         let ring: Double = Motion.ease(phase, 0.1, 0.85)
         let check: Double = Motion.ease(phase, 0.7, 1.15)
         let pop: Double = Motion.pulse(phase, 1.05, 0.45)
@@ -930,6 +933,7 @@ private struct ReadyDemo: View {
             }
         }
         .opacity(leaving)
+        .onAppear { if start < 0 { start = time } }
     }
 
     private func spark(_ index: Int, reach: Double, fade: Double) -> some View {

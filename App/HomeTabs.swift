@@ -293,11 +293,70 @@ private struct ThemeSection: View {
             .buttonStyle(PressableStyle())
             .accessibilityLabel(tr("Themes"))
             .glassOutsideCard()
+            AppearanceSwitch()
             ScreenRow(.themes) {
                 SettingsRow(title: tr("Themes"), symbol: "paintbrush.fill", color: .purple, value: shown.name)
             }
             ScreenRow(.themeEditor) {
                 SettingsRow(title: tr("Customize %@", "\(shown.name)"), symbol: "slider.horizontal.3", color: .pink)
+            }
+        }
+    }
+}
+
+/// The light / dark switch (Auto follows the phone), under the keyboard preview. Changing the mode sends the same
+/// wave across the window as the Themes screen's switch, spreading out from where the finger touched.
+private struct AppearanceSwitch: View {
+    @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var mode = SettingDefault.appearance
+    @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
+    @Environment(\.colorScheme) private var colorScheme
+    /// The mode just picked while its wave is setting off: the switch shows it at once.
+    @State private var pending: String?
+    @State private var running = false
+    @State private var touches = TouchPoint()
+
+    private var scheme: ColorScheme {
+        return mode == "light" ? .light : (mode == "dark" ? .dark : colorScheme)
+    }
+
+    var body: some View {
+        let shown = pending ?? mode
+        SegmentedChoice(names: [tr("Auto"), tr("Light"), tr("Dark")],
+                        selected: shown == "light" ? 1 : (shown == "dark" ? 2 : 0)) {
+            switchMode(["auto", "light", "dark"][$0])
+        }
+        .background(TouchRecorder(touches: touches))
+    }
+
+    private func switchMode(_ new: String) {
+        guard !running, pending == nil, new != mode else { return }
+        // Auto follows the system's mode (the screen's traits, which the app's own override does not touch).
+        let dark = new == "auto" ? UIScreen.main.traitCollection.userInterfaceStyle == .dark : new == "dark"
+        guard (scheme == .dark) != dark, let window = WindowWave.window, !UIAccessibility.isReduceMotionEnabled else {
+            mode = new
+            return
+        }
+        pending = new
+        let source = touches.point ?? CGPoint(x: window.bounds.midX, y: window.bounds.midY)
+        let oldScheme = scheme
+        let theme = themeID
+        // Once the switch has played its little slide to the new choice.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            ModeWave.count += 1
+            let id = ModeWave.count
+            let frame = window.bounds
+            let wave = ModeWave(id: id, oldScheme: oldScheme, newScheme: dark ? .dark : .light, oldTheme: theme,
+                                newTheme: theme, source: source, minX: frame.minX, minY: frame.minY,
+                                width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
+            running = true
+            WindowWave.start(for: wave)
+            ModeWave.running.append(wave)
+            mode = new
+            pending = nil
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(wave.lifetime * 1_000_000_000))
+                ModeWave.running.removeAll { $0.id == id }
+                running = false
             }
         }
     }

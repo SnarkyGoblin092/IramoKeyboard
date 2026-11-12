@@ -256,7 +256,7 @@ struct Keycap<Legend: View>: View {
         // upper half, and the legend white.
         ZStack {
             shape.fill(color)
-            shape.fill(Color.black.opacity(min(0.8, dim + (dark ? 0.34 : 0.26))))
+            shape.fill(Color.black.opacity(min(0.8, dim + (dark ? 0.34 : 0.17))))
             shape.fill(color).padding(.bottom, lip)
             shape.fill(Color.black.opacity(dim)).padding(.bottom, lip)
             shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.12 : 0.22), Color.white.opacity(0)],
@@ -264,7 +264,7 @@ struct Keycap<Legend: View>: View {
                 .padding(.bottom, lip)
             legend()
                 .foregroundColor(.white)
-                .shadow(color: Color.black.opacity(0.28), radius: 0.6, x: 0, y: 0.6)
+                .shadow(color: Color.black.opacity(dark ? 0.28 : 0.4), radius: 0.7, x: 0, y: 0.7)
                 .frame(width: size, height: size - lip)
                 .padding(.bottom, lip)
         }
@@ -277,14 +277,14 @@ struct Keycap<Legend: View>: View {
 /// most a white legend reads well on.)
 private func keycapDimming(of color: Color, dark: Bool) -> Double {
     // The accent is the app's tint, which a UIColor made from it would not be: taken as a colour of middling depth.
-    if color == Color.accentColor { return dark ? 0.24 : 0.08 }
+    if color == Color.accentColor { return dark ? 0.24 : 0.03 }
     let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
     var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
     guard UIColor(color).resolvedColor(with: traits).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
-        return dark ? 0.24 : 0.08
+        return dark ? 0.24 : 0.03
     }
     let lightness = 0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
-    let most = dark ? 0.32 : 0.5
+    let most = dark ? 0.32 : 0.62
     guard lightness > most else { return 0 }
     return min(0.62, 1 - most / lightness)
 }

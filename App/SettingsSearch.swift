@@ -393,6 +393,7 @@ struct SearchTab: View {
             }
             .glassScreen()
             .modifier(TabSwipeable())
+            .tabBarClearance()
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(tr("Search"))
             .navigationBarTitleDisplayMode(.large)

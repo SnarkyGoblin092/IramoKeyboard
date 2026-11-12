@@ -34,12 +34,36 @@ struct GlassBackdrop: View {
 }
 
 /// Rows of large, faint keys, staggered like a keyboard's and tilted a little, fading out down the screen.
-private struct Keybed: View {
-    let accent: Color
+private struct Keybed: View, Animatable {
+    // The accent as numbers, so a new accent is eased in by the same animation as the wash above the keys (a Canvas
+    // would otherwise take the new colour at once).
+    var red: Double
+    var green: Double
+    var blue: Double
     let dark: Bool
 
+    init(accent: Color, dark: Bool) {
+        let resolved = UIColor(accent).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+        self.red = Double(r)
+        self.green = Double(g)
+        self.blue = Double(b)
+        self.dark = dark
+    }
+
+    var animatableData: AnimatablePair<AnimatablePair<Double, Double>, Double> {
+        get { return AnimatablePair(AnimatablePair(red, green), blue) }
+        set {
+            red = newValue.first.first
+            green = newValue.first.second
+            blue = newValue.second
+        }
+    }
+
     var body: some View {
-        Canvas { context, size in
+        let accent = Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
+        return Canvas { context, size in
             guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return }
             let key: CGFloat = 60
             let pitch: CGFloat = key + 11
@@ -169,6 +193,11 @@ extension View {
     @ViewBuilder
     func roundedType() -> some View {
         if #available(iOS 16.1, *) { self.fontDesign(.rounded) } else { self }
+    }
+
+    /// Room at the bottom of a tab's list for the tab bar, so the last rows can be scrolled clear of it.
+    func tabBarClearance() -> some View {
+        return self.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 72) }
     }
 
     /// A screen of the app: its list or scroll view on the glass backdrop.

@@ -67,6 +67,10 @@ struct ContentView: View {
     @State private var keyboardUp = false
     /// How far the finger has pulled the pages sideways.
     @StateObject private var motion = PagerMotion()
+    /// A sideways drag is moving the pages (and for a moment after): the lists under it neither scroll nor take taps.
+    @State private var swiping = false
+    /// The search is being left for a setting it found: its words stay.
+    @State private var keepsQuery = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// How the pages slide from one tab to another.
@@ -86,6 +90,7 @@ struct ContentView: View {
             .background(GlassBackdrop())
             .safeAreaInset(edge: .bottom, spacing: 0) { bar }
             .environment(\.tabDrag, { event in drag(event) })
+            .environment(\.tabSwiping, swiping)
             .background(GeometryReader { geometry in
                 Color.clear
                     .onAppear { windowSize = geometry.size }
@@ -189,6 +194,8 @@ struct ContentView: View {
             DispatchQueue.main.async { show(item) }
             return
         }
+        if tab == .search, item != .search, !keepsQuery { query = "" }
+        keepsQuery = false
         if reduceMotion {
             motion.drag = 0
             tab = item
@@ -209,10 +216,13 @@ struct ContentView: View {
         let towardsNext: (CGFloat) -> Bool = { dx in (dx < 0) != AppLanguage.isRightToLeft }
         switch event {
         case .moved(let dx):
+            if !swiping { swiping = true }
             let beside = index + (towardsNext(dx) ? 1 : -1)
             // Past the last tab there is nothing to pull in: the pages resist.
             motion.drag = order.indices.contains(beside) ? dx : dx * 0.22
         case .ended(let dx, let speed):
+            // The lists wake again once the pages have settled.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { swiping = false }
             let beside = index + (towardsNext(dx) ? 1 : -1)
             let far = abs(dx) > max(60, windowSize.width * 0.3) || (abs(speed) > 550 && abs(dx) > 16)
             if far, order.indices.contains(beside) {
@@ -231,8 +241,8 @@ struct ContentView: View {
         if let anchor = entry.anchor {
             SearchFocus.shared.request = SearchFocus.Request(screen: entry.screen, anchor: anchor)
         }
-        query = ""
-        guard let screen = entry.screen else { return }
+        keepsQuery = true
+        guard let screen = entry.screen else { keepsQuery = false; return }
         let target = AppTab.owning(screen)
         if case .tab = screen {
             paths[target] = []
@@ -282,6 +292,10 @@ enum TabDrag {
     case ended(CGFloat, speed: CGFloat)
 }
 
+private struct TabSwipingKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 private struct TabDragKey: EnvironmentKey {
     static let defaultValue: (TabDrag) -> Void = { _ in }
 }
@@ -292,6 +306,12 @@ extension EnvironmentValues {
     var tabIsFront: Bool {
         get { return self[TabIsFrontKey.self] }
         set { self[TabIsFrontKey.self] = newValue }
+    }
+
+    /// A sideways drag is moving the pages: the lists on them hold still and take no taps.
+    var tabSwiping: Bool {
+        get { return self[TabSwipingKey.self] }
+        set { self[TabSwipingKey.self] = newValue }
     }
 
     /// Takes a sideways drag across a tab's list (set by ContentView, which moves the pages with it).
@@ -306,11 +326,18 @@ extension EnvironmentValues {
 /// keyboard pinned at the top.
 struct TabSwipeable: ViewModifier {
     @Environment(\.tabDrag) private var tabDrag
+    @Environment(\.tabSwiping) private var swiping
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.gesture(TabSwipePan(report: tabDrag))
+            content
+                .scrollDisabled(swiping)
+                // A sheet of nothing over the list while it is swiped: no button under the finger can take the tap.
+                .overlay {
+                    if swiping { Color.clear.contentShape(Rectangle()).onTapGesture {} }
+                }
+                .gesture(TabSwipePan(report: tabDrag))
         } else {
             content
         }
@@ -330,6 +357,7 @@ private struct TabSwipePan: UIGestureRecognizerRepresentable {
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
         let pan = UIPanGestureRecognizer()
         pan.delegate = context.coordinator
+        pan.cancelsTouchesInView = true
         return pan
     }
 
@@ -372,6 +400,7 @@ private struct GlassTabBar: View {
     private let areas: [AppTab] = [.typing, .look, .touch, .more]
 
     var body: some View {
+        container {
         HStack(spacing: 10) {
             HStack(spacing: 0) {
                 ForEach(areas, id: \.self) { item in
@@ -413,6 +442,7 @@ private struct GlassTabBar: View {
             .accessibilityLabel(AppTab.search.title)
             .accessibilityAddTraits(selected == .search ? .isSelected : [])
         }
+        }
         .frame(maxWidth: 560)
         .padding(.horizontal, 18)
         .padding(.top, 6)
@@ -420,13 +450,41 @@ private struct GlassTabBar: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.82), value: selected)
     }
 
-    /// The pill behind the tab shown: one pill, which slides from tab to tab.
+    /// The bar's glass shares one container, so the selection's lens can flow from tab to tab through it.
+    @ViewBuilder private func container<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 12) { content() }
+        } else {
+            content()
+        }
+        #else
+        content()
+        #endif
+    }
+
+    /// The selection behind the tab shown: a lens of Liquid Glass that answers the finger and slides (stretching and
+    /// melting, as glass does) from tab to tab; a plain pill before iOS 26.
     @ViewBuilder private func marker(for item: AppTab) -> some View {
         if item == selected {
-            Capsule()
-                .fill(Color.primary.opacity(0.1))
-                .matchedGeometryEffect(id: "marker", in: pill)
+            #if compiler(>=6.2)
+            if #available(iOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .glassEffectID("marker", in: pill)
+            } else {
+                pillMarker
+            }
+            #else
+            pillMarker
+            #endif
         }
+    }
+
+    private var pillMarker: some View {
+        Capsule()
+            .fill(Color.primary.opacity(0.1))
+            .matchedGeometryEffect(id: "marker", in: pill)
     }
 }
 
@@ -446,6 +504,7 @@ struct TabColumn: View {
             NavigationStack(path: $path) {
                 TabRoot(tab: tab)
                     .modifier(TabSwipeable())
+                    .tabBarClearance()
                     .navigationDestination(for: Screen.self) { $0.scopedView }
             }
             .environment(\.openScreen, { screen in path.append(screen) })
@@ -454,7 +513,7 @@ struct TabColumn: View {
 
     private var landscape: some View {
         HStack(spacing: 0) {
-            NavigationStack { TabRoot(tab: tab).modifier(TabSwipeable()) }
+            NavigationStack { TabRoot(tab: tab).modifier(TabSwipeable()).tabBarClearance() }
                 .frame(width: min(400, max(300, windowWidth * 0.38)))
                 .environment(\.openScreen, { screen in path = [screen] })
                 .environment(\.shownScreen, path.first)
