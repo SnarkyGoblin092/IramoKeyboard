@@ -14,32 +14,58 @@ import UIKit
 struct TypingTab: View {
     var body: some View {
         GlassList(eager: true) {
-            StageSection().glassRows()
+            TryFieldSection().glassRows()
             KeyboardSection().glassRows()
             CorrectionsSection().glassRows()
         }
         .glassScreen()
         .scrollDismissesKeyboard(.interactively)
         .environment(\.searchScope, AppTab.typing.scope)
-        .navigationTitle(tr("Iramo"))
+        .navigationTitle(AppTab.typing.title)
         .navigationBarTitleDisplayMode(.inline)
         .quietNavBar()
     }
 }
 
-/// The app's mark, whether the keyboard is ready, and a field to type in: the keyboard is one tap away from the
-/// moment the app opens. While something still needs setting up, what it is and the way to Settings.
-private struct StageSection: View {
-    @State private var status = KeyboardStatus.read()
+/// A field to type in: the keyboard is one tap away from the moment the app opens.
+private struct TryFieldSection: View {
     @State private var text = ""
+
+    var body: some View {
+        Section {
+            tryField
+                .searchAnchor("main.test")
+        }
+    }
+
+    private var tryField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "character.cursor.ibeam")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            TextField(tr("Tap here and type to try it"), text: $text, axis: .vertical)
+                .lineLimit(1...4)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tr("Clear"))
+            }
+        }
+    }
+}
+
+/// The app's mark and slogan on a glass card, whether the keyboard is ready, and while something still needs
+/// setting up, what it is and the way to Settings.
+private struct BrandSection: View {
+    @State private var status = KeyboardStatus.read()
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Section {
             brand
-            tryField
-                .searchAnchor("main.test")
             if !status.isReady {
                 setup
             }
@@ -61,8 +87,10 @@ private struct StageSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
+                Text(tr("Iramo")).font(.title3.weight(.bold))
                 Text(tr("Your words, your keyboard"))
-                    .font(.headline)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if status.isReady {
                     StatusChip(text: tr("Ready to type"), symbol: "checkmark.circle.fill", color: .green)
@@ -82,24 +110,6 @@ private struct StageSection: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
-    }
-
-    private var tryField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "character.cursor.ibeam")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-            TextField(tr("Tap here and type to try it"), text: $text, axis: .vertical)
-                .lineLimit(1...4)
-            if !text.isEmpty {
-                Button { text = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tr("Clear"))
-            }
-        }
     }
 
     /// What is still to do, and the way there.
@@ -483,6 +493,7 @@ private struct HoldsSection: View {
 struct MoreTab: View {
     var body: some View {
         GlassList(eager: true) {
+            BrandSection().glassRows()
             StatsSection().glassRows()
             AppLanguageSection().glassRows()
             DataSection().glassRows()
@@ -634,12 +645,7 @@ private struct DataSection: View {
 private struct AboutSection: View {
     @AppStorage(SettingKey.welcomeSeen, store: SharedStore.defaults) private var welcomeSeen = false
 
-    private var version: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? ""
-        let build = info?["CFBundleVersion"] as? String ?? ""
-        return build.isEmpty ? short : "\(short) (\(build))"
-    }
+    private let version = "v0.1-TestFlight"
 
     var body: some View {
         Section {
