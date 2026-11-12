@@ -192,6 +192,7 @@ struct ContentView: View {
         }
         // What a tab that is not shown would do for nothing (a live keyboard, a looping picture) rests until it is.
         .environment(\.tabIsFront, item == tab)
+        .background(TabSlideInstaller())
     }
 
     /// A setting picked in the search: its tab comes to the front with its screen open, and its row lights up.
@@ -451,5 +452,95 @@ private enum SnapshotCover {
     static func hide() {
         cover?.removeFromSuperview()
         cover = nil
+    }
+}
+
+// MARK: - Sliding between the tabs
+
+/// Puts the slide on the system tab view's own tab controller, so the pages slide from one tab to the next while the
+/// tab bar stays the system's. Found from inside a tab, through the responder chain.
+private struct TabSlideInstaller: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = InstallerView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {}
+
+    private final class InstallerView: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            DispatchQueue.main.async { [weak self] in
+                var responder: UIResponder? = self
+                while let next = responder?.next {
+                    if let controller = next as? UITabBarController {
+                        TabSlide.install(on: controller)
+                        return
+                    }
+                    responder = next
+                }
+            }
+        }
+    }
+}
+
+/// The tab controller's delegate: the slide, and everything else passed on to the delegate the system had set.
+private final class TabSlide: NSObject, UITabBarControllerDelegate, UIViewControllerAnimatedTransitioning {
+    private static var current: TabSlide?
+    private weak var original: UITabBarControllerDelegate?
+
+    static func install(on controller: UITabBarController) {
+        if controller.delegate is TabSlide { return }
+        let slide = TabSlide()
+        slide.original = controller.delegate
+        current = slide
+        controller.delegate = slide
+    }
+
+    override func responds(to selector: Selector!) -> Bool {
+        return super.responds(to: selector) || (original?.responds(to: selector) ?? false)
+    }
+
+    override func forwardingTarget(for selector: Selector!) -> Any? {
+        if let original = original, original.responds(to: selector) { return original }
+        return super.forwardingTarget(for: selector)
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController,
+                          animationControllerForTransitionFrom fromVC: UIViewController,
+                          to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        return UIAccessibility.isReduceMotionEnabled ? nil : self
+    }
+
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        return 0.38
+    }
+
+    func animateTransition(using context: UIViewControllerContextTransitioning) {
+        guard let from = context.viewController(forKey: .from), let to = context.viewController(forKey: .to) else {
+            context.completeTransition(false)
+            return
+        }
+        let controller = from.tabBarController ?? to.tabBarController
+        let list = controller?.viewControllers ?? []
+        let fromIndex = list.firstIndex(of: from) ?? 0
+        let toIndex = list.firstIndex(of: to) ?? 0
+        let rightToLeft = context.containerView.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let forward: CGFloat = (toIndex > fromIndex) != rightToLeft ? 1 : -1
+        let width = context.containerView.bounds.width
+        let frame = context.finalFrame(for: to)
+        context.containerView.addSubview(to.view)
+        to.view.frame = frame
+        to.view.transform = CGAffineTransform(translationX: forward * width, y: 0)
+        UIView.animate(withDuration: transitionDuration(using: context), delay: 0,
+                       usingSpringWithDamping: 0.92, initialSpringVelocity: 0, options: [.curveEaseInOut]) {
+            from.view.transform = CGAffineTransform(translationX: -forward * width, y: 0)
+            to.view.transform = .identity
+        } completion: { _ in
+            from.view.transform = .identity
+            context.completeTransition(!context.transitionWasCancelled)
+        }
     }
 }
