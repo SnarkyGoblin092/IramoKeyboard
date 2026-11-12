@@ -248,22 +248,45 @@ struct Keycap<Legend: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
         let lip: CGFloat = max(2, size * 0.09)
+        let dark = scheme == .dark
+        // The white legend has to stand out on the cap. The system's colours are light in dark mode (and yellow,
+        // mint and cyan in any mode), so a cap that would be too light for it is deepened first.
+        let dim = keycapDimming(of: color, dark: dark)
         // In full colour: the skirt is the colour darkened, the top the colour itself with a little light on its
         // upper half, and the legend white.
         ZStack {
             shape.fill(color)
-            shape.fill(Color.black.opacity(scheme == .dark ? 0.38 : 0.26))
+            shape.fill(Color.black.opacity(min(0.8, dim + (dark ? 0.34 : 0.26))))
             shape.fill(color).padding(.bottom, lip)
-            shape.fill(LinearGradient(colors: [Color.white.opacity(0.24), Color.white.opacity(0)],
+            shape.fill(Color.black.opacity(dim)).padding(.bottom, lip)
+            shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.12 : 0.22), Color.white.opacity(0)],
                                       startPoint: .top, endPoint: .bottom))
                 .padding(.bottom, lip)
             legend()
                 .foregroundColor(.white)
+                .shadow(color: Color.black.opacity(0.28), radius: 0.6, x: 0, y: 0.6)
                 .frame(width: size, height: size - lip)
                 .padding(.bottom, lip)
         }
         .frame(width: size, height: size)
     }
+}
+
+/// How much black goes over a keycap's colour so that white stands out on it: none for a colour that is deep
+/// enough, more the lighter the colour is. (Black at this share over the colour brings its lightness down to the
+/// most a white legend reads well on.)
+private func keycapDimming(of color: Color, dark: Bool) -> Double {
+    // The accent is the app's tint, which a UIColor made from it would not be: taken as a colour of middling depth.
+    if color == Color.accentColor { return dark ? 0.24 : 0.08 }
+    let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
+    var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+    guard UIColor(color).resolvedColor(with: traits).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+        return dark ? 0.24 : 0.08
+    }
+    let lightness = 0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
+    let most = dark ? 0.32 : 0.5
+    guard lightness > most else { return 0 }
+    return min(0.62, 1 - most / lightness)
 }
 
 /// A row that opens a screen or shows a value: its keycap, its title (and a line under it), and what it is set to.
@@ -376,6 +399,16 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
+extension View {
+    /// A row button's touch area: the row's whole width whatever the label's own (a short label used to take taps
+    /// only on its words), and the row's padding round it, so a tap anywhere on the row counts.
+    func rowTapArea() -> some View {
+        return self
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle().inset(by: -10))
+    }
+}
+
 /// Every plain button and row of the glass lists: while held, the row darkens a little inside its card and leans
 /// in, as a row of the system's own glass lists does. (A second piece of glass under the finger, inside a card
 /// that is glass already, is not how the system's material is used.)
@@ -385,6 +418,7 @@ struct GlassPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed && isEnabled
         return configuration.label
+            .rowTapArea()
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color.primary.opacity(pressed ? 0.09 : 0))
@@ -455,6 +489,8 @@ struct ActionButtonStyle: ButtonStyle {
             .frame(maxWidth: small ? nil : .infinity)
             .padding(.horizontal, small ? 14 : 16)
             .padding(.vertical, small ? 6 : 11)
+            // The whole capsule takes the tap, not only the words on it (glass alone does not take touches).
+            .contentShape(Capsule())
             .glassShape(Capsule(), tint: color.opacity(configuration.isPressed ? 0.95 : 0.8), interactive: true)
             .overlay(GlassSheen(pressed: configuration.isPressed, shape: Capsule()).allowsHitTesting(false))
             .scaleEffect(configuration.isPressed ? 0.95 : 1)

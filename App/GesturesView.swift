@@ -278,6 +278,8 @@ private struct TrailPreview: View {
     let style: String
     let color: Color
     let length: Double
+    /// On the tab that is shown: the swipe is only drawn again and again there.
+    @Environment(\.tabIsFront) private var isFront
 
     /// The word the finger glides through ("hello" on a keyboard row), as points in a unit square.
     private static let path: [CGPoint] = [
@@ -286,7 +288,7 @@ private struct TrailPreview: View {
     ]
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.animation(minimumInterval: nil, paused: !isFront)) { timeline in
             Canvas { context, size in
                 let cycle = 2.4
                 let time = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)

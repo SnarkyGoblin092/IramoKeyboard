@@ -22,6 +22,9 @@ struct LiveKeyboard: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     @Environment(\.colorScheme) private var appScheme
     @Environment(\.modeWaves) private var waves
+    /// On the tab that is shown. Every tab stays built, so a keyboard on a tab that is not shown would still read
+    /// every setting and build its keys at each change: there it is not built at all, only its backdrop is drawn.
+    @Environment(\.tabIsFront) private var isFront
 
     /// The mode the keys are drawn in, for the backdrop behind them.
     private var scheme: ColorScheme {
@@ -36,7 +39,7 @@ struct LiveKeyboard: View {
                                                     barOnly: barOnly)
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
-                LiveKeyboardHost(effects: effects, barOnly: barOnly)
+                LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(
                         Group {
@@ -61,6 +64,21 @@ struct LiveKeyboard: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
+    }
+}
+
+/// The keyboard itself while its tab is shown, and only its room otherwise.
+private struct LiveKeyboardStage: View {
+    let effects: EffectsConfig?
+    let barOnly: Bool
+    let live: Bool
+
+    var body: some View {
+        if live {
+            LiveKeyboardHost(effects: effects, barOnly: barOnly)
+        } else {
+            Color.clear
+        }
     }
 }
 

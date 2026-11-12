@@ -221,7 +221,7 @@ struct GlassSearchField: View {
 /// the finger while it slides).
 struct NoPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        configuration.label.rowTapArea()
     }
 }
 

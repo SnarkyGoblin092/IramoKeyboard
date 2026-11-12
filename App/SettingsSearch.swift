@@ -374,8 +374,8 @@ struct SettingsSitemap: View {
     }
 }
 
-/// The search tab: the system's search field (on iOS 26 and later the tab itself opens into it, in the glass bar)
-/// over the results, or over the map of the settings while nothing is typed.
+/// The search tab: the system's search field, under the title, over the results (or over the map of the settings
+/// while nothing is typed). The field stays at the top: the bottom of the screen is the tab bar's.
 struct SearchTab: View {
     @Binding var query: String
     let open: (SearchEntry) -> Void
@@ -396,7 +396,8 @@ struct SearchTab: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(tr("Search"))
             .navigationBarTitleDisplayMode(.large)
-            .searchable(text: $query, prompt: Text(tr("Search settings")))
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: Text(tr("Search settings")))
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
         }

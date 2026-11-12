@@ -44,8 +44,10 @@ enum AppTab: String, Hashable, CaseIterable {
     }
 }
 
-/// The app: a tab for each area and one for the search, under the system's Liquid Glass tab bar. Every tab keeps
-/// its own place (the screens opened on it), so going to another tab and back loses nothing.
+/// The app: its areas side by side as the pages of a pager, under a glass tab bar. A tab chosen in the bar slides in
+/// with the one it replaces sliding out, and a sideways drag across a tab's list pulls the tab beside it in under the
+/// finger. (The system's tab bar can do neither: it swaps its tabs in place.) Every tab stays built, so it keeps its
+/// own place: the screens opened on it, and how far its list is scrolled.
 struct ContentView: View {
     @State private var tab = AppTab.typing
     /// The screens open on each tab.
@@ -59,10 +61,16 @@ struct ContentView: View {
 
     /// The window's full size (the keyboard showing doesn't change it): wide enough, a tab shows two columns.
     @State private var windowSize: CGSize = .zero
-    /// How far the tab just chosen still has to slide in: 1 from the trailing side, -1 from the leading side, 0 at
-    /// rest.
-    @State private var slide: CGFloat = 0
+    /// The tabs built so far: the first one at once, the others a moment after the app has opened.
+    @State private var mounted: Set<AppTab> = [.typing]
+    /// The system keyboard is up (the try-it field, the search): the tab bar makes way for it.
+    @State private var keyboardUp = false
+    /// How far the finger has pulled the pages sideways.
+    @StateObject private var motion = PagerMotion()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// How the pages slide from one tab to another.
+    private static let slide = Animation.spring(response: 0.42, dampingFraction: 0.9)
 
     /// Landscape on an iPhone or iPad: a tab's list on the left and the open screen beside it.
     private static func isWide(_ size: CGSize) -> Bool {
@@ -74,15 +82,21 @@ struct ContentView: View {
     }
 
     var body: some View {
-        tabs
-            // A tab chosen (in the bar, by a swipe or by the search) slides in from the side it is on.
-            .onChange(of: tab) { [tab] chosen in slideIn(from: tab, to: chosen) }
-            .environment(\.tabSwipe, { step in swipe(step) })
+        pager
+            .background(GlassBackdrop())
+            .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+            .environment(\.tabDrag, { event in drag(event) })
             .background(GeometryReader { geometry in
                 Color.clear
                     .onAppear { windowSize = geometry.size }
                     .onChange(of: geometry.size) { windowSize = $0 }
             }.ignoresSafeArea())
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                keyboardUp = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardUp = false
+            }
             .toggleStyle(GlassSwitchStyle())   // every switch in the app is the system's glass switch, in the accent
             // Everything is built again in the new language when it changes (tr reads it as the views are drawn);
             // the tab and the screens open on it are kept, so the user stays where the language was picked.
@@ -104,71 +118,110 @@ struct ContentView: View {
                 Feedback.prepare()
                 // The enabled languages' data is unpacked now, so the keyboard finds it ready.
                 LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
+                // The other tabs are built once the first one is on screen, so the app opens as fast as before.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { mounted = Set(AppTab.allCases) }
             }
     }
 
-    private func column(_ tab: AppTab) -> some View {
-        return TabColumn(tab: tab, path: path(tab), wide: ContentView.isWide(windowSize), windowWidth: windowSize.width)
-            .modifier(TabSlide(amount: slide))
-    }
+    // MARK: The pages
 
-    private var search: some View {
-        return SearchTab(query: $query) { entry in open(entry) }
-            .modifier(TabSlide(amount: slide))
-    }
-
-    /// The tab beside the one shown (`step` 1: the next one, -1: the one before), for a swipe across a tab's list.
-    private func swipe(_ step: Int) {
+    /// Every tab built so far, each a whole screen: the one shown in place, the others a screen's width to either
+    /// side for each place they are away (PagerPlace).
+    private var pager: some View {
         let order = AppTab.allCases
-        guard let index = order.firstIndex(of: tab) else { return }
-        // The tabs run right to left where the app does.
-        let next = index + (AppLanguage.isRightToLeft ? -step : step)
-        guard order.indices.contains(next) else { return }
-        Feedback.tick()
-        tab = order[next]
-    }
-
-    /// Starts the new tab a little to the side it is on and lets it slide into place.
-    private func slideIn(from old: AppTab, to chosen: AppTab) {
-        let order = AppTab.allCases
-        guard !reduceMotion, let from = order.firstIndex(of: old), let to = order.firstIndex(of: chosen),
-              from != to else { return }
-        let forward = (to > from) != AppLanguage.isRightToLeft
-        slide = forward ? 1 : -1
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { slide = 0 }
+        let current = order.firstIndex(of: tab) ?? 0
+        let wide = ContentView.isWide(windowSize)
+        return ZStack {
+            ForEach(order, id: \.self) { item in
+                if mounted.contains(item) {
+                    page(item, wide: wide)
+                        // What a tab that is not shown would do for nothing (a live keyboard, a looping picture)
+                        // rests until it is.
+                        .environment(\.tabIsFront, item == tab)
+                        .modifier(PagerPlace(motion: motion, position: (order.firstIndex(of: item) ?? 0) - current,
+                                             width: windowSize.width, mirrored: AppLanguage.isRightToLeft))
+                        .accessibilityHidden(item != tab)
+                }
+            }
         }
     }
 
-    /// The tab bar. From iOS 18 the tabs are declared as `Tab`s, so the search is the system's search tab (on
-    /// iOS 26 and later it stands apart from the others in the glass bar and opens into the search field).
-    @ViewBuilder private var tabs: some View {
-        if #available(iOS 18.0, *) {
-            TabView(selection: $tab) {
-                Tab(AppTab.typing.title, systemImage: AppTab.typing.symbol, value: AppTab.typing) { column(.typing) }
-                Tab(AppTab.look.title, systemImage: AppTab.look.symbol, value: AppTab.look) { column(.look) }
-                Tab(AppTab.touch.title, systemImage: AppTab.touch.symbol, value: AppTab.touch) { column(.touch) }
-                Tab(AppTab.more.title, systemImage: AppTab.more.symbol, value: AppTab.more) { column(.more) }
-                Tab(value: AppTab.search, role: .search) { search }
-            }
-            .modifier(TabBarBehaviour())
+    @ViewBuilder private func page(_ item: AppTab, wide: Bool) -> some View {
+        if item == .search {
+            SearchTab(query: $query) { entry in open(entry) }
         } else {
-            TabView(selection: $tab) {
-                column(.typing)
-                    .tabItem { Label(AppTab.typing.title, systemImage: AppTab.typing.symbol) }
-                    .tag(AppTab.typing)
-                column(.look)
-                    .tabItem { Label(AppTab.look.title, systemImage: AppTab.look.symbol) }
-                    .tag(AppTab.look)
-                column(.touch)
-                    .tabItem { Label(AppTab.touch.title, systemImage: AppTab.touch.symbol) }
-                    .tag(AppTab.touch)
-                column(.more)
-                    .tabItem { Label(AppTab.more.title, systemImage: AppTab.more.symbol) }
-                    .tag(AppTab.more)
-                search
-                    .tabItem { Label(AppTab.search.title, systemImage: AppTab.search.symbol) }
-                    .tag(AppTab.search)
+            TabColumn(tab: item, path: path(item), wide: wide, windowWidth: windowSize.width)
+        }
+    }
+
+    /// The tab bar. It makes way for a screen opened on a tab (upright, where the screen takes the whole width) and
+    /// for the system keyboard.
+    private var bar: some View {
+        let shown = !keyboardUp && (ContentView.isWide(windowSize) || (paths[tab] ?? []).isEmpty)
+        return ZStack {
+            if shown {
+                GlassTabBar(selected: tab) { item in select(item) }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.spring(response: 0.34, dampingFraction: 0.9), value: shown)
+    }
+
+    // MARK: Moving between the tabs
+
+    /// A tab tapped in the bar. The one already shown goes back to its own list.
+    private func select(_ item: AppTab) {
+        guard item != tab else {
+            if !(paths[item] ?? []).isEmpty { paths[item] = [] }
+            return
+        }
+        Feedback.tick()
+        show(item)
+    }
+
+    /// Brings a tab to the front, the pages sliding to it.
+    private func show(_ item: AppTab) {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        guard mounted.contains(item) else {
+            // Not built yet (chosen in the app's first half second): built first, where it stands, then slid to.
+            mounted.insert(item)
+            DispatchQueue.main.async { show(item) }
+            return
+        }
+        if reduceMotion {
+            motion.drag = 0
+            tab = item
+        } else {
+            withAnimation(ContentView.slide) {
+                motion.drag = 0
+                tab = item
+            }
+        }
+    }
+
+    /// A sideways drag across a tab's list: the pages follow the finger, and on letting go settle on the tab beside
+    /// it (pulled far or fast enough) or back where they were.
+    private func drag(_ event: TabDrag) {
+        let order = AppTab.allCases
+        guard let index = order.firstIndex(of: tab) else { return }
+        // The tabs run right to left where the app does.
+        let towardsNext: (CGFloat) -> Bool = { dx in (dx < 0) != AppLanguage.isRightToLeft }
+        switch event {
+        case .moved(let dx):
+            let beside = index + (towardsNext(dx) ? 1 : -1)
+            // Past the last tab there is nothing to pull in: the pages resist.
+            motion.drag = order.indices.contains(beside) ? dx : dx * 0.22
+        case .ended(let dx, let speed):
+            let beside = index + (towardsNext(dx) ? 1 : -1)
+            let far = abs(dx) > max(60, windowSize.width * 0.3) || (abs(speed) > 550 && abs(dx) > 16)
+            if far, order.indices.contains(beside) {
+                Feedback.tick()
+                show(order[beside])
+            } else if reduceMotion {
+                motion.drag = 0
+            } else {
+                withAnimation(ContentView.slide) { motion.drag = 0 }
             }
         }
     }
@@ -179,7 +232,6 @@ struct ContentView: View {
             SearchFocus.shared.request = SearchFocus.Request(screen: entry.screen, anchor: anchor)
         }
         query = ""
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         guard let screen = entry.screen else { return }
         let target = AppTab.owning(screen)
         if case .tab = screen {
@@ -191,54 +243,85 @@ struct ContentView: View {
         } else {
             paths[target] = [screen]
         }
-        tab = target
+        show(target)
     }
 }
 
-/// A tab on its way in: moved to the side it comes from, by `amount` (0: in place). It is only moved, not faded:
-/// a see-through tab would have all its glass drawn off screen on every frame of the slide.
-private struct TabSlide: ViewModifier {
-    let amount: CGFloat
+// MARK: - The pager
+
+/// How far the finger has pulled the pages. It is kept apart from ContentView's own state so that a drag redraws
+/// only where the pages stand (PagerPlace), not the pages themselves, on every frame.
+final class PagerMotion: ObservableObject {
+    @Published var drag: CGFloat = 0
+}
+
+/// Where a page stands: `position` screens to the side of the one shown (0: it is the one shown), moved by the drag.
+/// Every page has the whole screen as its frame and is only moved from there, so each keeps the screen's safe areas
+/// (a page laid out off screen would lose them until it came in).
+private struct PagerPlace: ViewModifier {
+    @ObservedObject var motion: PagerMotion
+    let position: Int
+    let width: CGFloat
+    let mirrored: Bool
 
     func body(content: Content) -> some View {
-        content.offset(x: amount * 56)
+        content
+            .offset(x: CGFloat(position) * width * (mirrored ? -1 : 1) + motion.drag)
+            // Before the window's width is known the pages would lie on top of one another.
+            .opacity(width > 0 || position == 0 ? 1 : 0)
     }
 }
 
-private struct TabSwipeKey: EnvironmentKey {
-    static let defaultValue: (Int) -> Void = { _ in }
+private struct TabIsFrontKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+/// A sideways drag across a tab's list, as it goes and as it ends (how far, and how fast it was going).
+enum TabDrag {
+    case moved(CGFloat)
+    case ended(CGFloat, speed: CGFloat)
+}
+
+private struct TabDragKey: EnvironmentKey {
+    static let defaultValue: (TabDrag) -> Void = { _ in }
 }
 
 extension EnvironmentValues {
-    /// Moves to the tab beside the one shown (1: the next, -1: the one before). Set by ContentView.
-    var tabSwipe: (Int) -> Void {
-        get { return self[TabSwipeKey.self] }
-        set { self[TabSwipeKey.self] = newValue }
+    /// Whether the view is on the tab that is shown. Every tab stays built beside the others, so what would run for
+    /// nothing on a tab that is not shown (a live keyboard, a looping picture) reads this and rests.
+    var tabIsFront: Bool {
+        get { return self[TabIsFrontKey.self] }
+        set { self[TabIsFrontKey.self] = newValue }
+    }
+
+    /// Takes a sideways drag across a tab's list (set by ContentView, which moves the pages with it).
+    var tabDrag: (TabDrag) -> Void {
+        get { return self[TabDragKey.self] }
+        set { self[TabDragKey.self] = newValue }
     }
 }
 
-/// A sideways swipe across a tab's own list moves to the tab beside it (iOS 18 and later). Only the tabs' lists
-/// take it: on the screens opened from them a sideways drag belongs to the sliders, the rows that swipe to delete
-/// and the keyboard pinned at the top.
+/// A sideways drag across a tab's own list pulls the tab beside it in (iOS 18 and later). Only the tabs' lists take
+/// it: on the screens opened from them a sideways drag belongs to the sliders, the rows that swipe to delete and the
+/// keyboard pinned at the top.
 struct TabSwipeable: ViewModifier {
-    @Environment(\.tabSwipe) private var tabSwipe
+    @Environment(\.tabDrag) private var tabDrag
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.gesture(TabSwipePan(swiped: tabSwipe))
+            content.gesture(TabSwipePan(report: tabDrag))
         } else {
             content
         }
     }
 }
 
-/// A pan that begins only when the drag starts out sideways, leaving vertical drags to the list, and reports a swipe
-/// when it ends far or fast enough. It runs alongside the list's own pan.
+/// A pan that begins only when the drag starts out sideways, leaving vertical drags to the list, and reports how far
+/// it has gone as it goes. It runs alongside the list's own pan.
 @available(iOS 18.0, *)
 private struct TabSwipePan: UIGestureRecognizerRepresentable {
-    /// 1: swiped towards the leading edge (the next tab); -1: towards the trailing edge (the one before).
-    let swiped: (Int) -> Void
+    let report: (TabDrag) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
         return Coordinator()
@@ -253,17 +336,20 @@ private struct TabSwipePan: UIGestureRecognizerRepresentable {
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {}
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        guard recognizer.state == .ended else { return }
-        let moved = recognizer.translation(in: recognizer.view)
-        let speed = recognizer.velocity(in: recognizer.view)
-        guard abs(moved.x) > abs(moved.y) * 1.5, abs(moved.x) > 60 || abs(speed.x) > 500 else { return }
-        swiped(moved.x < 0 ? 1 : -1)
+        // Measured in the window: the page under the finger moves with it.
+        let moved = recognizer.translation(in: nil).x
+        switch recognizer.state {
+        case .began, .changed: report(.moved(moved))
+        case .ended: report(.ended(moved, speed: recognizer.velocity(in: nil).x))
+        case .cancelled, .failed: report(.ended(0, speed: 0))
+        default: break
+        }
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
-            let velocity = pan.velocity(in: pan.view)
+            let velocity = pan.velocity(in: nil)
             return abs(velocity.x) > abs(velocity.y) * 1.5
         }
 
@@ -274,25 +360,78 @@ private struct TabSwipePan: UIGestureRecognizerRepresentable {
     }
 }
 
-/// The glass tab bar draws back to a single button while a list is scrolled down, and comes back on the way up
-/// (iOS 26 and later).
-private struct TabBarBehaviour: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
-        } else {
-            content
+// MARK: - The tab bar
+
+/// The tab bar: the four areas in one capsule of Liquid Glass and the search in a round one beside it, as the
+/// system's bar has them. The tab shown is marked by a pill that slides to it and wears the accent.
+private struct GlassTabBar: View {
+    let selected: AppTab
+    let select: (AppTab) -> Void
+    @Namespace private var pill
+
+    private let areas: [AppTab] = [.typing, .look, .touch, .more]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 0) {
+                ForEach(areas, id: \.self) { item in
+                    Button {
+                        select(item)
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: item.symbol)
+                                .font(.system(size: 19, weight: .medium))
+                                .frame(height: 24)
+                            Text(item.title)
+                                .font(.system(size: 10, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                        .foregroundColor(item == selected ? .accentColor : .primary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(marker(for: item))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(item == selected ? .isSelected : [])
+                }
+            }
+            .padding(4)
+            .glassShape(Capsule())
+            Button {
+                select(.search)
+            } label: {
+                Image(systemName: AppTab.search.symbol)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(selected == .search ? .accentColor : .primary)
+                    .frame(width: 60, height: 60)
+                    .glassShape(Circle(), interactive: true)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(AppTab.search.title)
+            .accessibilityAddTraits(selected == .search ? .isSelected : [])
         }
-        #else
-        content
-        #endif
+        .frame(maxWidth: 560)
+        .padding(.horizontal, 18)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: selected)
+    }
+
+    /// The pill behind the tab shown: one pill, which slides from tab to tab.
+    @ViewBuilder private func marker(for item: AppTab) -> some View {
+        if item == selected {
+            Capsule()
+                .fill(Color.primary.opacity(0.1))
+                .matchedGeometryEffect(id: "marker", in: pill)
+        }
     }
 }
 
 /// One tab: its list, and the screens opened from it. Upright they are pushed over the list (and the tab bar makes
-/// way for them); in landscape the list stays as a column on the left and the screens open beside it. The same
+/// way for them: ContentView); in landscape the list stays as a column on the left and the screens open beside it. The same
 /// `path` either way, so turning the device keeps the place.
 struct TabColumn: View {
     let tab: AppTab
@@ -307,9 +446,7 @@ struct TabColumn: View {
             NavigationStack(path: $path) {
                 TabRoot(tab: tab)
                     .modifier(TabSwipeable())
-                    .navigationDestination(for: Screen.self) { screen in
-                        screen.scopedView.toolbar(.hidden, for: .tabBar)
-                    }
+                    .navigationDestination(for: Screen.self) { $0.scopedView }
             }
             .environment(\.openScreen, { screen in path.append(screen) })
         }
