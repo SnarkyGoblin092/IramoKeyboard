@@ -94,6 +94,8 @@ final class KeyboardViewController: UIInputViewController {
     private var selectingWithCursor = false
     /// The calculation or conversion the bar offers for the end of the text.
     private var shownSmart: (result: SmartResult, isCalculation: Bool)?
+    /// Every unit the measurement at the end of the text can be written in (all of them are in the bar).
+    private var shownConversions: [SmartResult] = []
     /// An emoji the bar offers for the words that end the text ("red heart"), and how many characters it replaces.
     private var shownEmojiPhrase: (emoji: String, length: Int)?
     /// The shortcut the bar offers, filled in ({date}...), with its cursor mark, and as it is shown.
@@ -1590,6 +1592,7 @@ final class KeyboardViewController: UIInputViewController {
     private func refreshSuggestions() {
         shownFix = nil
         shownSmart = nil
+        shownConversions = []
         shownEmojiPhrase = nil
         shownShortcut = nil
         // Selected text: the bar shows it, and offers what can be done with it.
@@ -1682,15 +1685,20 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
 
-        // A calculation ("12*3=") or a measurement ("5 km") at the end of the text: its result in the bar.
+        // A calculation ("12*3") or a measurement ("5 km") at the end of the text: its result in the bar.
         if !isPlainTextField || textDocumentProxy.keyboardType == .numbersAndPunctuation {
             let decimals = Prefs.resultDecimals
             if Prefs.inlineMath, let result = InlineCalculator.result(before: before, language: language, decimals: decimals) {
                 shownSmart = (result, true)
-            } else if Prefs.unitConversion,
-                      let result = UnitConverter.result(before: before, language: language, decimals: decimals, target: Prefs.unitTarget) {
-                shownSmart = (result, false)
+            } else if Prefs.unitConversion {
+                shownConversions = UnitConverter.results(before: before, language: language, decimals: decimals,
+                                                         target: Prefs.unitTarget)
             }
+        }
+        if !shownConversions.isEmpty {
+            // "30m": the bar is every way of writing it, scrolling along.
+            suggestionBar.update(shownConversions.map { Suggestion(text: $0.shown, kind: .result) }, showAll: true)
+            return
         }
         if let smart = shownSmart, smart.isCalculation {
             // "3+4=": the answer alone, in the middle.
@@ -2158,11 +2166,18 @@ extension KeyboardViewController: SuggestionBarDelegate {
         case .command:
             perform(command: suggestion.text)
         case .result:
-            guard let smart = shownSmart, smart.result.shown == suggestion.text else { return }
+            var picked: (result: SmartResult, isCalculation: Bool)?
+            if let smart = shownSmart, smart.result.shown == suggestion.text {
+                picked = smart
+            } else if let conversion = shownConversions.first(where: { $0.shown == suggestion.text }) {
+                picked = (conversion, false)
+            }
+            guard let smart = picked else { return }
             for _ in 0..<smart.result.replaceCount { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(smart.result.insert)
             TypingStats.shared.note(smart.isCalculation ? .calculation : .conversion)
             shownSmart = nil
+            shownConversions = []
             lastSpaceTime = Date.distantPast
             clearSwipeState()
             afterTyping()

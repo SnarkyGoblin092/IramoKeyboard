@@ -1,18 +1,20 @@
 name: Build Iramo IPA
 
-# Runs on every push (except documentation-only changes) and can also be started by hand
-# (Actions tab > Build Iramo IPA > Run workflow).
+# Runs only when started by hand (Actions tab > Build Iramo IPA > Run workflow).
 on:
-  push:
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
   workflow_dispatch:
+    inputs:
+      refresh_data:
+        description: "Download the word lists and emoji data again (otherwise the cached copy is used)"
+        type: boolean
+        default: false
 
 jobs:
   # The dictionaries and emoji data are plain Python work, so they are built on Linux, whose minutes cost a tenth
   # of macOS minutes in private repos. They only change when the scripts do (or the sources update), so they are
-  # cached for a week and shared with the macOS job instead of downloading ~400 MB of word lists on every push.
+  # cached and shared with the macOS job instead of downloading ~400 MB of word lists on every build. The cache is
+  # kept until a script changes or "Refresh data" is ticked when starting the workflow (it no longer expires weekly,
+  # which made the first build of every week download and compress everything again).
   # They are compressed here too, once, rather than in every macOS build.
   data:
     runs-on: ubuntu-latest
@@ -24,22 +26,25 @@ jobs:
       - uses: actions/checkout@v4
 
       # Two caches: the data as the scripts write it, and the same data compressed as it ships (what the macOS job
-      # needs). A push that changes neither restores only the second one, in seconds; "xz1" names how the files are
+      # needs). A build that changes neither only looks the second one up, in seconds; "xz1" names how the files are
       # packed, so change it when the "Compress language data" step changes.
-      - name: Cache keys (the scripts, refreshed weekly)
+      - name: Cache keys (the scripts, or a refresh)
         id: key
         run: |
-          raw="data-${{ hashFiles('scripts/build_data.py', 'scripts/language_model.py', 'scripts/lexicon.py', 'scripts/predict_eval/keyboard.py') }}-$(date -u +%G-%V)"
+          fresh="${{ inputs.refresh_data && github.run_id || 'kept' }}"
+          raw="data-${{ hashFiles('scripts/build_data.py', 'scripts/language_model.py', 'scripts/lexicon.py', 'scripts/predict_eval/keyboard.py') }}-$fresh"
           echo "raw=$raw" >> "$GITHUB_OUTPUT"
           echo "packed=$raw-xz1" >> "$GITHUB_OUTPUT"
 
-      - name: Restore compressed data
+      # Only looks the compressed copy up (nothing is downloaded here; the macOS job restores it itself).
+      - name: Look for compressed data
         id: packed
         uses: actions/cache/restore@v4
         with:
           path: Keyboard/Resources
           key: ${{ steps.key.outputs.packed }}
           enableCrossOsArchive: true
+          lookup-only: true
 
       - name: Restore generated data
         id: raw
@@ -161,6 +166,12 @@ jobs:
 
       - name: Show toolchain
         run: xcodebuild -version
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen-ldid-v1
 
       - name: Install XcodeGen and ldid (those the runner lacks)
         run: |

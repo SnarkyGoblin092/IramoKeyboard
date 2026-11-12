@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Calculations and measurements in the suggestion bar: "12*3=" offers 36, "5 km" offers 3.107 mi. The keyboard does
+/// Calculations and measurements in the suggestion bar: "12*3" offers 36, "5 km" offers 3.107 mi. The keyboard does
 /// the work (Keyboard/SmartInput.swift); this screen turns it on and off and shows examples worked out live.
 struct SmartTypingView: View {
     @AppStorage(SettingKey.inlineMath, store: SharedStore.defaults) private var inlineMath = SettingDefault.inlineMath
@@ -8,7 +8,7 @@ struct SmartTypingView: View {
     @AppStorage(SettingKey.unitTarget, store: SharedStore.defaults) private var target = SettingDefault.unitTarget
     @AppStorage(SettingKey.resultDecimals, store: SharedStore.defaults) private var decimals = SettingDefault.resultDecimals
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
-    @State private var tryText = "(12+3)*4^2="
+    @State private var tryText = "(12+3)*4^2"
 
     private let targets = ["auto", "metric", "imperial"]
 
@@ -20,25 +20,27 @@ struct SmartTypingView: View {
         if inlineMath, let result = InlineCalculator.result(before: text, language: language, decimals: places) {
             return result.shown
         }
-        if units, let result = UnitConverter.result(before: text, language: language, decimals: places, target: target) {
-            return result.shown
+        if units {
+            // The bar has every unit; the preview, room for the first few.
+            let all = UnitConverter.results(before: text, language: language, decimals: places, target: target)
+            if !all.isEmpty { return all.prefix(3).map { $0.shown }.joined(separator: "  \u{00B7}  ") }
         }
         return nil
     }
 
-    private var mathExamples: [String] { return ["12*3=", "(2+3)^2/5=", "200+15%=", "\u{221A}2\u{00B7}\u{03C0}=", "sin(30)=", "5!="] }
+    private var mathExamples: [String] { return ["12*3", "(2+3)^2/5", "200+15%", "\u{221A}2\u{00B7}\u{03C0}", "sin(30)", "5!"] }
     private var unitExamples: [String] { return ["5 km", "70 kg", "20 \u{00B0}C", "60 mph", "500 ml", "6 ft"] }
 
     var body: some View {
         PinnedPreview(height: 130) {
-            PreviewCard(caption: tr("Type a calculation ending in = or a number with a unit: the bar offers the result.")) {
+            PreviewCard(caption: tr("Type a calculation or a number with a unit: the bar offers the result.")) {
                 SmartBarPreview(typed: tryText, offer: offer(for: tryText))
             }
         } content: {
             GlassList {
                 Section {
                     GlassToggle(title: tr("Calculator"),
-                                subtitle: tr("Type a calculation and = to get its answer in the bar: + - \u{00D7} \u{00F7} ^ % !, brackets, \u{221A}, \u{03C0}, sin, cos, tan, log and more."),
+                                subtitle: tr("Type a calculation to get its answer in the bar: + - \u{00D7} \u{00F7} ^ % !, brackets, \u{221A}, \u{03C0}, sin, cos, tan, log and more."),
                                 isOn: $inlineMath)
                         .searchAnchor("smart.math")
                     exampleRow(mathExamples)
@@ -46,7 +48,7 @@ struct SmartTypingView: View {
                 } header: {
                     SectionHeader(tr("Calculator"), symbol: "plus.forwardslash.minus", color: .orange)
                 } footer: {
-                    Text(tr("Angles are in degrees. A calculation needs the = at its end, so dates and phone numbers are left alone."))
+                    Text(tr("Angles are in degrees. Tap the answer to write it in place of the calculation. Dates and phone numbers are left alone."))
                 }
                 .glassRows()
 

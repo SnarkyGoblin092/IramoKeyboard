@@ -34,6 +34,8 @@ struct GlassBackdrop: View {
                 .blur(radius: 130)
                 .offset(x: -110, y: 460)
         }
+        // A new accent fades in over the old one.
+        .animation(.easeInOut(duration: 0.7), value: accentName + accentHex)
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }

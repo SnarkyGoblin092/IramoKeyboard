@@ -112,16 +112,6 @@ struct GesturesView: View {
             .glassRows()
 
             Section {
-                GlassToggle(title: tr("Swipe down to hide"),
-                            subtitle: tr("Swipe down from the suggestion bar to hide the keyboard."),
-                            isOn: $swipeDownHide)
-                    .searchAnchor("gestures.hide")
-            } header: {
-                SectionHeader(tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo)
-            }
-            .glassRows()
-
-            Section {
                 GlassToggle(title: tr("Move the cursor"),
                             subtitle: tr("Hold the space bar until the letters fade, then slide left or right."),
                             isOn: $cursor)
@@ -166,6 +156,16 @@ struct GesturesView: View {
                 Text(tr("A tap deletes one letter when you let go. Hold to repeat letter by letter, or slide left before the delay to delete whole words."))
             }
             .glassRows()
+            Section {
+                GlassToggle(title: tr("Swipe down to hide"),
+                            subtitle: tr("Swipe down from the suggestion bar to hide the keyboard."),
+                            isOn: $swipeDownHide)
+                    .searchAnchor("gestures.hide")
+            } header: {
+                SectionHeader(tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo)
+            }
+            .glassRows()
+
         }
         .glassScreen()
         .navigationTitle(tr("Gestures"))

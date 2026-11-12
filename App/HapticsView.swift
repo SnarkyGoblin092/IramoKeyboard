@@ -90,7 +90,7 @@ struct HapticsView: View {
             .glassRows()
         }
         .glassScreen()
-        .navigationTitle(tr("Haptics"))
+        .navigationTitle(tr("Haptics & sound"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

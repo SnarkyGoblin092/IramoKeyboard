@@ -43,9 +43,23 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private enum Layout { case equal, fit, scroll }
-    private let layoutMode: Layout
+    private let configuredMode: Layout
+    private let configuredPages: Bool
+    /// Every conversion of a measurement is in the bar, however many (see `update`): it scrolls, whatever the
+    /// Suggestions screen chose.
+    private var showsAll = false {
+        didSet {
+            guard showsAll != oldValue else { return }
+            strip.alwaysBounceHorizontal = layoutMode == .scroll
+            strip.isScrollEnabled = layoutMode == .scroll
+            strip.isPagingEnabled = pagesOfThree
+            strip.isUserInteractionEnabled = layoutMode == .scroll
+            glass.contentView.isUserInteractionEnabled = layoutMode == .scroll || toolsOpen
+        }
+    }
+    private var layoutMode: Layout { return showsAll ? .scroll : configuredMode }
     /// The scrolling strip shows three equal slots at a time and moves a page of three at once.
-    private let pagesOfThree: Bool
+    private var pagesOfThree: Bool { return !showsAll && configuredPages }
     private let segments: Bool
     private let followTheme: Bool
 
@@ -125,8 +139,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     override init(frame: CGRect) {
-        layoutMode = Prefs.suggestionScroll ? .scroll : (Prefs.suggestionFit ? .fit : .equal)
-        pagesOfThree = Prefs.suggestionScroll && Prefs.suggestionScrollThree
+        configuredMode = Prefs.suggestionScroll ? .scroll : (Prefs.suggestionFit ? .fit : .equal)
+        configuredPages = Prefs.suggestionScroll && Prefs.suggestionScrollThree
         segments = Prefs.suggestionStyle == "segments"
         followTheme = Prefs.suggestionFollowTheme
         super.init(frame: frame)
@@ -154,10 +168,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         strip.isUserInteractionEnabled = layoutMode == .scroll
         strip.clipsToBounds = true
         glass.contentView.addSubview(strip)
-        if layoutMode == .scroll {
-            // The strip pans by itself; a tap picks the suggestion under the finger.
-            strip.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(stripTapped(_:))))
-        }
+        // The strip pans by itself where it scrolls; a tap picks the suggestion under the finger.
+        strip.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(stripTapped(_:))))
 
         separatorLayer.fillColor = nil
         separatorLayer.lineWidth = 1
@@ -315,11 +327,13 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     // MARK: Content
 
     /// `highlighted`: the slot space will write (the auto-correction), shown on an accent-coloured pill.
-    func update(_ newSuggestions: [Suggestion], highlighted: Int? = nil) {
+    /// `showAll`: every suggestion is shown, however many (the conversions of a measurement), in a strip that scrolls.
+    func update(_ newSuggestions: [Suggestion], highlighted: Int? = nil, showAll: Bool = false) {
+        showsAll = showAll
         // Empty places are dropped: one or two words sit centred, with separators only between them.
         var incoming: [Suggestion] = []
         var best: Int?
-        for (index, item) in newSuggestions.prefix(SuggestionBar.capacity).enumerated() where !item.text.isEmpty {
+        for (index, item) in newSuggestions.prefix(showAll ? Int.max : SuggestionBar.capacity).enumerated() where !item.text.isEmpty {
             if index == highlighted { best = incoming.count }
             incoming.append(item)
         }

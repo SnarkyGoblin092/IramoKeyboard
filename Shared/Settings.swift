@@ -95,7 +95,7 @@ enum SettingKey {
     static let letterLayouts = "hunkeys.letterLayouts"
     /// The user's own long-press characters: key -> the characters a hold adds to it.
     static let customHolds = "hunkeys.customHolds"
-    /// Smart typing: "12*3=" offers 36, "5 km" offers miles; the decimals shown and which units are offered.
+    /// Smart typing: "12*3" offers 36, "5 km" offers miles; the decimals shown and which units are offered.
     static let inlineMath = "hunkeys.inlineMath"
     static let unitConversion = "hunkeys.unitConversion"
     static let unitTarget = "hunkeys.unitTarget"
