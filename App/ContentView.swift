@@ -87,6 +87,7 @@ struct ContentView: View {
             }
             Feedback.tick()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            TabSlide.towardsEnd = AppTab.allCases.firstIndex(of: item).map { $0 > (AppTab.allCases.firstIndex(of: tab) ?? 0) } ?? true
             tab = item
         })
     }
@@ -212,6 +213,7 @@ struct ContentView: View {
         } else {
             paths[target] = [screen]
         }
+        TabSlide.towardsEnd = AppTab.allCases.firstIndex(of: target).map { $0 > (AppTab.allCases.firstIndex(of: tab) ?? 0) } ?? true
         tab = target
     }
 }
@@ -487,8 +489,10 @@ private struct TabSlideInstaller: UIViewRepresentable {
 }
 
 /// The tab controller's delegate: the slide, and everything else passed on to the delegate the system had set.
-private final class TabSlide: NSObject, UITabBarControllerDelegate, UIViewControllerAnimatedTransitioning {
+final class TabSlide: NSObject, UITabBarControllerDelegate, UIViewControllerAnimatedTransitioning {
     private static var current: TabSlide?
+    /// The tab being switched to comes after the one shown (is on its right, in a left-to-right app).
+    static var towardsEnd = true
     private weak var original: UITabBarControllerDelegate?
 
     static func install(on controller: UITabBarController) {
@@ -523,12 +527,9 @@ private final class TabSlide: NSObject, UITabBarControllerDelegate, UIViewContro
             context.completeTransition(false)
             return
         }
-        let controller = from.tabBarController ?? to.tabBarController
-        let list = controller?.viewControllers ?? []
-        let fromIndex = list.firstIndex(of: from) ?? 0
-        let toIndex = list.firstIndex(of: to) ?? 0
-        let rightToLeft = context.containerView.effectiveUserInterfaceLayoutDirection == .rightToLeft
-        let forward: CGFloat = (toIndex > fromIndex) != rightToLeft ? 1 : -1
+        // Which side the new tab is on, noted by ContentView as the tab is chosen (not mirrored for right-to-left
+        // languages: the tabs keep their order).
+        let forward: CGFloat = TabSlide.towardsEnd ? 1 : -1
         let width = context.containerView.bounds.width
         let frame = context.finalFrame(for: to)
         context.containerView.addSubview(to.view)
