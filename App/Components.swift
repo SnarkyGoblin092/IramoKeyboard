@@ -243,54 +243,28 @@ struct Keycap<Legend: View>: View {
     var color: Color = .accentColor
     var size: CGFloat = 32
     @ViewBuilder let legend: () -> Legend
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
-        let lip: CGFloat = max(2, size * 0.09)
-        // The same colours in light and dark mode: the dark mode's.
-        let dark = true
-        // The white legend has to stand out on the cap. The system's colours are light in dark mode (and yellow,
-        // mint and cyan in any mode), so a cap that would be too light for it is deepened first.
-        let dim = keycapDimming(of: color, dark: dark)
-        // In full colour: the skirt is the colour darkened, the top the colour itself with a little light on its
-        // upper half, and the legend white.
-        ZStack {
-            ZStack {
-            shape.fill(color)
-            shape.fill(Color.black.opacity(min(0.8, dim + (dark ? 0.24 : 0.17))))
-            shape.fill(color).padding(.bottom, lip)
-            shape.fill(Color.black.opacity(dim)).padding(.bottom, lip)
-            shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.12 : 0.22), Color.white.opacity(0)],
-                                      startPoint: .top, endPoint: .bottom))
-                .padding(.bottom, lip)
-            }
-            .saturation(1.3)
-            legend()
-                .foregroundColor(.white)
-                .shadow(color: Color.black.opacity(dark ? 0.28 : 0.4), radius: 0.7, x: 0, y: 0.7)
-                .frame(width: size, height: size - lip)
-                .padding(.bottom, lip)
-        }
-        .frame(width: size, height: size)
+        // Liquid Glass tinted with the colour, white on it, no shadow.
+        legend()
+            .foregroundColor(.white)
+            .frame(width: size, height: size)
+            .glassShape(shape, tint: keycapTint(of: color))
     }
 }
 
-/// How much black goes over a keycap's colour so that white stands out on it: none for a colour that is deep
-/// enough, more the lighter the colour is. (Black at this share over the colour brings its lightness down to the
-/// most a white legend reads well on.)
-private func keycapDimming(of color: Color, dark: Bool) -> Double {
-    // The accent is the app's tint, which a UIColor made from it would not be: taken as a colour of middling depth.
-    if color == Color.accentColor { return dark ? 0.24 : 0.03 }
-    let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
-    var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-    guard UIColor(color).resolvedColor(with: traits).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
-        return dark ? 0.24 : 0.03
+/// The colour between its light-mode and dark-mode versions, so the same glass works in both.
+private func keycapTint(of color: Color) -> Color {
+    // The app's accent is the tint itself (a UIColor made from it would not follow the chosen colour).
+    if color == Color.accentColor { return color }
+    func rgb(_ style: UIUserInterfaceStyle) -> (CGFloat, CGFloat, CGFloat)? {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        let resolved = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+        return resolved.getRed(&r, green: &g, blue: &b, alpha: &a) ? (r, g, b) : nil
     }
-    let lightness = 0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
-    let most = dark ? 0.45 : 0.62
-    guard lightness > most else { return 0 }
-    return min(0.62, 1 - most / lightness)
+    guard let light = rgb(.light), let dark = rgb(.dark) else { return color }
+    return Color(.sRGB, red: Double(light.0 + dark.0) / 2, green: Double(light.1 + dark.1) / 2,
+                 blue: Double(light.2 + dark.2) / 2, opacity: 1)
 }
 
 /// A row that opens a screen or shows a value: its keycap, its title (and a line under it), and what it is set to.

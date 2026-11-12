@@ -380,6 +380,8 @@ struct SearchTab: View {
     @Binding var query: String
     let open: (SearchEntry) -> Void
 
+    @State private var needsRoom = true
+
     private var isEmpty: Bool { return query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
@@ -393,7 +395,9 @@ struct SearchTab: View {
             }
             .glassScreen()
             // The search field floats over the bottom: room under the last setting for it.
-            .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 56) }
+            // (only when the list is long enough to reach it)
+            .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: needsRoom ? 56 : 0) }
+            .modifier(OverflowWatch(overflows: $needsRoom))
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(tr("Search"))
             .navigationBarTitleDisplayMode(.inline)
@@ -416,6 +420,23 @@ private struct SearchField: ViewModifier {
         } else {
             content.searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                                prompt: Text(tr("Search settings")))
+        }
+    }
+}
+
+/// Whether the scroll view's content runs into the bottom 56 pt (where the search field floats).
+private struct OverflowWatch: ViewModifier {
+    @Binding var overflows: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentSize.height > geometry.containerSize.height - 56
+            } action: { _, new in
+                overflows = new
+            }
+        } else {
+            content
         }
     }
 }

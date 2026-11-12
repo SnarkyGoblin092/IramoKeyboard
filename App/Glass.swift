@@ -166,11 +166,11 @@ struct TitleBlur: View {
     var body: some View {
         GeometryReader { proxy in
             let top = proxy.safeAreaInsets.top
-            let height = top + 30
+            let height = top + 80
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .mask(LinearGradient(stops: [.init(color: .black, location: 0),
-                                             .init(color: .black, location: top / max(height, 1) * 0.8),
+                                             .init(color: .black, location: top / max(height, 1) + 0.1),
                                              .init(color: .clear, location: 1)],
                                      startPoint: .top, endPoint: .bottom))
                 .frame(height: height)
