@@ -97,11 +97,9 @@ private struct Keybed: View, Animatable {
 /// A list row's background: real Liquid Glass over the backdrop (frosted glass before iOS 26), the same on every
 /// list of the app (settings, languages, learned words, shortcuts).
 struct GlassRowFill: View {
-    @Environment(\.scenePhase) private var phase
-
     var body: some View {
         #if compiler(>=6.2)
-        if #available(iOS 26.0, *), phase == .active {
+        if #available(iOS 26.0, *) {
             Color.clear.glassEffect(.regular, in: Rectangle())
         } else {
             Rectangle().fill(.thinMaterial)
@@ -154,25 +152,6 @@ private struct GlassTile<S: Shape>: ViewModifier {
 }
 
 #if compiler(>=6.2)
-/// Liquid Glass while the app is in front; a frosted fill of the same shape and tint while it is not, since the
-/// snapshot the app switcher takes of the app would otherwise show the glass empty (no colour on the icons).
-@available(iOS 26.0, *)
-private struct PhasedGlass<S: Shape>: ViewModifier {
-    let shape: S
-    let tint: Color?
-    let interactive: Bool
-    @Environment(\.scenePhase) private var phase
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if phase == .active {
-            content.glassEffect(makeGlass(tint: tint, interactive: interactive), in: shape)
-        } else {
-            content.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
-                .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))
-        }
-    }
-}
-
 @available(iOS 26.0, *)
 private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
     var glass = Glass.regular
@@ -189,7 +168,7 @@ extension View {
     func glassShape<S: Shape>(_ shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            self.modifier(PhasedGlass(shape: shape, tint: tint, interactive: interactive))
+            self.glassEffect(makeGlass(tint: tint, interactive: interactive), in: shape)
         } else {
             self.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
                 .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))

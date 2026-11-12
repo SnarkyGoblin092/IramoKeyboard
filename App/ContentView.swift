@@ -99,6 +99,14 @@ struct ContentView: View {
                     .onAppear { windowSize = geometry.size }
                     .onChange(of: geometry.size) { windowSize = $0 }
             }.ignoresSafeArea())
+            // The app switcher's snapshot of the app shows the glass and the colours empty; a picture of the window
+            // as it is, laid over it while the app is not active, is what that snapshot then takes.
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                SnapshotCover.show()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                SnapshotCover.hide()
+            }
             .onChange(of: welcomeSeen) { seen in
                 // The More tab's "Replay welcome" clears it.
                 if !seen { showWelcome = true }
@@ -420,4 +428,27 @@ struct KeyboardStatus {
 
     /// Nothing left to set up: the Typing tab then shows no setup card.
     var isReady: Bool { return seen && fullAccess && SharedStore.isShared }
+}
+
+/// A picture of the window, laid over it while the app is not in front (see ContentView).
+private enum SnapshotCover {
+    private static var cover: UIView?
+
+    static func show() {
+        guard cover == nil, let window = WindowWave.window else { return }
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+        }
+        let view = UIImageView(image: image)
+        view.frame = window.bounds
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.isUserInteractionEnabled = false
+        window.addSubview(view)
+        cover = view
+    }
+
+    static func hide() {
+        cover?.removeFromSuperview()
+        cover = nil
+    }
 }

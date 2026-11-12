@@ -26,7 +26,6 @@ struct GesturesView: View {
     @ObservedObject private var languages = EnabledLanguages.shared
     /// The page of settings shown under the keyboard.
     @State private var page: GesturesPage
-    @State private var trying = false
 
     private let trailStyles = ["fade", "solid", "dotted", "rainbow"]
     /// Ready-made trail colours (empty: the theme's accent).
@@ -45,19 +44,6 @@ struct GesturesView: View {
                 SegmentedChoice(names: GesturesPage.allCases.map { $0.title }, selected: page.rawValue) { index in
                     page = GesturesPage(rawValue: index) ?? .swipe
                 }
-                // The keyboard, as the gestures are set now, in a sheet to try them on.
-                Button {
-                    Feedback.tap()
-                    trying = true
-                } label: {
-                    Label(tr("Try the gestures"), systemImage: "hand.draw.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .foregroundColor(.white)
-                        .glassTile(Capsule(), isOn: true)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(PressableStyle())
             }
             .glassRows()
             switch page {
@@ -66,18 +52,6 @@ struct GesturesView: View {
             }
         }
         .glassScreen()
-        .sheet(isPresented: $trying) {
-            NavigationStack {
-                VStack {
-                    LiveKeyboard().frame(height: 300).padding(16)
-                    Spacer(minLength: 0)
-                }
-                .glassScreen()
-                .navigationTitle(tr("Gestures"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(tr("Done")) { trying = false } } }
-            }
-        }
         .navigationTitle(tr("Gestures"))
         .navigationBarTitleDisplayMode(.inline)
     }

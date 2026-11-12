@@ -31,7 +31,7 @@ struct HapticsView: View {
     var body: some View {
         GlassList {
             Section {
-                // A few key presses, as they are set now.
+                // A key press, as it is set now.
                 Button {
                     feelIt()
                 } label: {
@@ -110,13 +110,9 @@ struct HapticsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// Four key presses in a row: the vibration and the click, as they are set.
+    /// One key press: the vibration and the click, as they are set.
     private func feelIt() {
-        for index in 0..<4 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.16) {
-                Feedback.test(strength: strength, sharpness: sharpness)
-                if clicks, let sound = KeySound(rawValue: soundStyle) { AudioServicesPlaySystemSound(sound.soundID) }
-            }
-        }
+        Feedback.test(strength: strength, sharpness: sharpness)
+        if clicks, let sound = KeySound(rawValue: soundStyle) { AudioServicesPlaySystemSound(sound.soundID) }
     }
 }
