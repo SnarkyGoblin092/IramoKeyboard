@@ -22,7 +22,7 @@ struct TypingTab: View {
         .scrollDismissesKeyboard(.interactively)
         .environment(\.searchScope, AppTab.typing.scope)
         .navigationTitle(tr("Iramo"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .quietNavBar()
     }
 }
@@ -253,7 +253,7 @@ struct LookTab: View {
         .glassScreen()
         .environment(\.searchScope, AppTab.look.scope)
         .navigationTitle(AppTab.look.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .quietNavBar()
     }
 }
@@ -412,7 +412,7 @@ struct TouchTab: View {
         .glassScreen()
         .environment(\.searchScope, AppTab.touch.scope)
         .navigationTitle(AppTab.touch.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .quietNavBar()
     }
 }
@@ -491,7 +491,7 @@ struct MoreTab: View {
         .glassScreen()
         .environment(\.searchScope, AppTab.more.scope)
         .navigationTitle(AppTab.more.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .quietNavBar()
     }
 }

@@ -164,15 +164,14 @@ struct KeysView: View {
                         .font(.title3.weight(.semibold))
                         .foregroundColor(.white)
                         .frame(width: 38, height: 46)
-                        .background(shape.fill(Color.accentColor))
+                        .glassShape(shape, tint: Color.accentColor, interactive: true)
                 } else {
-                    shape
-                        .strokeBorder(isEditing ? Color.accentColor : Color.secondary.opacity(0.45),
-                                      style: StrokeStyle(lineWidth: 1.5, dash: isEditing ? [] : [4, 3]))
+                    Color.clear
                         .frame(width: 38, height: 46)
+                        .glassShape(shape, tint: isEditing ? Color.accentColor.opacity(0.45) : nil, interactive: true)
                         .overlay(Image(systemName: isEditing ? "keyboard" : "plus")
                             .font(.footnote.weight(.semibold))
-                            .foregroundColor(isEditing ? .accentColor : .secondary))
+                            .foregroundColor(isEditing ? .white : .secondary))
                 }
             }
             .frame(width: 38, height: 46)
@@ -213,14 +212,14 @@ struct KeysView: View {
                     .font(.title3.weight(.medium))
                     .foregroundColor(.secondary)
                     .frame(width: 30, height: 46)
-                    .background(shape.fill(Color.primary.opacity(0.08)))
+                    .glassShape(shape)
             }
             sideSlots(left: true)
             Text(tr("space"))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .background(shape.fill(Color.primary.opacity(0.08)))
+                .glassShape(shape)
                 .layoutPriority(1)
             sideSlots(left: false)
             if periodKey {
@@ -228,7 +227,7 @@ struct KeysView: View {
                     .font(.title3.weight(.medium))
                     .foregroundColor(.secondary)
                     .frame(width: 30, height: 46)
-                    .background(shape.fill(Color.primary.opacity(0.08)))
+                    .glassShape(shape)
             }
         }
         .padding(.vertical, 4)

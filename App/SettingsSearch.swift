@@ -392,17 +392,28 @@ struct SearchTab: View {
                 }
             }
             .glassScreen()
-            .modifier(TabSwipeable())
-            .tabBarClearance()
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(tr("Search"))
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .quietNavBar()
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: Text(tr("Search settings")))
+            .modifier(SearchField(query: $query))
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
         }
         .environment(\.searchScope, AppTab.search.scope)
+    }
+}
+
+/// The search field: in the tab bar's own search tab on iOS 26 (the bar turns into it), under the title before.
+private struct SearchField: ViewModifier {
+    @Binding var query: String
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.searchable(text: $query, prompt: Text(tr("Search settings")))
+        } else {
+            content.searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                               prompt: Text(tr("Search settings")))
+        }
     }
 }

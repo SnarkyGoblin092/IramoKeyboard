@@ -195,12 +195,11 @@ extension View {
         if #available(iOS 16.1, *) { self.fontDesign(.rounded) } else { self }
     }
 
-    /// A tab's navigation bar without the small title and bar that come in as the list scrolls (the large title stays).
+    /// A tab's navigation bar: the title always shown, with no bar behind it that comes in as the list scrolls.
     @ViewBuilder
     func quietNavBar() -> some View {
         let base = self
             .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar { ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) } }
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             base.scrollEdgeEffectHidden(true, for: .top)
@@ -210,11 +209,6 @@ extension View {
         #else
         base
         #endif
-    }
-
-    /// Room at the bottom of a tab's list for the tab bar, so the last rows can be scrolled clear of it.
-    func tabBarClearance() -> some View {
-        return self.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 72) }
     }
 
     /// A screen of the app: its list or scroll view on the glass backdrop.

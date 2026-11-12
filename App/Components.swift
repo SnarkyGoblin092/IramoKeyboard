@@ -588,9 +588,9 @@ struct AccentPicker: View {
                         accentHex = ""
                     }
                 } label: {
-                    Circle()
-                        .fill(Color(accent: choice))
+                    Color.clear
                         .frame(width: 34, height: 34)
+                        .glassShape(Circle(), tint: Color(accent: choice), interactive: true)
                         .overlay(
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .bold))
