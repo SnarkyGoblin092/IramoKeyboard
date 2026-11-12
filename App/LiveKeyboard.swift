@@ -22,6 +22,9 @@ struct LiveKeyboard: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     @Environment(\.colorScheme) private var appScheme
     @Environment(\.modeWaves) private var waves
+    /// On the tab that is shown. Every tab stays built, so a keyboard on a tab that is not shown would still read
+    /// every setting and build its keys at each change: there it is not built at all, only its backdrop is drawn.
+    @Environment(\.tabIsFront) private var isFront
 
     /// The mode the keys are drawn in, for the backdrop behind them.
     private var scheme: ColorScheme {
@@ -36,7 +39,7 @@ struct LiveKeyboard: View {
                                                     barOnly: barOnly)
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
-                LiveKeyboardHost(effects: effects, barOnly: barOnly)
+                LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)
                     // A transparent backdrop shows only the keys, over whatever the screen has behind them.
                     .background(
                         Group {
@@ -61,6 +64,21 @@ struct LiveKeyboard: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
+    }
+}
+
+/// The keyboard itself while its tab is shown, and only its room otherwise.
+private struct LiveKeyboardStage: View {
+    let effects: EffectsConfig?
+    let barOnly: Bool
+    let live: Bool
+
+    var body: some View {
+        if live {
+            LiveKeyboardHost(effects: effects, barOnly: barOnly)
+        } else {
+            Color.clear
+        }
     }
 }
 
@@ -97,6 +115,8 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var lastShiftTap = Date.distantPast
     private var builtSignature = ""
     private var refreshQueued = false
+    /// A setting changed while this keyboard was not on screen: it reads the settings when it is shown again.
+    private var stale = false
     private var builtStyle: UIUserInterfaceStyle = .unspecified
     /// Only the bar is shown, and it changes its words every little while to show off its animation.
     var barOnly = false {
@@ -271,6 +291,13 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
 
     /// Settings arrive in bursts (a slider); they are read once for each burst.
     private func queueRefresh() {
+        // Off screen (on a tab that is not shown, or under a screen opened over it) nothing is read or built: every
+        // tab keeps its screens, so several of these can be alive at once, and each would read every setting and
+        // build its keys again at every step of a slider on the screen in front. It catches up when it is shown.
+        guard window != nil else {
+            stale = true
+            return
+        }
         guard !refreshQueued else { return }
         refreshQueued = true
         DispatchQueue.main.async { [weak self] in
@@ -302,6 +329,11 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     override func didMoveToWindow() {
         super.didMoveToWindow()
         updateCycle()
+        // Back on screen: the settings changed meanwhile are read now.
+        if window != nil, stale {
+            stale = false
+            queueRefresh()
+        }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

@@ -48,11 +48,16 @@ struct FunctionsView: View {
             .glassRows()
 
             Section {
-                Button(tr("Restore the standard functions")) {
-                    Feedback.choose()
+                // Red: it throws the panel as it was arranged away.
+                Button(role: .destructive) {
+                    Feedback.delete()
                     save(KeyboardTool.standard)
+                } label: {
+                    Label(tr("Restore the standard functions"), systemImage: "arrow.counterclockwise")
                 }
+                .buttonStyle(ActionButtonStyle())
                 .disabled(tools == KeyboardTool.standard)
+                .glassOutsideCard()
             }
             .glassRows()
         }
@@ -73,7 +78,27 @@ struct FunctionsView: View {
 
     /// A tool's row: held, it is dragged; another tool dragged over it takes its place.
     private func draggableRow(_ tool: KeyboardTool, onPanel: Bool) -> some View {
-        ToolRow(tool: tool)
+        HStack(spacing: 10) {
+            ToolRow(tool: tool)
+            Spacer(minLength: 4)
+            // A tap does what a drag between the lists does, for those who would rather not drag.
+            Button {
+                toggle(tool, onPanel: onPanel)
+            } label: {
+                Image(systemName: onPanel ? "minus.circle.fill" : "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(onPanel ? .red : .green)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(onPanel ? tr("Remove") : tr("Add"))
+            if onPanel {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundColor(Color(.tertiaryLabel))
+                    .accessibilityHidden(true)
+            }
+        }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .opacity(dragging == tool ? 0.35 : 1)
@@ -117,6 +142,19 @@ struct FunctionsView: View {
         save(list)
     }
 
+    /// The row's button: takes the tool off the panel, or puts it at the panel's end.
+    private func toggle(_ tool: KeyboardTool, onPanel: Bool) {
+        var list = tools
+        if onPanel {
+            list.removeAll { $0 == tool }
+            Feedback.delete()
+        } else {
+            list.append(tool)
+            Feedback.success()
+        }
+        save(list)
+    }
+
     private func save(_ list: [KeyboardTool]) {
         withAnimation(.easeOut(duration: 0.2)) { tools = list }
         SharedStore.defaults.set(list.map { $0.rawValue }, forKey: SettingKey.keyboardTools)
@@ -144,7 +182,7 @@ private struct ToolRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            IconTile(symbol: tool.symbol, color: .pink)
+            IconTile(symbol: tool.symbol, color: .indigo)
             VStack(alignment: .leading, spacing: 2) {
                 Text(tr(tool.title)).foregroundColor(.primary)
                 Text(tr(tool.subtitle)).font(.footnote).foregroundColor(.secondary)

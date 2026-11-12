@@ -176,7 +176,7 @@ struct SettingToggle: View {
     /// `symbol`: an icon tile in front of the title (as on the main screen). `feature`: one some languages can't
     /// use (greyed out when none of the enabled languages can, with a note naming the ones that can't).
     init(_ title: String, key: String, defaultValue: Bool, subtitle: String? = nil,
-         symbol: String? = nil, color: Color = .gray, feature: LanguageFeature? = nil) {
+         symbol: String? = nil, color: Color = .accentColor, feature: LanguageFeature? = nil) {
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
@@ -206,42 +206,87 @@ struct SettingToggle: View {
     }
 }
 
-/// A white symbol on a small rounded square of colour, like the icons of the system Settings app.
+/// The app's icon: a small keycap in a colour of its own with the symbol on it in white. The cap has a top and a
+/// darker skirt under it, as a key seen from the front.
 struct IconTile: View {
     let symbol: String
-    let color: Color
+    var color: Color = .accentColor
 
     var body: some View {
-        // A glossy squircle: the colour deepening towards the bottom, a light edge at the top and a glow of its own.
-        RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(LinearGradient(colors: [color.opacity(0.75), color.hueShifted(by: 0.03)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 32, height: 32)
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.55), Color.white.opacity(0)],
-                                                 startPoint: .top, endPoint: .center), lineWidth: 1))
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.18), radius: 1, y: 1))
-            .shadow(color: color.opacity(0.35), radius: 5, y: 2)
-            .accessibilityHidden(true)
+        Keycap(color: color) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+        }
+        .accessibilityHidden(true)
     }
 }
 
-/// A row of the main screen: icon tile, title and (dimmed, on the right) what it is set to.
+/// A keycap with a short text on it (a language's code, a key's letter).
+struct KeycapLabel: View {
+    let text: String
+    var color: Color = .accentColor
+    var size: CGFloat = 32
+
+    var body: some View {
+        Keycap(color: color, size: size) {
+            Text(text)
+                .font(.system(size: text.count > 2 ? size * 0.34 : size * 0.44, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 2)
+        }
+    }
+}
+
+/// The keycap itself: the skirt, the top of the key a little above it, and the legend on the top.
+struct Keycap<Legend: View>: View {
+    var color: Color = .accentColor
+    var size: CGFloat = 32
+    @ViewBuilder let legend: () -> Legend
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
+        // Liquid Glass tinted with the colour, white on it, no shadow.
+        legend()
+            .foregroundColor(.white)
+            .frame(width: size, height: size)
+            .glassShape(shape, tint: keycapTint(of: color))
+    }
+}
+
+/// The colour between its light-mode and dark-mode versions, so the same glass works in both.
+private func keycapTint(of color: Color) -> Color {
+    // The app's accent is the tint itself (a UIColor made from it would not follow the chosen colour).
+    if color == Color.accentColor { return color }
+    func rgb(_ style: UIUserInterfaceStyle) -> (CGFloat, CGFloat, CGFloat)? {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        let resolved = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+        return resolved.getRed(&r, green: &g, blue: &b, alpha: &a) ? (r, g, b) : nil
+    }
+    guard let light = rgb(.light), let dark = rgb(.dark) else { return color }
+    return Color(.sRGB, red: Double(light.0 + dark.0) / 2, green: Double(light.1 + dark.1) / 2,
+                 blue: Double(light.2 + dark.2) / 2, opacity: 1)
+}
+
+/// A row that opens a screen or shows a value: its keycap, its title (and a line under it), and what it is set to.
 struct SettingsRow: View {
     let title: String
     let symbol: String
-    let color: Color
+    var color: Color = .accentColor
     var value: String? = nil
+    var subtitle: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             IconTile(symbol: symbol, color: color)
-            Text(title)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Spacer(minLength: 8)
             if let value = value {
                 Text(value)
@@ -322,7 +367,7 @@ struct SettingSlider: View {
 
 // MARK: - Styling helpers
 
-/// Slight shrink while pressed, so every card and swatch answers the finger at once, with a bloom of light over it.
+/// Slight shrink while pressed, so every card and swatch answers the finger at once.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -332,48 +377,40 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// Every plain button and row of the glass lists: while held, a lens of Liquid Glass swells up under it, lit with
-/// the accent and a bright edge, and the content leans in a little; on release it springs back and melts away.
+extension View {
+    /// A row button's touch area: the row's whole width whatever the label's own (a short label used to take taps
+    /// only on its words), and the row's padding round it, so a tap anywhere on the row counts.
+    func rowTapArea() -> some View {
+        return self
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle().inset(by: -10))
+    }
+}
+
+/// Every plain button and row of the glass lists: while held, the row darkens a little inside its card and leans
+/// in, as a row of the system's own glass lists does. (A second piece of glass under the finger, inside a card
+/// that is glass already, is not how the system's material is used.)
 struct GlassPressStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed && isEnabled
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return configuration.label
+            .rowTapArea()
             .background(
-                GlassHighlight(shape: shape, pressed: pressed)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(pressed ? 0.09 : 0))
                     .padding(.horizontal, -10)
                     .padding(.vertical, -6)
                     .allowsHitTesting(false))
-            .scaleEffect(pressed ? 0.975 : 1)
+            .scaleEffect(pressed ? 0.985 : 1)
             .opacity(isEnabled ? 1 : 0.45)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pressed)
+            .animation(.easeOut(duration: pressed ? 0.08 : 0.25), value: pressed)
     }
 }
 
-/// The lens of a GlassPressStyle press: real interactive Liquid Glass on iOS 26 and later (a frosted material
-/// before), swelling from a little smaller than the row and fading in, with GlassSheen's light on top.
-private struct GlassHighlight<S: InsettableShape>: View {
-    let shape: S
-    let pressed: Bool
-
-    // Only there while pressed: an invisible piece of glass under every row still costs a glass pass each frame.
-    var body: some View {
-        ZStack {
-            if pressed {
-                Color.clear
-                    .glassShape(shape, tint: Color.accentColor.opacity(0.22), interactive: true)
-                    .overlay(GlassSheen(pressed: pressed, shape: shape))
-                    .glassEdge(shape)
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
-            }
-        }
-    }
-}
-
-/// The light a press puts on glass: a bright specular wash from the top left fading into the accent, and a rim
-/// that catches it.
+/// The light a press puts on a frosted button before iOS 26. Real Liquid Glass answers the finger itself (its
+/// `interactive` form), so nothing is painted over it there.
 struct GlassSheen: View {
     let pressed: Bool
     var shape: AnyInsettableShape = AnyInsettableShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -388,19 +425,13 @@ struct GlassSheen: View {
         self.shape = AnyInsettableShape(shape)
     }
 
-    // Only there while pressed: a blended layer, even a see-through one, makes everything under it composite
-    // off screen on every frame, which made scrolling past many buttons stutter.
-    var body: some View {
-        let light = scheme == .dark ? 0.28 : 0.55
-        ZStack {
-            if pressed {
-                shape
-                    .fill(RadialGradient(colors: [Color.white.opacity(light), Color.accentColor.opacity(0.12), .clear],
-                                         center: .topLeading, startRadius: 0, endRadius: 220))
-                    .overlay(shape.strokeBorder(Color.white.opacity(light), lineWidth: 1))
-                    .blendMode(.plusLighter)
-                    .transition(.opacity)
-            }
+    @ViewBuilder var body: some View {
+        if #available(iOS 26.0, *) {
+            EmptyView()
+        } else if pressed {
+            shape
+                .fill(Color.white.opacity(scheme == .dark ? 0.14 : 0.3))
+                .transition(.opacity)
         }
     }
 }
@@ -436,6 +467,8 @@ struct ActionButtonStyle: ButtonStyle {
             .frame(maxWidth: small ? nil : .infinity)
             .padding(.horizontal, small ? 14 : 16)
             .padding(.vertical, small ? 6 : 11)
+            // The whole capsule takes the tap, not only the words on it (glass alone does not take touches).
+            .contentShape(Capsule())
             .glassShape(Capsule(), tint: color.opacity(configuration.isPressed ? 0.95 : 0.8), interactive: true)
             .overlay(GlassSheen(pressed: configuration.isPressed, shape: Capsule()).allowsHitTesting(false))
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
@@ -444,34 +477,31 @@ struct ActionButtonStyle: ButtonStyle {
     }
 }
 
-/// A section's title: quiet text, as in the system Settings app (the rows carry the colour). `symbol` and
-/// `color` tint a small glyph in front of it.
+/// A section's title, in sentence case: its glyph in the section's colour (the accent unless one is given) and
+/// its name.
 struct SectionHeader: View {
     let title: String
     let symbol: String
     let color: Color
 
-    init(_ title: String, symbol: String, color: Color) {
+    init(_ title: String, symbol: String, color: Color = .accentColor) {
         self.title = title
         self.symbol = symbol
         self.color = color
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(color)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(color.opacity(0.16)))
+                .frame(width: 18)
                 .accessibilityHidden(true)
             Text(title)
-                .font(.footnote.weight(.bold))
-                .tracking(0.8)
-                .foregroundColor(.secondary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.primary.opacity(0.75))
         }
-        .textCase(.uppercase)
-        .padding(.leading, -4)
+        .textCase(nil)
     }
 }
 
@@ -500,8 +530,14 @@ struct AccentTint: ViewModifier {
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     func body(content: Content) -> some View {
-        content.tint(Color.currentAccent(name: accentName, hex: accentHex))
+        content
+            .tint(Color.currentAccent(name: accentName, hex: accentHex))
+            // A new accent fades in over the old one, wherever it is drawn.
+            .animation(AccentTint.fade, value: accentName + accentHex)
     }
+
+    /// How a new accent takes over from the old one (the backdrop's fade, and everything else's).
+    static let fade = Animation.easeInOut(duration: 0.7)
 }
 
 // MARK: - Accent colour
@@ -514,9 +550,6 @@ struct AccentPicker: View {
 
     private let columns = Array(repeating: GridItem(.flexible(minimum: 30), spacing: 8), count: 6)
     private let presets = AccentChoice.allCases.filter { $0 != .graphite }
-    /// A colour picked in the colour picker, held until the picker closes (then the backdrop fades over to it).
-    @State private var pendingHex: String?
-    @State private var watching = false
 
     private var isCustom: Bool { return HexColor.parse(accentHex) != nil }
 
@@ -527,12 +560,14 @@ struct AccentPicker: View {
                 Button {
                     guard isCustom || accentName != choice.rawValue else { return }
                     Feedback.choose()
-                    accentName = choice.rawValue
-                    accentHex = ""
+                    withAnimation(AccentTint.fade) {
+                        accentName = choice.rawValue
+                        accentHex = ""
+                    }
                 } label: {
-                    Circle()
-                        .fill(Color(accent: choice))
+                    Color.clear
                         .frame(width: 34, height: 34)
+                        .glassShape(Circle(), tint: Color(accent: choice), interactive: true)
                         .overlay(
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .bold))
@@ -555,45 +590,18 @@ struct AccentPicker: View {
     private var customSwatch: some View {
         let selected = isCustom || accentName == AccentChoice.graphite.rawValue
         return ColorPicker(tr("Custom colour"), selection: Binding(
-            get: { pendingHex.map { Color(hex: $0) } ?? Color.currentAccent(name: accentName, hex: accentHex) },
+            get: { Color.currentAccent(name: accentName, hex: accentHex) },
             set: { newColor in
-                // Held while the picker is open; the accent changes once it has closed.
-                pendingHex = newColor.hexString
-                watchPicker()
+                // The accent follows the picker at once, fading to each colour.
+                let hex = newColor.hexString
+                guard hex != accentHex else { return }
+                withAnimation(AccentTint.fade) { accentHex = hex }
             }), supportsOpacity: false)
             .labelsHidden()
             .scaleEffect(1.2)
             .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.9 : 0), lineWidth: 2).frame(width: 42, height: 42))
             .frame(maxWidth: .infinity, minHeight: 44)
             .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    /// Whether the system is showing something over the app (the colour picker, while it is open).
-    private static var isPresenting: Bool {
-        func presenting(_ controller: UIViewController) -> Bool {
-            return controller.presentedViewController != nil || controller.children.contains(where: presenting)
-        }
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
-        guard let root = (windows.first(where: { $0.isKeyWindow }) ?? windows.first)?.rootViewController else { return false }
-        return presenting(root)
-    }
-
-    /// Waits for the colour picker to close, then, if the colour is not the one the accent already is, sets it. A
-    /// colour left as it was changes nothing.
-    private func watchPicker() {
-        guard !watching else { return }
-        watching = true
-        Task { @MainActor in
-            // The picker is open while something is shown over the app.
-            while AccentPicker.isPresenting { try? await Task.sleep(nanoseconds: 150_000_000) }
-            // Its dismissal finishes first.
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            watching = false
-            guard let hex = pendingHex else { return }
-            pendingHex = nil
-            guard hex != accentHex else { return }
-            accentHex = hex
-        }
     }
 }
 

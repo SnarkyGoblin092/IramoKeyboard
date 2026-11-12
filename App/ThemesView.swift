@@ -590,7 +590,7 @@ final class TouchPoint {
 
 /// Records where each touch lands, in the window, the moment it lands (before any button's action runs, which a
 /// SwiftUI gesture does not manage). It fails at once, so it never takes a touch from anything.
-private struct TouchRecorder: UIViewRepresentable {
+struct TouchRecorder: UIViewRepresentable {
     let touches: TouchPoint
 
     func makeUIView(context: Context) -> RecorderView { return RecorderView(touches: touches) }

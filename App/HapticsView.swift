@@ -31,6 +31,22 @@ struct HapticsView: View {
     var body: some View {
         GlassList {
             Section {
+                // A key press, as it is set now.
+                Button {
+                    feelIt()
+                } label: {
+                    Label(tr("Feel it"), systemImage: "hand.tap.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .foregroundColor(.white)
+                        .glassTile(Capsule(), isOn: true)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
+            .glassRows()
+
+            Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
                     strength = on ? SettingDefault.vibration : 0
                     Feedback.tick()
@@ -92,5 +108,11 @@ struct HapticsView: View {
         .glassScreen()
         .navigationTitle(tr("Haptics & sound"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// One key press: the vibration and the click, as they are set.
+    private func feelIt() {
+        Feedback.test(strength: strength, sharpness: sharpness)
+        if clicks, let sound = KeySound(rawValue: soundStyle) { AudioServicesPlaySystemSound(sound.soundID) }
     }
 }

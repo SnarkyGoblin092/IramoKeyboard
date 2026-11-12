@@ -641,32 +641,18 @@ struct EffectsView: View {
                         json = next.encoded()
                     }), supportsOpacity: false)
                 }
-            } header: {
-                SectionHeader(tr("Colour"), symbol: "paintpalette", color: .pink)
-            } footer: {
-                Text(tr("Rainbow gives every press a new colour."))
-            }
-            .glassRows()
-
-            Section {
                 GlassChoiceLink(title: tr("Direction"), symbol: "arrow.up.and.down.and.arrow.left.and.right",
                                 options: directionOptions(inherit: false),
                                 selected: config.direction) { bind(\.direction).wrappedValue = $0 }
-            } header: {
-                SectionHeader(tr("Direction"), symbol: "location.north.line", color: .mint)
-            } footer: {
-                Text(tr("Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press."))
-            }
-            .glassRows()
-
-            Section {
                 GlassChoiceLink(title: tr("Position"), symbol: "scope",
                                 options: positionOptions(inherit: false),
                                 selected: config.position) { bind(\.position).wrappedValue = $0 }
             } header: {
-                SectionHeader(tr("Position"), symbol: "scope", color: .cyan)
+                SectionHeader(tr("All effects"), symbol: "paintpalette", color: .pink)
             } footer: {
-                Text(tr("Where on the key the effects start. Random picks a new spot for every press."))
+                Text(tr("Rainbow gives every press a new colour.") + " "
+                     + tr("Which way the effects go. Auto lets each effect go the way it was designed; Random picks a new way for every press.") + " "
+                     + tr("Where on the key the effects start. Random picks a new spot for every press."))
             }
             .glassRows()
 
