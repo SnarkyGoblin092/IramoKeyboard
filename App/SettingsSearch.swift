@@ -89,10 +89,11 @@ struct SearchEntry: Identifiable {
 enum SettingsIndex {
     /// Every setting, in the app's language (English words are always found too).
     static var entries: [SearchEntry] {
-        let keyboard = tr("Keyboard")
-        let typing = tr("Typing")
-        let look = tr("Look & feel")
-        let data = tr("Privacy & data")
+        let typing = AppTab.typing.title
+        let keyboard = typing
+        let look = AppTab.look.title
+        let more = AppTab.more.title
+        let data = more + " \u{203A} " + tr("Privacy & data")
         func at(_ screen: String, _ section: String) -> String { return screen + " \u{203A} " + section }
         let gestures = tr("Gestures")
         let keys = tr("Keys")
@@ -100,10 +101,10 @@ enum SettingsIndex {
         let smart = tr("Calculator & units")
         let shortcuts = tr("Text shortcuts")
         let haptics = tr("Haptics & sound")
-        let touch = tr("Touch & gestures")
+        let touch = AppTab.touch.title
         return [
-            SearchEntry(id: "test", title: tr("Try it"), place: tr("Main list"), keywords: ["test", "type"],
-                        symbol: "keyboard", color: .gray, screen: nil, anchor: "main.test"),
+            SearchEntry(id: "test", title: tr("Try it"), place: typing, keywords: ["test", "type"],
+                        symbol: "keyboard", color: .gray, screen: AppTab.typing.scope, anchor: "main.test"),
             SearchEntry(id: "languages", title: tr("Languages"), place: keyboard, keywords: ["language", "add", "remove", "switch"],
                         symbol: "globe", color: .blue, screen: .languages, anchor: nil),
             SearchEntry(id: "layout", title: tr("Keyboard layout"), place: at(tr("Languages"), tr("Tap a language")),
@@ -115,12 +116,12 @@ enum SettingsIndex {
                         symbol: "bolt.fill", color: .orange, screen: .shortcuts, anchor: nil),
             SearchEntry(id: "placeholders", title: tr("Placeholders"), place: shortcuts,
                         keywords: ["placeholder", "date", "time", "clipboard", "cursor", "{date}"],
-                        symbol: "curlybraces", color: .orange, screen: .shortcuts, anchor: "shortcuts.placeholders"),
+                        symbol: "curlybraces", color: .orange, screen: .shortcuts, anchor: "shortcuts.new"),
             SearchEntry(id: "dateFormat", title: tr("Date format"), place: shortcuts, keywords: ["date", "format", "day", "month"],
                         symbol: "calendar", color: .orange, screen: .shortcuts, anchor: "shortcuts.date"),
             SearchEntry(id: "timeFormat", title: tr("Time format"), place: shortcuts, keywords: ["time", "clock", "24", "12", "seconds"],
                         symbol: "clock", color: .orange, screen: .shortcuts, anchor: "shortcuts.time"),
-            SearchEntry(id: "functions", title: tr("Functions panel"), place: keyboard, keywords: ["tools", "functions", "panel"],
+            SearchEntry(id: "functions", title: tr("Functions panel"), place: touch, keywords: ["tools", "functions", "panel"],
                         symbol: "square.grid.2x2.fill", color: .pink, screen: .functions, anchor: nil),
 
             SearchEntry(id: "bar", title: bar, place: typing, keywords: ["suggestions", "bar", "predictions"],
@@ -138,15 +139,15 @@ enum SettingsIndex {
             SearchEntry(id: "updateSpeed", title: tr("Update speed"), place: bar, keywords: ["speed", "delay", "battery"],
                         symbol: "speedometer", color: .indigo, screen: .suggestions, anchor: "suggestions.speed"),
             SearchEntry(id: "autocorrect", title: tr("Auto-correction"), place: typing, keywords: ["autocorrect", "typo", "correct", "spelling"],
-                        symbol: "checkmark.seal.fill", color: .green, screen: nil, anchor: "main.autocorrect"),
+                        symbol: "checkmark.seal.fill", color: .green, screen: AppTab.typing.scope, anchor: "main.autocorrect"),
             SearchEntry(id: "autocap", title: tr("Auto-capitalization"), place: typing, keywords: ["capital", "uppercase", "sentence"],
-                        symbol: "textformat", color: .blue, screen: nil, anchor: "main.autocap"),
+                        symbol: "textformat", color: .blue, screen: AppTab.typing.scope, anchor: "main.autocap"),
             SearchEntry(id: "period", title: tr("\u{201C}.\u{201D} shortcut"), place: typing, keywords: ["period", "full stop", "double space"],
-                        symbol: "circle.fill", color: .gray, screen: nil, anchor: "main.period"),
+                        symbol: "circle.fill", color: .gray, screen: AppTab.typing.scope, anchor: "main.period"),
             SearchEntry(id: "smartQuotes", title: tr("Smart quotes"), place: typing, keywords: ["quotes", "curly", "apostrophe", "quotation"],
-                        symbol: "quote.opening", color: .teal, screen: nil, anchor: "main.smartQuotes"),
+                        symbol: "quote.opening", color: .teal, screen: AppTab.typing.scope, anchor: "main.smartQuotes"),
             SearchEntry(id: "spaceAfter", title: tr("Space after punctuation"), place: typing, keywords: ["space", "punctuation", "comma", "period"],
-                        symbol: "space", color: .mint, screen: nil, anchor: "main.spaceAfter"),
+                        symbol: "space", color: .mint, screen: AppTab.typing.scope, anchor: "main.spaceAfter"),
             SearchEntry(id: "smart", title: smart, place: typing, keywords: ["calculator", "math", "units", "convert"],
                         symbol: "function", color: .orange, screen: .smartTyping, anchor: nil),
             SearchEntry(id: "math", title: tr("Calculator"), place: smart, keywords: ["math", "calculate", "sum", "equals", "="],
@@ -209,9 +210,9 @@ enum SettingsIndex {
                         symbol: "textformat.alt", color: .blue, screen: .keys, anchor: "keys.letters"),
             SearchEntry(id: "hints", title: tr("Accent hints"), place: keys, keywords: ["hint", "accent", "corner"],
                         symbol: "textformat.abc.dottedunderline", color: .blue, screen: .keys, anchor: "keys.hints"),
-            SearchEntry(id: "holds", title: tr("Long-press characters"), place: keys,
+            SearchEntry(id: "holds", title: tr("Long-press characters"), place: touch,
                         keywords: ["long press", "hold", "characters", "symbols", "custom", "accents"],
-                        symbol: "hand.point.up.left", color: .blue, screen: .keys, anchor: "keys.holds"),
+                        symbol: "hand.point.up.left", color: .blue, screen: .longPress, anchor: nil),
             SearchEntry(id: "spaceBar", title: tr("Space bar"), place: keys, keywords: ["space", "language name", "code"],
                         symbol: "space", color: .blue, screen: .keys, anchor: "keys.space"),
             SearchEntry(id: "symbolKeys", title: tr("Symbol keys"), place: keys, keywords: ["symbol", "@", "extra keys"],
@@ -232,22 +233,22 @@ enum SettingsIndex {
                         keywords: ["colour", "color", "rainbow", "direction", "position", "preset", "presets"],
                         symbol: "paintpalette", color: .indigo, screen: .effects, anchor: nil),
             SearchEntry(id: "accent", title: tr("Accent colour"), place: look, keywords: ["accent", "colour", "color", "tint"],
-                        symbol: "drop.fill", color: .blue, screen: nil, anchor: "main.accent"),
+                        symbol: "drop.fill", color: .blue, screen: AppTab.look.scope, anchor: "main.accent"),
 
-            SearchEntry(id: "stats", title: tr("Typing stats"), place: data, keywords: ["stats", "statistics", "speed", "wpm", "words"],
+            SearchEntry(id: "stats", title: tr("Typing stats"), place: more, keywords: ["stats", "statistics", "speed", "wpm", "words"],
                         symbol: "chart.bar.fill", color: .green, screen: .stats, anchor: nil),
             SearchEntry(id: "keepStats", title: tr("Keep typing stats"), place: tr("Typing stats"),
                         keywords: ["stats", "statistics", "privacy", "reset stats"],
                         symbol: "chart.bar.fill", color: .green, screen: .stats, anchor: "stats.enabled"),
             SearchEntry(id: "forget", title: tr("Forget learned words"), place: data, keywords: ["forget", "clear", "learned"],
-                        symbol: "text.book.closed", color: .orange, screen: nil, anchor: "main.forget"),
+                        symbol: "text.book.closed", color: .orange, screen: AppTab.more.scope, anchor: "main.forget"),
             SearchEntry(id: "reset", title: tr("Reset all settings"), place: data, keywords: ["reset", "default", "restore"],
-                        symbol: "arrow.counterclockwise", color: .red, screen: nil, anchor: "main.reset"),
-            SearchEntry(id: "appLanguage", title: tr("App language"), place: tr("Language"), keywords: ["app language", "translation"],
+                        symbol: "arrow.counterclockwise", color: .red, screen: AppTab.more.scope, anchor: "main.reset"),
+            SearchEntry(id: "appLanguage", title: tr("App language"), place: more, keywords: ["app language", "translation"],
                         symbol: "character.bubble.fill", color: .blue, screen: .appLanguage, anchor: nil),
-            SearchEntry(id: "welcome", title: tr("Replay welcome"), place: tr("About"), keywords: ["welcome", "tutorial", "intro", "help"],
-                        symbol: "play.circle.fill", color: .blue, screen: nil, anchor: "main.welcome"),
-            SearchEntry(id: "licences", title: tr("Licences"), place: tr("About"), keywords: ["licence", "license", "credits"],
+            SearchEntry(id: "welcome", title: tr("Replay welcome"), place: more + " \u{203A} " + tr("About"), keywords: ["welcome", "tutorial", "intro", "help"],
+                        symbol: "play.circle.fill", color: .blue, screen: AppTab.more.scope, anchor: "main.welcome"),
+            SearchEntry(id: "licences", title: tr("Licences"), place: more + " \u{203A} " + tr("About"), keywords: ["licence", "license", "credits"],
                         symbol: "doc.text.fill", color: .gray, screen: .licences, anchor: nil)
         ]
     }
@@ -285,52 +286,117 @@ enum SettingsIndex {
 
 // MARK: - Results
 
-/// The main list while searching: the settings that match, each with where it is; a tap goes there. A section of the
-/// main list, under its search field.
+/// A setting in the search: its keycap, its name and where it is; a tap goes there.
+struct SearchEntryRow: View {
+    let entry: SearchEntry
+    var showsPlace = true
+    let open: (SearchEntry) -> Void
+
+    var body: some View {
+        Button {
+            Feedback.tap()
+            open(entry)
+        } label: {
+            HStack(spacing: 12) {
+                IconTile(symbol: entry.symbol)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.title).foregroundColor(.primary)
+                    if showsPlace {
+                        Text(entry.place).font(.footnote).foregroundColor(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+            .contentShape(Rectangle())
+        }
+    }
+}
+
+/// The settings that match what is typed, each with where it is.
 struct SettingsSearchResults: View {
     let query: String
     let open: (SearchEntry) -> Void
 
     var body: some View {
         let results = SettingsIndex.search(query)
-        Group {
+        Section {
+            if results.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").font(.title2).foregroundColor(.secondary)
+                    Text(tr("No settings match \u{201C}%@\u{201D}", query))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            } else {
+                ForEach(results) { entry in
+                    SearchEntryRow(entry: entry, open: open)
+                }
+            }
+        } header: {
+            if !results.isEmpty {
+                Text(results.count == 1 ? tr("1 setting") : tr("%@ settings", "\(results.count)"))
+            }
+        }
+        .glassRows()
+    }
+}
+
+/// The search before anything is typed: every screen of the app, by the tab it is on, so the search tab doubles as
+/// a map of the settings.
+struct SettingsSitemap: View {
+    let open: (SearchEntry) -> Void
+
+    private func screens(on tab: AppTab) -> [SearchEntry] {
+        return SettingsIndex.entries.filter { entry in
+            guard entry.anchor == nil, let screen = entry.screen else { return false }
+            return AppTab.owning(screen) == tab
+        }
+    }
+
+    var body: some View {
+        ForEach([AppTab.typing, AppTab.look, AppTab.touch, AppTab.more], id: \.self) { tab in
             Section {
-                if results.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass").font(.title2).foregroundColor(.secondary)
-                        Text(tr("No settings match \u{201C}%@\u{201D}", query))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                } else {
-                    ForEach(results) { entry in
-                        Button {
-                            Feedback.tap()
-                            open(entry)
-                        } label: {
-                            HStack(spacing: 12) {
-                                IconTile(symbol: entry.symbol, color: entry.color)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(entry.title).foregroundColor(.primary)
-                                    Text(entry.place).font(.footnote).foregroundColor(.secondary)
-                                }
-                                Spacer(minLength: 8)
-                                Image(systemName: "chevron.forward")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundColor(Color(.tertiaryLabel))
-                            }
-                            .contentShape(Rectangle())
-                        }
-                    }
+                ForEach(screens(on: tab)) { entry in
+                    SearchEntryRow(entry: entry, showsPlace: false, open: open)
                 }
             } header: {
-                if !results.isEmpty {
-                    Text(results.count == 1 ? tr("1 setting") : tr("%@ settings", "\(results.count)"))
-                }
+                SectionHeader(tab.title, symbol: tab.symbol)
             }
             .glassRows()
         }
+    }
+}
+
+/// The search tab: the system's search field (on iOS 26 and later the tab itself opens into it, in the glass bar)
+/// over the results, or over the map of the settings while nothing is typed.
+struct SearchTab: View {
+    @Binding var query: String
+    let open: (SearchEntry) -> Void
+
+    private var isEmpty: Bool { return query.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            GlassList(eager: true) {
+                if isEmpty {
+                    SettingsSitemap(open: open)
+                } else {
+                    SettingsSearchResults(query: query, open: open)
+                }
+            }
+            .glassScreen()
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle(tr("Search"))
+            .navigationBarTitleDisplayMode(.large)
+            .searchable(text: $query, prompt: Text(tr("Search settings")))
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+        }
+        .environment(\.searchScope, AppTab.search.scope)
     }
 }

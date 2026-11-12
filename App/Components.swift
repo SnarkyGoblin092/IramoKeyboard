@@ -176,7 +176,7 @@ struct SettingToggle: View {
     /// `symbol`: an icon tile in front of the title (as on the main screen). `feature`: one some languages can't
     /// use (greyed out when none of the enabled languages can, with a note naming the ones that can't).
     init(_ title: String, key: String, defaultValue: Bool, subtitle: String? = nil,
-         symbol: String? = nil, color: Color = .gray, feature: LanguageFeature? = nil) {
+         symbol: String? = nil, color: Color = .accentColor, feature: LanguageFeature? = nil) {
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
@@ -206,42 +206,80 @@ struct SettingToggle: View {
     }
 }
 
-/// A white symbol on a small rounded square of colour, like the icons of the system Settings app.
+/// The app's icon: a small keycap with the symbol on it. The cap has a lighter top and a darker skirt under it, as
+/// a key seen from the front, in the accent colour unless another is given.
 struct IconTile: View {
     let symbol: String
-    let color: Color
+    var color: Color = .accentColor
 
     var body: some View {
-        // A glossy squircle: the colour deepening towards the bottom, a light edge at the top and a glow of its own.
-        RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(LinearGradient(colors: [color.opacity(0.75), color.hueShifted(by: 0.03)],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 32, height: 32)
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.55), Color.white.opacity(0)],
-                                                 startPoint: .top, endPoint: .center), lineWidth: 1))
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.18), radius: 1, y: 1))
-            .shadow(color: color.opacity(0.35), radius: 5, y: 2)
-            .accessibilityHidden(true)
+        Keycap(color: color) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+        }
+        .accessibilityHidden(true)
     }
 }
 
-/// A row of the main screen: icon tile, title and (dimmed, on the right) what it is set to.
+/// A keycap with a short text on it (a language's code, a key's letter).
+struct KeycapLabel: View {
+    let text: String
+    var color: Color = .accentColor
+    var size: CGFloat = 32
+
+    var body: some View {
+        Keycap(color: color, size: size) {
+            Text(text)
+                .font(.system(size: text.count > 2 ? size * 0.34 : size * 0.44, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 2)
+        }
+    }
+}
+
+/// The keycap itself: the skirt, the top of the key a little above it, and the legend on the top.
+struct Keycap<Legend: View>: View {
+    var color: Color = .accentColor
+    var size: CGFloat = 32
+    @ViewBuilder let legend: () -> Legend
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
+        let lip: CGFloat = max(2, size * 0.09)
+        ZStack {
+            shape.fill(color.opacity(scheme == .dark ? 0.42 : 0.32))
+            shape.fill(Color.white.opacity(scheme == .dark ? 0.10 : 0.62)).padding(.bottom, lip)
+            legend()
+                .foregroundColor(color)
+                .frame(width: size, height: size - lip)
+                .padding(.bottom, lip)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// A row that opens a screen or shows a value: its keycap, its title (and a line under it), and what it is set to.
 struct SettingsRow: View {
     let title: String
     let symbol: String
-    let color: Color
+    var color: Color = .accentColor
     var value: String? = nil
+    var subtitle: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             IconTile(symbol: symbol, color: color)
-            Text(title)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Spacer(minLength: 8)
             if let value = value {
                 Text(value)
@@ -322,7 +360,7 @@ struct SettingSlider: View {
 
 // MARK: - Styling helpers
 
-/// Slight shrink while pressed, so every card and swatch answers the finger at once, with a bloom of light over it.
+/// Slight shrink while pressed, so every card and swatch answers the finger at once.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -332,48 +370,29 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// Every plain button and row of the glass lists: while held, a lens of Liquid Glass swells up under it, lit with
-/// the accent and a bright edge, and the content leans in a little; on release it springs back and melts away.
+/// Every plain button and row of the glass lists: while held, the row darkens a little inside its card and leans
+/// in, as a row of the system's own glass lists does. (A second piece of glass under the finger, inside a card
+/// that is glass already, is not how the system's material is used.)
 struct GlassPressStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed && isEnabled
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return configuration.label
             .background(
-                GlassHighlight(shape: shape, pressed: pressed)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(pressed ? 0.09 : 0))
                     .padding(.horizontal, -10)
                     .padding(.vertical, -6)
                     .allowsHitTesting(false))
-            .scaleEffect(pressed ? 0.975 : 1)
+            .scaleEffect(pressed ? 0.985 : 1)
             .opacity(isEnabled ? 1 : 0.45)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pressed)
+            .animation(.easeOut(duration: pressed ? 0.08 : 0.25), value: pressed)
     }
 }
 
-/// The lens of a GlassPressStyle press: real interactive Liquid Glass on iOS 26 and later (a frosted material
-/// before), swelling from a little smaller than the row and fading in, with GlassSheen's light on top.
-private struct GlassHighlight<S: InsettableShape>: View {
-    let shape: S
-    let pressed: Bool
-
-    // Only there while pressed: an invisible piece of glass under every row still costs a glass pass each frame.
-    var body: some View {
-        ZStack {
-            if pressed {
-                Color.clear
-                    .glassShape(shape, tint: Color.accentColor.opacity(0.22), interactive: true)
-                    .overlay(GlassSheen(pressed: pressed, shape: shape))
-                    .glassEdge(shape)
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
-            }
-        }
-    }
-}
-
-/// The light a press puts on glass: a bright specular wash from the top left fading into the accent, and a rim
-/// that catches it.
+/// The light a press puts on a frosted button before iOS 26. Real Liquid Glass answers the finger itself (its
+/// `interactive` form), so nothing is painted over it there.
 struct GlassSheen: View {
     let pressed: Bool
     var shape: AnyInsettableShape = AnyInsettableShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -388,19 +407,13 @@ struct GlassSheen: View {
         self.shape = AnyInsettableShape(shape)
     }
 
-    // Only there while pressed: a blended layer, even a see-through one, makes everything under it composite
-    // off screen on every frame, which made scrolling past many buttons stutter.
-    var body: some View {
-        let light = scheme == .dark ? 0.28 : 0.55
-        ZStack {
-            if pressed {
-                shape
-                    .fill(RadialGradient(colors: [Color.white.opacity(light), Color.accentColor.opacity(0.12), .clear],
-                                         center: .topLeading, startRadius: 0, endRadius: 220))
-                    .overlay(shape.strokeBorder(Color.white.opacity(light), lineWidth: 1))
-                    .blendMode(.plusLighter)
-                    .transition(.opacity)
-            }
+    @ViewBuilder var body: some View {
+        if #available(iOS 26.0, *) {
+            EmptyView()
+        } else if pressed {
+            shape
+                .fill(Color.white.opacity(scheme == .dark ? 0.14 : 0.3))
+                .transition(.opacity)
         }
     }
 }
@@ -444,34 +457,31 @@ struct ActionButtonStyle: ButtonStyle {
     }
 }
 
-/// A section's title: quiet text, as in the system Settings app (the rows carry the colour). `symbol` and
-/// `color` tint a small glyph in front of it.
+/// A section's title, in sentence case: its glyph in the accent and its name. (`color` is kept for the callers
+/// that name one; the app's sections all wear the accent.)
 struct SectionHeader: View {
     let title: String
     let symbol: String
     let color: Color
 
-    init(_ title: String, symbol: String, color: Color) {
+    init(_ title: String, symbol: String, color: Color = .accentColor) {
         self.title = title
         self.symbol = symbol
         self.color = color
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(color)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(color.opacity(0.16)))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.tint)
+                .frame(width: 18)
                 .accessibilityHidden(true)
             Text(title)
-                .font(.footnote.weight(.bold))
-                .tracking(0.8)
-                .foregroundColor(.secondary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.primary.opacity(0.75))
         }
-        .textCase(.uppercase)
-        .padding(.leading, -4)
+        .textCase(nil)
     }
 }
 

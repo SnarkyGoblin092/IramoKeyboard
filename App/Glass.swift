@@ -2,10 +2,14 @@ import SwiftUI
 
 // MARK: - Liquid Glass look
 //
-// Every screen sits on a soft, accent-tinted backdrop, and its rows and cards are glass on top of it: real Liquid
-// Glass (`glassEffect`) on iOS 26 and later, a frosted material before that.
+// Every screen sits on the keybed (a field of faint keys in the accent colour), and its cards and controls are the
+// system's own Liquid Glass on top of it (`glassEffect`, iOS 26 and later; a frosted material before that). Nothing
+// is painted over the glass: its rim, its light and how clear or tinted it is are the system's, so it follows the
+// Liquid Glass setting of the phone (iOS 27's slider) like every system control.
 
-/// The light behind the glass: the grouped background with a few large, blurred washes of colour.
+/// What the glass has behind it: the grouped background, a wash of the accent from the top, and the keybed. Glass
+/// bends what is under it, so it needs edges to bend: over the keys its rims show the refraction that a plain blur
+/// of colour never does.
 struct GlassBackdrop: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
@@ -13,31 +17,55 @@ struct GlassBackdrop: View {
 
     var body: some View {
         let accent = Color.currentAccent(name: accentName, hex: accentHex)
-        let strength = scheme == .dark ? 0.45 : 0.30
-        // An aurora built from the accent itself: the same colour turned a little each way round the colour wheel,
-        // so the whole app takes its character from the accent chosen.
+        let dark = scheme == .dark
         return ZStack {
             Color(.systemGroupedBackground)
-            Circle()
-                .fill(accent.opacity(strength))
-                .frame(width: 460, height: 460)
-                .blur(radius: 110)
-                .offset(x: -150, y: -300)
-            Circle()
-                .fill(accent.hueShifted(by: 0.09).opacity(strength * 0.65))
-                .frame(width: 400, height: 400)
-                .blur(radius: 120)
-                .offset(x: 170, y: 80)
-            Circle()
-                .fill(accent.hueShifted(by: -0.10).opacity(strength * 0.55))
-                .frame(width: 420, height: 420)
-                .blur(radius: 130)
-                .offset(x: -110, y: 460)
+            LinearGradient(colors: [accent.opacity(dark ? 0.34 : 0.22),
+                                    accent.hueShifted(by: 0.07).opacity(dark ? 0.12 : 0.08),
+                                    Color.clear],
+                           startPoint: .topLeading, endPoint: .bottom)
+            Keybed(accent: accent, dark: dark)
         }
         // A new accent fades in over the old one.
         .animation(.easeInOut(duration: 0.7), value: accentName + accentHex)
         .ignoresSafeArea()
         .accessibilityHidden(true)
+    }
+}
+
+/// Rows of large, faint keys, staggered like a keyboard's and tilted a little, fading out down the screen.
+private struct Keybed: View {
+    let accent: Color
+    let dark: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let key: CGFloat = 60
+            let pitch: CGFloat = key + 11
+            let stagger: [CGFloat] = [0, 0.5, 0.25, 0.75]
+            // Turned about the middle; the rows reach past the edges so the corners stay covered.
+            let reach: CGFloat = max(size.width, size.height) * 0.7
+            context.translateBy(x: size.width / 2, y: size.height / 2)
+            context.rotate(by: .degrees(-11))
+            context.translateBy(x: -size.width / 2, y: -size.height / 2)
+            let rows = Int((size.height + reach) / pitch) + 2
+            let columns = Int((size.width + reach) / pitch) + 2
+            let base: Double = dark ? 0.10 : 0.07
+            for row in 0..<rows {
+                let y: CGFloat = CGFloat(row) * pitch - reach / 2
+                let depth: Double = Double(min(1, max(0, y / max(size.height, 1))))
+                let strength: Double = base * (1 - 0.85 * depth)
+                if strength < 0.004 { continue }
+                let shift: CGFloat = stagger[row % 4] * pitch
+                for column in 0..<columns {
+                    let x: CGFloat = CGFloat(column) * pitch - reach / 2 + shift
+                    let path = Path(roundedRect: CGRect(x: x, y: y, width: key, height: key), cornerRadius: 15,
+                                    style: .continuous)
+                    context.fill(path, with: .color(accent.opacity(strength)))
+                    context.stroke(path, with: .color(Color.white.opacity(strength * (dark ? 0.8 : 1.8))), lineWidth: 1)
+                }
+            }
+        }
     }
 }
 
@@ -68,20 +96,21 @@ extension Color {
     }
 }
 
-/// The app's signature edge: a hairline that catches the light at the top left and fades out towards the bottom
-/// right, on every glass card.
+/// The rim of a frosted card before iOS 26. Real Liquid Glass has a rim of its own, lit by the system (and dimmed
+/// or cleared by the phone's Liquid Glass setting): nothing is drawn over it.
 private struct GlassEdge<S: InsettableShape>: ViewModifier {
     let shape: S
     @Environment(\.colorScheme) private var scheme
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        let light = scheme == .dark ? 0.32 : 0.85
-        content.overlay(
-            shape.strokeBorder(
-                LinearGradient(colors: [Color.white.opacity(light), Color.white.opacity(0.05), .accentColor.opacity(0.25)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing),
-                lineWidth: 0.8)
-                .allowsHitTesting(false))
+        if #available(iOS 26.0, *) {
+            content
+        } else {
+            content.overlay(
+                shape.strokeBorder(Color.white.opacity(scheme == .dark ? 0.18 : 0.5), lineWidth: 0.6)
+                    .allowsHitTesting(false))
+        }
     }
 }
 
@@ -240,58 +269,6 @@ private struct ReportScrollOffset: ViewModifier {
     }
 }
 
-/// A search field that is away when the screen opens. Pulling the list down at its top brings it in (the list
-/// makes room for it); scrolling down puts it away again, and scrolling back up does not bring it back. (Before
-/// iOS 26 it is simply there above the list.)
-struct PullDownSearch: ViewModifier {
-    @Binding var text: String
-    let prompt: String
-    @State private var shown = false
-    /// How far the list is scrolled: the field moves up with it.
-    @State private var scrolled: CGFloat = 0
-    @State private var shownAt = Date.distantPast
-    private let height: CGFloat = 62
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            let visible = shown || !text.isEmpty
-            let away = min(max(scrolled, 0), height)
-            content
-                .contentMargins(.top, visible ? height : 0, for: .scrollContent)
-                .environment(\.scrollOffsetReport, { offset in handle(offset) })
-                .overlay(alignment: .top) {
-                    if visible {
-                        GlassSearchField(text: $text, prompt: prompt)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 6)
-                            .offset(y: -away)
-                            .opacity(1 - Double(away / height))
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                }
-                .animation(.easeOut(duration: 0.25), value: visible)
-        } else {
-            content.glassSearchable(text: $text, prompt: prompt)
-        }
-    }
-
-    private func handle(_ offset: CGFloat) {
-        // Only the first stretch of the scroll moves the field (and only while it is there): the state is not
-        // touched on every frame of a long scroll, which would draw the whole list again each time.
-        let near = min(max(offset, 0), height)
-        if shown, abs(scrolled - near) > 0.5 { scrolled = near }
-        if offset < -90, !shown {
-            scrolled = 0
-            shown = true
-            shownAt = Date()
-        } else if shown, text.isEmpty, offset >= height, Date().timeIntervalSince(shownAt) > 0.4 {
-            // Scrolled down past the field: it goes, and the room it took goes with it without moving the list.
-            shown = false
-        }
-    }
-}
-
 /// The rounded corner of the app's cards: larger on iOS 26, as the system's own.
 enum GlassMetrics {
     static var cardRadius: CGFloat {
@@ -370,7 +347,7 @@ struct ValueBar: View {
         }
     }
 
-    /// The name, and the value on a glass capsule.
+    /// The name, and the value on a capsule of the accent.
     private var header: some View {
         HStack(spacing: 8) {
             if let symbol = symbol {
@@ -385,7 +362,7 @@ struct ValueBar: View {
                 .lineLimit(1)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 3)
-                .glassShape(Capsule(), tint: Color.accentColor.opacity(0.25))
+                .background(Capsule().fill(Color.accentColor.opacity(0.2)))
         }
     }
 
@@ -647,9 +624,11 @@ struct GlassList<Content: View>: View {
     /// (Decided when the list first appears, and kept: switching would build every row again.)
     @State private var eager: Bool
 
-    init(@ViewBuilder content: () -> Content) {
+    /// `eager`: every card is built at once (a short screen, so any of its rows can be scrolled to); nil decides
+    /// by whether the search is taking the user to a row.
+    init(eager: Bool? = nil, @ViewBuilder content: () -> Content) {
         self.content = content()
-        self._eager = State(initialValue: SearchFocus.shared.request != nil)
+        self._eager = State(initialValue: eager ?? (SearchFocus.shared.request != nil))
     }
 
     var body: some View {
@@ -717,11 +696,11 @@ private struct GlassCardSection: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(section.header) { $0 }
                 }
-                .font(.footnote)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 7)
+                .textCase(nil)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
             }
             VStack(spacing: 12) {
                 ForEach(runs) { run in
@@ -739,11 +718,11 @@ private struct GlassCardSection: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .padding(.top, 7)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
             }
         }
-        .padding(.top, section.header.isEmpty ? 20 : 24)
+        .padding(.top, section.header.isEmpty ? 18 : 26)
     }
 
     private func card(_ rows: [Subview]) -> some View {

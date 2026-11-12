@@ -121,7 +121,7 @@ struct StatsView: View {
 
     private func countRow(_ title: String, _ value: Int, symbol: String, color: Color) -> some View {
         HStack(spacing: 12) {
-            IconTile(symbol: symbol, color: color)
+            IconTile(symbol: symbol)
             Text(title)
             Spacer(minLength: 8)
             Text(number(value)).foregroundColor(.secondary).monospacedDigit()

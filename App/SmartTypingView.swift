@@ -39,6 +39,29 @@ struct SmartTypingView: View {
         } content: {
             GlassList {
                 Section {
+                    HStack(spacing: 10) {
+                        Image(systemName: "pencil.line")
+                            .foregroundStyle(.tint)
+                            .accessibilityHidden(true)
+                        TextField(tr("Try your own"), text: $tryText)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.numbersAndPunctuation)
+                            .font(.body.monospaced())
+                        if !tryText.isEmpty {
+                            Button { tryText = "" } label: {
+                                Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(tr("Clear"))
+                        }
+                    }
+                } footer: {
+                    Text(tr("Type here, or tap an example below: the bar above shows what the keyboard would offer."))
+                }
+                .glassRows()
+
+                Section {
                     GlassToggle(title: tr("Calculator"),
                                 subtitle: tr("Type a calculation to get its answer in the bar: + - \u{00D7} \u{00F7} ^ % !, brackets, \u{221A}, \u{03C0}, sin, cos, tan, log and more."),
                                 isOn: $inlineMath)
@@ -82,6 +105,7 @@ struct SmartTypingView: View {
                 .disabled(!inlineMath && !units)
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
         }
         .navigationTitle(tr("Calculator & units"))
         .navigationBarTitleDisplayMode(.inline)
@@ -101,7 +125,8 @@ struct SmartTypingView: View {
                             .foregroundColor(.primary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .glassShape(Capsule(), tint: tryText == example ? Color.accentColor.opacity(0.3) : nil)
+                            .background(Capsule().fill(tryText == example
+                                                       ? Color.accentColor.opacity(0.28) : Color.primary.opacity(0.07)))
                     }
                     .buttonStyle(.plain)
                 }

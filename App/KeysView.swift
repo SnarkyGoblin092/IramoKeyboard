@@ -48,6 +48,8 @@ struct KeysView: View {
     @AppStorage(SettingKey.periodHold, store: SharedStore.defaults) private var periodHold = SettingDefault.periodHold
     /// How many keys have characters of the user's own (read again on every visit).
     @State private var customHoldCount = Settings.shared.customHolds.count
+    /// The page of settings shown under the keyboard.
+    @State private var page: KeysPage
 
     // MARK: Presets
 
@@ -150,7 +152,7 @@ struct KeysView: View {
                         .font(.title3.weight(.semibold))
                         .foregroundColor(.white)
                         .frame(width: 38, height: 46)
-                        .glassTile(shape, isOn: true)
+                        .background(shape.fill(Color.accentColor))
                 } else {
                     shape
                         .strokeBorder(isEditing ? Color.accentColor : Color.secondary.opacity(0.45),
@@ -199,14 +201,14 @@ struct KeysView: View {
                     .font(.title3.weight(.medium))
                     .foregroundColor(.secondary)
                     .frame(width: 30, height: 46)
-                    .glassTile(shape, isOn: false)
+                    .background(shape.fill(Color.primary.opacity(0.08)))
             }
             sideSlots(left: true)
             Text(tr("space"))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .glassTile(shape, isOn: false)
+                .background(shape.fill(Color.primary.opacity(0.08)))
                 .layoutPriority(1)
             sideSlots(left: false)
             if periodKey {
@@ -214,7 +216,7 @@ struct KeysView: View {
                     .font(.title3.weight(.medium))
                     .foregroundColor(.secondary)
                     .frame(width: 30, height: 46)
-                    .glassTile(shape, isOn: false)
+                    .background(shape.fill(Color.primary.opacity(0.08)))
             }
         }
         .padding(.vertical, 4)
@@ -237,237 +239,288 @@ struct KeysView: View {
         }
     }
 
+    init() {
+        // A setting picked in the search opens the page it is on.
+        _page = State(initialValue: KeysPage.holding(SearchFocus.shared.request?.anchor))
+    }
+
     var body: some View {
-        // The keyboard stays pinned above the settings, at a fixed size.
-        PinnedPreview(height: 240, fills: true) {
-            LiveKeyboard()
+        // The keyboard stays pinned above the settings, at a fixed size, with the pages of settings under it: the
+        // keys' size and layout, their letters, and the bottom row.
+        PinnedPreview(height: 284, fills: true) {
+            VStack(spacing: 8) {
+                LiveKeyboard()
+                SegmentedChoice(names: KeysPage.allCases.map { $0.title }, selected: page.rawValue) { index in
+                    page = KeysPage(rawValue: index) ?? .size
+                }
+            }
         } content: {
         GlassList {
-            Section {
-                SegmentedChoice(title: tr("Overall"), names: styles.map { $0.name }, selected: styleIndex) { index in
-                    let style = styles[index]
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        keyHeight = style.height
-                        roundness = style.roundness
-                        keyGap = style.keyGap
-                        rowGap = style.rowGap
-                    }
-                }
-            } footer: {
-                Text(styleIndex == nil
-                     ? tr("Your own mix of size, corners and spacing.")
-                     : tr("Sets the key size, corners and spacing together; change any of them below."))
+            switch page {
+            case .size: sizeSections
+            case .letters: letterSections
+            case .bottom: bottomSections
             }
-            .glassRows()
-
-            Section {
-                SegmentedChoice(names: heights.map { "\(Int($0))" },
-                                selected: heights.firstIndex { same($0, keyHeight) }) { keyHeight = heights[$0] }
-                    .searchAnchor("keys.size")
-                GlassSlider(title: tr("Key height"), symbol: "arrow.up.and.down", value: $keyHeight,
-                            range: Settings.keyHeightRange, step: 1) { "\(Int($0.rounded())) pt" }
-                GlassSlider(title: tr("Keyboard width"), symbol: "arrow.left.and.right", value: $keyboardWidth,
-                            range: Settings.keyboardWidthRange, step: 0.01) { DeviceMetrics.points(DeviceMetrics.keyboardWidth * $0) }
-                GlassToggle(title: tr("Own height in landscape"),
-                            subtitle: tr("Off: landscape keys are two thirds of the portrait height."),
-                            isOn: $landscapeSeparate)
-                if landscapeSeparate {
-                    GlassSlider(title: tr("Landscape key height"), symbol: "rectangle.landscape.rotate",
-                                value: $landscapeKeyHeight, range: Settings.landscapeKeyHeightRange,
-                                step: 1) { "\(Int($0.rounded())) pt" }
-                }
-            } header: {
-                SectionHeader(tr("Size"), symbol: "arrow.up.left.and.arrow.down.right", color: .blue)
-            }
-            .glassRows()
-
-            Section {
-                SegmentedChoice(names: [tr("Narrow"), tr("Standard"), tr("Wide"), tr("Extra wide")],
-                                selected: gaps.firstIndex { same($0.key, keyGap) && same($0.row, rowGap) }) { index in
-                    keyGap = gaps[index].key
-                    rowGap = gaps[index].row
-                }
-                .searchAnchor("keys.spacing")
-                GlassSlider(title: tr("Between keys"), symbol: "arrow.left.and.right", value: $keyGap,
-                            range: Settings.keyGapRange, step: 1) { "\(Int($0.rounded())) pt" }
-                GlassSlider(title: tr("Between rows"), symbol: "arrow.up.and.down", value: $rowGap,
-                            range: Settings.rowGapRange, step: 1) { "\(Int($0.rounded())) pt" }
-            } header: {
-                SectionHeader(tr("Spacing"), symbol: "square.split.2x2", color: .teal)
-            } footer: {
-                Text(tr("The whole space between keys still takes taps; wider gaps only change how the keys look."))
-            }
-            .glassRows()
-
-            Section {
-                SettingToggle(tr("Number row"), key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
-                              subtitle: tr("Numbers above the letters"))
-                    .searchAnchor("keys.layout")
-                GlassToggle(title: tr("Split keyboard"),
-                            subtitle: isPad
-                                ? tr("The keys in two halves, one under each thumb, in every language.")
-                                : tr("In landscape: the keys in two halves, one under each thumb, in every language."),
-                            isOn: $split)
-                GlassToggle(title: tr("One-handed"), subtitle: tr("One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over."),
-                            isOn: Binding(get: { oneHanded != "off" }, set: { setOneHanded($0) }))
-                    .disabled(isPad && split)
-                    .opacity(isPad && split ? 0.45 : 1)
-            } header: {
-                SectionHeader(tr("Layout"), symbol: "hand.raised.fingers.spread", color: .teal)
-            } footer: {
-                if split {
-                    Text(isPad
-                         ? tr("The split keyboard is used instead of the one-handed one.")
-                         : tr("One-handed: a narrower keyboard against that side, upright; in landscape the split keyboard is used instead."))
-                }
-            }
-            .glassRows()
-
-            Section {
-                NavigationLink {
-                    KeyFontChoice(keyFont: $keyFont)
-                } label: {
-                    HStack {
-                        Label(tr("Font"), systemImage: "textformat.alt")
-                        Spacer()
-                        Text(tr(KeyFont.named(keyFont).displayName)).foregroundColor(.secondary)
-                        DisclosureChevron()
-                    }
-                    .foregroundColor(.primary)
-                    .contentShape(Rectangle())
-                }
-                .searchAnchor("keys.letters")
-                VStack(alignment: .leading, spacing: 6) {
-                    SegmentedChoice(names: [tr("Follow shift"), tr("Always capitals")], selected: alwaysCapitals ? 1 : 0) {
-                        alwaysCapitals = $0 == 1
-                    }
-                    .disabled(languages.lacking(.capitals).all)
-                    .opacity(languages.lacking(.capitals).all ? 0.45 : 1)
-                    FeatureNote(.capitals)
-                }
-                GlassSlider(title: tr("Letter size"), symbol: "textformat.size", value: $letterSize,
-                            range: Settings.letterSizeRange, step: 0.05) { DeviceMetrics.points(23 * $0) }
-                SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
-                              subtitle: tr("The letter shows above your finger"))
-                    .searchAnchor("keys.popups")
-            } header: {
-                SectionHeader(tr("Letters"), symbol: "textformat", color: .orange)
-            } footer: {
-                Text(tr("The font of the keys, their pop-ups and the suggestion bar. Letters a font lacks (Arabic, Cyrillic) use the system font."))
-            }
-            .glassRows()
-
-            Section {
-                // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
-                HStack {
-                    Label(tr("Position"), systemImage: "square.grid.3x3.topright.filled")
-                    Spacer()
-                    Picker(tr("Position"), selection: Binding(get: { keyHints ? hintPosition : "off" }, set: { value in
-                        Feedback.choose()
-                        if value == "off" {
-                            keyHints = false
-                        } else {
-                            keyHints = true
-                            hintPosition = value
-                        }
-                    })) {
-                        Text(tr("Off")).tag("off")
-                        Text(tr("Top right")).tag("topRight")
-                        Text(tr("Top centre")).tag("topCenter")
-                        Text(tr("Top left")).tag("topLeft")
-                        Text(tr("Bottom right")).tag("bottomRight")
-                        Text(tr("Bottom centre")).tag("bottomCenter")
-                        Text(tr("Bottom left")).tag("bottomLeft")
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-                .searchAnchor("keys.hints")
-                GlassSlider(title: tr("Hint size"), symbol: "textformat.size.smaller", value: $hintSize,
-                            range: Settings.hintSizeRange, step: 0.05) { DeviceMetrics.points(10 * $0) }
-                    .disabled(!keyHints)
-                    .opacity(keyHints ? 1 : 0.45)
-            } header: {
-                SectionHeader(tr("Accent hints"), symbol: "textformat.abc.dottedunderline", color: .pink)
-            } footer: {
-                Text(tr("A small mark on a key shows the first accent you get by holding it."))
-            }
-            .glassRows()
-
-            Section {
-                ScreenRow(.longPress) {
-                    HStack {
-                        Label(tr("Long-press characters"), systemImage: "hand.point.up.left")
-                        Spacer()
-                        Text(customHoldCount == 0 ? tr("None") : "\(customHoldCount)").foregroundColor(.secondary)
-                    }
-                }
-                .searchAnchor("keys.holds")
-            } header: {
-                SectionHeader(tr("Your own characters"), symbol: "character.textbox", color: .purple)
-            } footer: {
-                Text(tr("Add characters of your own to any letter or digit: touch and hold the key to type them."))
-            }
-            .glassRows()
-
-            Section {
-                GlassSlider(title: tr("Text size"), symbol: "textformat.size", value: $spaceTextSize,
-                            range: Settings.spaceTextSizeRange, step: 1) { "\(Int($0.rounded())) pt" }
-                    .searchAnchor("keys.space")
-                GlassToggle(title: tr("Short language code"),
-                            subtitle: tr("EN, HU... instead of the language's full name."),
-                            isOn: $spaceLanguageCode)
-            } header: {
-                SectionHeader(tr("Space bar"), symbol: "space", color: .gray)
-            } footer: {
-                Text(tr("The space bar shows the language you're typing in."))
-            }
-            .glassRows()
-
-            Section {
-                symbolSlots
-                    .searchAnchor("keys.symbols")
-            } header: {
-                SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
-            } footer: {
-                Text(tr("Tap a place and type a character: it gets its own key on either side of the space bar. A comma or full stop taken off leaves its place free. Touch and hold a key to remove it."))
-            }
-            .glassRows()
-
-            Section {
-                GlassToggle(title: tr("Emoji key"), subtitle: tr("Opens the emoji picker. Touch and hold it for the settings.") + " "
-                                + tr("With the key off, the settings cannot be opened from the keyboard."),
-                            isOn: $emojiKey)
-                    .searchAnchor("keys.bottom")
-                GlassToggle(title: tr("Comma key"),
-                            subtitle: !commaKey && blocksReturn(comma: true)
-                                ? tr("Remove a symbol key first: there is no room for the comma.")
-                                : tr("The comma left of the space bar."), isOn: $commaKey)
-                    .disabled(!commaKey && blocksReturn(comma: true))
-                if commaKey {
-                    holdField(tr("Hold comma for"), text: $commaHold)
-                }
-                GlassToggle(title: tr("Full stop key"),
-                            subtitle: !periodKey && blocksReturn(comma: false)
-                                ? tr("Remove a symbol key first: there is no room for the full stop.")
-                                : tr("The full stop right of the space bar."), isOn: $periodKey)
-                    .disabled(!periodKey && blocksReturn(comma: false))
-                if periodKey {
-                    holdField(tr("Hold full stop for"), text: $periodHold)
-                }
-            } header: {
-                SectionHeader(tr("Bottom row"), symbol: "keyboard.chevron.compact.down", color: .gray)
-            } footer: {
-                Text(tr("Keys you take off give their room to the space bar. Type the symbols a hold offers, in order (up to ten); leave it empty for your language's own."))
-            }
-            .glassRows()
         }
         .scrollContentBackground(.hidden)
+        .id(page)   // each page opens at its top
         }
         .scrollDismissesKeyboard(.interactively)
         .onAppear { customHoldCount = Settings.shared.customHolds.count }
         .navigationTitle(tr("Keys"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: Pages
+
+    /// How big the keys are, the gaps between them, and the keyboard's layout.
+    @ViewBuilder private var sizeSections: some View {
+        Section {
+            SegmentedChoice(title: tr("Overall"), names: styles.map { $0.name }, selected: styleIndex) { index in
+                let style = styles[index]
+                withAnimation(.easeOut(duration: 0.2)) {
+                    keyHeight = style.height
+                    roundness = style.roundness
+                    keyGap = style.keyGap
+                    rowGap = style.rowGap
+                }
+            }
+        } footer: {
+            Text(styleIndex == nil
+                 ? tr("Your own mix of size, corners and spacing.")
+                 : tr("Sets the key size, corners and spacing together; change any of them below."))
+        }
+        .glassRows()
+
+        Section {
+            SegmentedChoice(names: heights.map { "\(Int($0))" },
+                            selected: heights.firstIndex { same($0, keyHeight) }) { keyHeight = heights[$0] }
+                .searchAnchor("keys.size")
+            GlassSlider(title: tr("Key height"), symbol: "arrow.up.and.down", value: $keyHeight,
+                        range: Settings.keyHeightRange, step: 1) { "\(Int($0.rounded())) pt" }
+            GlassSlider(title: tr("Keyboard width"), symbol: "arrow.left.and.right", value: $keyboardWidth,
+                        range: Settings.keyboardWidthRange, step: 0.01) { DeviceMetrics.points(DeviceMetrics.keyboardWidth * $0) }
+            GlassToggle(title: tr("Own height in landscape"),
+                        subtitle: tr("Off: landscape keys are two thirds of the portrait height."),
+                        isOn: $landscapeSeparate)
+            if landscapeSeparate {
+                GlassSlider(title: tr("Landscape key height"), symbol: "rectangle.landscape.rotate",
+                            value: $landscapeKeyHeight, range: Settings.landscapeKeyHeightRange,
+                            step: 1) { "\(Int($0.rounded())) pt" }
+            }
+        } header: {
+            SectionHeader(tr("Size"), symbol: "arrow.up.left.and.arrow.down.right", color: .blue)
+        }
+        .glassRows()
+
+        Section {
+            SegmentedChoice(names: [tr("Narrow"), tr("Standard"), tr("Wide"), tr("Extra wide")],
+                            selected: gaps.firstIndex { same($0.key, keyGap) && same($0.row, rowGap) }) { index in
+                keyGap = gaps[index].key
+                rowGap = gaps[index].row
+            }
+            .searchAnchor("keys.spacing")
+            GlassSlider(title: tr("Between keys"), symbol: "arrow.left.and.right", value: $keyGap,
+                        range: Settings.keyGapRange, step: 1) { "\(Int($0.rounded())) pt" }
+            GlassSlider(title: tr("Between rows"), symbol: "arrow.up.and.down", value: $rowGap,
+                        range: Settings.rowGapRange, step: 1) { "\(Int($0.rounded())) pt" }
+        } header: {
+            SectionHeader(tr("Spacing"), symbol: "square.split.2x2", color: .teal)
+        } footer: {
+            Text(tr("The whole space between keys still takes taps; wider gaps only change how the keys look."))
+        }
+        .glassRows()
+
+        Section {
+            SettingToggle(tr("Number row"), key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
+                          subtitle: tr("Numbers above the letters"))
+                .searchAnchor("keys.layout")
+            GlassToggle(title: tr("Split keyboard"),
+                        subtitle: isPad
+                            ? tr("The keys in two halves, one under each thumb, in every language.")
+                            : tr("In landscape: the keys in two halves, one under each thumb, in every language."),
+                        isOn: $split)
+            GlassToggle(title: tr("One-handed"), subtitle: tr("One-handed: a narrower keyboard against that side. Tap the arrow in the empty side to move it over."),
+                        isOn: Binding(get: { oneHanded != "off" }, set: { setOneHanded($0) }))
+                .disabled(isPad && split)
+                .opacity(isPad && split ? 0.45 : 1)
+        } header: {
+            SectionHeader(tr("Layout"), symbol: "hand.raised.fingers.spread", color: .teal)
+        } footer: {
+            if split {
+                Text(isPad
+                     ? tr("The split keyboard is used instead of the one-handed one.")
+                     : tr("One-handed: a narrower keyboard against that side, upright; in landscape the split keyboard is used instead."))
+            }
+        }
+        .glassRows()
+    }
+
+    /// What is written on the keys, and what holding them offers.
+    @ViewBuilder private var letterSections: some View {
+        Section {
+            NavigationLink {
+                KeyFontChoice(keyFont: $keyFont)
+            } label: {
+                HStack {
+                    Label(tr("Font"), systemImage: "textformat.alt")
+                    Spacer()
+                    Text(tr(KeyFont.named(keyFont).displayName)).foregroundColor(.secondary)
+                    DisclosureChevron()
+                }
+                .foregroundColor(.primary)
+                .contentShape(Rectangle())
+            }
+            .searchAnchor("keys.letters")
+            VStack(alignment: .leading, spacing: 6) {
+                SegmentedChoice(names: [tr("Follow shift"), tr("Always capitals")], selected: alwaysCapitals ? 1 : 0) {
+                    alwaysCapitals = $0 == 1
+                }
+                .disabled(languages.lacking(.capitals).all)
+                .opacity(languages.lacking(.capitals).all ? 0.45 : 1)
+                FeatureNote(.capitals)
+            }
+            GlassSlider(title: tr("Letter size"), symbol: "textformat.size", value: $letterSize,
+                        range: Settings.letterSizeRange, step: 0.05) { DeviceMetrics.points(23 * $0) }
+            SettingToggle(tr("Key pop-ups"), key: SettingKey.keyPopups, defaultValue: SettingDefault.keyPopups,
+                          subtitle: tr("The letter shows above your finger"))
+                .searchAnchor("keys.popups")
+        } header: {
+            SectionHeader(tr("Letters"), symbol: "textformat", color: .orange)
+        } footer: {
+            Text(tr("The font of the keys, their pop-ups and the suggestion bar. Letters a font lacks (Arabic, Cyrillic) use the system font."))
+        }
+        .glassRows()
+
+        Section {
+            // The label beside a menu picker, as in a list (a menu picker alone shows only its value).
+            HStack {
+                Label(tr("Position"), systemImage: "square.grid.3x3.topright.filled")
+                Spacer()
+                Picker(tr("Position"), selection: Binding(get: { keyHints ? hintPosition : "off" }, set: { value in
+                    Feedback.choose()
+                    if value == "off" {
+                        keyHints = false
+                    } else {
+                        keyHints = true
+                        hintPosition = value
+                    }
+                })) {
+                    Text(tr("Off")).tag("off")
+                    Text(tr("Top right")).tag("topRight")
+                    Text(tr("Top centre")).tag("topCenter")
+                    Text(tr("Top left")).tag("topLeft")
+                    Text(tr("Bottom right")).tag("bottomRight")
+                    Text(tr("Bottom centre")).tag("bottomCenter")
+                    Text(tr("Bottom left")).tag("bottomLeft")
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            .searchAnchor("keys.hints")
+            GlassSlider(title: tr("Hint size"), symbol: "textformat.size.smaller", value: $hintSize,
+                        range: Settings.hintSizeRange, step: 0.05) { DeviceMetrics.points(10 * $0) }
+                .disabled(!keyHints)
+                .opacity(keyHints ? 1 : 0.45)
+        } header: {
+            SectionHeader(tr("Accent hints"), symbol: "textformat.abc.dottedunderline", color: .pink)
+        } footer: {
+            Text(tr("A small mark on a key shows the first accent you get by holding it."))
+        }
+        .glassRows()
+
+        Section {
+            ScreenRow(.longPress) {
+                HStack {
+                    Label(tr("Long-press characters"), systemImage: "hand.point.up.left")
+                    Spacer()
+                    Text(customHoldCount == 0 ? tr("None") : "\(customHoldCount)").foregroundColor(.secondary)
+                }
+            }
+            .searchAnchor("keys.holds")
+        } header: {
+            SectionHeader(tr("Your own characters"), symbol: "character.textbox", color: .purple)
+        } footer: {
+            Text(tr("Add characters of your own to any letter or digit: touch and hold the key to type them."))
+        }
+        .glassRows()
+    }
+
+    /// The row of the space bar: the symbol keys beside it, the keys that can be taken off, and the bar's own text.
+    @ViewBuilder private var bottomSections: some View {
+        Section {
+            symbolSlots
+                .searchAnchor("keys.symbols")
+        } header: {
+            SectionHeader(tr("Symbol keys"), symbol: "at", color: .indigo)
+        } footer: {
+            Text(tr("Tap a place and type a character: it gets its own key on either side of the space bar. A comma or full stop taken off leaves its place free. Touch and hold a key to remove it."))
+        }
+        .glassRows()
+
+        Section {
+            GlassToggle(title: tr("Emoji key"), subtitle: tr("Opens the emoji picker. Touch and hold it for the settings.") + " "
+                            + tr("With the key off, the settings cannot be opened from the keyboard."),
+                        isOn: $emojiKey)
+                .searchAnchor("keys.bottom")
+            GlassToggle(title: tr("Comma key"),
+                        subtitle: !commaKey && blocksReturn(comma: true)
+                            ? tr("Remove a symbol key first: there is no room for the comma.")
+                            : tr("The comma left of the space bar."), isOn: $commaKey)
+                .disabled(!commaKey && blocksReturn(comma: true))
+            if commaKey {
+                holdField(tr("Hold comma for"), text: $commaHold)
+            }
+            GlassToggle(title: tr("Full stop key"),
+                        subtitle: !periodKey && blocksReturn(comma: false)
+                            ? tr("Remove a symbol key first: there is no room for the full stop.")
+                            : tr("The full stop right of the space bar."), isOn: $periodKey)
+                .disabled(!periodKey && blocksReturn(comma: false))
+            if periodKey {
+                holdField(tr("Hold full stop for"), text: $periodHold)
+            }
+        } header: {
+            SectionHeader(tr("Bottom row"), symbol: "keyboard.chevron.compact.down", color: .gray)
+        } footer: {
+            Text(tr("Keys you take off give their room to the space bar. Type the symbols a hold offers, in order (up to ten); leave it empty for your language's own."))
+        }
+        .glassRows()
+
+        Section {
+            GlassSlider(title: tr("Text size"), symbol: "textformat.size", value: $spaceTextSize,
+                        range: Settings.spaceTextSizeRange, step: 1) { "\(Int($0.rounded())) pt" }
+                .searchAnchor("keys.space")
+            GlassToggle(title: tr("Short language code"),
+                        subtitle: tr("EN, HU... instead of the language's full name."),
+                        isOn: $spaceLanguageCode)
+        } header: {
+            SectionHeader(tr("Space bar"), symbol: "space", color: .gray)
+        } footer: {
+            Text(tr("The space bar shows the language you're typing in."))
+        }
+        .glassRows()
+    }
+}
+
+/// The Keys screen's pages, as its switch under the keyboard has them.
+private enum KeysPage: Int, CaseIterable {
+    case size, letters, bottom
+
+    var title: String {
+        switch self {
+        case .size: return tr("Size")
+        case .letters: return tr("Letters")
+        case .bottom: return tr("Bottom row")
+        }
+    }
+
+    /// The page a row the search points at is on.
+    static func holding(_ anchor: String?) -> KeysPage {
+        switch anchor ?? "" {
+        case "keys.letters", "keys.popups", "keys.hints", "keys.holds": return .letters
+        case "keys.space", "keys.symbols", "keys.bottom": return .bottom
+        default: return .size
+        }
     }
 }
 

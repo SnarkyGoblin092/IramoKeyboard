@@ -29,6 +29,10 @@ struct HapticsView: View {
     }
 
     var body: some View {
+        // The keyboard itself is pinned above the settings: its keys vibrate and click as they are set to.
+        PinnedPreview(height: 240, fills: true) {
+            LiveKeyboard()
+        } content: {
         GlassList {
             Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
@@ -55,7 +59,8 @@ struct HapticsView: View {
             } header: {
                 SectionHeader(tr("Vibration"), symbol: "iphone.radiowaves.left.and.right", color: .pink)
             } footer: {
-                Text(tr("Needs Full Access for the keyboard. Sharpness goes from a soft thud to a crisp tap."))
+                Text(tr("Touch the keyboard above to feel it.") + " "
+                     + tr("Needs Full Access for the keyboard. Sharpness goes from a soft thud to a crisp tap."))
             }
             .glassRows()
 
@@ -89,7 +94,8 @@ struct HapticsView: View {
             }
             .glassRows()
         }
-        .glassScreen()
+        .scrollContentBackground(.hidden)
+        }
         .navigationTitle(tr("Haptics & sound"))
         .navigationBarTitleDisplayMode(.inline)
     }
