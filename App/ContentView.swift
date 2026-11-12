@@ -431,6 +431,7 @@ struct KeyboardStatus {
 }
 
 /// A picture of the window, laid over it while the app is not in front (see ContentView).
+@MainActor
 private enum SnapshotCover {
     private static var cover: UIView?
 
