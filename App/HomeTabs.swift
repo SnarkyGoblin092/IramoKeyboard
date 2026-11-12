@@ -67,8 +67,16 @@ private struct StageSection: View {
                 if status.isReady {
                     StatusChip(text: tr("Ready to type"), symbol: "checkmark.circle.fill", color: .green)
                 } else {
-                    StatusChip(text: title, symbol: "exclamationmark.triangle.fill",
-                               color: SharedStore.isShared ? .orange : .red)
+                    // A tap goes to the app's page in Settings, where the keyboard and Full Access are switched on.
+                    Button {
+                        Feedback.tap()
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    } label: {
+                        StatusChip(text: title, symbol: "exclamationmark.triangle.fill",
+                                   color: SharedStore.isShared ? .orange : .red)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!SharedStore.isShared)
                 }
             }
             Spacer(minLength: 0)
@@ -101,21 +109,13 @@ private struct StageSection: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if SharedStore.isShared, let url = URL(string: UIApplication.openSettingsURLString) {
-                // The app's own page in Settings lists Keyboards > Iramo and Allow Full Access.
-                Button(tr("Open Settings")) {
-                    Feedback.tap()
-                    openURL(url)
-                }
-                .buttonStyle(ActionButtonStyle())
-            }
         }
         .padding(.vertical, 4)
     }
 
     private var title: String {
         if !SharedStore.isShared { return tr("Settings can't reach the keyboard") }
-        return status.seen ? tr("Allow Full Access") : tr("Add the keyboard")
+        return status.seen ? tr("Full Access is off") : tr("Keyboard not enabled")
     }
 
     private var hint: String {

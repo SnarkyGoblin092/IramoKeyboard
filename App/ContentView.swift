@@ -112,7 +112,10 @@ struct ContentView: View {
             // The Themes screen's light / dark switch sets the mode of the whole app ("auto": the system's).
             .preferredColorScheme(appearance == "light" ? .light : (appearance == "dark" ? .dark : nil))
             .fullScreenCover(isPresented: Binding(get: { !welcomeSeen }, set: { welcomeSeen = !$0 })) {
-                WelcomeView { welcomeSeen = true }
+                WelcomeView {
+                    SharedStore.defaults.set(0, forKey: WelcomeView.pageKey)
+                    welcomeSeen = true
+                }
                     .environment(\.locale, AppLanguage.locale)
                     .environment(\.layoutDirection, AppLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
                     .modifier(AccentTint())

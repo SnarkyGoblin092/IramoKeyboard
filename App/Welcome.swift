@@ -7,7 +7,10 @@ import SwiftUI
 /// the buttons, or skip at any time.
 struct WelcomeView: View {
     let finish: () -> Void
-    @State private var page = 0
+    /// The page shown, kept in the settings so that leaving the app (the Settings button) and coming back, even
+    /// after the system has closed the app, returns to it. It is cleared when the welcome page is finished.
+    @AppStorage(WelcomeView.pageKey, store: SharedStore.defaults) private var page = 0
+    static let pageKey = "welcomePage"
 
     private struct Page {
         let color: Color
@@ -86,7 +89,7 @@ struct WelcomeView: View {
 
     var body: some View {
         let pages = self.pages
-        let last = page == pages.count - 1
+        let last = page >= pages.count - 1
         VStack(spacing: 0) {
             header(last: last)
             TabView(selection: $page) {
@@ -214,6 +217,12 @@ struct WelcomeView: View {
                 }
                 if item.demo == .turnOn {
                     settingsButton
+                    Text(tr("Without Full Access, some features don't work: vibration, recent emoji, learned words and typing stats."))
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
                 }
                 if item.demo == .ready {
                     placesCard
