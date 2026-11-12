@@ -169,9 +169,14 @@ struct KeysView: View {
                     Color.clear
                         .frame(width: 38, height: 46)
                         .glassShape(shape, tint: isEditing ? Color.accentColor.opacity(0.45) : nil, interactive: true)
-                        .overlay(Image(systemName: isEditing ? "keyboard" : "plus")
+                        .overlay(
+                            ZStack {
+                                Image(systemName: "plus").opacity(isEditing ? 0 : 1)
+                                Image(systemName: "keyboard").opacity(isEditing ? 1 : 0)
+                            }
                             .font(.footnote.weight(.semibold))
-                            .foregroundColor(isEditing ? .white : .secondary))
+                            .foregroundColor(isEditing ? .white : .secondary)
+                            .animation(.easeInOut(duration: 0.25), value: isEditing))
                 }
             }
             .frame(width: 38, height: 46)

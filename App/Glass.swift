@@ -161,22 +161,65 @@ private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
 }
 #endif
 
-/// A soft blur behind the title at the top of a tab, fading out downwards so the list has no hard edge under it.
+/// A blur behind the title at the top of a tab: full strength down to 70% of its height, then fading to nothing
+/// over the bottom 30%, so the list has no hard edge under it. A real variable blur, with no grey tint.
 struct TitleBlur: View {
     var body: some View {
         GeometryReader { proxy in
-            let top = proxy.safeAreaInsets.top
-            let height = top + 80
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0),
-                                             .init(color: .black, location: top / max(height, 1) + 0.1),
-                                             .init(color: .clear, location: 1)],
-                                     startPoint: .top, endPoint: .bottom))
-                .frame(height: height)
+            VariableBlurView()
+                .frame(height: proxy.safeAreaInsets.top + 200)
         }
         .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
+    }
+}
+
+/// The system's blur with its amount varying along a mask (the blur filter UIKit's own bars use), and its tint
+/// layers taken away. If the filter is not there, a plain blur faded out by a gradient instead.
+private struct VariableBlurView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIVisualEffectView, context: Context) {
+        guard let backdrop = view.subviews.first,
+              let filterClass = NSClassFromString("CAFilter") as? NSObject.Type,
+              let made = filterClass.perform(NSSelectorFromString("filterWithType:"), with: "variableBlur"),
+              let filter = made.takeUnretainedValue() as? NSObject,
+              let mask = VariableBlurView.maskImage() else {
+            view.layer.mask = VariableBlurView.fadeMask(for: view.bounds)
+            return
+        }
+        filter.setValue(20, forKey: "inputRadius")
+        filter.setValue(mask, forKey: "inputMaskImage")
+        filter.setValue(true, forKey: "inputNormalizeEdges")
+        backdrop.layer.filters = [filter]
+        // The effect's grey tint and edge layers.
+        for tint in view.subviews.dropFirst() { tint.alpha = 0 }
+    }
+
+    /// The blur's amount along the view: all of it down to 70%, none at the bottom (alpha of the image).
+    private static func maskImage() -> CGImage? {
+        let size = CGSize(width: 1, height: 256)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            let colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor] as CFArray
+            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors,
+                                            locations: [0, 0.7, 1]) else { return }
+            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+        }
+        return image.cgImage
+    }
+
+    private static func fadeMask(for bounds: CGRect) -> CALayer {
+        let layer = CAGradientLayer()
+        layer.frame = bounds
+        layer.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
+        layer.locations = [0, 0.7, 1]
+        return layer
     }
 }
 

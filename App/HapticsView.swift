@@ -29,11 +29,23 @@ struct HapticsView: View {
     }
 
     var body: some View {
-        // The keyboard itself is pinned above the settings: its keys vibrate and click as they are set to.
-        PinnedPreview(height: 240, fills: true) {
-            LiveKeyboard()
-        } content: {
         GlassList {
+            Section {
+                // A few key presses, as they are set now.
+                Button {
+                    feelIt()
+                } label: {
+                    Label(tr("Feel it"), systemImage: "hand.tap.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .foregroundColor(.white)
+                        .glassTile(Capsule(), isOn: true)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
+            .glassRows()
+
             Section {
                 Toggle(isOn: Binding(get: { isOn }, set: { on in
                     strength = on ? SettingDefault.vibration : 0
@@ -59,8 +71,7 @@ struct HapticsView: View {
             } header: {
                 SectionHeader(tr("Vibration"), symbol: "iphone.radiowaves.left.and.right", color: .pink)
             } footer: {
-                Text(tr("Touch the keyboard above to feel it.") + " "
-                     + tr("Needs Full Access for the keyboard. Sharpness goes from a soft thud to a crisp tap."))
+                Text(tr("Needs Full Access for the keyboard. Sharpness goes from a soft thud to a crisp tap."))
             }
             .glassRows()
 
@@ -95,8 +106,17 @@ struct HapticsView: View {
             .glassRows()
         }
         .scrollContentBackground(.hidden)
-        }
         .navigationTitle(tr("Haptics & sound"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Four key presses in a row: the vibration and the click, as they are set.
+    private func feelIt() {
+        for index in 0..<4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.16) {
+                Feedback.test(strength: strength, sharpness: sharpness)
+                if clicks, let sound = KeySound(rawValue: soundStyle) { AudioServicesPlaySystemSound(sound.soundID) }
+            }
+        }
     }
 }
