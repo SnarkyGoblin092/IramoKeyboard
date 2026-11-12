@@ -161,13 +161,13 @@ private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
 }
 #endif
 
-/// A blur behind the title at the top of a tab: full strength down to 70% of its height, then fading to nothing
-/// over the bottom 30%, so the list has no hard edge under it. A real variable blur, with no grey tint.
+/// A blur behind the title at the top of a tab: full strength down to half its height, then fading to nothing
+/// over the lower half, so the list has no hard edge under it. A real variable blur, with no grey tint.
 struct TitleBlur: View {
     var body: some View {
         GeometryReader { proxy in
             VariableBlurView()
-                .frame(height: proxy.safeAreaInsets.top + 200)
+                .frame(height: proxy.safeAreaInsets.top + 36)
         }
         .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
@@ -192,7 +192,7 @@ private struct VariableBlurView: UIViewRepresentable {
             view.layer.mask = VariableBlurView.fadeMask(for: view.bounds)
             return
         }
-        filter.setValue(20, forKey: "inputRadius")
+        filter.setValue(10, forKey: "inputRadius")
         filter.setValue(mask, forKey: "inputMaskImage")
         filter.setValue(true, forKey: "inputNormalizeEdges")
         backdrop.layer.filters = [filter]
@@ -200,7 +200,7 @@ private struct VariableBlurView: UIViewRepresentable {
         for tint in view.subviews.dropFirst() { tint.alpha = 0 }
     }
 
-    /// The blur's amount along the view: all of it down to 70%, none at the bottom (alpha of the image).
+    /// The blur's amount along the view: all of it down to half, none at the bottom (alpha of the image).
     private static func maskImage() -> CGImage? {
         let size = CGSize(width: 1, height: 256)
         let format = UIGraphicsImageRendererFormat()
@@ -208,7 +208,7 @@ private struct VariableBlurView: UIViewRepresentable {
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor] as CFArray
             guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors,
-                                            locations: [0, 0.7, 1]) else { return }
+                                            locations: [0, 0.5, 1]) else { return }
             context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
         }
         return image.cgImage
@@ -218,7 +218,7 @@ private struct VariableBlurView: UIViewRepresentable {
         let layer = CAGradientLayer()
         layer.frame = bounds
         layer.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
-        layer.locations = [0, 0.7, 1]
+        layer.locations = [0, 0.5, 1]
         return layer
     }
 }
