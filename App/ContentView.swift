@@ -388,8 +388,15 @@ struct KeyboardStatus {
 
     static func read() -> KeyboardStatus {
         let store = SharedStore.defaults
-        return KeyboardStatus(seen: store.double(forKey: SettingKey.lastSeen) > 0,
-                              fullAccess: store.bool(forKey: SettingKey.fullAccess))
+        // Enabled: the system lists the keyboard among the ones switched on (checked here, in the app, so the answer
+        // is current). Full Access can only be told by the keyboard itself, which saves it each time it opens.
+        return KeyboardStatus(seen: isEnabled, fullAccess: store.bool(forKey: SettingKey.fullAccess))
+    }
+
+    /// Whether the keyboard is among the system's enabled keyboards.
+    private static var isEnabled: Bool {
+        let id = (Bundle.main.bundleIdentifier ?? "") + ".keyboard"
+        return UITextInputMode.activeInputModes.contains { ($0.value(forKey: "identifier") as? String) == id }
     }
 
     /// Nothing left to set up: the Typing tab then shows no setup card.
