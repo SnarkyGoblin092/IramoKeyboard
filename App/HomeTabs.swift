@@ -175,7 +175,7 @@ private struct KeyboardSection: View {
         Section {
             ScreenRow(.languages) {
                 HStack(spacing: 12) {
-                    IconTile(symbol: "globe")
+                    IconTile(symbol: "globe", color: .blue)
                     Text(tr("Languages"))
                     Spacer(minLength: 8)
                     languageCaps
@@ -183,26 +183,27 @@ private struct KeyboardSection: View {
                 .padding(.vertical, 2)
             }
             ScreenRow(.suggestions) {
-                SettingsRow(title: tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", value: barSummary)
+                SettingsRow(title: tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo, value: barSummary)
             }
             ScreenRow(.shortcuts) {
-                SettingsRow(title: tr("Text shortcuts"), symbol: "bolt.fill",
+                SettingsRow(title: tr("Text shortcuts"), symbol: "bolt.fill", color: .orange,
                             value: shortcutCount > 0 ? "\(shortcutCount)" : tr("None"))
             }
             ScreenRow(.smartTyping) {
-                SettingsRow(title: tr("Calculator & units"), symbol: "function", value: smartSummary)
+                SettingsRow(title: tr("Calculator & units"), symbol: "function", color: .cyan, value: smartSummary)
             }
             ScreenRow(.learnedWords) {
-                SettingsRow(title: tr("Learned words"), symbol: "character.book.closed",
+                SettingsRow(title: tr("Learned words"), symbol: "character.book.closed", color: .brown,
                             value: learnedCount > 0 ? "\(learnedCount)" : nil)
             }
         } header: {
-            SectionHeader(tr("Keyboard"), symbol: "keyboard")
+            SectionHeader(tr("Keyboard"), symbol: "keyboard", color: .blue)
         }
         .onAppear {
             languages = Settings.shared.enabledLanguages
             shortcutCount = Settings.shared.shortcuts.count
-            learnedCount = Settings.shared.learnedWordList().count
+            // Counted without putting them in order (this runs every time the tab is shown).
+            learnedCount = Settings.shared.learnedWords().filter { $0.value >= 2 }.count
         }
     }
 }
@@ -213,27 +214,27 @@ private struct CorrectionsSection: View {
         Section {
             SettingToggle(tr("Auto-correction"), key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: tr("Fixes typos, accents and missing spaces on space"),
-                          symbol: "checkmark.seal.fill", feature: .autoCorrect)
+                          symbol: "checkmark.seal.fill", color: .green, feature: .autoCorrect)
                 .searchAnchor("main.autocorrect")
             SettingToggle(tr("Auto-capitalization"), key: SettingKey.autoCapitalize, defaultValue: SettingDefault.autoCapitalize,
                           subtitle: tr("A capital at the start of each sentence"),
-                          symbol: "textformat", feature: .capitals)
+                          symbol: "textformat", color: .blue, feature: .capitals)
                 .searchAnchor("main.autocap")
             SettingToggle(tr("\u{201C}.\u{201D} shortcut"), key: SettingKey.doubleSpacePeriod, defaultValue: SettingDefault.doubleSpacePeriod,
                           subtitle: tr("Tap the space bar twice to end a sentence"),
-                          symbol: "circle.fill", feature: .sentencePeriod)
+                          symbol: "circle.fill", color: .gray, feature: .sentencePeriod)
                 .searchAnchor("main.period")
             SettingToggle(tr("Smart quotes"), key: SettingKey.smartQuotes, defaultValue: SettingDefault.smartQuotes,
                           subtitle: tr("Curly quotes and apostrophes in your language's style"),
-                          symbol: "quote.opening")
+                          symbol: "quote.opening", color: .teal)
                 .searchAnchor("main.smartQuotes")
             SettingToggle(tr("Space after punctuation"), key: SettingKey.spaceAfterPunctuation,
                           defaultValue: SettingDefault.spaceAfterPunctuation,
                           subtitle: tr("A space goes after . , ! ? ; : by itself"),
-                          symbol: "space")
+                          symbol: "space", color: .mint)
                 .searchAnchor("main.spaceAfter")
         } header: {
-            SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam")
+            SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }
     }
 }
@@ -255,7 +256,8 @@ struct LookTab: View {
     }
 }
 
-/// The chosen theme as a picture of the keyboard: a tap opens the themes; the row under it, the theme's editor.
+/// The chosen theme, drawn as the keyboard has it: a tap on it or on the row under it opens the themes; the last
+/// row, the theme's editor.
 private struct ThemeSection: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.systemEdits, store: SharedStore.defaults) private var systemEdits = SettingDefault.systemEdits
@@ -274,31 +276,28 @@ private struct ThemeSection: View {
     var body: some View {
         let shown = theme
         Section {
+            // The keyboard as the theme draws it, standing on the backdrop: the Liquid Glass theme's keys are real
+            // glass here too, as on the keyboard. A new accent fades in on it.
             Button {
                 Feedback.tap()
                 openScreen(.themes)
             } label: {
-                VStack(spacing: 12) {
-                    // A picture of flat glass for the Liquid Glass theme: its keys are not drawn as real glass
-                    // inside a card that is glass already.
-                    ThemePreview(theme: shown, accent: accent, showsStrip: false, cornerRadius: 14)
-                        .environment(\.staticGlass, true)
+                ZStack {
+                    ThemePreview(theme: shown, accent: accent, showsStrip: false, cornerRadius: 20)
                         .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+                        .animation(AccentTint.fade, value: accentName + accentHex)
                         .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                    HStack(spacing: 8) {
-                        SettingsRow(title: tr("Themes"), symbol: "paintbrush.fill", value: shown.name)
-                        Image(systemName: "chevron.forward")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(Color(.tertiaryLabel))
-                    }
                 }
-                .foregroundColor(.primary)
-                .padding(.vertical, 4)
                 .contentShape(Rectangle())
             }
+            .buttonStyle(PressableStyle())
+            .accessibilityLabel(tr("Themes"))
+            .glassOutsideCard()
+            ScreenRow(.themes) {
+                SettingsRow(title: tr("Themes"), symbol: "paintbrush.fill", color: .purple, value: shown.name)
+            }
             ScreenRow(.themeEditor) {
-                SettingsRow(title: tr("Customize %@", "\(shown.name)"), symbol: "slider.horizontal.3")
+                SettingsRow(title: tr("Customize %@", "\(shown.name)"), symbol: "slider.horizontal.3", color: .pink)
             }
         }
     }
@@ -316,10 +315,10 @@ private struct KeysAndEffectsSection: View {
     var body: some View {
         Section {
             ScreenRow(.keys) {
-                SettingsRow(title: tr("Keys"), symbol: "square.grid.3x2.fill", value: "\(Int(keyHeight.rounded())) pt")
+                SettingsRow(title: tr("Keys"), symbol: "square.grid.3x2.fill", color: .blue, value: "\(Int(keyHeight.rounded())) pt")
             }
             ScreenRow(.effects) {
-                SettingsRow(title: tr("Effects"), symbol: "sparkles", value: effectsSummary)
+                SettingsRow(title: tr("Effects"), symbol: "sparkles", color: .orange, value: effectsSummary)
             }
         }
     }
@@ -376,13 +375,13 @@ private struct GesturesSection: View {
     var body: some View {
         Section {
             ScreenRow(.gestures) {
-                SettingsRow(title: tr("Gestures"), symbol: "hand.draw.fill", value: swipeSummary)
+                SettingsRow(title: tr("Gestures"), symbol: "hand.draw.fill", color: .teal, value: swipeSummary)
             }
             ScreenRow(.haptics) {
-                SettingsRow(title: tr("Haptics & sound"), symbol: "iphone.radiowaves.left.and.right", value: hapticSummary)
+                SettingsRow(title: tr("Haptics & sound"), symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
             }
         } header: {
-            SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill")
+            SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill", color: .teal)
         }
         .onAppear { languages = Settings.shared.enabledLanguages }
     }
@@ -397,14 +396,14 @@ private struct HoldsSection: View {
     var body: some View {
         Section {
             ScreenRow(.longPress) {
-                SettingsRow(title: tr("Long-press characters"), symbol: "hand.point.up.left.fill",
+                SettingsRow(title: tr("Long-press characters"), symbol: "hand.point.up.left.fill", color: .purple,
                             value: holdCount == 0 ? tr("None") : "\(holdCount)")
             }
             ScreenRow(.functions) {
-                SettingsRow(title: tr("Functions panel"), symbol: "square.grid.2x2.fill", value: "\(toolCount)")
+                SettingsRow(title: tr("Functions panel"), symbol: "square.grid.2x2.fill", color: .indigo, value: "\(toolCount)")
             }
         } header: {
-            SectionHeader(tr("Keyboard"), symbol: "keyboard")
+            SectionHeader(tr("Keyboard"), symbol: "keyboard", color: .blue)
         } footer: {
             Text(tr("Add characters of your own to any letter or digit: touch and hold the key to type them."))
         }
@@ -448,7 +447,7 @@ private struct StatsSection: View {
     var body: some View {
         Section {
             ScreenRow(.stats) {
-                SettingsRow(title: tr("Typing stats"), symbol: "chart.bar.fill", value: wordsText)
+                SettingsRow(title: tr("Typing stats"), symbol: "chart.bar.fill", color: .green, value: wordsText)
             }
         }
         .onAppear {
@@ -472,7 +471,7 @@ private struct AppLanguageSection: View {
     var body: some View {
         Section {
             ScreenRow(.appLanguage) {
-                SettingsRow(title: tr("App language"), symbol: "character.bubble.fill", value: chosenName)
+                SettingsRow(title: tr("App language"), symbol: "character.bubble.fill", color: .blue, value: chosenName)
             }
         } footer: {
             Text(tr("The language of this app. The keyboard's typing languages are set under Languages."))
@@ -522,7 +521,7 @@ private struct DataSection: View {
                     .foregroundColor(.secondary)
             }
         } header: {
-            SectionHeader(tr("Privacy & data"), symbol: "hand.raised.fill")
+            SectionHeader(tr("Privacy & data"), symbol: "hand.raised.fill", color: .gray)
         } footer: {
             Text(tr("Everything the keyboard learns stays on this device."))
         }
@@ -585,16 +584,16 @@ private struct AboutSection: View {
                 Feedback.tap()
                 welcomeSeen = false
             } label: {
-                SettingsRow(title: tr("Replay welcome"), symbol: "play.circle.fill")
+                SettingsRow(title: tr("Replay welcome"), symbol: "play.circle.fill", color: .blue)
                     .foregroundColor(.primary)
                     .contentShape(Rectangle())
             }
             .searchAnchor("main.welcome")
             ScreenRow(.licences) {
-                SettingsRow(title: tr("Licences"), symbol: "doc.text.fill")
+                SettingsRow(title: tr("Licences"), symbol: "doc.text.fill", color: .gray)
             }
         } header: {
-            SectionHeader(tr("About"), symbol: "info.circle")
+            SectionHeader(tr("About"), symbol: "info.circle", color: .gray)
         } footer: {
             Text(tr("Iramo. Copyright \u{00A9} 2026 Ors\u{00F3}s Emil.") + "  \u{00B7}  " + version)
         }

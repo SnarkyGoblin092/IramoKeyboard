@@ -27,7 +27,7 @@ struct GlassBackdrop: View {
             Keybed(accent: accent, dark: dark)
         }
         // A new accent fades in over the old one.
-        .animation(.easeInOut(duration: 0.7), value: accentName + accentHex)
+        .animation(AccentTint.fade, value: accentName + accentHex)
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
@@ -40,6 +40,7 @@ private struct Keybed: View {
 
     var body: some View {
         Canvas { context, size in
+            guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return }
             let key: CGFloat = 60
             let pitch: CGFloat = key + 11
             let stagger: [CGFloat] = [0, 0.5, 0.25, 0.75]
@@ -746,10 +747,14 @@ private struct GlassCardSection: View {
         .glassEdge(shape)
     }
 
+    /// A stretch of a section's rows that share a card (or stand outside one). It is known by its place among
+    /// the section's runs, not by its first row: named after its first row, a card whose first row was deleted
+    /// became another card, so the whole card was taken down and built again in the middle of the deletion, with
+    /// the rows that stayed alive in both for a moment.
     private struct Run: Identifiable {
+        let id: Int
         var outside: Bool
         var rows: [Subview]
-        var id: Subview.ID { return rows[0].id }
     }
 
     private static func runs(_ rows: [Subview]) -> [Run] {
@@ -759,7 +764,7 @@ private struct GlassCardSection: View {
             if !outside, let last = runs.last, !last.outside {
                 runs[runs.count - 1].rows.append(row)
             } else {
-                runs.append(Run(outside: outside, rows: [row]))
+                runs.append(Run(id: runs.count, outside: outside, rows: [row]))
             }
         }
         return runs

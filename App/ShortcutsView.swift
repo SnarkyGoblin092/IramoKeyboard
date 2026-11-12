@@ -9,6 +9,14 @@ struct ShortcutsView: View {
     @State private var items: [TextShortcut] = Settings.shared.shortcuts
     /// The shortcut being written or changed (the sheet is open while it is set).
     @State private var composing: ShortcutDraft?
+    /// What the sheet decided (save or delete), carried out once it has closed: the list under an open sheet is
+    /// never changed.
+    @State private var pending: PendingChange?
+
+    private enum PendingChange {
+        case save(ShortcutDraft, trigger: String, phrase: String)
+        case remove(TextShortcut)
+    }
     @AppStorage(SettingKey.dateFormat, store: SharedStore.defaults) private var dateFormat = SettingDefault.dateFormat
     @AppStorage(SettingKey.customDateFormat, store: SharedStore.defaults) private var customDate = SettingDefault.customDateFormat
     @AppStorage(SettingKey.timeFormat, store: SharedStore.defaults) private var timeFormat = SettingDefault.timeFormat
@@ -48,28 +56,6 @@ struct ShortcutsView: View {
             .glassRows()
 
             Section {
-                if items.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(sorted, id: \.id) { item in
-                        Button {
-                            Feedback.tap()
-                            composing = ShortcutDraft(original: item, trigger: item.trigger, phrase: item.phrase)
-                        } label: {
-                            ShortcutRow(item: item)
-                        }
-                        .buttonStyle(NoPressStyle())   // the row slides to delete: nothing lights up under the finger
-                        .swipeToDelete { remove(item) }
-                    }
-                }
-            } header: {
-                SectionHeader(tr("Your shortcuts"), symbol: "bolt.fill")
-            } footer: {
-                if !items.isEmpty { Text(tr("Tap a shortcut to change it; swipe it left to remove it.")) }
-            }
-            .glassRows()
-
-            Section {
                 GlassChoiceLink(title: tr("Date format"), symbol: "calendar",
                                 options: dateStyles.map { (value: $0, name: $0 == "custom" ? tr("Custom") : dateExample($0)) },
                                 selected: dateFormat) { dateFormat = $0 }
@@ -93,11 +79,33 @@ struct ShortcutsView: View {
                             subtitle: ShortcutTemplate.timeText(Date(), locale: locale, style: timeFormat, seconds: timeSeconds),
                             isOn: $timeSeconds)
             } header: {
-                SectionHeader(tr("Date and time"), symbol: "calendar")
+                SectionHeader(tr("Date and time"), symbol: "calendar", color: .red)
             } footer: {
                 Text(dateFormat == "custom"
                      ? tr("Letters stand for parts of the date: yyyy year, MM month, MMMM month's name, dd day, EEEE weekday.")
                      : tr("How {date}, {time} and {datetime} are written, in the words of your keyboard's language."))
+            }
+            .glassRows()
+
+            Section {
+                if items.isEmpty {
+                    emptyState
+                } else {
+                    ForEach(sorted, id: \.id) { item in
+                        Button {
+                            Feedback.tap()
+                            composing = ShortcutDraft(original: item, trigger: item.trigger, phrase: item.phrase)
+                        } label: {
+                            ShortcutRow(item: item)
+                        }
+                        .buttonStyle(NoPressStyle())   // the row slides to delete: nothing lights up under the finger
+                        .swipeToDelete { remove(item) }
+                    }
+                }
+            } header: {
+                SectionHeader(tr("Your shortcuts"), symbol: "bolt.fill", color: .orange)
+            } footer: {
+                if !items.isEmpty { Text(tr("Tap a shortcut to change it; swipe it left to remove it.")) }
             }
             .glassRows()
         }
@@ -105,9 +113,9 @@ struct ShortcutsView: View {
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(tr("Text shortcuts"))
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $composing) { draft in
+        .sheet(item: $composing, onDismiss: applyPending) { draft in
             ShortcutComposer(draft: draft, locale: locale, others: items.filter { $0.id != draft.original?.id },
-                             save: { trigger, phrase in save(draft, trigger: trigger, phrase: phrase) },
+                             save: { trigger, phrase in pending = .save(draft, trigger: trigger, phrase: phrase) },
                              delete: deletion(of: draft.original))
         }
         // Read again on every visit: the screen is built once with the parent, so the starting value above is
@@ -151,22 +159,38 @@ struct ShortcutsView: View {
         list.removeAll { $0.id == draft.original?.id || $0.trigger.lowercased() == trigger.lowercased() }
         list.append(TextShortcut(trigger: trigger, phrase: phrase))
         Feedback.success()
-        withAnimation(.easeOut(duration: 0.2)) { items = list }
+        items = list
         Settings.shared.shortcuts = list
     }
 
+    /// Removes a shortcut. The list changes at once, without an animation: an animated removal takes the row (and,
+    /// for the first row, its whole card) out while it is still being drawn.
     private func remove(_ item: TextShortcut) {
+        guard items.contains(where: { $0.id == item.id }) else { return }
+        // A sheet open on the shortcut that is going closes with it.
+        if composing?.original?.id == item.id { composing = nil }
         Feedback.delete()
         var list = items
         list.removeAll { $0.id == item.id }
-        withAnimation(.easeOut(duration: 0.2)) { items = list }
+        items = list
         Settings.shared.shortcuts = list
     }
 
-    /// What the sheet's Delete does: removes the shortcut being changed (a new one has nothing to delete).
+    /// What the sheet's Delete does: the shortcut being changed is removed once the sheet has closed (a new one has
+    /// nothing to delete).
     private func deletion(of original: TextShortcut?) -> (() -> Void)? {
         guard let original = original else { return nil }
-        return { remove(original) }
+        return { pending = .remove(original) }
+    }
+
+    /// The sheet has closed: what it decided is done now.
+    private func applyPending() {
+        guard let change = pending else { return }
+        pending = nil
+        switch change {
+        case .save(let draft, let trigger, let phrase): save(draft, trigger: trigger, phrase: phrase)
+        case .remove(let item): remove(item)
+        }
     }
 }
 
@@ -228,6 +252,9 @@ private struct ShortcutComposer: View {
     @State private var phrase: String
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
+    /// The placeholders and their notes, worked out once when the sheet opens: the sheet is drawn again on every
+    /// key typed, and each note takes several date formatters.
+    @State private var tokens: [(token: String, note: String)] = []
 
     init(draft: ShortcutDraft, locale: Locale, others: [TextShortcut], save: @escaping (String, String) -> Void,
          delete: (() -> Void)?) {
@@ -254,18 +281,29 @@ private struct ShortcutComposer: View {
     private var filledPhrase: String {
         let written = cleanPhrase
         guard ShortcutTemplate.hasPlaceholders(written) else { return written }
-        Settings.shared.refresh()   // the formats just picked, not the half-second-old copy
         let expanded = ShortcutTemplate.expand(written, locale: locale) { tr("copied text") }
         return expanded.replacingOccurrences(of: String(ShortcutTemplate.cursorMark), with: "\u{258F}")
     }
 
-    /// The placeholders, then the days, months and times ahead (each with what it writes today).
-    private var tokens: [(token: String, note: String, translated: Bool)] {
-        let plain = ShortcutTemplate.placeholders.map { (token: $0.token, note: $0.note, translated: true) }
-        let ahead = ShortcutTemplate.offsetExamples.map {
-            (token: $0, note: ShortcutTemplate.expand($0, locale: locale) { nil }, translated: false)
+    /// The placeholders with what each is, then the days, months and times ahead with what they write today. The
+    /// names of the days and months, and the dates and times, are in the app's language (the language these notes
+    /// are read in) and in the date and time formats set.
+    private func makeTokens() -> [(token: String, note: String)] {
+        let shown = AppLanguage.locale
+        let plain = ShortcutTemplate.placeholders.map { item -> (token: String, note: String) in
+            return (token: item.token, note: note(for: item.token, described: tr(item.note), locale: shown))
+        }
+        let ahead = ShortcutTemplate.offsetExamples.map { token -> (token: String, note: String) in
+            return (token: token, note: ShortcutTemplate.expand(token, locale: shown) { nil })
         }
         return plain + ahead
+    }
+
+    /// A placeholder's note: what it is, and (for the ones that write a date, a time or a name) what that is today.
+    private func note(for token: String, described: String, locale: Locale) -> String {
+        if token == "{clipboard}" || token == "{cursor}" { return described }
+        let value = ShortcutTemplate.expand(token, locale: locale) { nil }
+        return value.isEmpty || value == token ? described : described + ": " + value
     }
 
     var body: some View {
@@ -298,7 +336,7 @@ private struct ShortcutComposer: View {
                 .glassRows()
 
                 Section {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8, alignment: .top)], spacing: 8) {
                         ForEach(tokens, id: \.token) { item in
                             Button {
                                 Feedback.tick()
@@ -308,11 +346,12 @@ private struct ShortcutComposer: View {
                                     Text(item.token)
                                         .font(.subheadline.monospaced().weight(.semibold))
                                         .foregroundColor(.primary)
-                                    Text(item.translated ? tr(item.note) : item.note)
+                                    Text(item.note)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 12)
@@ -326,7 +365,7 @@ private struct ShortcutComposer: View {
                     }
                     .padding(.vertical, 4)
                 } header: {
-                    SectionHeader(tr("Placeholders"), symbol: "curlybraces")
+                    SectionHeader(tr("Placeholders"), symbol: "curlybraces", color: .orange)
                 } footer: {
                     Text(tr("Tap one to add it to the phrase. They are filled in when you type the shortcut: \u{201C}Sent {date}\u{201D} writes today's date."))
                 }
@@ -364,6 +403,8 @@ private struct ShortcutComposer: View {
             }
         }
         .onAppear {
+            Settings.shared.refresh()   // the formats just picked, not the half-second-old copy
+            if tokens.isEmpty { tokens = makeTokens() }
             // A new shortcut starts in its trigger; one being changed is read first.
             if draft.original == nil && draft.trigger.isEmpty { focus = .trigger }
         }

@@ -33,7 +33,7 @@ struct LanguagesView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            IconTile(symbol: "plus")
+                            IconTile(symbol: "plus", color: .green)
                             Text(tr("Add a language"))
                             Spacer()
                             Text("\(Language.allCases.count - enabled.count)").foregroundColor(.secondary)
@@ -198,7 +198,7 @@ struct LearnedWordsView: View {
             Section {
                 if words.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        IconTile(symbol: "character.book.closed")
+                        IconTile(symbol: "character.book.closed", color: .brown)
                         Text(tr("No learned words yet")).font(.headline)
                         Text(tr("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar. Learned words work in every language."))
                             .font(.subheadline)

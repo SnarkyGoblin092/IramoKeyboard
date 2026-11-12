@@ -298,7 +298,7 @@ struct SearchEntryRow: View {
             open(entry)
         } label: {
             HStack(spacing: 12) {
-                IconTile(symbol: entry.symbol)
+                IconTile(symbol: entry.symbol, color: entry.color)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.title).foregroundColor(.primary)
                     if showsPlace {
@@ -351,21 +351,23 @@ struct SettingsSearchResults: View {
 struct SettingsSitemap: View {
     let open: (SearchEntry) -> Void
 
-    private func screens(on tab: AppTab) -> [SearchEntry] {
-        return SettingsIndex.entries.filter { entry in
+    private func screens(on tab: AppTab, in entries: [SearchEntry]) -> [SearchEntry] {
+        return entries.filter { entry in
             guard entry.anchor == nil, let screen = entry.screen else { return false }
             return AppTab.owning(screen) == tab
         }
     }
 
     var body: some View {
+        // The index is built once for the four lists (building it looks every title up in the app's language).
+        let entries = SettingsIndex.entries
         ForEach([AppTab.typing, AppTab.look, AppTab.touch, AppTab.more], id: \.self) { tab in
             Section {
-                ForEach(screens(on: tab)) { entry in
+                ForEach(screens(on: tab, in: entries)) { entry in
                     SearchEntryRow(entry: entry, showsPlace: false, open: open)
                 }
             } header: {
-                SectionHeader(tab.title, symbol: tab.symbol)
+                SectionHeader(tab.title, symbol: tab.symbol, color: .secondary)
             }
             .glassRows()
         }
@@ -390,6 +392,7 @@ struct SearchTab: View {
                 }
             }
             .glassScreen()
+            .modifier(TabSwipeable())
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(tr("Search"))
             .navigationBarTitleDisplayMode(.large)

@@ -59,6 +59,10 @@ struct ContentView: View {
 
     /// The window's full size (the keyboard showing doesn't change it): wide enough, a tab shows two columns.
     @State private var windowSize: CGSize = .zero
+    /// How far the tab just chosen still has to slide in: 1 from the trailing side, -1 from the leading side, 0 at
+    /// rest.
+    @State private var slide: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Landscape on an iPhone or iPad: a tab's list on the left and the open screen beside it.
     private static func isWide(_ size: CGSize) -> Bool {
@@ -71,6 +75,9 @@ struct ContentView: View {
 
     var body: some View {
         tabs
+            // A tab chosen (in the bar, by a swipe or by the search) slides in from the side it is on.
+            .onChange(of: tab) { [tab] chosen in slideIn(from: tab, to: chosen) }
+            .environment(\.tabSwipe, { step in swipe(step) })
             .background(GeometryReader { geometry in
                 Color.clear
                     .onAppear { windowSize = geometry.size }
@@ -100,12 +107,37 @@ struct ContentView: View {
             }
     }
 
-    private func column(_ tab: AppTab) -> TabColumn {
+    private func column(_ tab: AppTab) -> some View {
         return TabColumn(tab: tab, path: path(tab), wide: ContentView.isWide(windowSize), windowWidth: windowSize.width)
+            .modifier(TabSlide(amount: slide))
     }
 
-    private var search: SearchTab {
+    private var search: some View {
         return SearchTab(query: $query) { entry in open(entry) }
+            .modifier(TabSlide(amount: slide))
+    }
+
+    /// The tab beside the one shown (`step` 1: the next one, -1: the one before), for a swipe across a tab's list.
+    private func swipe(_ step: Int) {
+        let order = AppTab.allCases
+        guard let index = order.firstIndex(of: tab) else { return }
+        // The tabs run right to left where the app does.
+        let next = index + (AppLanguage.isRightToLeft ? -step : step)
+        guard order.indices.contains(next) else { return }
+        Feedback.tick()
+        tab = order[next]
+    }
+
+    /// Starts the new tab a little to the side it is on and lets it slide into place.
+    private func slideIn(from old: AppTab, to chosen: AppTab) {
+        let order = AppTab.allCases
+        guard !reduceMotion, let from = order.firstIndex(of: old), let to = order.firstIndex(of: chosen),
+              from != to else { return }
+        let forward = (to > from) != AppLanguage.isRightToLeft
+        slide = forward ? 1 : -1
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { slide = 0 }
+        }
     }
 
     /// The tab bar. From iOS 18 the tabs are declared as `Tab`s, so the search is the system's search tab (on
@@ -163,6 +195,85 @@ struct ContentView: View {
     }
 }
 
+/// A tab on its way in: moved to the side it comes from, by `amount` (0: in place). It is only moved, not faded:
+/// a see-through tab would have all its glass drawn off screen on every frame of the slide.
+private struct TabSlide: ViewModifier {
+    let amount: CGFloat
+
+    func body(content: Content) -> some View {
+        content.offset(x: amount * 56)
+    }
+}
+
+private struct TabSwipeKey: EnvironmentKey {
+    static let defaultValue: (Int) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    /// Moves to the tab beside the one shown (1: the next, -1: the one before). Set by ContentView.
+    var tabSwipe: (Int) -> Void {
+        get { return self[TabSwipeKey.self] }
+        set { self[TabSwipeKey.self] = newValue }
+    }
+}
+
+/// A sideways swipe across a tab's own list moves to the tab beside it (iOS 18 and later). Only the tabs' lists
+/// take it: on the screens opened from them a sideways drag belongs to the sliders, the rows that swipe to delete
+/// and the keyboard pinned at the top.
+struct TabSwipeable: ViewModifier {
+    @Environment(\.tabSwipe) private var tabSwipe
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.gesture(TabSwipePan(swiped: tabSwipe))
+        } else {
+            content
+        }
+    }
+}
+
+/// A pan that begins only when the drag starts out sideways, leaving vertical drags to the list, and reports a swipe
+/// when it ends far or fast enough. It runs alongside the list's own pan.
+@available(iOS 18.0, *)
+private struct TabSwipePan: UIGestureRecognizerRepresentable {
+    /// 1: swiped towards the leading edge (the next tab); -1: towards the trailing edge (the one before).
+    let swiped: (Int) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        return Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {}
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        guard recognizer.state == .ended else { return }
+        let moved = recognizer.translation(in: recognizer.view)
+        let speed = recognizer.velocity(in: recognizer.view)
+        guard abs(moved.x) > abs(moved.y) * 1.5, abs(moved.x) > 60 || abs(speed.x) > 500 else { return }
+        swiped(moved.x < 0 ? 1 : -1)
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.5
+        }
+
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            return true
+        }
+    }
+}
+
 /// The glass tab bar draws back to a single button while a list is scrolled down, and comes back on the way up
 /// (iOS 26 and later).
 private struct TabBarBehaviour: ViewModifier {
@@ -195,6 +306,7 @@ struct TabColumn: View {
         } else {
             NavigationStack(path: $path) {
                 TabRoot(tab: tab)
+                    .modifier(TabSwipeable())
                     .navigationDestination(for: Screen.self) { screen in
                         screen.scopedView.toolbar(.hidden, for: .tabBar)
                     }
@@ -205,7 +317,7 @@ struct TabColumn: View {
 
     private var landscape: some View {
         HStack(spacing: 0) {
-            NavigationStack { TabRoot(tab: tab) }
+            NavigationStack { TabRoot(tab: tab).modifier(TabSwipeable()) }
                 .frame(width: min(400, max(300, windowWidth * 0.38)))
                 .environment(\.openScreen, { screen in path = [screen] })
                 .environment(\.shownScreen, path.first)

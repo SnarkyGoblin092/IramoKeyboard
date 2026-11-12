@@ -70,19 +70,31 @@ struct KeysView: View {
 
     private func same(_ a: Double, _ b: Double) -> Bool { return abs(a - b) < 0.001 }
 
-    /// The symbols a hold on a key offers, typed in a row ("" keeps the language's own).
+    /// The symbols a hold on a key offers ("" keeps the language's own): the same cells and field as the long-press
+    /// characters (HoldEditor), so no more than fit can be entered, and each can be moved or removed.
     private func holdField(_ title: String, text: Binding<String>) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            TextField(tr("Language's own"), text: Binding(get: { text.wrappedValue }, set: { value in
-                text.wrappedValue = Settings.holdSymbols(value).joined()
-            }))
-            .multilineTextAlignment(.trailing)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .font(.body.monospaced())
+        let characters = Settings.holdSymbols(text.wrappedValue)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                Spacer(minLength: 8)
+                if !characters.isEmpty {
+                    Button(tr("Language's own")) {
+                        Feedback.delete()
+                        withAnimation(.easeOut(duration: 0.2)) { text.wrappedValue = "" }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+                }
+            }
+            HoldEditor(characters: characters,
+                       emptyNote: tr("Your language's own marks. Type characters to offer your own instead."),
+                       change: { list in
+                           withAnimation(.easeOut(duration: 0.2)) { text.wrappedValue = list.joined() }
+                       })
         }
+        .padding(.vertical, 2)
     }
 
     /// A place for a symbol key: the side of the space bar and the place's number there.
@@ -482,7 +494,7 @@ struct KeysView: View {
         } header: {
             SectionHeader(tr("Bottom row"), symbol: "keyboard.chevron.compact.down", color: .gray)
         } footer: {
-            Text(tr("Keys you take off give their room to the space bar. Type the symbols a hold offers, in order (up to ten); leave it empty for your language's own."))
+            Text(tr("Keys you take off give their room to the space bar. A hold offers its symbols in the order shown (up to ten); with none, your language's own."))
         }
         .glassRows()
 

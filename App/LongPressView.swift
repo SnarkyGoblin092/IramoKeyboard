@@ -7,15 +7,15 @@ import SwiftUI
 ///
 /// The keyboard is the editor: tap a key on the keyboard pinned at the top and its hold opens under it, the
 /// language's own accents first (dimmed, they cannot be changed here) and then the user's characters. Characters are
-/// added by typing them or by tapping a suggestion, and saved at once; a tap on one moves or removes it. Keys that
-/// have characters of the user's own carry a dot, and are listed at the bottom.
+/// added by typing them or by tapping a suggestion, and saved at once; a tap on one moves or removes it. A key that
+/// has characters of the user's own is ringed in the accent and carries their number; all such keys are listed at
+/// the bottom, above the button that removes every one of them.
 struct LongPressCharactersView: View {
     @State private var holds: [String: String] = Settings.shared.customHolds
     /// The key being edited.
     @State private var selected: String?
-    /// The characters typed into the field, not added yet.
-    @State private var draft = ""
-    @FocusState private var typing: Bool
+    /// Asking before every key's characters are removed.
+    @State private var confirmingClear = false
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
 
     /// The language the keyboard opens in: its letters are the keys, and its accents the ones shown.
@@ -32,6 +32,11 @@ struct LongPressCharactersView: View {
         return holds.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    /// How many characters of the user's own each key has.
+    private var counts: [String: Int] {
+        return holds.mapValues { Settings.holdSymbols($0).count }.filter { $0.value > 0 }
+    }
+
     private func own(_ key: String) -> [String] { return Settings.holdSymbols(holds[key] ?? "") }
 
     private func builtIn(_ key: String) -> [String] { return language.accents[key] ?? [] }
@@ -43,8 +48,11 @@ struct LongPressCharactersView: View {
     }
 
     var body: some View {
-        PinnedPreview(height: 214, fills: true, minimumHeight: 176) {
-            HoldKeyboard(rows: rows, marked: Set(holds.keys), selected: selected) { key in pick(key) }
+        PinnedPreview(height: 238, fills: true, minimumHeight: 190) {
+            VStack(spacing: 6) {
+                HoldKeyboard(rows: rows, counts: counts, selected: selected) { key in pick(key) }
+                legend
+            }
         } content: {
             GlassList {
                 if let key = selected {
@@ -53,6 +61,7 @@ struct LongPressCharactersView: View {
                     hint
                 }
                 overview
+                clearAll
             }
             .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -66,6 +75,27 @@ struct LongPressCharactersView: View {
         }
     }
 
+    /// What the mark on the keys means, and how many keys carry it.
+    private var legend: some View {
+        let keys = counts.count
+        return HStack(spacing: 6) {
+            Text("3")
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .frame(width: 14, height: 14)
+                .background(Circle().fill(Color.accentColor))
+                .accessibilityHidden(true)
+            Text(keys == 0
+                 ? tr("Keys with your characters show how many they have.")
+                 : (keys == 1 ? tr("1 key has your characters.") : tr("%@ keys have your characters.", "\(keys)")))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     // MARK: The key being edited
 
     @ViewBuilder private func editor(_ key: String) -> some View {
@@ -74,8 +104,9 @@ struct LongPressCharactersView: View {
         let offered = ideas(for: key)
         let full = mine.count >= Settings.holdSymbolsLimit
         Section {
-            popup(key, fixed: fixed, mine: mine)
-            addField(key, full: full)
+            HoldEditor(fixed: fixed, excluded: key, characters: mine,
+                       emptyNote: tr("Nothing yet. Type characters below, or tap a suggestion."),
+                       change: { list in store(list, for: key) })
             if !offered.isEmpty && !full {
                 suggestions(offered, key: key)
             }
@@ -94,8 +125,7 @@ struct LongPressCharactersView: View {
             HStack(spacing: 8) {
                 KeycapLabel(text: key, size: 26)
                 Text(tr("Touch and hold for"))
-                Spacer(minLength: 8)
-                Text("\(mine.count)/\(Settings.holdSymbolsLimit)").monospacedDigit()
+                Spacer(minLength: 0)
             }
             .textCase(nil)
         } footer: {
@@ -104,70 +134,6 @@ struct LongPressCharactersView: View {
                  : tr("The dimmed ones are your language's own accents; yours come after them. Tap one of yours to move or remove it."))
         }
         .glassRows()
-    }
-
-    /// The key's hold as the keyboard will offer it: the language's accents, then the user's characters.
-    @ViewBuilder private func popup(_ key: String, fixed: [String], mine: [String]) -> some View {
-        if fixed.isEmpty && mine.isEmpty {
-            Text(tr("Nothing yet. Type characters below, or tap a suggestion."))
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 8)], spacing: 8) {
-                ForEach(fixed, id: \.self) { character in
-                    HoldCell(character: character, own: false)
-                        .accessibilityLabel(tr("%@, from your language", character))
-                }
-                ForEach(mine, id: \.self) { character in
-                    let index = mine.firstIndex(of: character) ?? 0
-                    Menu {
-                        Button {
-                            move(character, by: -1, on: key)
-                        } label: {
-                            Label(tr("Move earlier"), systemImage: "arrow.left")
-                        }
-                        .disabled(index == 0)
-                        Button {
-                            move(character, by: 1, on: key)
-                        } label: {
-                            Label(tr("Move later"), systemImage: "arrow.right")
-                        }
-                        .disabled(index >= mine.count - 1)
-                        Button(role: .destructive) {
-                            remove(character, from: key)
-                        } label: {
-                            Label(tr("Remove"), systemImage: "trash")
-                        }
-                    } label: {
-                        HoldCell(character: character, own: true)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.vertical, 4)
-            // The popup is laid out left to right, as on the keyboard.
-            .environment(\.layoutDirection, .leftToRight)
-        }
-    }
-
-    /// Characters are typed (or pasted) here, several at once if wanted; return or Add puts them on the key.
-    private func addField(_ key: String, full: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus.circle.fill")
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-            TextField(full ? tr("This key is full") : tr("Type or paste characters"), text: $draft)
-                .focused($typing)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .submitLabel(.done)
-                .onSubmit { commit(to: key) }
-                .disabled(full)
-            Button(tr("Add")) { commit(to: key) }
-                .buttonStyle(ActionButtonStyle(compact: true))
-                .disabled(full || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
     }
 
     private func suggestions(_ offered: [String], key: String) -> some View {
@@ -203,7 +169,7 @@ struct LongPressCharactersView: View {
     private var hint: some View {
         Section {
             HStack(spacing: 14) {
-                IconTile(symbol: "hand.point.up.left.fill")
+                IconTile(symbol: "hand.point.up.left.fill", color: .purple)
                 Text(tr("Tap a key above to choose what touching and holding it offers."))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -222,7 +188,7 @@ struct LongPressCharactersView: View {
                         pick(item)
                     } label: {
                         HStack(spacing: 14) {
-                            KeycapLabel(text: item, color: item == selected ? .accentColor : .secondary)
+                            KeycapLabel(text: item, color: item == selected ? .accentColor : .gray)
                             Text(own(item).joined(separator: "  "))
                                 .font(.body.monospaced())
                                 .foregroundColor(.primary)
@@ -238,7 +204,7 @@ struct LongPressCharactersView: View {
                     }
                 }
             } header: {
-                SectionHeader(tr("Your characters"), symbol: "character.textbox")
+                SectionHeader(tr("Your characters"), symbol: "character.textbox", color: .purple)
             } footer: {
                 Text(tr("Tap a key to change it; swipe it left to remove it."))
             }
@@ -246,15 +212,42 @@ struct LongPressCharactersView: View {
         }
     }
 
+    /// The way back to a keyboard without any characters of the user's own. Red, and it asks first.
+    private var clearAll: some View {
+        Section {
+            Button(role: .destructive) {
+                Feedback.danger()
+                confirmingClear = true
+            } label: {
+                Label(tr("Delete all custom characters"), systemImage: "trash")
+            }
+            .buttonStyle(ActionButtonStyle())
+            .disabled(holds.isEmpty)
+            .confirmationDialog(tr("Delete all custom characters?"), isPresented: $confirmingClear, titleVisibility: .visible) {
+                Button(tr("Delete"), role: .destructive) {
+                    Settings.shared.customHolds = [:]
+                    Feedback.warning()
+                    holds = [:]
+                }
+                Button(tr("Cancel"), role: .cancel) {}
+            } message: {
+                Text(tr("Every key goes back to its language's own accents."))
+            }
+            .glassOutsideCard()
+        }
+        .glassRows()
+    }
+
     // MARK: Changes (each is saved at once)
 
     private func pick(_ key: String) {
         guard key != selected else { return }
         Feedback.tap()
-        draft = ""
         withAnimation(.easeOut(duration: 0.2)) { selected = key }
     }
 
+    /// Saves a key's characters. A key left with none goes from the list under the editor: that is done at once,
+    /// without an animation (an animated removal takes a row out while it is still being drawn).
     private func store(_ characters: [String], for key: String) {
         var updated = Settings.shared.customHolds
         if characters.isEmpty {
@@ -263,76 +256,31 @@ struct LongPressCharactersView: View {
             updated[key] = characters.joined()
         }
         Settings.shared.customHolds = updated
-        withAnimation(.easeOut(duration: 0.2)) { holds = updated }
+        if updated.count == holds.count {
+            withAnimation(.easeOut(duration: 0.2)) { holds = updated }
+        } else {
+            holds = updated
+        }
     }
 
-    /// Adds every new character of `text` to the key (not the key's own letter, nor one it already offers), up to
-    /// the limit.
-    private func add(_ text: String, to key: String) {
+    /// A suggestion tapped: added to the key if it still fits.
+    private func add(_ character: String, to key: String) {
         var list = own(key)
-        let fixed = builtIn(key)
-        var added = false
-        for character in text where !character.isWhitespace {
-            let symbol = String(character)
-            if symbol == key || list.contains(symbol) || fixed.contains(symbol) { continue }
-            if list.count >= Settings.holdSymbolsLimit { break }
-            list.append(symbol)
-            added = true
-        }
-        guard added else {
+        guard !list.contains(character), list.count < Settings.holdSymbolsLimit else {
             Feedback.threshold()
             return
         }
+        list.append(character)
         Feedback.choose()
         store(list, for: key)
-    }
-
-    private func commit(to key: String) {
-        let text = draft
-        draft = ""
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        add(text, to: key)
-        typing = true   // the field stays ready for more
-    }
-
-    private func remove(_ character: String, from key: String) {
-        Feedback.delete()
-        store(own(key).filter { $0 != character }, for: key)
-    }
-
-    private func move(_ character: String, by step: Int, on key: String) {
-        var list = own(key)
-        guard let from = list.firstIndex(of: character) else { return }
-        let to = from + step
-        guard list.indices.contains(to) else { return }
-        list.swapAt(from, to)
-        Feedback.tick()
-        store(list, for: key)
-    }
-}
-
-/// One character of a hold: the user's own on the accent, the language's dimmed.
-private struct HoldCell: View {
-    let character: String
-    let own: Bool
-
-    var body: some View {
-        Text(character)
-            .font(.system(size: 21, weight: .medium))
-            .foregroundColor(own ? .primary : .secondary)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(own ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06)))
-            .contentShape(Rectangle())
     }
 }
 
 /// The keyboard to pick a key on: the digits and the letters in the chosen theme's look. The key being edited is
-/// lit in the accent; a key with characters of the user's own carries a dot.
+/// lit in the accent; a key with characters of the user's own is ringed in the accent and carries their number.
 private struct HoldKeyboard: View {
     let rows: [[String]]
-    let marked: Set<String>
+    let counts: [String: Int]
     let selected: String?
     let pick: (String) -> Void
 
@@ -355,8 +303,8 @@ private struct HoldKeyboard: View {
             VStack(spacing: gap) {
                 ForEach(rows.indices, id: \.self) { index in
                     HStack(spacing: gap) {
-                        ForEach(rows[index], id: \.self) { key in
-                            keyButton(key, look: look, width: keyWidth, height: keyHeight)
+                        ForEach(Array(rows[index].enumerated()), id: \.offset) { item in
+                            keyButton(item.element, look: look, width: keyWidth, height: keyHeight)
                         }
                     }
                 }
@@ -367,26 +315,21 @@ private struct HoldKeyboard: View {
 
     private func keyButton(_ key: String, look: ThemeLook, width: CGFloat, height: CGFloat) -> some View {
         let isSelected = key == selected
+        let count = counts[key] ?? 0
         return Button {
             pick(key)
         } label: {
             Text(key)
-                .font(.system(size: min(21, width * 0.58), weight: .regular))
+                .font(.system(size: min(21, width * 0.58), weight: count > 0 ? .semibold : .regular))
                 .foregroundColor(isSelected ? look.onAccent : look.textColor)
                 .frame(width: width, height: height)
                 .background(face(look, selected: isSelected))
-                .overlay(alignment: .topTrailing) {
-                    if marked.contains(key) {
-                        Circle()
-                            .fill(isSelected ? look.onAccent : look.accent)
-                            .frame(width: 6, height: 6)
-                            .padding(4)
-                    }
-                }
+                .overlay(mark(count, look: look, selected: isSelected))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(key)
+        .accessibilityValue(count > 0 ? "\(count)" : "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -395,6 +338,24 @@ private struct HoldKeyboard: View {
             look.pill(radius: 8)
         } else {
             look.keyShape(.letter, radius: 8)
+        }
+    }
+
+    /// The mark of a key that has characters of the user's own: a ring in the accent, and their number in the
+    /// corner.
+    @ViewBuilder private func mark(_ count: Int, look: ThemeLook, selected: Bool) -> some View {
+        if count > 0 {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(look.accent, lineWidth: selected ? 0 : 1.5)
+                Text("\(count)")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundColor(selected ? look.accent : look.onAccent)
+                    .frame(minWidth: 14, minHeight: 14)
+                    .background(Circle().fill(selected ? look.onAccent : look.accent))
+                    .offset(x: 4, y: -4)
+            }
+            .allowsHitTesting(false)
         }
     }
 }

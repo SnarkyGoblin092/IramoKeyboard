@@ -48,11 +48,16 @@ struct FunctionsView: View {
             .glassRows()
 
             Section {
-                Button(tr("Restore the standard functions")) {
-                    Feedback.choose()
+                // Red: it throws the panel as it was arranged away.
+                Button(role: .destructive) {
+                    Feedback.delete()
                     save(KeyboardTool.standard)
+                } label: {
+                    Label(tr("Restore the standard functions"), systemImage: "arrow.counterclockwise")
                 }
+                .buttonStyle(ActionButtonStyle())
                 .disabled(tools == KeyboardTool.standard)
+                .glassOutsideCard()
             }
             .glassRows()
         }
@@ -177,7 +182,7 @@ private struct ToolRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            IconTile(symbol: tool.symbol)
+            IconTile(symbol: tool.symbol, color: .indigo)
             VStack(alignment: .leading, spacing: 2) {
                 Text(tr(tool.title)).foregroundColor(.primary)
                 Text(tr(tool.subtitle)).font(.footnote).foregroundColor(.secondary)

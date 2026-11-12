@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// A welcome page for the app, shown the first time it opens and again from the About section: what the keyboard does,
-/// how to turn it on, and its features, each with a small looping animation of it at work. Swipe through, or skip at
-/// any time.
+/// The welcome page, shown the first time the app opens and again from the More tab: what the keyboard does, how to
+/// turn it on, and its features, each with a small looping animation of it at work, and at the end where everything
+/// is in the app. It is built from the same pieces as the settings: the keybed behind, glass cards (the animation in
+/// one, the points in another, as rows with their keycaps), and the app's glass buttons. Swipe through, step with
+/// the buttons, or skip at any time.
 struct WelcomeView: View {
     let finish: () -> Void
     @State private var page = 0
@@ -61,13 +63,24 @@ struct WelcomeView: View {
             Page(color: .pink, title: tr("Find and follow"),
                  text: tr("Search for any setting, and see how you type."),
                  demo: .stats,
-                 points: [("magnifyingglass", tr("Search at the top of the main list takes you to a setting")),
+                 points: [("magnifyingglass", tr("The Search tab finds any setting and takes you to it")),
                           ("chart.bar.fill", tr("Typing stats: words, speed and time saved")),
                           ("hand.raised.fill", tr("Counted on this device only, never in passwords"))]),
             Page(color: .indigo, title: tr("All set"),
-                 text: tr("Try the keyboard in the box at the top of the main list. You can see this page again at the bottom of the app."),
+                 text: tr("Try the keyboard in the box at the top of the Typing tab. This page can be seen again from the More tab."),
                  demo: .ready,
                  points: [])
+        ]
+    }
+
+    /// Where everything is: the app's tabs, on the last page.
+    private var places: [(symbol: String, color: Color, title: String, text: String)] {
+        return [
+            ("keyboard", .blue, AppTab.typing.title, tr("Languages, corrections, suggestions and shortcuts")),
+            ("paintpalette.fill", .purple, AppTab.look.title, tr("Themes, keys, effects and the accent colour")),
+            ("hand.tap.fill", .teal, AppTab.touch.title, tr("Gestures, haptics and your own characters")),
+            ("ellipsis", .gray, AppTab.more.title, tr("Typing stats, the app's language and your data")),
+            ("magnifyingglass", .pink, AppTab.search.title, tr("Any setting, by name"))
         ]
     }
 
@@ -75,102 +88,210 @@ struct WelcomeView: View {
         let pages = self.pages
         let last = page == pages.count - 1
         VStack(spacing: 0) {
-            HStack {
-                // Where you are: a dot for each page, the current one stretched in its colour.
-                HStack(spacing: 6) {
-                    ForEach(pages.indices, id: \.self) { index in
-                        Capsule()
-                            .fill(index == page ? pages[page].color : Color.secondary.opacity(0.3))
-                            .frame(width: index == page ? 20 : 7, height: 7)
-                    }
-                }
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
-                .accessibilityHidden(true)
-                Spacer()
-                Button(tr("Skip")) { finish() }
-                    .opacity(last ? 0 : 1)
-                    .disabled(last)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 14)
-            .frame(height: 48)
+            header(last: last)
             TabView(selection: $page) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { index, item in
                     pageView(item, shown: index == page).tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            Button {
-                Feedback.tap()
-                if last {
-                    finish()
-                } else {
-                    withAnimation { page += 1 }
-                }
-            } label: {
-                Text(last ? tr("Get started") : tr("Next"))
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .foregroundColor(.white)
-                    .glassTile(Capsule(), isOn: true)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 28)
+            footer(pages: pages, last: last)
         }
         .background(GlassBackdrop().ignoresSafeArea())
     }
 
-    private func pageView(_ item: Page, shown: Bool) -> some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                demoView(item.demo, color: item.color, running: shown)
-                    .frame(height: 190)
-                    .frame(maxWidth: .infinity)
-                    .glassShape(RoundedRectangle(cornerRadius: 26, style: .continuous), tint: item.color.opacity(0.08))
-                    .padding(.top, 12)
-                    .accessibilityHidden(true)
-                Text(item.title)
-                    .font(.largeTitle.weight(.bold))
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 4)
-                Text(item.text)
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(item.points.enumerated()), id: \.offset) { _, point in
-                        HStack(spacing: 14) {
-                            IconTile(symbol: point.symbol, color: item.color)
-                            Text(point.text).fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                }
-                .padding(.top, 4)
-                if item.demo == .turnOn {
-                    // The app's own page in the system Settings: Keyboards > Iramo, and Allow Full Access.
-                    Button {
-                        Feedback.tap()
-                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                    } label: {
-                        Label(tr("Open Settings"), systemImage: "gearshape.fill")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 46)
-                            .foregroundColor(.white)
-                            .glassTile(Capsule(), isOn: true)
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 8)
+    // MARK: The bars
+
+    /// The app's mark, and the way out.
+    private func header(last: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image("AppLogo")
+                .resizable()
+                .frame(width: 30, height: 30)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .accessibilityHidden(true)
+            Text(tr("Iramo")).font(.headline)
+            Spacer()
+            Button {
+                finish()
+            } label: {
+                Text(tr("Skip"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .glassShape(Capsule(), interactive: true)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .opacity(last ? 0 : 1)
+            .disabled(last)
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 52)
+    }
+
+    /// Where you are (a mark for each page, the current one stretched in its colour), and the way on and back.
+    private func footer(pages: [Page], last: Bool) -> some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 6) {
+                ForEach(pages.indices, id: \.self) { index in
+                    Capsule()
+                        .fill(index == page ? pages[page].color : Color.secondary.opacity(0.3))
+                        .frame(width: index == page ? 22 : 7, height: 7)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
+            .accessibilityHidden(true)
+            HStack(spacing: 12) {
+                if page > 0 {
+                    Button {
+                        Feedback.tap()
+                        withAnimation { page -= 1 }
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .font(.body.weight(.semibold))
+                            .foregroundColor(.primary)
+                            .frame(width: 50, height: 50)
+                            .glassShape(Circle(), interactive: true)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tr("Back"))
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+                Button {
+                    Feedback.tap()
+                    if last {
+                        finish()
+                    } else {
+                        withAnimation { page += 1 }
+                    }
+                } label: {
+                    Text(last ? tr("Get started") : tr("Next")).frame(minHeight: 28)
+                }
+                .buttonStyle(ActionButtonStyle())
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: page > 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 20)
+    }
+
+    // MARK: A page
+
+    /// A glass card, as the settings have them.
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: .infinity)
+            .glassShape(RoundedRectangle(cornerRadius: GlassMetrics.cardRadius, style: .continuous))
+    }
+
+    private func pageView(_ item: Page, shown: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                card {
+                    demoView(item.demo, color: item.color, running: shown)
+                        .frame(height: 196)
+                        .frame(maxWidth: .infinity)
+                }
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(item.title)
+                        .font(.largeTitle.weight(.bold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(item.text)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 4)
+                if !item.points.isEmpty {
+                    pointsCard(item)
+                }
+                if item.demo == .turnOn {
+                    settingsButton
+                }
+                if item.demo == .ready {
+                    placesCard
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The page's points as the rows of a card, each with its keycap (the steps of turning the keyboard on carry
+    /// their numbers).
+    private func pointsCard(_ item: Page) -> some View {
+        card {
+            VStack(spacing: 0) {
+                ForEach(Array(item.points.enumerated()), id: \.offset) { index, point in
+                    HStack(spacing: 14) {
+                        if item.demo == .turnOn {
+                            KeycapLabel(text: "\(index + 1)", color: item.color)
+                        } else {
+                            IconTile(symbol: point.symbol, color: item.color)
+                        }
+                        Text(point.text).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    if index < item.points.count - 1 {
+                        Divider().padding(.leading, 62)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// The app's own page in the system Settings: Keyboards > Iramo, and Allow Full Access.
+    private var settingsButton: some View {
+        Button {
+            Feedback.tap()
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        } label: {
+            Label(tr("Open Settings"), systemImage: "gearshape.fill")
+                .font(.body.weight(.semibold))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .glassShape(Capsule(), interactive: true)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The tabs of the app and what is on each.
+    private var placesCard: some View {
+        let places = self.places
+        return card {
+            VStack(spacing: 0) {
+                ForEach(places.indices, id: \.self) { index in
+                    HStack(spacing: 14) {
+                        IconTile(symbol: places[index].symbol, color: places[index].color)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(places[index].title).font(.body.weight(.semibold))
+                            Text(places[index].text)
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    if index < places.count - 1 {
+                        Divider().padding(.leading, 62)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
         }
     }
 
@@ -550,11 +671,9 @@ private struct StatsDemo: View {
             VStack(spacing: 6) {
                 ForEach(results) { entry in
                     HStack(spacing: 10) {
-                        Image(systemName: entry.symbol)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 26, height: 26)
-                            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(entry.color))
+                        Keycap(color: entry.color, size: 26) {
+                            Image(systemName: entry.symbol).font(.system(size: 12, weight: .semibold))
+                        }
                         VStack(alignment: .leading, spacing: 0) {
                             Text(entry.title).font(.subheadline).lineLimit(1)
                             Text(entry.place).font(.caption2).foregroundColor(.secondary).lineLimit(1)

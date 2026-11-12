@@ -206,8 +206,8 @@ struct SettingToggle: View {
     }
 }
 
-/// The app's icon: a small keycap with the symbol on it. The cap has a lighter top and a darker skirt under it, as
-/// a key seen from the front, in the accent colour unless another is given.
+/// The app's icon: a small keycap in a colour of its own with the symbol on it in white. The cap has a top and a
+/// darker skirt under it, as a key seen from the front.
 struct IconTile: View {
     let symbol: String
     var color: Color = .accentColor
@@ -248,11 +248,17 @@ struct Keycap<Legend: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
         let lip: CGFloat = max(2, size * 0.09)
+        // In full colour: the skirt is the colour darkened, the top the colour itself with a little light on its
+        // upper half, and the legend white.
         ZStack {
-            shape.fill(color.opacity(scheme == .dark ? 0.42 : 0.32))
-            shape.fill(Color.white.opacity(scheme == .dark ? 0.10 : 0.62)).padding(.bottom, lip)
+            shape.fill(color)
+            shape.fill(Color.black.opacity(scheme == .dark ? 0.38 : 0.26))
+            shape.fill(color).padding(.bottom, lip)
+            shape.fill(LinearGradient(colors: [Color.white.opacity(0.24), Color.white.opacity(0)],
+                                      startPoint: .top, endPoint: .bottom))
+                .padding(.bottom, lip)
             legend()
-                .foregroundColor(color)
+                .foregroundColor(.white)
                 .frame(width: size, height: size - lip)
                 .padding(.bottom, lip)
         }
@@ -457,8 +463,8 @@ struct ActionButtonStyle: ButtonStyle {
     }
 }
 
-/// A section's title, in sentence case: its glyph in the accent and its name. (`color` is kept for the callers
-/// that name one; the app's sections all wear the accent.)
+/// A section's title, in sentence case: its glyph in the section's colour (the accent unless one is given) and
+/// its name.
 struct SectionHeader: View {
     let title: String
     let symbol: String
@@ -474,7 +480,7 @@ struct SectionHeader: View {
         HStack(spacing: 6) {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.tint)
+                .foregroundColor(color)
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(title)
@@ -510,8 +516,14 @@ struct AccentTint: ViewModifier {
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     func body(content: Content) -> some View {
-        content.tint(Color.currentAccent(name: accentName, hex: accentHex))
+        content
+            .tint(Color.currentAccent(name: accentName, hex: accentHex))
+            // A new accent fades in over the old one, wherever it is drawn.
+            .animation(AccentTint.fade, value: accentName + accentHex)
     }
+
+    /// How a new accent takes over from the old one (the backdrop's fade, and everything else's).
+    static let fade = Animation.easeInOut(duration: 0.7)
 }
 
 // MARK: - Accent colour
@@ -537,8 +549,10 @@ struct AccentPicker: View {
                 Button {
                     guard isCustom || accentName != choice.rawValue else { return }
                     Feedback.choose()
-                    accentName = choice.rawValue
-                    accentHex = ""
+                    withAnimation(AccentTint.fade) {
+                        accentName = choice.rawValue
+                        accentHex = ""
+                    }
                 } label: {
                     Circle()
                         .fill(Color(accent: choice))
@@ -602,7 +616,7 @@ struct AccentPicker: View {
             guard let hex = pendingHex else { return }
             pendingHex = nil
             guard hex != accentHex else { return }
-            accentHex = hex
+            withAnimation(AccentTint.fade) { accentHex = hex }
         }
     }
 }
