@@ -383,7 +383,9 @@ private struct TabSwipePan: UIGestureRecognizerRepresentable {
 
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            return true
+            // Beside the list's own pan only: every other touch under the finger (a row's tap) is cancelled when the
+            // drag takes over.
+            return other is UIPanGestureRecognizer && other.view is UIScrollView
         }
     }
 }
@@ -391,43 +393,23 @@ private struct TabSwipePan: UIGestureRecognizerRepresentable {
 // MARK: - The tab bar
 
 /// The tab bar: the four areas in one capsule of Liquid Glass and the search in a round one beside it, as the
-/// system's bar has them. The tab shown is marked by a pill that slides to it and wears the accent.
+/// system's bar has them. The selection is a lens of glass, as on the system's bar: touching the bar makes it swell
+/// under the finger, it follows the finger from tab to tab, and on letting go it settles, small again, on the tab
+/// chosen.
 private struct GlassTabBar: View {
     let selected: AppTab
     let select: (AppTab) -> Void
-    @Namespace private var pill
+    /// The tab under the finger while the bar is touched.
+    @State private var touched: Int?
+    @Environment(\.layoutDirection) private var direction
 
     private let areas: [AppTab] = [.typing, .look, .touch, .more]
 
     var body: some View {
-        container {
         HStack(spacing: 10) {
-            HStack(spacing: 0) {
-                ForEach(areas, id: \.self) { item in
-                    Button {
-                        select(item)
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: item.symbol)
-                                .font(.system(size: 19, weight: .medium))
-                                .frame(height: 24)
-                            Text(item.title)
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-                        .foregroundColor(item == selected ? .accentColor : .primary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(marker(for: item))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(item == selected ? .isSelected : [])
-                }
-            }
-            .padding(4)
-            .glassShape(Capsule())
+            areaBar
+                .padding(4)
+                .glassShape(Capsule())
             Button {
                 select(.search)
             } label: {
@@ -442,49 +424,82 @@ private struct GlassTabBar: View {
             .accessibilityLabel(AppTab.search.title)
             .accessibilityAddTraits(selected == .search ? .isSelected : [])
         }
-        }
         .frame(maxWidth: 560)
         .padding(.horizontal, 18)
         .padding(.top, 6)
         .padding(.bottom, 2)
-        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: selected)
     }
 
-    /// The bar's glass shares one container, so the selection's lens can flow from tab to tab through it.
-    @ViewBuilder private func container<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    /// The place (left to right) of a tab on the bar.
+    private func place(of index: Int) -> Int {
+        return direction == .rightToLeft ? areas.count - 1 - index : index
+    }
+
+    private var areaBar: some View {
+        let current = areas.firstIndex(of: selected)
+        let lensAt = touched ?? current
+        return GeometryReader { proxy in
+            let slot = proxy.size.width / CGFloat(areas.count)
+            ZStack {
+                if let lensAt = lensAt {
+                    lens
+                        .frame(width: slot, height: proxy.size.height)
+                        .scaleEffect(touched == nil ? 1 : 1.22)
+                        .position(x: slot * (CGFloat(place(of: lensAt)) + 0.5), y: proxy.size.height / 2)
+                }
+                HStack(spacing: 0) {
+                    ForEach(Array(areas.enumerated()), id: \.offset) { index, item in
+                        label(item, on: index == lensAt)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(item == selected ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityAction { select(item) }
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { value in touched = index(at: value.location.x, slot: slot) }
+                .onEnded { value in
+                    let index = index(at: value.location.x, slot: slot)
+                    touched = nil
+                    select(areas[index])
+                })
+            .animation(.spring(response: 0.36, dampingFraction: 0.74), value: touched)
+            .animation(.spring(response: 0.36, dampingFraction: 0.78), value: selected)
+        }
+        .frame(height: 52)
+    }
+
+    private func index(at x: CGFloat, slot: CGFloat) -> Int {
+        let place = min(areas.count - 1, max(0, Int(x / max(slot, 1))))
+        return direction == .rightToLeft ? areas.count - 1 - place : place
+    }
+
+    private func label(_ item: AppTab, on: Bool) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: item.symbol)
+                .font(.system(size: 19, weight: .medium))
+                .frame(height: 24)
+            Text(item.title)
+                .font(.system(size: 10, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .foregroundColor(on ? .accentColor : .primary)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The selection: a lens of Liquid Glass (a plain pill before iOS 26).
+    @ViewBuilder private var lens: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 12) { content() }
+            Color.clear.glassEffect(.regular, in: Capsule())
         } else {
-            content()
+            Capsule().fill(Color.primary.opacity(0.1))
         }
         #else
-        content()
+        Capsule().fill(Color.primary.opacity(0.1))
         #endif
-    }
-
-    /// The selection behind the tab shown: a lens of Liquid Glass that answers the finger and slides (stretching and
-    /// melting, as glass does) from tab to tab; a plain pill before iOS 26.
-    @ViewBuilder private func marker(for item: AppTab) -> some View {
-        if item == selected {
-            #if compiler(>=6.2)
-            if #available(iOS 26.0, *) {
-                Color.clear
-                    .glassEffect(.regular.interactive(), in: Capsule())
-                    .glassEffectID("marker", in: pill)
-            } else {
-                pillMarker
-            }
-            #else
-            pillMarker
-            #endif
-        }
-    }
-
-    private var pillMarker: some View {
-        Capsule()
-            .fill(Color.primary.opacity(0.1))
-            .matchedGeometryEffect(id: "marker", in: pill)
     }
 }
 
@@ -630,6 +645,7 @@ struct ScreenRow<Label: View>: View {
     @Environment(\.openScreen) private var openScreen
     @Environment(\.shownScreen) private var shownScreen
     @Environment(\.swipeFade) private var swipeFade
+    @Environment(\.tabSwiping) private var swiping
 
     init(_ screen: Screen, @ViewBuilder label: @escaping () -> Label) {
         self.screen = screen
@@ -638,6 +654,8 @@ struct ScreenRow<Label: View>: View {
 
     var body: some View {
         Button {
+            // A tab swipe that began on the row doesn't open it.
+            guard !swiping else { return }
             Feedback.tap()
             openScreen(screen)
         } label: {

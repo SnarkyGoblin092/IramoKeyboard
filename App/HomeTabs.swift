@@ -23,6 +23,7 @@ struct TypingTab: View {
         .environment(\.searchScope, AppTab.typing.scope)
         .navigationTitle(tr("Iramo"))
         .navigationBarTitleDisplayMode(.large)
+        .quietNavBar()
     }
 }
 
@@ -253,6 +254,7 @@ struct LookTab: View {
         .environment(\.searchScope, AppTab.look.scope)
         .navigationTitle(AppTab.look.title)
         .navigationBarTitleDisplayMode(.large)
+        .quietNavBar()
     }
 }
 
@@ -411,6 +413,7 @@ struct TouchTab: View {
         .environment(\.searchScope, AppTab.touch.scope)
         .navigationTitle(AppTab.touch.title)
         .navigationBarTitleDisplayMode(.large)
+        .quietNavBar()
     }
 }
 
@@ -489,6 +492,7 @@ struct MoreTab: View {
         .environment(\.searchScope, AppTab.more.scope)
         .navigationTitle(AppTab.more.title)
         .navigationBarTitleDisplayMode(.large)
+        .quietNavBar()
     }
 }
 
