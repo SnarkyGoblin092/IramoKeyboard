@@ -256,13 +256,16 @@ struct Keycap<Legend: View>: View {
         // In full colour: the skirt is the colour darkened, the top the colour itself with a little light on its
         // upper half, and the legend white.
         ZStack {
+            ZStack {
             shape.fill(color)
-            shape.fill(Color.black.opacity(min(0.8, dim + (dark ? 0.34 : 0.17))))
+            shape.fill(Color.black.opacity(min(0.8, dim + (dark ? 0.24 : 0.17))))
             shape.fill(color).padding(.bottom, lip)
             shape.fill(Color.black.opacity(dim)).padding(.bottom, lip)
             shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.12 : 0.22), Color.white.opacity(0)],
                                       startPoint: .top, endPoint: .bottom))
                 .padding(.bottom, lip)
+            }
+            .saturation(1.3)
             legend()
                 .foregroundColor(.white)
                 .shadow(color: Color.black.opacity(dark ? 0.28 : 0.4), radius: 0.7, x: 0, y: 0.7)
@@ -285,7 +288,7 @@ private func keycapDimming(of color: Color, dark: Bool) -> Double {
         return dark ? 0.24 : 0.03
     }
     let lightness = 0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
-    let most = dark ? 0.32 : 0.62
+    let most = dark ? 0.45 : 0.62
     guard lightness > most else { return 0 }
     return min(0.62, 1 - most / lightness)
 }

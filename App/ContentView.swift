@@ -224,9 +224,12 @@ struct TabColumn: View {
         } else {
             NavigationStack(path: $path) {
                 TabRoot(tab: tab)
-                    // A screen opened on the tab takes the whole screen: the tab bar makes way for it.
-                    .navigationDestination(for: Screen.self) { $0.scopedView.toolbar(.hidden, for: .tabBar) }
+                    .navigationDestination(for: Screen.self) { $0.scopedView }
             }
+            // A screen opened on the tab takes the whole screen: the tab bar slides away for it, and back up from
+            // the bottom when it is left.
+            .toolbar(path.isEmpty ? .visible : .hidden, for: .tabBar)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: path.isEmpty)
             .environment(\.openScreen, { screen in path.append(screen) })
         }
     }

@@ -161,6 +161,25 @@ private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
 }
 #endif
 
+/// A soft blur behind the title at the top of a tab, fading out downwards so the list has no hard edge under it.
+struct TitleBlur: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let top = proxy.safeAreaInsets.top
+            let height = top + 30
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0),
+                                             .init(color: .black, location: top / max(height, 1) * 0.8),
+                                             .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(height: height)
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+    }
+}
+
 extension View {
     /// A piece of Liquid Glass in the shape (a frosted material before iOS 26), optionally tinted, and answering
     /// touches when `interactive`. The sliders and buttons use it.
@@ -200,6 +219,7 @@ extension View {
     func quietNavBar() -> some View {
         let base = self
             .toolbarBackground(.hidden, for: .navigationBar)
+            .overlay(alignment: .top) { TitleBlur() }
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             base.scrollEdgeEffectHidden(true, for: .top)

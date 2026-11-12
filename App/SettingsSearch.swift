@@ -392,6 +392,8 @@ struct SearchTab: View {
                 }
             }
             .glassScreen()
+            // The search field floats over the bottom: room under the last setting for it.
+            .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 56) }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(tr("Search"))
             .navigationBarTitleDisplayMode(.inline)
