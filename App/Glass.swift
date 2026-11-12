@@ -161,73 +161,6 @@ private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
 }
 #endif
 
-/// A blur behind the title at the top of a tab: full strength down to half its height, then fading to nothing
-/// over the lower half, so the list has no hard edge under it. A real variable blur, with no grey tint.
-struct TitleBlur: View {
-    var body: some View {
-        GeometryReader { proxy in
-            // Solid down to the bottom of the title (the bar's bottom edge), then 48 pt of fade below it.
-            let top = proxy.safeAreaInsets.top
-            VariableBlurView(solid: top / (top + 48))
-                .frame(height: top + 48)
-        }
-        .ignoresSafeArea(edges: .top)
-        .allowsHitTesting(false)
-    }
-}
-
-/// The system's blur with its amount varying along a mask (the blur filter UIKit's own bars use), and its tint
-/// layers taken away. If the filter is not there, a plain blur faded out by a gradient instead.
-private struct VariableBlurView: UIViewRepresentable {
-    /// The share of the height (from the top) at full strength.
-    let solid: CGFloat
-
-    func makeUIView(context: Context) -> UIVisualEffectView {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
-        view.isUserInteractionEnabled = false
-        return view
-    }
-
-    func updateUIView(_ view: UIVisualEffectView, context: Context) {
-        guard let backdrop = view.subviews.first,
-              let filterClass = NSClassFromString("CAFilter") as? NSObject.Type,
-              let made = filterClass.perform(NSSelectorFromString("filterWithType:"), with: "variableBlur"),
-              let filter = made.takeUnretainedValue() as? NSObject,
-              let mask = VariableBlurView.maskImage(solid: solid) else {
-            view.layer.mask = VariableBlurView.fadeMask(for: view.bounds, solid: solid)
-            return
-        }
-        filter.setValue(10, forKey: "inputRadius")
-        filter.setValue(mask, forKey: "inputMaskImage")
-        filter.setValue(true, forKey: "inputNormalizeEdges")
-        backdrop.layer.filters = [filter]
-        // The effect's grey tint and edge layers.
-        for tint in view.subviews.dropFirst() { tint.alpha = 0 }
-    }
-
-    /// The blur's amount along the view: all of it down to `solid`, none at the bottom (alpha of the image).
-    private static func maskImage(solid: CGFloat) -> CGImage? {
-        let size = CGSize(width: 1, height: 256)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
-            let colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor] as CFArray
-            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors,
-                                            locations: [0, solid, 1]) else { return }
-            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
-        }
-        return image.cgImage
-    }
-
-    private static func fadeMask(for bounds: CGRect, solid: CGFloat) -> CALayer {
-        let layer = CAGradientLayer()
-        layer.frame = bounds
-        layer.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
-        layer.locations = [0, NSNumber(value: Double(solid)), 1]
-        return layer
-    }
-}
-
 extension View {
     /// A piece of Liquid Glass in the shape (a frosted material before iOS 26), optionally tinted, and answering
     /// touches when `interactive`. The sliders and buttons use it.
@@ -262,21 +195,10 @@ extension View {
         if #available(iOS 16.1, *) { self.fontDesign(.rounded) } else { self }
     }
 
-    /// A tab's navigation bar: the title always shown, with no bar behind it that comes in as the list scrolls.
-    @ViewBuilder
+    /// A tab's navigation bar is out of the way: its title is a header of the list (GlassList's `title`), which
+    /// scrolls with it.
     func quietNavBar() -> some View {
-        let base = self
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .overlay(alignment: .top) { TitleBlur() }
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            base.scrollEdgeEffectHidden(true, for: .top)
-        } else {
-            base
-        }
-        #else
-        base
-        #endif
+        return self.toolbar(.hidden, for: .navigationBar)
     }
 
     /// A screen of the app: its list or scroll view on the glass backdrop.
@@ -726,6 +648,7 @@ struct SegmentedChoice: View {
 /// Takes the same `Section { } header: { } footer: { }` content as a List.
 struct GlassList<Content: View>: View {
     private let content: Content
+    private let title: String?
     /// The screen this list is on (the settings search takes the user to a row of it: SearchFocus).
     @Environment(\.searchScope) private var scope
     @Environment(\.scrollOffsetReport) private var scrollReport
@@ -735,7 +658,9 @@ struct GlassList<Content: View>: View {
 
     /// `eager`: every card is built at once (a short screen, so any of its rows can be scrolled to); nil decides
     /// by whether the search is taking the user to a row.
-    init(eager: Bool? = nil, @ViewBuilder content: () -> Content) {
+    /// `title`: a large title above the cards, scrolling away with them.
+    init(eager: Bool? = nil, title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
         self.content = content()
         self._eager = State(initialValue: eager ?? (SearchFocus.shared.request != nil))
     }
@@ -751,6 +676,7 @@ struct GlassList<Content: View>: View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             ScrollView {
+                if let title = title { titleView(title) }
                 if eager {
                     VStack(alignment: .leading, spacing: 0) { cards }
                         .padding(.horizontal, 16)
@@ -784,8 +710,26 @@ struct GlassList<Content: View>: View {
     }
     #endif
 
+    private func titleView(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 38, weight: .bold, design: .rounded))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     private var list: some View {
-        List { content }
+        List {
+            if let title = title {
+                titleView(title)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+            }
+            content
+        }
             .listStyle(.insetGrouped)
             .buttonStyle(GlassPressStyle())
     }

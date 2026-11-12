@@ -13,7 +13,7 @@ import UIKit
 /// corrections it makes while typing.
 struct TypingTab: View {
     var body: some View {
-        GlassList(eager: true) {
+        GlassList(eager: true, title: tr("Iramo")) {
             StageSection().glassRows()
             KeyboardSection().glassRows()
             CorrectionsSection().glassRows()
@@ -245,7 +245,7 @@ private struct CorrectionsSection: View {
 /// How the keyboard looks: its theme (drawn as it is now), its keys, the effects and the accent colour.
 struct LookTab: View {
     var body: some View {
-        GlassList(eager: true) {
+        GlassList(eager: true, title: AppTab.look.title) {
             ThemeSection().glassRows()
             KeysAndEffectsSection().glassRows()
             AccentSection().glassRows()
@@ -405,7 +405,7 @@ private struct AccentSection: View {
 /// functions panel offer when held or opened.
 struct TouchTab: View {
     var body: some View {
-        GlassList(eager: true) {
+        GlassList(eager: true, title: AppTab.touch.title) {
             GesturesSection().glassRows()
             HoldsSection().glassRows()
         }
@@ -482,7 +482,7 @@ private struct HoldsSection: View {
 /// The rest: what the keyboard counted, the app's own language, the data it keeps, and the app itself.
 struct MoreTab: View {
     var body: some View {
-        GlassList(eager: true) {
+        GlassList(eager: true, title: AppTab.more.title) {
             StatsSection().glassRows()
             AppLanguageSection().glassRows()
             DataSection().glassRows()

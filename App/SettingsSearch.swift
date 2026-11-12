@@ -386,7 +386,7 @@ struct SearchTab: View {
 
     var body: some View {
         NavigationStack {
-            GlassList(eager: true) {
+            GlassList(eager: true, title: tr("Search")) {
                 if isEmpty {
                     SettingsSitemap(open: open)
                 } else {
@@ -399,7 +399,6 @@ struct SearchTab: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: needsRoom ? 56 : 0) }
             .modifier(OverflowWatch(overflows: $needsRoom))
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(tr("Search"))
             .navigationBarTitleDisplayMode(.inline)
             .quietNavBar()
             .modifier(SearchField(query: $query))
