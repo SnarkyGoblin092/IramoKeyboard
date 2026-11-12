@@ -386,7 +386,7 @@ struct SearchTab: View {
 
     var body: some View {
         NavigationStack {
-            GlassList(eager: true, title: tr("Search")) {
+            GlassList(eager: true) {
                 if isEmpty {
                     SettingsSitemap(open: open)
                 } else {
