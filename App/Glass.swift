@@ -166,8 +166,10 @@ private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
 struct TitleBlur: View {
     var body: some View {
         GeometryReader { proxy in
-            VariableBlurView()
-                .frame(height: proxy.safeAreaInsets.top + 36)
+            // Solid down to the bottom of the title (the bar's bottom edge), then 48 pt of fade below it.
+            let top = proxy.safeAreaInsets.top
+            VariableBlurView(solid: top / (top + 48))
+                .frame(height: top + 48)
         }
         .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
@@ -177,6 +179,9 @@ struct TitleBlur: View {
 /// The system's blur with its amount varying along a mask (the blur filter UIKit's own bars use), and its tint
 /// layers taken away. If the filter is not there, a plain blur faded out by a gradient instead.
 private struct VariableBlurView: UIViewRepresentable {
+    /// The share of the height (from the top) at full strength.
+    let solid: CGFloat
+
     func makeUIView(context: Context) -> UIVisualEffectView {
         let view = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
         view.isUserInteractionEnabled = false
@@ -188,8 +193,8 @@ private struct VariableBlurView: UIViewRepresentable {
               let filterClass = NSClassFromString("CAFilter") as? NSObject.Type,
               let made = filterClass.perform(NSSelectorFromString("filterWithType:"), with: "variableBlur"),
               let filter = made.takeUnretainedValue() as? NSObject,
-              let mask = VariableBlurView.maskImage() else {
-            view.layer.mask = VariableBlurView.fadeMask(for: view.bounds)
+              let mask = VariableBlurView.maskImage(solid: solid) else {
+            view.layer.mask = VariableBlurView.fadeMask(for: view.bounds, solid: solid)
             return
         }
         filter.setValue(10, forKey: "inputRadius")
@@ -200,25 +205,25 @@ private struct VariableBlurView: UIViewRepresentable {
         for tint in view.subviews.dropFirst() { tint.alpha = 0 }
     }
 
-    /// The blur's amount along the view: all of it down to half, none at the bottom (alpha of the image).
-    private static func maskImage() -> CGImage? {
+    /// The blur's amount along the view: all of it down to `solid`, none at the bottom (alpha of the image).
+    private static func maskImage(solid: CGFloat) -> CGImage? {
         let size = CGSize(width: 1, height: 256)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor] as CFArray
             guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors,
-                                            locations: [0, 0.5, 1]) else { return }
+                                            locations: [0, solid, 1]) else { return }
             context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
         }
         return image.cgImage
     }
 
-    private static func fadeMask(for bounds: CGRect) -> CALayer {
+    private static func fadeMask(for bounds: CGRect, solid: CGFloat) -> CALayer {
         let layer = CAGradientLayer()
         layer.frame = bounds
         layer.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
-        layer.locations = [0, 0.5, 1]
+        layer.locations = [0, NSNumber(value: Double(solid)), 1]
         return layer
     }
 }
