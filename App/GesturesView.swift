@@ -65,7 +65,7 @@ struct GesturesView: View {
             case .keys: keySections
             }
         }
-        .scrollContentBackground(.hidden)
+        .glassScreen()
         .sheet(isPresented: $trying) {
             NavigationStack {
                 VStack {

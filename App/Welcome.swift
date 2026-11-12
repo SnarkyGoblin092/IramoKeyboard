@@ -266,7 +266,7 @@ struct WelcomeView: View {
     private var settingsButton: some View {
         Button {
             Feedback.tap()
-            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            KeyboardStatus.openSettings()
         } label: {
             Label(tr("Open Settings"), systemImage: "gearshape.fill")
                 .font(.body.weight(.semibold))

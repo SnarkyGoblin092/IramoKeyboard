@@ -61,6 +61,9 @@ struct ContentView: View {
     @AppStorage(SettingKey.appearance, store: SharedStore.defaults) private var appearance = SettingDefault.appearance
     /// The first-run welcome page (Welcome.swift); the More tab's button shows it again by clearing this.
     @AppStorage(SettingKey.welcomeSeen, store: SharedStore.defaults) private var welcomeSeen = false
+    /// Whether the welcome page is up. Kept apart from the setting, so nothing the system does as the app leaves
+    /// and returns can close it or open it again: only its own buttons close it, and Replay opens it.
+    @State private var showWelcome = !SharedStore.defaults.bool(forKey: SettingKey.welcomeSeen)
 
     /// The window's full size (the keyboard showing doesn't change it): wide enough, a tab shows two columns.
     @State private var windowSize: CGSize = .zero
@@ -96,6 +99,10 @@ struct ContentView: View {
                     .onAppear { windowSize = geometry.size }
                     .onChange(of: geometry.size) { windowSize = $0 }
             }.ignoresSafeArea())
+            .onChange(of: welcomeSeen) { seen in
+                // The More tab's "Replay welcome" clears it.
+                if !seen { showWelcome = true }
+            }
             .onChange(of: tab) { new in
                 if previous == .search, new != .search, !keepsQuery { query = "" }
                 keepsQuery = false
@@ -111,9 +118,10 @@ struct ContentView: View {
             .roundedType()
             // The Themes screen's light / dark switch sets the mode of the whole app ("auto": the system's).
             .preferredColorScheme(appearance == "light" ? .light : (appearance == "dark" ? .dark : nil))
-            .fullScreenCover(isPresented: Binding(get: { !welcomeSeen }, set: { welcomeSeen = !$0 })) {
+            .fullScreenCover(isPresented: Binding(get: { showWelcome }, set: { _ in })) {
                 WelcomeView {
                     SharedStore.defaults.set(0, forKey: WelcomeView.pageKey)
+                    showWelcome = false
                     welcomeSeen = true
                 }
                     .environment(\.locale, AppLanguage.locale)
@@ -232,7 +240,6 @@ struct TabColumn: View {
             // A screen opened on the tab takes the whole screen: the tab bar slides away for it, and back up from
             // the bottom when it is left.
             .toolbar(path.isEmpty ? .visible : .hidden, for: .tabBar)
-            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: path.isEmpty)
             .environment(\.openScreen, { screen in path.append(screen) })
         }
     }
@@ -390,7 +397,19 @@ struct KeyboardStatus {
         let store = SharedStore.defaults
         // Enabled: the system lists the keyboard among the ones switched on (checked here, in the app, so the answer
         // is current). Full Access can only be told by the keyboard itself, which saves it each time it opens.
-        return KeyboardStatus(seen: isEnabled, fullAccess: store.bool(forKey: SettingKey.fullAccess))
+        // A visit to Settings (the buttons that open it) may have changed it, so it counts once the keyboard has
+        // opened after the visit and saved it again.
+        let visit = UserDefaults.standard.double(forKey: KeyboardStatus.visitKey)
+        let confirmed = store.double(forKey: SettingKey.lastSeen) > visit
+        return KeyboardStatus(seen: isEnabled, fullAccess: store.bool(forKey: SettingKey.fullAccess) && confirmed)
+    }
+
+    private static let visitKey = "hunkeys.settingsVisit"
+
+    /// Opens the app's page in Settings, noting the time.
+    static func openSettings() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: visitKey)
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
     }
 
     /// Whether the keyboard is among the system's enabled keyboards.

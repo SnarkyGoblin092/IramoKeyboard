@@ -97,9 +97,11 @@ private struct Keybed: View, Animatable {
 /// A list row's background: real Liquid Glass over the backdrop (frosted glass before iOS 26), the same on every
 /// list of the app (settings, languages, learned words, shortcuts).
 struct GlassRowFill: View {
+    @Environment(\.scenePhase) private var phase
+
     var body: some View {
         #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), phase == .active {
             Color.clear.glassEffect(.regular, in: Rectangle())
         } else {
             Rectangle().fill(.thinMaterial)
@@ -152,6 +154,25 @@ private struct GlassTile<S: Shape>: ViewModifier {
 }
 
 #if compiler(>=6.2)
+/// Liquid Glass while the app is in front; a frosted fill of the same shape and tint while it is not, since the
+/// snapshot the app switcher takes of the app would otherwise show the glass empty (no colour on the icons).
+@available(iOS 26.0, *)
+private struct PhasedGlass<S: Shape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    let interactive: Bool
+    @Environment(\.scenePhase) private var phase
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if phase == .active {
+            content.glassEffect(makeGlass(tint: tint, interactive: interactive), in: shape)
+        } else {
+            content.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
+                .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+        }
+    }
+}
+
 @available(iOS 26.0, *)
 private func makeGlass(tint: Color?, interactive: Bool) -> Glass {
     var glass = Glass.regular
@@ -168,7 +189,7 @@ extension View {
     func glassShape<S: Shape>(_ shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            self.glassEffect(makeGlass(tint: tint, interactive: interactive), in: shape)
+            self.modifier(PhasedGlass(shape: shape, tint: tint, interactive: interactive))
         } else {
             self.background(shape.fill(.thinMaterial)).background(shape.fill(tint ?? .clear))
                 .overlay(shape.stroke(Color.white.opacity(0.3), lineWidth: 0.5))
@@ -195,10 +216,14 @@ extension View {
         if #available(iOS 16.1, *) { self.fontDesign(.rounded) } else { self }
     }
 
-    /// A tab's navigation bar is out of the way: its title is a header of the list (GlassList's `title`), which
-    /// scrolls with it.
+    /// A tab's navigation bar is empty and clear: its title is a header of the list (GlassList's `title`), which
+    /// scrolls with it. The bar stays (not hidden), so the screens opened from the tab, which have one, don't make
+    /// it jump in and out as they come and go.
     func quietNavBar() -> some View {
-        return self.toolbar(.hidden, for: .navigationBar)
+        return self
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     /// A screen of the app: its list or scroll view on the glass backdrop.

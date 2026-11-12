@@ -105,7 +105,7 @@ struct HapticsView: View {
             }
             .glassRows()
         }
-        .scrollContentBackground(.hidden)
+        .glassScreen()
         .navigationTitle(tr("Haptics & sound"))
         .navigationBarTitleDisplayMode(.inline)
     }

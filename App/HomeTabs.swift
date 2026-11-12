@@ -70,7 +70,7 @@ private struct StageSection: View {
                     // A tap goes to the app's page in Settings, where the keyboard and Full Access are switched on.
                     Button {
                         Feedback.tap()
-                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                        KeyboardStatus.openSettings()
                     } label: {
                         StatusChip(text: title, symbol: "exclamationmark.triangle.fill",
                                    color: SharedStore.isShared ? .orange : .red)
@@ -125,7 +125,7 @@ private struct StageSection: View {
         if !status.seen {
             return tr("In Settings, open Keyboards, switch on Iramo and Allow Full Access, then open the keyboard once.")
         }
-        return tr("Without it there is no vibration, and the keyboard can't save recent emoji or learned words.")
+        return tr("Switch on Allow Full Access in Settings, then open the keyboard once to confirm. Without it there is no vibration, and the keyboard can't save recent emoji or learned words.")
     }
 }
 
