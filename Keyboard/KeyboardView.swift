@@ -1564,9 +1564,7 @@ final class TrailCanvas: CALayer {
 
     override func draw(in ctx: CGContext) {
         guard !points.isEmpty else { return }
-        // A plain layer's context has its origin at the bottom left: flipped, the points (top left) land upright.
-        ctx.translateBy(x: 0, y: bounds.height)
-        ctx.scaleBy(x: 1, y: -1)
+        // On iOS a layer's context already has its origin at the top left, like the points: no flip.
         TrailGeometry.draw(in: ctx, points: points, width: width, style: trailStyle, color: color, opacity: headOpacity,
                            hueShift: hueShift, soften: 2)
     }

@@ -282,6 +282,24 @@ struct KeysView: View {
             .glassRows()
 
             Section {
+                SegmentedChoice(names: [tr("Narrow"), tr("Standard"), tr("Wide"), tr("Extra wide")],
+                                selected: gaps.firstIndex { same($0.key, keyGap) && same($0.row, rowGap) }) { index in
+                    keyGap = gaps[index].key
+                    rowGap = gaps[index].row
+                }
+                .searchAnchor("keys.spacing")
+                GlassSlider(title: tr("Between keys"), symbol: "arrow.left.and.right", value: $keyGap,
+                            range: Settings.keyGapRange, step: 1) { "\(Int($0.rounded())) pt" }
+                GlassSlider(title: tr("Between rows"), symbol: "arrow.up.and.down", value: $rowGap,
+                            range: Settings.rowGapRange, step: 1) { "\(Int($0.rounded())) pt" }
+            } header: {
+                SectionHeader(tr("Spacing"), symbol: "square.split.2x2", color: .teal)
+            } footer: {
+                Text(tr("The whole space between keys still takes taps; wider gaps only change how the keys look."))
+            }
+            .glassRows()
+
+            Section {
                 SettingToggle(tr("Number row"), key: SettingKey.numberRow, defaultValue: SettingDefault.numberRow,
                               subtitle: tr("Numbers above the letters"))
                     .searchAnchor("keys.layout")
@@ -302,24 +320,6 @@ struct KeysView: View {
                          ? tr("The split keyboard is used instead of the one-handed one.")
                          : tr("One-handed: a narrower keyboard against that side, upright; in landscape the split keyboard is used instead."))
                 }
-            }
-            .glassRows()
-
-            Section {
-                SegmentedChoice(names: [tr("Narrow"), tr("Standard"), tr("Wide"), tr("Extra wide")],
-                                selected: gaps.firstIndex { same($0.key, keyGap) && same($0.row, rowGap) }) { index in
-                    keyGap = gaps[index].key
-                    rowGap = gaps[index].row
-                }
-                .searchAnchor("keys.spacing")
-                GlassSlider(title: tr("Between keys"), symbol: "arrow.left.and.right", value: $keyGap,
-                            range: Settings.keyGapRange, step: 1) { "\(Int($0.rounded())) pt" }
-                GlassSlider(title: tr("Between rows"), symbol: "arrow.up.and.down", value: $rowGap,
-                            range: Settings.rowGapRange, step: 1) { "\(Int($0.rounded())) pt" }
-            } header: {
-                SectionHeader(tr("Spacing"), symbol: "square.split.2x2", color: .teal)
-            } footer: {
-                Text(tr("The whole space between keys still takes taps; wider gaps only change how the keys look."))
             }
             .glassRows()
 

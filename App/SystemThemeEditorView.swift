@@ -134,7 +134,7 @@ struct SystemThemeSections: View {
             .transaction { $0.animation = nil }
             .glassOutsideCard()
         } footer: {
-            Text(tr("Puts the theme back as it came, with the corners and key style set on the old Keys screen."))
+            Text(tr("Puts the theme back as it came, with the corners and key style it had before you edited it."))
         }
         .glassRows()
     }

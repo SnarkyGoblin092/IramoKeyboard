@@ -1,12 +1,7 @@
 name: Build Iramo IPA
 
-# Runs on every push (except documentation-only changes) and can also be started by hand
-# (Actions tab > Build Iramo IPA > Run workflow).
+# Runs only when started by hand (Actions tab > Build Iramo IPA > Run workflow).
 on:
-  push:
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
   workflow_dispatch:
 
 jobs:

@@ -99,7 +99,8 @@ enum SettingsIndex {
         let bar = tr("Suggestion bar")
         let smart = tr("Calculator & units")
         let shortcuts = tr("Text shortcuts")
-        let haptics = tr("Haptics")
+        let haptics = tr("Haptics & sound")
+        let touch = tr("Touch & gestures")
         return [
             SearchEntry(id: "test", title: tr("Try it"), place: tr("Main list"), keywords: ["test", "type"],
                         symbol: "keyboard", color: .gray, screen: nil, anchor: "main.test"),
@@ -156,7 +157,7 @@ enum SettingsIndex {
             SearchEntry(id: "decimals", title: tr("Decimal places"), place: smart, keywords: ["decimals", "rounding", "digits"],
                         symbol: "number", color: .orange, screen: .smartTyping, anchor: "smart.decimals"),
 
-            SearchEntry(id: "gestures", title: gestures, place: tr("Touch & gestures"), keywords: ["gesture", "swipe", "touch"],
+            SearchEntry(id: "gestures", title: gestures, place: touch, keywords: ["gesture", "swipe", "touch"],
                         symbol: "hand.draw.fill", color: .teal, screen: .gestures, anchor: nil),
             SearchEntry(id: "swipe", title: tr("Swipe typing"), place: gestures, keywords: ["swipe", "glide", "slide", "thumb", "phrase"],
                         symbol: "scribble.variable", color: .teal, screen: .gestures, anchor: "gestures.swipe"),
@@ -187,6 +188,9 @@ enum SettingsIndex {
 
             SearchEntry(id: "themes", title: tr("Themes"), place: look, keywords: ["theme", "dark", "light", "colour", "color", "appearance"],
                         symbol: "paintbrush.fill", color: .purple, screen: .themes, anchor: nil),
+            SearchEntry(id: "themeEditor", title: tr("Customize theme"), place: tr("Themes"),
+                        keywords: ["corners", "roundness", "border", "outline", "glow", "solidity", "sheen", "surface", "reset theme"],
+                        symbol: "paintbrush.pointed.fill", color: .purple, screen: .themeEditor, anchor: nil),
             SearchEntry(id: "keys", title: keys, place: look, keywords: ["keys", "size", "height"],
                         symbol: "square.grid.3x2.fill", color: .blue, screen: .keys, anchor: nil),
             SearchEntry(id: "keySize", title: tr("Key height"), place: at(keys, tr("Size")), keywords: ["height", "size", "width", "landscape"],
@@ -216,7 +220,7 @@ enum SettingsIndex {
                         symbol: "keyboard.chevron.compact.down", color: .blue, screen: .keys, anchor: "keys.bottom"),
             SearchEntry(id: "effects", title: tr("Effects"), place: look, keywords: ["effects", "glow", "ripple", "animation", "sparkle"],
                         symbol: "sparkles", color: .indigo, screen: .effects, anchor: nil),
-            SearchEntry(id: "haptics", title: haptics, place: look, keywords: ["vibration", "haptic", "feel"],
+            SearchEntry(id: "haptics", title: haptics, place: touch, keywords: ["vibration", "haptic", "feel"],
                         symbol: "iphone.radiowaves.left.and.right", color: .pink, screen: .haptics, anchor: nil),
             SearchEntry(id: "vibration", title: tr("Vibration"), place: haptics, keywords: ["vibrate", "strength", "sharpness"],
                         symbol: "waveform", color: .pink, screen: .haptics, anchor: "haptics.vibration"),
@@ -224,11 +228,17 @@ enum SettingsIndex {
                         symbol: "cursorarrow.rays", color: .pink, screen: .haptics, anchor: "haptics.cursor"),
             SearchEntry(id: "sound", title: tr("Key clicks"), place: at(haptics, tr("Sound")), keywords: ["sound", "click", "audio"],
                         symbol: "speaker.wave.2.fill", color: .pink, screen: .haptics, anchor: "haptics.sound"),
+            SearchEntry(id: "effectLook", title: tr("Effect colour, direction and position"), place: tr("Effects"),
+                        keywords: ["colour", "color", "rainbow", "direction", "position", "preset", "presets"],
+                        symbol: "paintpalette", color: .indigo, screen: .effects, anchor: nil),
             SearchEntry(id: "accent", title: tr("Accent colour"), place: look, keywords: ["accent", "colour", "color", "tint"],
                         symbol: "drop.fill", color: .blue, screen: nil, anchor: "main.accent"),
 
             SearchEntry(id: "stats", title: tr("Typing stats"), place: data, keywords: ["stats", "statistics", "speed", "wpm", "words"],
                         symbol: "chart.bar.fill", color: .green, screen: .stats, anchor: nil),
+            SearchEntry(id: "keepStats", title: tr("Keep typing stats"), place: tr("Typing stats"),
+                        keywords: ["stats", "statistics", "privacy", "reset stats"],
+                        symbol: "chart.bar.fill", color: .green, screen: .stats, anchor: "stats.enabled"),
             SearchEntry(id: "forget", title: tr("Forget learned words"), place: data, keywords: ["forget", "clear", "learned"],
                         symbol: "text.book.closed", color: .orange, screen: nil, anchor: "main.forget"),
             SearchEntry(id: "reset", title: tr("Reset all settings"), place: data, keywords: ["reset", "default", "restore"],

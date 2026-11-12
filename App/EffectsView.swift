@@ -615,14 +615,6 @@ struct EffectsView: View {
                 ForEach(savedByName, id: \.name) { preset in
                     savedRow(preset)
                 }
-            } header: {
-                SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
-            } footer: {
-                Text(tr("Tap a preset to load it; overwrite or delete it from its menu."))
-            }
-            .glassRows()
-
-            Section {
                 Button {
                     newName = ""
                     naming = true
@@ -631,45 +623,12 @@ struct EffectsView: View {
                 }
                 .buttonStyle(ActionButtonStyle())
                 .glassOutsideCard()
-            }
-            .glassRows()
-
-            Section {
-                NavigationLink {
-                    AddEffectView()
-                } label: {
-                    HStack {
-                        Label(tr("Add effect"), systemImage: "plus.circle.fill")
-                        Spacer()
-                        DisclosureChevron()
-                    }
-                    .foregroundColor(.accentColor)
-                    .contentShape(Rectangle())
-                }
             } header: {
-                SectionHeader(tr("Effects"), symbol: "sparkles", color: .orange)
+                SectionHeader(tr("My presets"), symbol: "tray.full", color: .indigo)
             } footer: {
-                Text(activeEffects.isEmpty && !config.trail
-                     ? tr("No effects yet. Add one, or pick a preset above to fill the list.")
-                     : tr("Every effect here plays when a key is pressed, with its settings under its name. A preset fills the list with its own effects."))
+                Text(tr("Tap a preset to load it; overwrite or delete it from its menu."))
             }
             .glassRows()
-
-            ForEach(activeEffects, id: \.id) { item in
-                if let entry = EffectCatalog.entry(item.id) {
-                    moreEffect(entry)
-                } else {
-                    builtInEffect(item.id, item.title)
-                }
-            }
-
-            if config.trail {
-                effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
-                       note: tr("The line you draw while swipe typing takes the colour and glows.")) {
-                    GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
-                                range: EffectsConfig.trailGlowRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
-                }
-            }
 
             Section {
                 GlassChoiceLink(title: tr("Colour"), symbol: "paintpalette",
@@ -710,6 +669,44 @@ struct EffectsView: View {
                 Text(tr("Where on the key the effects start. Random picks a new spot for every press."))
             }
             .glassRows()
+
+            Section {
+                NavigationLink {
+                    AddEffectView()
+                } label: {
+                    HStack {
+                        Label(tr("Add effect"), systemImage: "plus.circle.fill")
+                        Spacer()
+                        DisclosureChevron()
+                    }
+                    .foregroundColor(.accentColor)
+                    .contentShape(Rectangle())
+                }
+            } header: {
+                SectionHeader(tr("Effects"), symbol: "sparkles", color: .orange)
+            } footer: {
+                Text(activeEffects.isEmpty && !config.trail
+                     ? tr("No effects yet. Add one, or pick a preset above to fill the list.")
+                     : tr("Every effect here plays when a key is pressed, with its settings under its name. A preset fills the list with its own effects."))
+            }
+            .glassRows()
+
+            ForEach(activeEffects, id: \.id) { item in
+                if let entry = EffectCatalog.entry(item.id) {
+                    moreEffect(entry)
+                } else {
+                    builtInEffect(item.id, item.title)
+                }
+            }
+
+            if config.trail {
+                effect(tr("Swipe trail"), "scribble", .red, id: "trail", on: bind(\.trail),
+                       note: tr("The line you draw while swipe typing takes the colour and glows.")) {
+                    GlassSlider(title: tr("Glow"), symbol: "light.max", value: bind(\.trailGlow),
+                                range: EffectsConfig.trailGlowRange, step: 0.05) { DeviceMetrics.level($0, in: 0...1) }
+                }
+            }
+
 
         }
         .scrollContentBackground(.hidden)

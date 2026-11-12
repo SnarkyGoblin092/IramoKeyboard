@@ -82,8 +82,8 @@ struct ContentView: View {
                     TypingSection().glassRows()
                     TouchSection().glassRows()
                     LookSection().glassRows()
-                    DataSection().glassRows()
                     AppLanguageSection().glassRows()
+                    DataSection().glassRows()
                     AboutSection().glassRows()
                 } else {
                     SettingsSearchResults(query: query) { entry in open(entry) }
@@ -288,8 +288,6 @@ private struct KeyboardSection: View {
             }
         } header: {
             SectionHeader(tr("Keyboard"), symbol: "keyboard", color: .blue)
-        } footer: {
-            Text(tr("Swipe the space bar left or right to switch languages."))
         }
         .onAppear {
             languages = Settings.shared.enabledLanguages
@@ -299,16 +297,26 @@ private struct KeyboardSection: View {
     }
 }
 
-/// The gestures on the keys.
+/// The gestures on the keys, and how they feel.
 private struct TouchSection: View {
     @State private var languages = Settings.shared.enabledLanguages
     @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
+    @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
+    @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
+
+    private var hapticSummary: String {
+        if vibration < 0.01 { return tr("Off") }
+        return [tr("Soft"), tr("Light"), tr("Medium"), tr("Firm"), tr("Crisp")][min(4, max(0, Int(sharpness * 5)))]
+    }
 
     var body: some View {
         Section {
             ScreenRow(.gestures) {
                 SettingsRow(title: tr("Gestures"), symbol: "hand.draw.fill", color: .teal,
                             value: swipe && !Language.lacking(.swipe, among: Language.list(from: languages)).all ? tr("Swipe on") : tr("Swipe off"))
+            }
+            ScreenRow(.haptics) {
+                SettingsRow(title: tr("Haptics & sound"), symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
             }
         } header: {
             SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill", color: .teal)
@@ -344,6 +352,9 @@ private struct TypingSection: View {
                 SettingsRow(title: tr("Suggestion bar"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo,
                             value: barSummary)
             }
+            ScreenRow(.smartTyping) {
+                SettingsRow(title: tr("Calculator & units"), symbol: "function", color: .orange, value: smartSummary)
+            }
             SettingToggle(tr("Auto-correction"), key: SettingKey.autoCorrect, defaultValue: SettingDefault.autoCorrect,
                           subtitle: tr("Fixes typos, accents and missing spaces on space"),
                           symbol: "checkmark.seal.fill", color: .green, feature: .autoCorrect)
@@ -365,24 +376,19 @@ private struct TypingSection: View {
                           subtitle: tr("A space goes after . , ! ? ; : by itself"),
                           symbol: "space", color: .mint)
                 .searchAnchor("main.spaceAfter")
-            ScreenRow(.smartTyping) {
-                SettingsRow(title: tr("Calculator & units"), symbol: "function", color: .orange, value: smartSummary)
-            }
         } header: {
             SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }
     }
 }
 
-/// The theme (its preview is on the Themes screen), the keys (with the number row and key pop-ups), effects,
-/// haptics and the accent colour.
+/// The theme (its preview is on the Themes screen), the keys (with the number row and key pop-ups), effects
+/// and the accent colour.
 private struct LookSection: View {
     @AppStorage(SettingKey.theme, store: SharedStore.defaults) private var themeID = SettingDefault.theme
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
-    @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
-    @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
@@ -392,11 +398,6 @@ private struct LookSection: View {
     private var effectsSummary: String {
         let on = EffectsConfig.decode(effectsJSON).activeCount
         return on == 0 ? tr("Off") : tr("%@ on", "\(on)")
-    }
-
-    private var hapticSummary: String {
-        if vibration < 0.01 { return tr("Off") }
-        return [tr("Soft"), tr("Light"), tr("Medium"), tr("Firm"), tr("Crisp")][min(4, max(0, Int(sharpness * 5)))]
     }
 
     var body: some View {
@@ -409,9 +410,6 @@ private struct LookSection: View {
             }
             ScreenRow(.effects) {
                 SettingsRow(title: tr("Effects"), symbol: "sparkles", color: .indigo, value: effectsSummary)
-            }
-            ScreenRow(.haptics) {
-                SettingsRow(title: tr("Haptics"), symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
             }
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
