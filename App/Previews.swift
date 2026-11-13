@@ -34,6 +34,46 @@ struct PreviewCard<Content: View>: View {
     }
 }
 
+// MARK: - What was typed, and what the bar offers
+
+/// A word typed, then what the bar offers for it, in the app's own look instead of the keyboard theme: the typed
+/// text on clear glass, the offer on glass in the accent colour. Used by the calculator, units and shortcut previews.
+struct AccentOfferPreview: View {
+    let typed: String
+    let offer: String?
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    var body: some View {
+        let accent = Color.currentAccent(name: accentName, hex: accentHex)
+        HStack(spacing: 10) {
+            Text(typed)
+                .font(.system(size: 15, design: .rounded))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .glassShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Image(systemName: "arrow.right")
+                .foregroundColor(.secondary)
+            Text(offer ?? "\u{2014}")
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .foregroundColor(offer == nil ? .secondary : accent.readableText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassShape(Capsule(), tint: offer == nil ? nil : accent)
+                .id(offer ?? "")
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer)
+        .animation(AccentTint.fade, value: accentName + accentHex)
+    }
+}
+
 // MARK: - Pinned preview
 
 /// A settings screen with its preview pinned at the top: the preview stays in view while the settings below it

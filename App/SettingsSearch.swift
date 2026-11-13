@@ -135,7 +135,7 @@ enum SettingsIndex {
                         symbol: "face.smiling", color: .indigo, screen: .suggestions, anchor: "suggestions.words"),
             SearchEntry(id: "wordsShown", title: tr("Words shown"), place: bar, keywords: ["three", "scrolling", "fit"],
                         symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo, screen: .suggestions, anchor: "suggestions.count"),
-            SearchEntry(id: "barLook", title: tr("Bar height"), place: at(bar, tr("Look")), keywords: ["height", "lines", "tiles", "separator"],
+            SearchEntry(id: "barLook", title: tr("Bar height"), place: at(bar, tr("Look")), keywords: ["height", "lines", "separator"],
                         symbol: "arrow.up.and.down", color: .indigo, screen: .suggestions, anchor: "suggestions.look"),
             SearchEntry(id: "switching", title: tr("Switching"), place: bar, keywords: ["animation", "fade", "slide", "transition"],
                         symbol: "arrow.left.arrow.right", color: .indigo, screen: .suggestions, anchor: "suggestions.switching"),

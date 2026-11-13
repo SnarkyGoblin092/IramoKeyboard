@@ -411,8 +411,8 @@ private struct ShortcutComposer: View {
     }
 }
 
-/// What a shortcut does, as the suggestion bar shows it: the trigger typed (on a key of the theme), then the phrase
-/// space will write (on the theme's accent pill).
+/// What a shortcut does, as the suggestion bar shows it: the trigger typed, then the phrase space will write on
+/// the accent.
 private struct ShortcutPreview: View {
     let trigger: String
     let phrase: String
@@ -421,28 +421,8 @@ private struct ShortcutPreview: View {
         let typed = trigger.trimmingCharacters(in: .whitespaces)
         let written = phrase.trimmingCharacters(in: .whitespaces)
         PreviewCard(caption: tr("Type the trigger and press space: the phrase takes its place.")) {
-            CurrentThemeLook { look in
-                HStack(spacing: 10) {
-                    Text(typed.isEmpty ? "omw" : typed)
-                        .font(.system(size: 15, design: .rounded))
-                        .foregroundColor(look.textColor)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(look.keyShape(.letter, radius: 8))
-                    Image(systemName: "arrow.right")
-                        .foregroundColor(look.stripText.opacity(0.6))
-                    Text(written.isEmpty ? tr("On my way!") : written)
-                        .font(.system(size: 15, weight: .semibold))
-                        .lineLimit(1)
-                        .foregroundColor(look.onAccent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(look.pill(radius: 15))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
+            AccentOfferPreview(typed: typed.isEmpty ? "omw" : typed, offer: written.isEmpty ? tr("On my way!") : written)
                 .opacity(typed.isEmpty && written.isEmpty ? 0.6 : 1)
-            }
         }
     }
 }

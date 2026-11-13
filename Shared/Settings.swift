@@ -71,7 +71,6 @@ enum SettingKey {
     static let hapticSharpness = "hunkeys.hapticSharpness"
     static let cursorStartHaptic = "hunkeys.cursorStartHaptic"
     static let cursorTickHaptic = "hunkeys.cursorTickHaptic"
-    static let suggestionStyle = "hunkeys.suggestionStyle"
     static let separatorStyle = "hunkeys.separatorStyle"
     static let suggestionFollowTheme = "hunkeys.suggestionFollowTheme"
     static let suggestionHeight = "hunkeys.suggestionHeight"
@@ -198,7 +197,7 @@ enum SettingKey {
         holdDelay, vibration, clickSound, clickSoundStyle, keyPopups, swipe, suggestions, emojiSuggestions,
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, accent, accentHex, appearance, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
-        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
+        keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         emojiNative, emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
         emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay,
@@ -281,7 +280,6 @@ enum SettingDefault {
     static let hapticSharpness: Double = 1.0
     static let cursorStartHaptic: Bool = true
     static let cursorTickHaptic: Bool = true
-    static let suggestionStyle: String = "separators"
     static let separatorStyle: String = "solid"
     static let suggestionFollowTheme: Bool = true
     static let suggestionHeight: Double = 44.0
@@ -534,7 +532,6 @@ final class Settings {
             SettingKey.hapticSharpness: SettingDefault.hapticSharpness,
             SettingKey.cursorStartHaptic: SettingDefault.cursorStartHaptic,
             SettingKey.cursorTickHaptic: SettingDefault.cursorTickHaptic,
-            SettingKey.suggestionStyle: SettingDefault.suggestionStyle,
             SettingKey.separatorStyle: SettingDefault.separatorStyle,
             SettingKey.suggestionFollowTheme: SettingDefault.suggestionFollowTheme,
             SettingKey.suggestionHeight: SettingDefault.suggestionHeight,
@@ -811,7 +808,6 @@ final class Settings {
     var hapticSharpness: Double { return clamp(readDouble(SettingKey.hapticSharpness), Settings.hapticSharpnessRange) }
     var cursorStartHaptic: Bool { return readBool(SettingKey.cursorStartHaptic) }
     var cursorTickHaptic: Bool { return readBool(SettingKey.cursorTickHaptic) }
-    var suggestionStyle: String { return readString(SettingKey.suggestionStyle) ?? SettingDefault.suggestionStyle }
     var separatorStyle: String { return readString(SettingKey.separatorStyle) ?? SettingDefault.separatorStyle }
     var suggestionFollowTheme: Bool { return readBool(SettingKey.suggestionFollowTheme) }
     var suggestionHeight: Double { return clamp(readDouble(SettingKey.suggestionHeight), Settings.suggestionHeightRange) }

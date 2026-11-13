@@ -92,6 +92,8 @@ final class KeyboardView: UIView {
         var visited = Set<ObjectIdentifier>()
         /// The key the swiping finger is over, whose effects played as it arrived.
         var effectKey: KeyView?
+        /// The letter key's press effects wait for this: a swipe may begin first, and swiped keys play none.
+        var effectTimer: Timer?
         var startedOnSpace = false
         var isSwiping = false
         var popupActive = false
@@ -846,7 +848,18 @@ final class KeyboardView: UIView {
     private func press(_ state: TouchState, key: KeyView) {
         state.key = key
         state.startKey = key
+        // A letter key's press effects wait a moment (and play at once if the finger is lifted first): if a swipe
+        // begins meanwhile, the key plays none.
+        let swipeMayBegin = Prefs.swipe && swipeAllowed && page == .letters && letter(of: key.spec) != nil
+        key.defersEffects = swipeMayBegin
         key.isPressed = true
+        if swipeMayBegin {
+            state.effectTimer?.invalidate()
+            state.effectTimer = makeTimer(after: 0.07, repeats: false) { [weak key, weak state] in
+                state?.effectTimer = nil
+                key?.playDeferredEffects()
+            }
+        }
         Haptics.shared.keyPress()
         showPreview(for: key)
 
@@ -896,6 +909,7 @@ final class KeyboardView: UIView {
         state.key?.isPressed = false
 
         state.key = newKey
+        newKey.defersEffects = false
         newKey.isPressed = true
         showPreview(for: newKey)
         if !newKey.spec.alternates.isEmpty {
@@ -979,6 +993,10 @@ final class KeyboardView: UIView {
         if state.isSelectionFinger { return }
         state.holdTimer?.invalidate()
         state.repeatTimer?.invalidate()
+        // A tap lifted before its effects started plays them now.
+        if !state.isSwiping { state.effectTimer?.fire() }
+        state.effectTimer?.invalidate()
+        state.effectTimer = nil
         state.key?.isPressed = false
         hidePreview()
         // Another finger may still be holding a key (two-thumb typing): keep its preview.
@@ -1272,7 +1290,10 @@ final class KeyboardView: UIView {
 
     private func beginSwipe(_ state: TouchState) {
         state.isSwiping = true
-        state.effectKey = state.startKey   // its effects played when the finger went down
+        // A swipe plays no key effects, not even the first key's.
+        state.effectTimer?.invalidate()
+        state.effectTimer = nil
+        state.startKey?.cancelDeferredEffects()
         state.holdTimer?.invalidate()
         state.holdTimer = nil
         state.key?.isPressed = false
@@ -1352,18 +1373,7 @@ final class KeyboardView: UIView {
             trailLayer.opacity = 1
         }
         updateTrail(state.path)
-        playSwipeEffects(state, at: point)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
-    }
-
-    /// A swiping finger moved onto a letter key it was not on a moment ago: that key's press effects play, so
-    /// they follow the finger along the swipe.
-    private func playSwipeEffects(_ state: TouchState, at point: CGPoint) {
-        guard let index = keyIndex(at: point) else { return }
-        let key = keyViews[index.row][index.col]
-        guard key !== state.effectKey else { return }
-        state.effectKey = key
-        if letter(of: key.spec) != nil { key.playSwipeEffects() }
     }
 
     /// The path of the word just swiped, without the glide to or from the space bar: the decoder would read the

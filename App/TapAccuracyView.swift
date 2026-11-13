@@ -344,10 +344,23 @@ private struct TapHitAreas: View {
         return CGPoint(x: start.x + dx / length * reach, y: start.y + dy / length * reach)
     }
 
+    /// The picture's width over its height, with the room all round it (worked out for a card about as wide as the
+    /// screen's upright width less its margins).
+    static func ratio(_ aspect: Double) -> CGFloat {
+        let width = CGFloat(DeviceMetrics.portraitWidth) - 64
+        let margin: CGFloat = 14
+        return width / ((width - 2 * margin) * CGFloat(aspect) + 2 * margin)
+    }
+
     var body: some View {
         let extent = layout.verticalSpan
         let aspect = min(0.8, max(0.1, layout.aspect * extent.span))
-        Canvas { context, size in
+        Canvas { context, canvas in
+            // Room all round, for keys moved out past the edges.
+            let margin: CGFloat = 14
+            let fitted = max(1, min(canvas.width - 2 * margin, (canvas.height - 2 * margin) / CGFloat(aspect)))
+            let size = CGSize(width: fitted, height: fitted * CGFloat(aspect))
+            context.translateBy(x: (canvas.width - size.width) / 2, y: (canvas.height - size.height) / 2)
             // Heights are shares of the keyboard's; the picture starts at the first row and ends at the last.
             func down(_ y: Double) -> CGFloat { return CGFloat((y - extent.top) / extent.span) * size.height }
             for (letter, key) in layout.keys where key.w > 0 && key.h > 0 {
@@ -374,7 +387,7 @@ private struct TapHitAreas: View {
                              at: label)
             }
         }
-        .aspectRatio(1 / aspect, contentMode: .fit)
+        .aspectRatio(TapHitAreas.ratio(aspect), contentMode: .fit)
         .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
     }

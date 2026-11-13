@@ -43,7 +43,6 @@ final class Prefs {
     static var hapticSharpness = SettingDefault.hapticSharpness
     static var cursorStartHaptic = SettingDefault.cursorStartHaptic
     static var cursorTickHaptic = SettingDefault.cursorTickHaptic
-    static var suggestionStyle = SettingDefault.suggestionStyle
     static var separatorStyle = SettingDefault.separatorStyle
     static var suggestionFollowTheme = SettingDefault.suggestionFollowTheme
     static var suggestionHeight = SettingDefault.suggestionHeight
@@ -162,7 +161,6 @@ final class Prefs {
         hapticSharpness = s.hapticSharpness
         cursorStartHaptic = s.cursorStartHaptic
         cursorTickHaptic = s.cursorTickHaptic
-        suggestionStyle = s.suggestionStyle
         separatorStyle = s.separatorStyle
         suggestionFollowTheme = s.suggestionFollowTheme
         suggestionHeight = s.suggestionHeight

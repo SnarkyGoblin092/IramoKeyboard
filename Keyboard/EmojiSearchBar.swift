@@ -23,6 +23,11 @@ final class EmojiSearchBar: UIView {
     private var results: [EmojiItem] = []
     /// The skin tones of a held result: a layer over the keyboard that a tap anywhere else closes.
     private var variantOverlay: UIControl?
+    /// The forms in the row and their buttons, and the one under the finger that holds the result.
+    private var variantChoices: [String] = []
+    private var variantButtons: [UIButton] = []
+    private var variantHighlight: Int?
+    private weak var variantContainer: UIView?
     private var placeholder = "Search Emoji"
     private var query = ""
 
@@ -186,14 +191,67 @@ final class EmojiSearchBar: UIView {
     // MARK: Skin tones
 
     @objc private func handleLongPress(_ recognizer: UILongPressGestureRecognizer) {
-        guard recognizer.state == .began else { return }
-        let point = recognizer.location(in: scroll)
-        guard let button = HitTesting.nearestByX(point.x, in: resultButtons, relativeTo: scroll) as? HitButton,
-              button.tag < results.count else { return }
-        let item = results[button.tag]
-        guard !item.variants.isEmpty else { return }
-        Haptics.shared.keyPress()
-        showVariants([item.base] + item.variants, under: button)
+        switch recognizer.state {
+        case .began:
+            let point = recognizer.location(in: scroll)
+            guard let button = HitTesting.nearestByX(point.x, in: resultButtons, relativeTo: scroll) as? HitButton,
+                  button.tag < results.count else { return }
+            let item = results[button.tag]
+            guard !item.variants.isEmpty else { return }
+            Haptics.shared.keyPress()
+            showVariants([item.base] + item.variants, under: button)
+            // The finger can now slide down over the forms: the strip stays where it is.
+            scroll.panGestureRecognizer.isEnabled = false
+        case .changed:
+            guard let host = superview else { return }
+            highlightVariant(at: recognizer.location(in: host))
+        case .ended:
+            scroll.panGestureRecognizer.isEnabled = true
+            // Lifted over a form: that one is typed, without a second tap.
+            if let index = variantHighlight, index < variantChoices.count {
+                let emoji = variantChoices[index]
+                dismissVariants()
+                Haptics.shared.keyPress()
+                delegate?.emojiSearchBar(self, didSelect: emoji)
+            }
+        case .cancelled, .failed:
+            scroll.panGestureRecognizer.isEnabled = true
+            setVariantHighlight(nil)
+        default:
+            break
+        }
+    }
+
+    /// The form nearest the finger lights up while it is on the row (or just above it).
+    private func highlightVariant(at point: CGPoint) {
+        guard let row = variantContainer, !variantButtons.isEmpty,
+              row.frame.insetBy(dx: -40, dy: -4).contains(point) || (point.y > row.frame.minY - 14
+                && point.x > row.frame.minX - 40 && point.x < row.frame.maxX + 40 && point.y < row.frame.maxY + 30) else {
+            setVariantHighlight(nil)
+            return
+        }
+        var best = 0
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for (index, button) in variantButtons.enumerated() {
+            let centre = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: row.superview)
+            let distance = abs(centre.x - point.x)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = index
+            }
+        }
+        setVariantHighlight(best)
+    }
+
+    private func setVariantHighlight(_ index: Int?) {
+        guard index != variantHighlight else { return }
+        if let old = variantHighlight, old < variantButtons.count { variantButtons[old].backgroundColor = .clear }
+        variantHighlight = index
+        if let new = index, new < variantButtons.count {
+            variantButtons[new].backgroundColor = Theme.accent.withAlphaComponent(0.35)
+            variantButtons[new].layer.cornerRadius = 8
+            Haptics.shared.tick()
+        }
     }
 
     /// The forms of a held result in a row like the picker's, just under the bar (the keyboard can't draw above
@@ -220,6 +278,9 @@ final class EmojiSearchBar: UIView {
         container.layer.shadowOffset = CGSize(width: 0, height: 1)
         container.frame = CGRect(x: x, y: y, width: width, height: height)
 
+        variantChoices = options
+        variantButtons = []
+        variantContainer = container
         let strip = UIScrollView(frame: CGRect(x: 6, y: 0, width: width - 12, height: height))
         strip.showsHorizontalScrollIndicator = false
         strip.contentSize = CGSize(width: itemWidth * CGFloat(options.count), height: height)
@@ -235,6 +296,7 @@ final class EmojiSearchBar: UIView {
                 self.delegate?.emojiSearchBar(self, didSelect: emoji)
             }, for: .touchUpInside)
             strip.addSubview(option)
+            variantButtons.append(option)
         }
         container.contentView.addSubview(strip)
         overlay.addSubview(container)
@@ -245,6 +307,10 @@ final class EmojiSearchBar: UIView {
     func dismissVariants() {
         variantOverlay?.removeFromSuperview()
         variantOverlay = nil
+        variantChoices = []
+        variantButtons = []
+        variantHighlight = nil
+        variantContainer = nil
     }
 
     override func removeFromSuperview() {

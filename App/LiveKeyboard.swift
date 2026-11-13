@@ -38,7 +38,7 @@ struct LiveKeyboard: View {
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode),
                                                     barOnly: barOnly)
             // Room all round the keys inside the glass, so square-cornered keys and their outlines are not cut off.
-            let room: CGFloat = barOnly ? 4 : 10
+            let room: CGFloat = barOnly ? 8 : 18
             let scale = min((geometry.size.width - 2 * room) / size.width, (geometry.size.height - 2 * room) / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)
@@ -181,7 +181,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", "\(KeyboardLayoutMode.split)", s.oneHanded,
-            s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
+            s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             s.systemEditsJSON, layouts, holds
         ]

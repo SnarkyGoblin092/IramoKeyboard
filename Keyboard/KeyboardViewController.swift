@@ -380,7 +380,7 @@ final class KeyboardViewController: UIInputViewController {
             // Keys and the suggestion bar (the app's Keys and Suggestions screens)
             "\(s.keyHeight)", "\(s.landscapeSeparate)", "\(s.landscapeKeyHeight)", "\(s.keyboardWidth)",
             "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)", s.hintPosition, "\(s.hintSize)",
-            "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.suggestionStyle, s.separatorStyle,
+            "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", s.separatorStyle,
             "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             "\(s.splitKeyboard)", s.oneHanded, tools,
             s.effectsJSON, s.systemEditsJSON, layouts, holds

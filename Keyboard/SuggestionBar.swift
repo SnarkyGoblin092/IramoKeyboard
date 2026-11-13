@@ -1,5 +1,42 @@
 import UIKit
 
+/// Contrast between colours, so the suggestion bar's words can be read on any theme's accent.
+private enum BarContrast {
+    private static func parts(_ color: UIColor) -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (r, g, b, a)
+    }
+
+    /// `top` laid over `bottom` (either may be see-through).
+    static func layer(_ top: UIColor, over bottom: UIColor) -> UIColor {
+        let t = parts(top), b = parts(bottom)
+        let alpha = t.a + b.a * (1 - t.a)
+        guard alpha > 0.001 else { return .clear }
+        func mix(_ x: CGFloat, _ y: CGFloat) -> CGFloat { return (x * t.a + y * b.a * (1 - t.a)) / alpha }
+        return UIColor(red: mix(t.r, b.r), green: mix(t.g, b.g), blue: mix(t.b, b.b), alpha: alpha)
+    }
+
+    private static func luminance(_ color: UIColor) -> CGFloat {
+        let c = parts(color)
+        func linear(_ v: CGFloat) -> CGFloat { return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
+    }
+
+    /// The WCAG contrast ratio of two opaque colours (1 to 21).
+    static func ratio(_ a: UIColor, _ b: UIColor) -> CGFloat {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    /// `preferred` if it reads on `fill` (at least 4.5 : 1), else near-black or white, whichever reads better.
+    static func readable(_ preferred: UIColor, on fill: UIColor) -> UIColor {
+        if ratio(layer(preferred, over: fill), fill) >= 4.5 { return preferred }
+        let dark = UIColor(white: 0.08, alpha: 1), light = UIColor.white
+        return ratio(dark, fill) >= ratio(light, fill) ? dark : light
+    }
+}
+
 struct Suggestion {
     enum Kind {
         case literal           // exactly what has been typed so far
@@ -60,7 +97,6 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     private var layoutMode: Layout { return showsAll ? .scroll : configuredMode }
     /// The scrolling strip shows three equal slots at a time and moves a page of three at once.
     private var pagesOfThree: Bool { return !showsAll && configuredPages }
-    private let segments: Bool
     private let followTheme: Bool
 
     private let glass = FlatPanel(background: Theme.stripFill)
@@ -141,7 +177,6 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     override init(frame: CGRect) {
         configuredMode = Prefs.suggestionScroll ? .scroll : (Prefs.suggestionFit ? .fit : .equal)
         configuredPages = Prefs.suggestionScroll && Prefs.suggestionScrollThree
-        segments = Prefs.suggestionStyle == "segments"
         followTheme = Prefs.suggestionFollowTheme
         super.init(frame: frame)
         backgroundColor = UIColor.clear
@@ -181,7 +216,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
             separatorLayer.lineWidth = 1.5
         default: break
         }
-        separatorLayer.isHidden = segments || Prefs.separatorStyle == "none"
+        separatorLayer.isHidden = Prefs.separatorStyle == "none"
         strip.layer.addSublayer(separatorLayer)
 
         bestPill.backgroundColor = Theme.pill
@@ -321,7 +356,15 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private var textColor: UIColor {
-        return Theme.suggestionText(onSegments: followTheme && segments)
+        return Theme.suggestionText(onSegments: false)
+    }
+
+    /// The words on the accent pill: the theme's, unless the accent cannot carry them.
+    private var pillTextColor: UIColor {
+        let accent = Theme.pill, preferred = Theme.onPill
+        return UIColor { traits in
+            BarContrast.readable(preferred.resolvedColor(with: traits), on: accent.resolvedColor(with: traits))
+        }
     }
 
     // MARK: Content
@@ -360,7 +403,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
             label.isHidden = false
             label.text = suggestions[index].text
             styleLabel(index, onPill: index == highlightedIndex)
-            segmentViews[index].isHidden = !segments || suggestions[index].text.isEmpty
+            segmentViews[index].isHidden = true
         }
         bestPill.isHidden = highlightedIndex == nil
         strip.contentOffset = .zero
@@ -439,14 +482,14 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         guard index < labels.count, index < suggestions.count else { return }
         labels[index].font = suggestions[index].kind == .emoji ? UIFont.systemFont(ofSize: 26)
             : Theme.keyFont(ofSize: 17, weight: onPill ? .semibold : .regular)
-        labels[index].textColor = onPill ? Theme.onPill : textColor
+        labels[index].textColor = onPill ? pillTextColor : textColor
         if suggestions[index].kind == .command {
             labels[index].attributedText = SuggestionBar.commandLabel(suggestions[index].text,
-                                                                      color: onPill ? Theme.onPill : textColor)
+                                                                      color: onPill ? pillTextColor : textColor)
             labels[index].accessibilityLabel = suggestions[index].text
         } else if suggestions[index].kind == .result, suggestions[index].text.hasPrefix("=") {
             // A calculation's answer: "=" in a lighter shade, then the number.
-            let color = onPill ? Theme.onPill : textColor
+            let color = onPill ? pillTextColor : textColor
             let text = NSMutableAttributedString(string: suggestions[index].text, attributes: [.foregroundColor: color])
             text.addAttribute(.foregroundColor, value: color.withAlphaComponent(0.45), range: NSRange(location: 0, length: 1))
             labels[index].attributedText = text
@@ -600,7 +643,7 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     /// The accent pill of a slot (the auto-correction's, and a pressed word's): with segments the segment itself;
     /// otherwise a bubble hugging the word, like the system's auto-correction bubble, with the keys' corner style.
     private func pillShape(for index: Int, in frame: CGRect, areaHeight: CGFloat, segmentRadius: CGFloat) -> (CGRect, CGFloat) {
-        if segments || index >= suggestions.count { return (frame.insetBy(dx: 2.5, dy: 3), segmentRadius) }
+        if index >= suggestions.count { return (frame.insetBy(dx: 2.5, dy: 3), segmentRadius) }
         let item = suggestions[index]
         // Measured in the pill's semibold, so a pressed word gets the same bubble as the auto-correction would.
         let textWidth = item.kind == .emoji ? labels[index].intrinsicContentSize.width

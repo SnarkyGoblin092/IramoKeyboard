@@ -27,7 +27,6 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var suggestionHeight = SettingDefault.suggestionHeight
-    @AppStorage(SettingKey.suggestionStyle, store: SharedStore.defaults) private var suggestionStyle = SettingDefault.suggestionStyle
     @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separatorStyle = SettingDefault.separatorStyle
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     // What the keyboard shows when it opens: the number row, shift on at the start of a sentence (with
@@ -376,14 +375,12 @@ struct ThemePreview: View {
         .frame(width: rowWidth)
     }
 
-    /// The suggestion strip: three slots with dividers (or on segments, as the Suggestions screen sets it) and
+    /// The suggestion strip: three slots with dividers and
     /// the accent-coloured hide-keyboard button. Mirrors Keyboard/SuggestionBar.swift.
     private func strip(height: CGFloat, scale s: CGFloat) -> some View {
         let words = shownLanguage == .hungarian ? ["A", "Én", "Nem"] : ["I", "The", "It"]   // l10n: keep
-        let segments = suggestionStyle == "segments"
-        let radius = CGFloat(min(1, max(0, keyRoundness))) * (height - 13 * s) / 2
         // The word space would write sits on the accent pill (SuggestionBar.bestPill), hugging it with the keys'
-        // corner style; on segments the whole middle segment takes the accent.
+        // corner style;
         let pillHeight = max(1, height - 18 * s)
         let pillRadius = min(pillHeight / 2, CGFloat(min(1, max(0, keyRoundness))) * pillHeight / 2 * 1.6)
         return HStack(spacing: 0) {
@@ -391,31 +388,17 @@ struct ThemePreview: View {
                 let best = i == 1
                 Text(words[i])
                     .font(keyFont(17 * s, weight: best ? .semibold : .regular))
-                    .foregroundColor(best ? look.onPill : look.suggestionText(onSegments: segments && followTheme))
+                    .foregroundColor(best ? look.onPill : look.suggestionText(onSegments: false))
                     .lineLimit(1)
-                    .padding(.horizontal, best && !segments ? 14 * s : 0)
-                    .frame(minWidth: best && !segments ? pillHeight * 1.6 : 0)
-                    .frame(height: best && !segments ? pillHeight : nil)
+                    .padding(.horizontal, best ? 14 * s : 0)
+                    .frame(minWidth: best ? pillHeight * 1.6 : 0)
+                    .frame(height: best ? pillHeight : nil)
                     .background {
-                        if best && !segments { bestPill(radius: pillRadius) }
+                        if best { bestPill(radius: pillRadius) }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background {
-                        if segments {
-                            Group {
-                                if best {
-                                    bestPill(radius: radius)
-                                } else {
-                                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                                        .fill(followTheme ? keyFill : pick(Color.black.opacity(0.06), Color.white.opacity(0.12)))
-                                }
-                            }
-                            .padding(.horizontal, 2.5 * s)
-                            .padding(.vertical, 3 * s)
-                        }
-                    }
                     .overlay(alignment: .trailing) {
-                        if i < words.count - 1 && !segments && separatorStyle != "none" {
+                        if i < words.count - 1 && separatorStyle != "none" {
                             Rectangle()
                                 .fill(Color.clear)
                                 .frame(width: max(1, s), height: height * 0.5)
