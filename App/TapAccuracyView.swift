@@ -318,6 +318,38 @@ private struct TapHitAreas: View {
     /// 1 shows the shifts as they are; more draws them larger.
     let magnify: Double
 
+    /// A shape through the corners, each one rounded like a key's (a curve from `radius` before the corner to `radius`
+    /// after it), and drawn in by `inset` all round so neighbours do not touch.
+    private static func rounded(_ corners: [CGPoint], radius: CGFloat, inset: CGFloat) -> Path {
+        guard corners.count >= 3 else { return Path() }
+        let centre = CGPoint(x: corners.map { $0.x }.reduce(0, +) / CGFloat(corners.count),
+                             y: corners.map { $0.y }.reduce(0, +) / CGFloat(corners.count))
+        let points = corners.map { point -> CGPoint in
+            let dx = centre.x - point.x, dy = centre.y - point.y
+            let length = max(hypot(dx, dy), 0.001)
+            return CGPoint(x: point.x + dx / length * inset, y: point.y + dy / length * inset)
+        }
+        var path = Path()
+        let count = points.count
+        for index in 0..<count {
+            let previous = points[(index + count - 1) % count], point = points[index], next = points[(index + 1) % count]
+            let before = TapHitAreas.step(from: point, towards: previous, by: radius)
+            let after = TapHitAreas.step(from: point, towards: next, by: radius)
+            if index == 0 { path.move(to: before) } else { path.addLine(to: before) }
+            path.addQuadCurve(to: after, control: point)
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    /// The point `distance` from `start` on the way to `end` (at most halfway).
+    private static func step(from start: CGPoint, towards end: CGPoint, by distance: CGFloat) -> CGPoint {
+        let dx = end.x - start.x, dy = end.y - start.y
+        let length = max(hypot(dx, dy), 0.001)
+        let reach = min(distance, length / 2)
+        return CGPoint(x: start.x + dx / length * reach, y: start.y + dy / length * reach)
+    }
+
     var body: some View {
         let aspect = min(0.8, max(0.2, layout.aspect))
         Canvas { context, size in
@@ -328,14 +360,13 @@ private struct TapHitAreas: View {
                                      width: key.w * size.width, height: key.h * size.height).insetBy(dx: 1.5, dy: 1.5)
                 context.stroke(Path(roundedRect: nominal, cornerRadius: min(nominal.width, nominal.height) * 0.2),
                                with: .color(.primary.opacity(0.22)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                var shape = Path()
-                for (index, corner) in corners.enumerated() {
+                var points: [CGPoint] = []
+                for corner in corners {
                     let offset = field.offset(at: CGPoint(x: corner.0, y: corner.1))
-                    let point = CGPoint(x: (corner.0 + magnify * Double(offset.x)) * size.width,
-                                        y: (corner.1 + magnify * Double(offset.y)) * size.height)
-                    if index == 0 { shape.move(to: point) } else { shape.addLine(to: point) }
+                    points.append(CGPoint(x: (corner.0 + magnify * Double(offset.x)) * size.width,
+                                          y: (corner.1 + magnify * Double(offset.y)) * size.height))
                 }
-                shape.closeSubpath()
+                let shape = TapHitAreas.rounded(points, radius: min(nominal.width, nominal.height) * 0.2, inset: 1.5)
                 let centre = field.offset(at: CGPoint(x: key.cx, y: key.cy))
                 let moved = hypot(Double(centre.x) / field.unitW, Double(centre.y) / field.unitH)
                 context.fill(shape, with: .color(.accentColor.opacity(0.1 + min(0.5, moved * 2.5))))
