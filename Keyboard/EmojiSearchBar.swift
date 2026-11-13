@@ -12,7 +12,7 @@ final class EmojiSearchBar: UIView {
     weak var delegate: EmojiSearchBarDelegate?
 
     private let look = Theme.searchLook(besideKeys: true)
-    private lazy var glass = FlatPanel(background: look.fill, allowGlass: look.glass)
+    private lazy var glass = FlatPanel(background: look.fill, allowGlass: look.glass, forceGlass: look.glass)
     private let backButton = HitButton(type: .system)
     private let hideButton = HitButton(type: .system)
     private let iconView = UIImageView()
@@ -22,12 +22,8 @@ final class EmojiSearchBar: UIView {
     private var resultButtons: [HitButton] = []
     private var results: [EmojiItem] = []
     /// The skin tones of a held result: a layer over the keyboard that a tap anywhere else closes.
-    private var variantOverlay: UIControl?
-    /// The forms in the row and their buttons, and the one under the finger that holds the result.
-    private var variantChoices: [String] = []
-    private var variantButtons: [UIButton] = []
-    private var variantHighlight: Int?
-    private weak var variantContainer: UIView?
+    /// The skin tones of a held result, in the keyboard's own popup for accented characters (AlternatesPopupView).
+    private var variantPopup: AlternatesPopupView?
     private var placeholder = "Search Emoji"
     private var query = ""
 
@@ -200,117 +196,43 @@ final class EmojiSearchBar: UIView {
             guard !item.variants.isEmpty else { return }
             Haptics.shared.keyPress()
             showVariants([item.base] + item.variants, under: button)
-            // The finger can now slide down over the forms: the strip stays where it is.
+            // The finger can now slide over the tones: the strip stays where it is.
             scroll.panGestureRecognizer.isEnabled = false
         case .changed:
             guard let host = superview else { return }
-            highlightVariant(at: recognizer.location(in: host))
+            variantPopup?.updateHighlight(hostX: recognizer.location(in: host).x)
         case .ended:
             scroll.panGestureRecognizer.isEnabled = true
-            // Lifted over a form: that one is typed, without a second tap.
-            if let index = variantHighlight, index < variantChoices.count {
-                let emoji = variantChoices[index]
+            // Lifted: the lit tone is typed, as with an accent on a key.
+            if let popup = variantPopup {
+                let emoji = popup.selectedItem
                 dismissVariants()
                 Haptics.shared.keyPress()
                 delegate?.emojiSearchBar(self, didSelect: emoji)
             }
         case .cancelled, .failed:
             scroll.panGestureRecognizer.isEnabled = true
-            setVariantHighlight(nil)
+            dismissVariants()
         default:
             break
         }
     }
 
-    /// The form nearest the finger lights up while it is on the row (or just above it).
-    private func highlightVariant(at point: CGPoint) {
-        guard let row = variantContainer, !variantButtons.isEmpty,
-              row.frame.insetBy(dx: -40, dy: -4).contains(point) || (point.y > row.frame.minY - 14
-                && point.x > row.frame.minX - 40 && point.x < row.frame.maxX + 40 && point.y < row.frame.maxY + 30) else {
-            setVariantHighlight(nil)
-            return
-        }
-        var best = 0
-        var bestDistance = CGFloat.greatestFiniteMagnitude
-        for (index, button) in variantButtons.enumerated() {
-            let centre = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: row.superview)
-            let distance = abs(centre.x - point.x)
-            if distance < bestDistance {
-                bestDistance = distance
-                best = index
-            }
-        }
-        setVariantHighlight(best)
-    }
-
-    private func setVariantHighlight(_ index: Int?) {
-        guard index != variantHighlight else { return }
-        if let old = variantHighlight, old < variantButtons.count { variantButtons[old].backgroundColor = .clear }
-        variantHighlight = index
-        if let new = index, new < variantButtons.count {
-            variantButtons[new].backgroundColor = Theme.accent.withAlphaComponent(0.35)
-            variantButtons[new].layer.cornerRadius = 8
-            Haptics.shared.tick()
-        }
-    }
-
-    /// The forms of a held result in a row like the picker's, just under the bar (the keyboard can't draw above
-    /// its top edge), over the keys: a tap on one types it, a tap anywhere else closes the row.
+    /// The tones of a held result in the keyboard's popup, just under the bar (the keyboard can't draw above its top
+    /// edge), over the keys.
     private func showVariants(_ options: [String], under button: UIView) {
         dismissVariants()
         guard let host = superview else { return }
-        let overlay = UIControl(frame: host.bounds)
-        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        overlay.addAction(UIAction { [weak self] _ in self?.dismissVariants() }, for: .touchDown)
-
-        let itemWidth: CGFloat = 44
-        let height: CGFloat = 54
-        let fitting = max(1, Int((host.bounds.width - 16) / itemWidth))
-        let width = CGFloat(min(options.count, fitting)) * itemWidth + 12
         let anchor = button.convert(button.bounds, to: host)
-        let x = max(4, min(anchor.midX - width / 2, host.bounds.width - width - 4))
-        let y = frame.maxY + 4
-
-        let container = FlatPanel(background: EmojiLook.popup, cornerRadius: 10)
-        container.layer.shadowColor = UIColor.black.cgColor
-        container.layer.shadowOpacity = 0.3
-        container.layer.shadowRadius = 3
-        container.layer.shadowOffset = CGSize(width: 0, height: 1)
-        container.frame = CGRect(x: x, y: y, width: width, height: height)
-
-        variantChoices = options
-        variantButtons = []
-        variantContainer = container
-        let strip = UIScrollView(frame: CGRect(x: 6, y: 0, width: width - 12, height: height))
-        strip.showsHorizontalScrollIndicator = false
-        strip.contentSize = CGSize(width: itemWidth * CGFloat(options.count), height: height)
-        for (index, emoji) in options.enumerated() {
-            let option = HitButton(type: .custom)
-            option.frame = CGRect(x: CGFloat(index) * itemWidth, y: 4, width: itemWidth, height: height - 8)
-            option.titleLabel?.font = UIFont.systemFont(ofSize: 30)
-            option.setTitle(emoji, for: .normal)
-            option.addAction(UIAction { [weak self] _ in
-                guard let self = self else { return }
-                self.dismissVariants()
-                Haptics.shared.keyPress()
-                self.delegate?.emojiSearchBar(self, didSelect: emoji)
-            }, for: .touchUpInside)
-            strip.addSubview(option)
-            variantButtons.append(option)
-        }
-        container.contentView.addSubview(strip)
-        overlay.addSubview(container)
-        host.addSubview(overlay)
-        variantOverlay = overlay
+        let popup = AlternatesPopupView(alternates: options, keyFrame: anchor, hostBounds: host.bounds)
+        popup.frame.origin.y = frame.maxY + 4
+        host.addSubview(popup)
+        variantPopup = popup
     }
 
     func dismissVariants() {
-        variantOverlay?.removeFromSuperview()
-        variantOverlay = nil
-        variantChoices = []
-        variantButtons = []
-        variantHighlight = nil
-        variantContainer = nil
+        variantPopup?.removeFromSuperview()
+        variantPopup = nil
     }
 
     override func removeFromSuperview() {

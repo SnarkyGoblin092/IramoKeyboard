@@ -101,14 +101,17 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private let minimumFills: CGFloat
     /// The preview has the same room above and below it (a bar centred in its pane).
     private let balanced: Bool
+    /// The room at the sides of the preview.
+    private let horizontalPadding: CGFloat
 
     /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
     init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = true,
-         minimumHeight: CGFloat = 150, balanced: Bool = false,
+         minimumHeight: CGFloat = 150, balanced: Bool = false, horizontalPadding: CGFloat = 16,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
         self.minimumFills = minimumHeight
         self.balanced = balanced
+        self.horizontalPadding = horizontalPadding
         self.edgeToEdge = edgeToEdge
         self.preview = preview
         self.content = content
@@ -152,7 +155,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, horizontalPadding)
                 .padding(.top, balanced ? 9 : PinnedPreview.topPadding)
                 .padding(.bottom, balanced ? 9 : PinnedPreview.bottomPadding)
                 .frame(height: height)

@@ -1742,8 +1742,9 @@ final class KeyboardViewController: UIInputViewController {
         } else if Prefs.emojiSuggestions, !emojiWord.isEmpty,
                   let phrase = EmojiStore.shared.phraseSuggestion(before: before, languages: emojiLanguages) {
             // A name of several words ("red heart", "thumbs up") wins over its last word's.
-            emojis = [phrase.emoji]
-            shownEmojiPhrase = phrase
+            let toned = EmojiStore.inSkinTone(phrase.emoji, tone: Prefs.emojiSkinTone)
+            emojis = [toned]
+            shownEmojiPhrase = (toned, phrase.length)
         } else if Prefs.emojiSuggestions && !emojiWord.isEmpty {
             // The word's own language first ("hat" is six in Hungarian, a hat in English), then the others.
             let owners = Predictor.owners(of: emojiWord, stores: stores)
@@ -1751,6 +1752,7 @@ final class KeyboardViewController: UIInputViewController {
             var languages: [Language] = []
             for candidate in order where !languages.contains(candidate) { languages.append(candidate) }
             emojis = EmojiStore.shared.suggestions(for: emojiWord, languages: languages, limit: 1)
+                .map { EmojiStore.inSkinTone($0, tone: Prefs.emojiSkinTone) }
         }
 
         ensureStores()
@@ -1961,13 +1963,15 @@ final class KeyboardViewController: UIInputViewController {
         panel.language = language
         panel.translatesAutoresizingMaskIntoConstraints = false
         // The picker shows only the system keyboard backdrop (like the native emoji picker): hide any theme
-        // backdrop, and supply a native one when the root itself is see-through (Liquid Glass).
+        // backdrop, and supply a native one when the root itself is see-through (Liquid Glass). The keys fade out as
+        // the picker fades in, and are taken away once it has.
         hiddenForEmoji = container.subviews.filter { !$0.isHidden }
-        for sub in hiddenForEmoji { sub.isHidden = true }
+        var backdrops: [UIView] = []
         if !rootIsKeyboardStyle {
             let native = UIInputView(frame: .zero, inputViewStyle: .keyboard)
             native.translatesAutoresizingMaskIntoConstraints = false
             native.accessibilityIdentifier = "emojiNativeBackdrop"
+            native.alpha = 0
             container.addSubview(native)
             NSLayoutConstraint.activate([
                 native.topAnchor.constraint(equalTo: container.topAnchor),
@@ -1975,7 +1979,13 @@ final class KeyboardViewController: UIInputViewController {
                 native.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                 native.trailingAnchor.constraint(equalTo: container.trailingAnchor)
             ])
+            backdrops.append(native)
         }
+        // The picker rises from the bottom edge with a little spring while the keys sink back and fade; the keyboard
+        // and the picker are one move.
+        let rise = max(40, container.bounds.height * 0.35)
+        panel.alpha = 0
+        panel.transform = CGAffineTransform(translationX: 0, y: rise).scaledBy(x: 0.98, y: 0.98)
         container.addSubview(panel)
         NSLayoutConstraint.activate([
             panel.topAnchor.constraint(equalTo: container.topAnchor),
@@ -1985,25 +1995,80 @@ final class KeyboardViewController: UIInputViewController {
         ])
         emojiPanel = panel
         applyHeight()
-        // The picker replaces the keyboard completely: nothing may show through from behind it.
-        stage.isHidden = true
         panel.reload()
         EmojiStore.shared.loadIfNeeded { [weak panel] in
             panel?.reload()
         }
+        let leaving = hiddenForEmoji
+        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.3,
+                       options: [.allowUserInteraction]) {
+            panel.transform = .identity
+            for view in leaving { view.transform = CGAffineTransform(scaleX: 0.96, y: 0.96).translatedBy(x: 0, y: 10) }
+        }
+        UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+            panel.alpha = 1
+            for view in backdrops { view.alpha = 1 }
+            for view in leaving { view.alpha = 0 }
+        } completion: { [weak self, weak panel] _ in
+            // The picker replaces the keyboard completely: nothing may show through from behind it.
+            guard let self = self, let panel = panel, self.emojiPanel === panel else { return }
+            for view in leaving {
+                view.isHidden = true
+                view.alpha = 1
+                view.transform = .identity
+            }
+            self.stage.isHidden = true
+        }
     }
 
-    private func hideEmojiPanel(refresh: Bool = true) {
-        if emojiPanel != nil {
-            for sub in container.subviews where sub.accessibilityIdentifier == "emojiNativeBackdrop" { sub.removeFromSuperview() }
-            for sub in hiddenForEmoji { sub.isHidden = false }
-            hiddenForEmoji = []
-        }
-        emojiPanel?.removeFromSuperview()
+    /// Takes the picker away and brings the keyboard back (`animated`: the picker fades out over it).
+    private func hideEmojiPanel(refresh: Bool = true, animated: Bool = false) {
+        let leaving = emojiPanel
+        let backdrops = container.subviews.filter { $0.accessibilityIdentifier == "emojiNativeBackdrop" }
+        let restored = hiddenForEmoji
+        hiddenForEmoji = []
         emojiPanel = nil
-        applyHeight()
+        if leaving != nil {
+            for view in restored {
+                view.layer.removeAllAnimations()
+                view.isHidden = false
+                view.alpha = 1
+                view.transform = .identity
+            }
+        }
+        stage.layer.removeAllAnimations()
         stage.isHidden = false
+        stage.alpha = 1
+        stage.transform = .identity
+        applyHeight()
         if refresh { scheduleRefresh() }
+        guard let panel = leaving else { return }
+        if animated && view.window != nil {
+            panel.isUserInteractionEnabled = false
+            let back = restored.isEmpty ? [stage] : restored
+            let sink = max(40, container.bounds.height * 0.35)
+            for view in back {
+                view.alpha = 0
+                view.transform = CGAffineTransform(scaleX: 0.96, y: 0.96).translatedBy(x: 0, y: 10)
+            }
+            // The keys come back up to size as the picker drops away.
+            UIView.animate(withDuration: 0.42, delay: 0, usingSpringWithDamping: 0.88, initialSpringVelocity: 0.2,
+                           options: [.allowUserInteraction]) {
+                panel.transform = CGAffineTransform(translationX: 0, y: sink).scaledBy(x: 0.98, y: 0.98)
+                for view in back { view.transform = .identity }
+            }
+            UIView.animate(withDuration: 0.24, delay: 0, options: [.curveEaseIn, .allowUserInteraction]) {
+                panel.alpha = 0
+                for view in backdrops { view.alpha = 0 }
+                for view in back { view.alpha = 1 }
+            } completion: { _ in
+                panel.removeFromSuperview()
+                for view in backdrops { view.removeFromSuperview() }
+            }
+        } else {
+            panel.removeFromSuperview()
+            for view in backdrops { view.removeFromSuperview() }
+        }
     }
 
     private func beginEmojiSearch() {
@@ -2016,7 +2081,7 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar.isHidden = true
         searchBar.isHidden = false
         reloadKeyboardLayout()
-        hideEmojiPanel(refresh: false)
+        hideEmojiPanel(refresh: false, animated: true)
         refreshEmojiSearch()
         EmojiStore.shared.loadSearchIfNeeded(languages: enabledLanguages + [.english]) { [weak self] in
             self?.refreshEmojiSearch()
@@ -2583,7 +2648,7 @@ extension KeyboardViewController: EmojiPanelDelegate {
     }
 
     func emojiPanelDidClose(_ panel: EmojiPanel) {
-        hideEmojiPanel()
+        hideEmojiPanel(animated: true)
     }
 
     func emojiPanelDidTapHide(_ panel: EmojiPanel) {

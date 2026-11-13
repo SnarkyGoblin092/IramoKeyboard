@@ -280,6 +280,19 @@ final class EmojiStore {
         return result
     }
 
+    /// An emoji suggested in the bar, in the skin tone chosen in the app (1 light ... 5 dark) when it can have one
+    /// (a single person or hand; sequences of several keep their own tones).
+    static func inSkinTone(_ emoji: String, tone: Int) -> String {
+        guard tone >= 1, tone <= 5 else { return emoji }
+        let scalars = Array(emoji.unicodeScalars).filter { $0.value != 0xFE0F }
+        guard scalars.count == 1, scalars[0].properties.isEmojiModifierBase,
+              let modifier = Unicode.Scalar(0x1F3FA + UInt32(tone)) else { return emoji }
+        var text = String.UnicodeScalarView()
+        text.append(scalars[0])
+        text.append(modifier)
+        return String(text)
+    }
+
     /// An emoji whose name is the last two to five words typed ("red heart" -> ❤️, "thumbs up" -> 👍), and how many
     /// characters before the cursor it takes the place of (the words and a space after them). The longest name wins.
     func phraseSuggestion(before: String, languages: [Language]) -> (emoji: String, length: Int)? {

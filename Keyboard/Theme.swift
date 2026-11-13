@@ -287,6 +287,11 @@ enum Theme {
     /// the picker follows the app's style, so it takes the base palette.
     static func searchLook(besideKeys: Bool) -> SearchLook {
         let p = palette
+        // Where real Liquid Glass exists the search fields are always glass, whatever the theme (its text follows
+        // the system's colours unless the theme is the glass one).
+        if GlassSupport.isAvailable && kind != .liquidGlass {
+            return SearchLook(fill: UIColor.clear, text: UIColor.label, secondaryText: UIColor.secondaryLabel, glass: true)
+        }
         switch kind {
         case .native:
             return SearchLook(fill: pick(black(0.08), white(0.14)), text: UIColor.label,

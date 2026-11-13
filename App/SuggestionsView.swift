@@ -28,9 +28,19 @@ struct SuggestionsView: View {
     /// Three equal words, words sized to fit (more of them), or a strip that scrolls.
     private var countIndex: Int { return scroll ? 2 : (fit ? 1 : 0) }
 
+    /// The preview's pane: the bar (with its 9 pt of room) at the scale that fits the keyboard's width into the pane's,
+    /// and 9 pt above and below it.
+    private var previewPaneHeight: CGFloat {
+        let width = CGFloat(DeviceMetrics.keyboardWidth)
+        let scale = max(0.5, (width - 32) / width)
+        return (CGFloat(height) + 9) * scale + 18
+    }
+
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(height: 110, fills: true, minimumHeight: 90, balanced: true) {
+        // The bar alone, as wide as the pane (16 pt in from the sides), and as tall as the real bar is for that width:
+        // scaled down together, so its proportions are the real ones.
+        PinnedPreview(height: previewPaneHeight, fills: true, minimumHeight: previewPaneHeight, balanced: true) {
             LiveKeyboard(barOnly: true)
         } content: {
         GlassList {

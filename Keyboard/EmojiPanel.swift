@@ -261,7 +261,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var collectionView: UICollectionView!
 
     private let searchLook = Theme.searchLook(besideKeys: false)
-    private lazy var searchGlass = FlatPanel(background: searchLook.fill, cornerRadius: 20, allowGlass: searchLook.glass)
+    private lazy var searchGlass = FlatPanel(background: searchLook.fill, cornerRadius: 20, allowGlass: searchLook.glass, forceGlass: searchLook.glass)
     private let searchButton = HitButton(type: .system)
     private let searchIcon = UIImageView()
     private let searchLabel = UILabel()
@@ -301,13 +301,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
     private var startSection = 0
     private var needsInitialScroll = false
     private var isProgrammaticScroll = false
-    private var variantPopup: UIView?
-    /// The options in the popup and their buttons, and the one under the finger that holds the emoji.
-    private var variantChoices: [String] = []
-    private var variantButtons: [UIButton] = []
-    private var variantHighlight: Int?
-    /// The cell the finger went down on (over it, no option is chosen yet).
-    private var variantCellFrame = CGRect.zero
+    /// The skin tones of a held emoji, in the keyboard's own popup for accented characters (AlternatesPopupView): the
+    /// finger slides over them and lifting picks the lit one.
+    private var variantPopup: AlternatesPopupView?
+    /// The finger is still down on the emoji that opened the popup: the grid scrolling under it does not close it.
+    private var holdingVariants = false
 
     /// Everything is measured on the stock 440 x 402pt picker and scaled by the width (capped in landscape).
     static func scale(forWidth width: CGFloat) -> CGFloat {
@@ -392,6 +390,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
         longPress.minimumPressDuration = Prefs.emojiHoldDelay
+        // The finger may slide a long way (under the tones, too) once the tones are up.
+        longPress.allowableMovement = 600
         collectionView.addGestureRecognizer(longPress)
 
         if Prefs.emojiSwipeTabs {
@@ -461,7 +461,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         let store = EmojiStore.shared
         var built: [Section] = []
 
-        let recents = Settings.shared.orderedRecentEmoji().map { EmojiItem(base: $0, variants: []) }
+        // Each recent emoji keeps its other skin tones, to hold for (as the search's results do).
+        let recents = Settings.shared.orderedRecentEmoji().map { EmojiStore.shared.toned($0, tone: 0) }
         var byKey: [String: Section] = [:]
         if Prefs.emojiShowRecents {
             byKey["recent"] = Section(key: "recent",
@@ -966,118 +967,50 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         switch recognizer.state {
         case .began:
             let point = recognizer.location(in: collectionView)
-            guard let indexPath = collectionView.indexPathForItem(at: point),
+            // (Not while the grid is being scrolled: the long press may only have outlasted the delay.)
+            guard !collectionView.isDragging, !collectionView.isDecelerating,
+                  let indexPath = collectionView.indexPathForItem(at: point),
                   let cell = collectionView.cellForItem(at: indexPath) else { return }
             let item = sections[indexPath.section].items[indexPath.item]
             guard !item.variants.isEmpty else { return }
             Haptics.shared.keyPress()
             showVariants([item.base] + item.variants, above: cell)
-            // The finger can now slide over the options: the grid under it stays where it is.
+            // The finger can now slide over the tones: the grid under it stays where it is.
+            holdingVariants = true
             collectionView.panGestureRecognizer.isEnabled = false
         case .changed:
-            guard variantPopup != nil else { return }
-            highlightVariant(at: recognizer.location(in: self))
+            variantPopup?.updateHighlight(hostX: recognizer.location(in: self).x)
         case .ended:
+            holdingVariants = false
             collectionView.panGestureRecognizer.isEnabled = true
-            // Lifted over an option: that one is picked, without a second tap. Lifted elsewhere, the popup stays
-            // for a tap.
-            if let index = variantHighlight, index < variantChoices.count {
-                let emoji = variantChoices[index]
+            // Lifted: the lit tone is typed, as with an accent on a key.
+            if let popup = variantPopup {
+                let emoji = popup.selectedItem
                 dismissVariantPopup()
                 Haptics.shared.keyPress()
                 delegate?.emojiPanel(self, didSelect: emoji)
             }
         case .cancelled, .failed:
+            holdingVariants = false
             collectionView.panGestureRecognizer.isEnabled = true
-            setVariantHighlight(nil)
+            dismissVariantPopup()
         default:
             break
         }
     }
 
-    /// The option nearest the finger lights up while it is over the popup (or just around it).
-    private func highlightVariant(at point: CGPoint) {
-        guard let popup = variantPopup, !variantButtons.isEmpty else { return }
-        guard popup.frame.insetBy(dx: -40, dy: -30).contains(point), !variantCellFrame.contains(point) else {
-            setVariantHighlight(nil)
-            return
-        }
-        var best = 0
-        var bestDistance = CGFloat.greatestFiniteMagnitude
-        for (index, button) in variantButtons.enumerated() {
-            let centre = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: self)
-            let distance = abs(centre.x - point.x)
-            if distance < bestDistance {
-                bestDistance = distance
-                best = index
-            }
-        }
-        setVariantHighlight(best)
-    }
-
-    private func setVariantHighlight(_ index: Int?) {
-        guard index != variantHighlight else { return }
-        if let old = variantHighlight, old < variantButtons.count { variantButtons[old].backgroundColor = .clear }
-        variantHighlight = index
-        if let new = index, new < variantButtons.count {
-            variantButtons[new].backgroundColor = Theme.accent.withAlphaComponent(0.35)
-            variantButtons[new].layer.cornerRadius = 8
-            Haptics.shared.tick()
-        }
-    }
-
     private func showVariants(_ options: [String], above cell: UICollectionViewCell) {
         dismissVariantPopup()
-        let cellFrame = collectionView.convert(cell.frame, to: self)
-        let itemWidth: CGFloat = 44
-        let fitting = max(1, Int((bounds.width - 16) / itemWidth))
-        let visibleCount = min(options.count, fitting)
-        let width = CGFloat(visibleCount) * itemWidth + 12
-        let height: CGFloat = 54
-
-        var x = cellFrame.midX - width / 2
-        x = max(4, min(x, bounds.width - width - 4))
-        var y = cellFrame.minY - height - 2
-        if y < 0 { y = cellFrame.maxY + 2 }
-
-        let container = FlatPanel(background: EmojiLook.popup, cornerRadius: 10)
-        container.layer.shadowColor = UIColor.black.cgColor
-        container.layer.shadowOpacity = 0.3
-        container.layer.shadowRadius = 3
-        container.layer.shadowOffset = CGSize(width: 0, height: 1)
-        container.frame = CGRect(x: x, y: y, width: width, height: height)
-
-        variantChoices = options
-        variantCellFrame = cellFrame
-        variantButtons = []
-        let scroll = UIScrollView(frame: CGRect(x: 6, y: 0, width: width - 12, height: height))
-        scroll.showsHorizontalScrollIndicator = false
-        scroll.contentSize = CGSize(width: itemWidth * CGFloat(options.count), height: height)
-        for (index, emoji) in options.enumerated() {
-            let button = HitButton(type: .custom)
-            button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 4, width: itemWidth, height: height - 8)
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 30)
-            button.setTitle(emoji, for: .normal)
-            button.addAction(UIAction { [weak self] _ in
-                guard let self = self else { return }
-                self.dismissVariantPopup()
-                Haptics.shared.keyPress()
-                self.delegate?.emojiPanel(self, didSelect: emoji)
-            }, for: .touchUpInside)
-            scroll.addSubview(button)
-            variantButtons.append(button)
-        }
-        container.contentView.addSubview(scroll)
-        addSubview(container)
-        variantPopup = container
+        let popup = AlternatesPopupView(alternates: options,
+                                        keyFrame: collectionView.convert(cell.frame, to: self),
+                                        hostBounds: bounds)
+        addSubview(popup)
+        variantPopup = popup
     }
 
     private func dismissVariantPopup() {
         variantPopup?.removeFromSuperview()
         variantPopup = nil
-        variantChoices = []
-        variantButtons = []
-        variantHighlight = nil
     }
 
     // MARK: UICollectionViewDataSource / Delegate
@@ -1110,7 +1043,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         guard scrollView === collectionView else { return }
         updateEmptyState()
         guard !needsInitialScroll, !isProgrammaticScroll else { return }
-        dismissVariantPopup()
+        if !holdingVariants { dismissVariantPopup() }
 
         // The current category is the last one whose start has reached the edge.
         let probe = vertical ? scrollView.contentOffset.y + gridLayout.cellSize.height * 0.6

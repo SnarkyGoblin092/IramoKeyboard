@@ -263,15 +263,16 @@ struct KeysView: View {
     var body: some View {
         // The keyboard stays pinned above the settings, at a fixed size, with the pages of settings under it: the
         // keys' size and layout, their letters, and the bottom row.
-        PinnedPreview(height: 284, fills: true) {
-            VStack(spacing: 8) {
-                LiveKeyboard()
+        PinnedPreview(height: 260, fills: true) {
+            LiveKeyboard()
+        } content: {
+        GlassList {
+            Section {
                 SegmentedChoice(names: KeysPage.allCases.map { $0.title }, selected: page.rawValue) { index in
                     page = KeysPage(rawValue: index) ?? .size
                 }
             }
-        } content: {
-        GlassList {
+            .glassRows()
             switch page {
             case .size: sizeSections
             case .letters: letterSections

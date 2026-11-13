@@ -296,23 +296,13 @@ private struct ThemeSection: View {
     var body: some View {
         let shown = theme
         Section {
-            // The keyboard as the theme draws it, standing on the backdrop: the Liquid Glass theme's keys are real
-            // glass here too, as on the keyboard. A new accent fades in on it.
-            Button {
-                Feedback.tap()
-                openScreen(.themes)
-            } label: {
-                ZStack {
-                    ThemePreview(theme: shown, accent: accent, showsStrip: true, cornerRadius: 20, glassBackdrop: true)
-                        .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
-                        .animation(AccentTint.fade, value: accentName + accentHex)
-                        .allowsHitTesting(false)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableStyle())
-            .accessibilityLabel(tr("Themes"))
-            .glassOutsideCard()
+            // The keyboard itself, in the same card as the Effects and Keys screens' (the pinned pane there is 260 pt
+            // with 12 above and 6 below the keyboard, 16 at the sides).
+            LiveKeyboard()
+                .frame(height: 242)
+                .environment(\.layoutDirection, .leftToRight)
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
+                .glassOutsideCard()
             AppearanceSwitch()
             ScreenRow(.themes) {
                 SettingsRow(title: tr("Themes"), symbol: "paintbrush.fill", color: .purple, value: shown.name)
