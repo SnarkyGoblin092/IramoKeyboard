@@ -1656,7 +1656,9 @@ final class TapBias {
     /// The average aim of the left and right half (key sizes), for the keys that have not learned their own yet.
     func prior(landscape wide: Bool) -> (left: (x: Double, y: Double), right: (x: Double, y: Double)) {
         let base = wide ? 2 : 0
-        return ((offsets[base].x, offsets[base].y), (offsets[base + 1].x, offsets[base + 1].y))
+        let left = (x: offsets[base].x, y: offsets[base].y)
+        let right = (x: offsets[base + 1].x, y: offsets[base + 1].y)
+        return (left: left, right: right)
     }
 
     /// A press at `point` was resolved to the key centred at `keyCenter`.

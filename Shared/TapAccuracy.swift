@@ -20,7 +20,7 @@ struct TapMapData: Codable, Equatable {
         init() {}
 
         // Older saves lack the aim: every field is optional on reading.
-        init(from decoder: Decoder) throws {
+        init(from decoder: Swift.Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             count = try c.decodeIfPresent(Int.self, forKey: .count) ?? 0
             sumX = try c.decodeIfPresent(Double.self, forKey: .sumX) ?? 0
