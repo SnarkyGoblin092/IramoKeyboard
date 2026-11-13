@@ -161,7 +161,8 @@ final class EmojiSearchBar: UIView {
             .scaledBy(x: source.pill.width / target.width, y: source.pill.height / target.height)
         // The placeholder starts where (and as big as) the picker's was.
         let fromX = source.placeholder.minX - source.pill.minX
-        queryLabel.transform = CGAffineTransform(translationX: fromX - queryLabel.frame.minX, y: 0).scaledBy(x: 1.12, y: 1.12)
+        let fromScale = source.font.pointSize / max(queryLabel.font.pointSize, 1)
+        queryLabel.transform = CGAffineTransform(translationX: fromX - queryLabel.frame.minX, y: 0).scaledBy(x: fromScale, y: fromScale)
         // The picker's magnifying glass, fading out where it was.
         let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass"))
         ghost.tintColor = look.secondaryText
@@ -211,11 +212,12 @@ final class EmojiSearchBar: UIView {
         glass.contentView.addSubview(ghost)
         exitGhost = ghost
         let toX = target.placeholder.minX - target.pill.minX
+        let toScale = target.font.pointSize / max(queryLabel.font.pointSize, 1)
         UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.92, initialSpringVelocity: 0.1,
                        options: [.allowUserInteraction]) {
             self.glass.transform = CGAffineTransform(translationX: target.pill.midX - here.midX, y: target.pill.midY - here.midY)
                 .scaledBy(x: target.pill.width / here.width, y: target.pill.height / here.height)
-            self.queryLabel.transform = CGAffineTransform(translationX: toX - self.queryLabel.frame.minX, y: 0).scaledBy(x: 1.12, y: 1.12)
+            self.queryLabel.transform = CGAffineTransform(translationX: toX - self.queryLabel.frame.minX, y: 0).scaledBy(x: toScale, y: toScale)
         } completion: { _ in
             completion()
         }

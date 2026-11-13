@@ -2085,6 +2085,7 @@ final class KeyboardViewController: UIInputViewController {
         container.layoutIfNeeded()
         let width = max(container.bounds.width, 1)
         leaving.hideSearchPill()
+        leaving.setHideButtonVisible(false)
         leaving.isUserInteractionEnabled = false
         keyboardView.transform = CGAffineTransform(translationX: -width, y: 0)
         searchBar.playEntrance(from: source)
@@ -2182,6 +2183,7 @@ final class KeyboardViewController: UIInputViewController {
         let width = max(container.bounds.width, 1)
         let leaving = hiddenForEmoji
         panel.hideSearchPill()
+        panel.setHideButtonVisible(false)
         panel.transform = CGAffineTransform(translationX: width, y: 0)
         searchBar.playExit(to: target) { }
         UIView.animate(withDuration: 0.4, delay: 0, options: [.curveEaseInOut]) {
@@ -2191,6 +2193,9 @@ final class KeyboardViewController: UIInputViewController {
         } completion: { [weak self, weak panel] _ in
             guard let self = self, let panel = panel else { return }
             // The search is over: the keys and the bar are put back for the next time, behind the picker.
+            // The picker's own pill and hide button appear in the same moment the search bar's go.
+            panel.showSearchPill()
+            panel.setHideButtonVisible(true)
             self.isSearchingEmoji = false
             self.searchQuery = ""
             self.searchBar.isHidden = true
@@ -2201,7 +2206,6 @@ final class KeyboardViewController: UIInputViewController {
             self.updateAutoShift()
             for view in leaving { view.isHidden = true }
             self.stage.isHidden = true
-            panel.showSearchPill()
             self.applyHeight()
         }
         applyHeight()

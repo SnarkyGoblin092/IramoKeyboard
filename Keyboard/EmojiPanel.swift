@@ -583,7 +583,12 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
     /// The field is drawn again (the search bar's has settled into its place).
     func showSearchPill() {
-        UIView.animate(withDuration: 0.18) { self.searchGlass.alpha = 1 }
+        searchGlass.alpha = 1   // at once: the search bar's pill goes in the same moment, so nothing blinks
+    }
+
+    /// The search bar has a hide button of its own in the same place: this one stays out of the slide.
+    func setHideButtonVisible(_ visible: Bool) {
+        hideButton.alpha = visible ? 1 : 0
     }
 
     private func updateEmptyState() {
