@@ -244,6 +244,11 @@ private struct CorrectionsSection: View {
                           subtitle: tr("A space goes after . , ! ? ; : by itself"),
                           symbol: "space", color: .mint)
                 .searchAnchor("main.spaceAfter")
+            SettingToggle(tr("Space after suggestions"), key: SettingKey.spaceAfterSuggestion,
+                          defaultValue: SettingDefault.spaceAfterSuggestion,
+                          subtitle: tr("A space goes after a picked word, emoji, result or conversion"),
+                          symbol: "space", color: .cyan)
+                .searchAnchor("main.spaceAfterSuggestion")
         } header: {
             SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }
@@ -433,6 +438,7 @@ private struct GesturesSection: View {
     @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
     @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
     @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
+    @AppStorage(SettingKey.tapAdaptive, store: SharedStore.defaults) private var adaptive = SettingDefault.tapAdaptive
 
     private var hapticSummary: String {
         if vibration < 0.01 { return tr("Off") }
@@ -451,6 +457,9 @@ private struct GesturesSection: View {
             }
             ScreenRow(.haptics) {
                 SettingsRow(title: tr("Haptics & sound"), symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
+            }
+            ScreenRow(.tapAccuracy) {
+                SettingsRow(title: tr("Tap accuracy"), symbol: "scope", color: .orange, value: adaptive ? tr("Adaptive") : tr("Off"))
             }
         } header: {
             SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill", color: .teal)

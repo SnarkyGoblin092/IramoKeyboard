@@ -700,11 +700,17 @@ final class KeyboardView: UIView {
                 continue
             }
             // The key is chosen from where this user's thumbs tend to land (TapBias), not from the raw point.
-            let aimed = page == .letters ? TapBias.shared.corrected(point, in: bounds, keySize: letterKeySize()) : point
+            let aimed = page == .letters && Prefs.tapAdaptive
+                ? TapBias.shared.corrected(point, in: bounds, keySize: letterKeySize()) : point
             guard let index = keyIndex(at: aimed) else { continue }
             let key = keyViews[index.row][index.col]
-            if page == .letters, letter(of: key.spec) != nil, let rect = hitRect(of: key) {
-                TapBias.shared.learn(point, keyCenter: CGPoint(x: rect.midX, y: rect.midY), in: bounds, keySize: letterKeySize())
+            if page == .letters, let typed = letter(of: key.spec), let rect = hitRect(of: key) {
+                if Prefs.tapAdaptive {
+                    TapBias.shared.learn(point, keyCenter: CGPoint(x: rect.midX, y: rect.midY), in: bounds, keySize: letterKeySize())
+                }
+                if Prefs.tapRecord {
+                    TapAccuracy.shared.record(letter: String(typed), point: point, cell: rect, in: bounds)
+                }
             }
             // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
             // that same word.
@@ -1580,13 +1586,35 @@ final class TapBias {
     private struct Offset { var x = 0.0, y = 0.0 }   // in key widths and heights
     private var offsets: [Offset]
     private var samples = 0
-    private static let key = "hunkeys.tapBias"
-    private static let limit = 0.2
-    private static let rate = 0.01
+    private var stamp = SharedStore.defaults.string(forKey: TapAccuracy.resetKey) ?? ""
+    static let savedKey = "hunkeys.tapBias"
+    static let limit = 0.2
+    /// How fast the average follows the taps: the Tap accuracy screen's learning speed (slow, normal, fast).
+    private static var rate: Double { return [0.004, 0.01, 0.025][min(2, max(0, Prefs.tapLearnSpeed))] }
 
     private init() {
-        let saved = SharedStore.defaults.array(forKey: TapBias.key) as? [Double] ?? []
-        offsets = (0..<4).map { i in i * 2 + 1 < saved.count ? Offset(x: saved[i * 2], y: saved[i * 2 + 1]) : Offset() }
+        offsets = TapBias.savedOffsets().map { Offset(x: $0.x, y: $0.y) }
+    }
+
+    /// The learned aim as saved: left and right half in portrait, then in landscape (in key widths and heights).
+    static func savedOffsets() -> [(x: Double, y: Double)] {
+        let saved = SharedStore.defaults.array(forKey: savedKey) as? [Double] ?? []
+        return (0..<4).map { i in i * 2 + 1 < saved.count ? (saved[i * 2], saved[i * 2 + 1]) : (0, 0) }
+    }
+
+    /// Drops what is in memory when the app wiped the learned aim meanwhile.
+    func syncWithApp() {
+        let current = SharedStore.defaults.string(forKey: TapAccuracy.resetKey) ?? ""
+        guard current != stamp else { return }
+        stamp = current
+        offsets = TapBias.savedOffsets().map { Offset(x: $0.x, y: $0.y) }
+        samples = 0
+    }
+
+    /// Writes the learned aim now.
+    func flush() {
+        guard TapAccuracy.isKeyboard else { return }
+        SharedStore.defaults.set(offsets.flatMap { [$0.x, $0.y] }, forKey: TapBias.savedKey)
     }
 
     private func slot(for point: CGPoint, in bounds: CGRect) -> Int {
@@ -1604,7 +1632,7 @@ final class TapBias {
 
     /// A press at `point` was resolved to the key centred at `keyCenter`.
     func learn(_ point: CGPoint, keyCenter: CGPoint, in bounds: CGRect, keySize: CGSize) {
-        guard keySize.width > 1, keySize.height > 1 else { return }
+        guard TapAccuracy.isKeyboard, keySize.width > 1, keySize.height > 1 else { return }
         let dx = Double((point.x - keyCenter.x) / keySize.width)
         let dy = Double((point.y - keyCenter.y) / keySize.height)
         // Presses near a key's edge are as likely the neighbour's: only the middle of a key teaches.
@@ -1614,8 +1642,6 @@ final class TapBias {
         offsets[i].x = max(-limit, min(limit, offsets[i].x + (dx - offsets[i].x) * TapBias.rate))
         offsets[i].y = max(-limit, min(limit, offsets[i].y + (dy - offsets[i].y) * TapBias.rate))
         samples += 1
-        if samples % 60 == 0 {
-            SharedStore.defaults.set(offsets.flatMap { [$0.x, $0.y] }, forKey: TapBias.key)
-        }
+        if samples % 40 == 0 { flush() }
     }
 }

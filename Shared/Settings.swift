@@ -103,6 +103,12 @@ enum SettingKey {
     /// Curly quotes in the language's style, and a space typed after . , ! ? ; :
     static let smartQuotes = "hunkeys.smartQuotes"
     static let spaceAfterPunctuation = "hunkeys.spaceAfterPunctuation"
+    static let spaceAfterSuggestion = "hunkeys.spaceAfterSuggestion"
+    /// Tap accuracy (the Tap accuracy screen): letters are resolved from where the thumbs tend to land, how fast that
+    /// is learned (0 slow, 1 normal, 2 fast), and the per-key map of where taps landed is kept.
+    static let tapAdaptive = "hunkeys.tapAdaptive"
+    static let tapLearnSpeed = "hunkeys.tapLearnSpeed"
+    static let tapRecord = "hunkeys.tapRecord"
     /// The {date} and {time} placeholders of text shortcuts.
     static let dateFormat = "hunkeys.dateFormat"
     static let customDateFormat = "hunkeys.customDateFormat"
@@ -165,7 +171,8 @@ enum SettingKey {
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
         swipeTrailShown, swipeTrailWidth, swipeTrailOpacity, swipeTrailColor, swipeTrailStyle,
         spaceSelect, cursorSpeed, deleteRepeatInterval, letterLayouts,
-        inlineMath, unitConversion, unitTarget, resultDecimals, smartQuotes, spaceAfterPunctuation,
+        inlineMath, unitConversion, unitTarget, resultDecimals, smartQuotes, spaceAfterPunctuation, spaceAfterSuggestion,
+        tapAdaptive, tapLearnSpeed, tapRecord,
         dateFormat, customDateFormat, timeFormat, timeSeconds, statsEnabled,
         keyboardTools,
         deleteSwipedWord, twoThumbSwipe, spaceCommits, multiWordSwipe, flickUpCapital, flickDownAccent,
@@ -272,6 +279,10 @@ enum SettingDefault {
     static let resultDecimals: Double = 3
     static let smartQuotes = true
     static let spaceAfterPunctuation = false
+    static let spaceAfterSuggestion = true
+    static let tapAdaptive = true
+    static let tapLearnSpeed = 1
+    static let tapRecord = true
     /// "short", "medium", "long", "full", "iso" or "custom" (customDateFormat).
     static let dateFormat = "medium"
     static let customDateFormat = "yyyy-MM-dd"
@@ -484,6 +495,10 @@ final class Settings {
             SettingKey.resultDecimals: SettingDefault.resultDecimals,
             SettingKey.smartQuotes: SettingDefault.smartQuotes,
             SettingKey.spaceAfterPunctuation: SettingDefault.spaceAfterPunctuation,
+            SettingKey.spaceAfterSuggestion: SettingDefault.spaceAfterSuggestion,
+            SettingKey.tapAdaptive: SettingDefault.tapAdaptive,
+            SettingKey.tapLearnSpeed: SettingDefault.tapLearnSpeed,
+            SettingKey.tapRecord: SettingDefault.tapRecord,
             SettingKey.dateFormat: SettingDefault.dateFormat,
             SettingKey.customDateFormat: SettingDefault.customDateFormat,
             SettingKey.timeFormat: SettingDefault.timeFormat,
@@ -739,6 +754,10 @@ final class Settings {
     var resultDecimals: Int { return Int(clamp(readDouble(SettingKey.resultDecimals), Settings.resultDecimalsRange).rounded()) }
     var smartQuotes: Bool { return readBool(SettingKey.smartQuotes) }
     var spaceAfterPunctuation: Bool { return readBool(SettingKey.spaceAfterPunctuation) }
+    var spaceAfterSuggestion: Bool { return readBool(SettingKey.spaceAfterSuggestion) }
+    var tapAdaptive: Bool { return readBool(SettingKey.tapAdaptive) }
+    var tapLearnSpeed: Int { return min(2, max(0, Int(readDouble(SettingKey.tapLearnSpeed)))) }
+    var tapRecord: Bool { return readBool(SettingKey.tapRecord) }
     var dateFormat: String { return readString(SettingKey.dateFormat) ?? SettingDefault.dateFormat }
     var customDateFormat: String { return readString(SettingKey.customDateFormat) ?? SettingDefault.customDateFormat }
     var timeFormat: String { return readString(SettingKey.timeFormat) ?? SettingDefault.timeFormat }

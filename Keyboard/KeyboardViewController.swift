@@ -299,6 +299,8 @@ final class KeyboardViewController: UIInputViewController {
             PhoneticInput.shared(for: language).saveNow()
         }
         LearnedWords.shared.saveNow()
+        TapAccuracy.shared.flush()
+        TapBias.shared.flush()
         for store in stores.values { store.saveNow() }
         saveLanguageUsage()
         TypingStats.shared.save()
@@ -1702,7 +1704,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         if let smart = shownSmart, smart.isCalculation {
             // "3+4=": the answer alone, in the middle.
-            suggestionBar.update([Suggestion(text: "", kind: .word), Suggestion(text: smart.result.shown, kind: .result)])
+            suggestionBar.update([Suggestion(text: "", kind: .word), Suggestion(text: "=" + smart.result.shown, kind: .result)])
             return
         }
 
@@ -1758,7 +1760,8 @@ final class KeyboardViewController: UIInputViewController {
         if let smart = shownSmart {
             while result.count < 2 { result.append(Suggestion(text: "", kind: .word)) }
             result.removeAll { $0.kind == .emoji }
-            result.insert(Suggestion(text: smart.result.shown, kind: .result), at: min(2, result.count))
+            result.insert(Suggestion(text: smart.isCalculation ? "=" + smart.result.shown : smart.result.shown, kind: .result),
+                          at: min(2, result.count))
             while result.count > capacity { result.removeLast() }
         }
         suggestionBar.update(result, highlighted: highlighted)
@@ -1776,13 +1779,15 @@ final class KeyboardViewController: UIInputViewController {
         TypingStats.shared.word(language)
         TypingStats.shared.saved(written.text.count - removed, writing: written.text.count - removed)
         for _ in 0..<removed { textDocumentProxy.deleteBackward() }
-        textDocumentProxy.insertText(written.text + " ")
+        let space = Prefs.spaceAfterSuggestion ? " " : ""
+        textDocumentProxy.insertText(written.text + space)
         lastSpaceTime = Date()
         if written.cursorBack > 0 {
-            textDocumentProxy.adjustTextPosition(byCharacterOffset: -(written.cursorBack + 1))
+            if !space.isEmpty { textDocumentProxy.adjustTextPosition(byCharacterOffset: -(written.cursorBack + 1)) }
+            else { textDocumentProxy.adjustTextPosition(byCharacterOffset: -written.cursorBack) }
             autoSpaceMarker = nil
         } else {
-            autoSpaceMarker = String((String(before.dropLast(removed)) + written.text + " ").suffix(12))
+            autoSpaceMarker = space.isEmpty ? nil : String((String(before.dropLast(removed)) + written.text + space).suffix(12))
         }
     }
 
@@ -2167,14 +2172,16 @@ extension KeyboardViewController: SuggestionBarDelegate {
             perform(command: suggestion.text)
         case .result:
             var picked: (result: SmartResult, isCalculation: Bool)?
-            if let smart = shownSmart, smart.result.shown == suggestion.text {
+            if let smart = shownSmart, smart.result.shown == suggestion.text || "=" + smart.result.shown == suggestion.text {
                 picked = smart
             } else if let conversion = shownConversions.first(where: { $0.shown == suggestion.text }) {
                 picked = (conversion, false)
             }
             guard let smart = picked else { return }
             for _ in 0..<smart.result.replaceCount { textDocumentProxy.deleteBackward() }
-            textDocumentProxy.insertText(smart.result.insert)
+            var inserted = smart.result.insert
+            if Prefs.spaceAfterSuggestion && !inserted.hasSuffix(" ") { inserted += " " }
+            textDocumentProxy.insertText(inserted)
             TypingStats.shared.note(smart.isCalculation ? .calculation : .conversion)
             shownSmart = nil
             shownConversions = []
@@ -2218,7 +2225,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
             }
             for _ in 0..<replaced { textDocumentProxy.deleteBackward() }
             let needsSpace = replaced == 0 && (before.last?.isWhitespace == false)
-            textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + " ")
+            textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + (Prefs.spaceAfterSuggestion ? " " : ""))
             TypingStats.shared.note(.emoji)
             lastSpaceTime = Date.distantPast
             clearSwipeState()

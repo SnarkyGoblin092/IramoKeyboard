@@ -77,8 +77,8 @@ enum InlineCalculator {
             text.removeLast()
             if text.hasSuffix("=") { return nil }   // "==" is code, not a sum
         }
-        let spaceBefore = text.hasSuffix(" ")
-        while text.hasSuffix(" ") { text.removeLast() }
+        var spacesBefore = 0
+        while text.hasSuffix(" ") { text.removeLast(); spacesBefore += 1 }
         guard !text.isEmpty else { return nil }
 
         // The longest run at the end made only of what a calculation can hold.
@@ -107,9 +107,10 @@ enum InlineCalculator {
                 return SmartResult(shown: formatted, replaceCount: expression.count + (spaceAfter ? 1 : 0),
                                    insert: formatted + (spaceAfter ? " " : ""))
             }
-            // "3 + 4 =" gets " 7"; "3+4=" gets "7"; after "= " the result comes straight on.
-            let insert = (spaceBefore && !spaceAfter ? " " : "") + formatted
-            return SmartResult(shown: formatted, replaceCount: 0, insert: insert)
+            // "3+4=" and "3 + 4 = " are replaced whole by the answer alone: "7".
+            return SmartResult(shown: formatted,
+                               replaceCount: expression.count + spacesBefore + 1 + (spaceAfter ? 1 : 0),
+                               insert: formatted + (spaceAfter ? " " : ""))
         }
         return nil
     }
@@ -126,7 +127,6 @@ enum InlineCalculator {
         if compact.allSatisfy({ $0.isNumber || "-/.:".contains($0) }) {
             let groups = compact.split(whereSeparator: { "-/.:".contains($0) })
             if groups.count > 2 { return false }
-            if groups.count == 2, !expression.contains(" "), groups.allSatisfy({ $0.count >= 3 }) { return false }
         }
         return true
     }

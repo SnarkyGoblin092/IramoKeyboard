@@ -444,6 +444,13 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
             labels[index].attributedText = SuggestionBar.commandLabel(suggestions[index].text,
                                                                       color: onPill ? Theme.onPill : textColor)
             labels[index].accessibilityLabel = suggestions[index].text
+        } else if suggestions[index].kind == .result, suggestions[index].text.hasPrefix("=") {
+            // A calculation's answer: "=" in a lighter shade, then the number.
+            let color = onPill ? Theme.onPill : textColor
+            let text = NSMutableAttributedString(string: suggestions[index].text, attributes: [.foregroundColor: color])
+            text.addAttribute(.foregroundColor, value: color.withAlphaComponent(0.45), range: NSRange(location: 0, length: 1))
+            labels[index].attributedText = text
+            labels[index].accessibilityLabel = nil
         } else {
             labels[index].accessibilityLabel = nil
         }

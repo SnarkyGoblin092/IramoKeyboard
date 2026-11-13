@@ -84,6 +84,10 @@ final class Prefs {
     static var resultDecimals = Int(SettingDefault.resultDecimals)
     static var smartQuotes = SettingDefault.smartQuotes
     static var spaceAfterPunctuation = SettingDefault.spaceAfterPunctuation
+    static var spaceAfterSuggestion = SettingDefault.spaceAfterSuggestion
+    static var tapAdaptive = SettingDefault.tapAdaptive
+    static var tapLearnSpeed = SettingDefault.tapLearnSpeed
+    static var tapRecord = SettingDefault.tapRecord
     static var statsEnabled = SettingDefault.statsEnabled
 
     /// The letter layout picked for a language (its own when none is).
@@ -185,6 +189,12 @@ final class Prefs {
         resultDecimals = s.resultDecimals
         smartQuotes = s.smartQuotes
         spaceAfterPunctuation = s.spaceAfterPunctuation
+        spaceAfterSuggestion = s.spaceAfterSuggestion
+        tapAdaptive = s.tapAdaptive
+        tapLearnSpeed = s.tapLearnSpeed
+        tapRecord = s.tapRecord
+        TapBias.shared.syncWithApp()
+        TapAccuracy.shared.syncWithApp()
         statsEnabled = s.statsEnabled
         if let stored = SharedStore.defaults.object(forKey: keyRoundnessKey) as? Double {
             keyRoundness = min(max(stored, 0), 1)

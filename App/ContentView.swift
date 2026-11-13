@@ -308,7 +308,7 @@ private struct TabRoot: View {
 /// The screens the tabs open.
 enum Screen: Hashable {
     case languages, appLanguage, suggestions, gestures, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
-    case smartTyping, stats, longPress
+    case smartTyping, stats, longPress, tapAccuracy
     /// The letter layout of one language (its code).
     case languageLayout(String)
     /// A tab's own list (AppTab's name): not a screen that is opened, but a place the search can point at.
@@ -324,6 +324,7 @@ enum Screen: Hashable {
         case .smartTyping: SmartTypingView()
         case .stats: StatsView()
         case .longPress: LongPressCharactersView()
+        case .tapAccuracy: TapAccuracyView()
         case .languageLayout(let code): LanguageLayoutView(language: Language(rawValue: code) ?? .english)
         case .languages: LanguagesView()
         case .appLanguage: AppLanguageView()

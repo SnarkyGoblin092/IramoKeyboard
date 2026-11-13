@@ -130,7 +130,7 @@ struct StatsView: View {
 }
 
 /// One figure on a glass tile.
-private struct StatTile: View {
+struct StatTile: View {
     let value: String
     let label: String
     let symbol: String
