@@ -2196,6 +2196,10 @@ final class KeyboardViewController: UIInputViewController {
             // The picker's own pill and hide button appear in the same moment the search bar's go.
             panel.showSearchPill()
             panel.setHideButtonVisible(true)
+            // The keys go out of sight first: putting them back in place (below) while still shown would flash them
+            // through the picker.
+            for view in leaving { view.isHidden = true }
+            self.stage.isHidden = true
             self.isSearchingEmoji = false
             self.searchQuery = ""
             self.searchBar.isHidden = true
@@ -2204,8 +2208,6 @@ final class KeyboardViewController: UIInputViewController {
             self.keyboardView.transform = .identity
             self.reloadKeyboardLayout()
             self.updateAutoShift()
-            for view in leaving { view.isHidden = true }
-            self.stage.isHidden = true
             self.applyHeight()
         }
         applyHeight()

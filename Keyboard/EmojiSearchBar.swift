@@ -161,10 +161,10 @@ final class EmojiSearchBar: UIView {
             .scaledBy(x: source.pill.width / target.width, y: source.pill.height / target.height)
         // The placeholder starts where (and as big as) the picker's was.
         let fromX = source.placeholder.minX - source.pill.minX
-        let fromScale = source.font.pointSize / max(queryLabel.font.pointSize, 1)
-        queryLabel.transform = CGAffineTransform(translationX: fromX - queryLabel.frame.minX, y: 0).scaledBy(x: fromScale, y: fromScale)
+        queryLabel.transform = placeholderTransform(toLeft: fromX, fontSize: source.font.pointSize)
         // The picker's magnifying glass, fading out where it was.
-        let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+        let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass",
+                                               withConfiguration: UIImage.SymbolConfiguration(weight: .medium)))
         ghost.tintColor = look.secondaryText
         ghost.contentMode = .scaleAspectFit
         ghost.frame = CGRect(x: source.icon.minX - source.pill.minX, y: source.icon.minY - source.pill.minY,
@@ -203,7 +203,8 @@ final class EmojiSearchBar: UIView {
             return
         }
         // The magnifying glass the arrow turns into, where the picker's is.
-        let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+        let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass",
+                                               withConfiguration: UIImage.SymbolConfiguration(weight: .medium)))
         ghost.tintColor = look.secondaryText
         ghost.contentMode = .scaleAspectFit
         ghost.frame = CGRect(x: target.icon.minX - target.pill.minX, y: target.icon.minY - target.pill.minY,
@@ -212,12 +213,12 @@ final class EmojiSearchBar: UIView {
         glass.contentView.addSubview(ghost)
         exitGhost = ghost
         let toX = target.placeholder.minX - target.pill.minX
-        let toScale = target.font.pointSize / max(queryLabel.font.pointSize, 1)
+        let end = placeholderTransform(toLeft: toX, fontSize: target.font.pointSize)
         UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.92, initialSpringVelocity: 0.1,
                        options: [.allowUserInteraction]) {
             self.glass.transform = CGAffineTransform(translationX: target.pill.midX - here.midX, y: target.pill.midY - here.midY)
                 .scaledBy(x: target.pill.width / here.width, y: target.pill.height / here.height)
-            self.queryLabel.transform = CGAffineTransform(translationX: toX - self.queryLabel.frame.minX, y: 0).scaledBy(x: toScale, y: toScale)
+            self.queryLabel.transform = end
         } completion: { _ in
             completion()
         }
@@ -235,6 +236,18 @@ final class EmojiSearchBar: UIView {
     }
 
     private var exitGhost: UIImageView?
+
+    /// The label drawn with its left edge at `left` (in the pill) and its text `fontSize` big. The label shrinks its text
+    /// to fit its narrow frame, so that is allowed for: the text ends up exactly as big as the picker's, not a bit less.
+    /// (Scaled about the label's centre, so the move is worked out for that.)
+    private func placeholderTransform(toLeft left: CGFloat, fontSize: CGFloat) -> CGAffineTransform {
+        let frame = queryLabel.frame
+        let natural = ((queryLabel.text ?? "") as NSString).size(withAttributes: [.font: queryLabel.font as Any]).width
+        let shrink: CGFloat = natural > frame.width && natural > 0 ? max(queryLabel.minimumScaleFactor, frame.width / natural) : 1
+        let scale = fontSize / max(queryLabel.font.pointSize * shrink, 1)
+        let move = left - frame.minX - frame.width / 2 + scale * frame.width / 2
+        return CGAffineTransform(translationX: move, y: 0).scaledBy(x: scale, y: scale)
+    }
 
     /// Puts the bar as it was after `playExit`, for the next time it is shown.
     func resetAfterExit() {

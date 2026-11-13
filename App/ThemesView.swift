@@ -337,6 +337,10 @@ private struct ThemeThumbnail: View {
 
     static let fadeAnimation = Animation.easeInOut(duration: 0.3)
 
+    /// The room around the keys in a card (the keyboard's points), so the card's rounded corners do not cut them off.
+    /// Part of every picture's key, so pictures saved with another value are drawn again.
+    fileprivate static let inset: CGFloat = 16
+
     /// The card in one mode, while a wave crosses.
     @ViewBuilder private func layer(dark: Bool) -> some View {
         if let picture = picture(dark: dark) {
@@ -382,7 +386,7 @@ private struct ThemeThumbnail: View {
         // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
         // it is seeded anew each run, so pictures saved on disk would never be found again).
         let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|\(ThumbnailCache.settingsSignature())"
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -398,7 +402,7 @@ private struct ThemeThumbnail: View {
         let width = ThemeThumbnail.renderWidth
         let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
         func preview() -> some View {
-            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14, contentInset: 6)
+            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14, contentInset: ThemeThumbnail.inset)
                 .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
         }

@@ -343,7 +343,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // Search field
         searchGlass.capsule = true
         addSubview(searchGlass)
-        searchIcon.image = UIImage(systemName: "magnifyingglass")
+        searchIcon.image = UIImage(systemName: "magnifyingglass",
+                                   withConfiguration: UIImage.SymbolConfiguration(weight: .medium))
         searchIcon.tintColor = searchLook.secondaryText
         searchIcon.contentMode = .scaleAspectFit
         searchLabel.font = UIFont.systemFont(ofSize: 20)
@@ -753,10 +754,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchButton.frame = searchGlass.bounds
         let ix = wide ? f : xf      // the icon and placeholder keep their spacing on iPad
         // iPad: the same icon and text size as the active search field (EmojiSearchBar).
-        let iconSide = wide ? 16 : 17 * f
+        let iconSide = wide ? 19 : 21 * f
         searchIcon.frame = CGRect(x: 13 * ix, y: (searchHeight - iconSide) / 2, width: iconSide, height: iconSide)
         searchLabel.font = UIFont.systemFont(ofSize: wide ? 16 : 20 * f)
-        let labelX = wide ? 13 * ix + iconSide + 6 : 37 * ix
+        let labelX = wide ? 13 * ix + iconSide + 6 : 13 * ix + iconSide + 7 * ix
         searchLabel.frame = CGRect(x: labelX, y: 0, width: max(0, searchGlass.bounds.width - labelX - 13 * ix), height: searchHeight)
 
         let gridTop: CGFloat
@@ -828,10 +829,10 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             placeHide(CGRect(x: searchGlass.frame.maxX, y: y, width: hideWidth + 6 * xf, height: pill))
             searchButton.frame = searchGlass.bounds
             let ix = wide ? f : xf
-            let iconSide = wide ? 16 : 17 * f
+            let iconSide = wide ? 19 : 21 * f
             searchIcon.frame = CGRect(x: 13 * ix, y: (pill - iconSide) / 2, width: iconSide, height: iconSide)
             searchLabel.font = UIFont.systemFont(ofSize: wide ? 16 : 20 * f)
-            let labelX = wide ? 13 * ix + iconSide + 6 : 37 * ix
+            let labelX = wide ? 13 * ix + iconSide + 6 : 13 * ix + iconSide + 7 * ix
             searchLabel.frame = CGRect(x: labelX, y: 0, width: max(0, searchGlass.bounds.width - labelX - 13 * ix), height: pill)
         }
 
