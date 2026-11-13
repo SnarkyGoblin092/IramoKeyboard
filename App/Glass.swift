@@ -77,6 +77,15 @@ struct ClearGlassCard: View {
 }
 
 extension Color {
+    /// Near-black or white, whichever reads on this colour (as the keyboard picks the text on its accent).
+    var readableText: Color {
+        let resolved = UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return .white }
+        let luminance = 0.299 * Double(red) + 0.587 * Double(green) + 0.114 * Double(blue)
+        return luminance > 0.62 ? Color(white: 0.08) : .white
+    }
+
     /// The same colour turned round the colour wheel (a share of a full turn).
     func hueShifted(by turn: Double) -> Color {
         var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0

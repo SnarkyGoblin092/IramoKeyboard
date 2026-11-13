@@ -109,6 +109,8 @@ enum EmojiPickerMetrics {
 /// The five tabs as tiles: an icon over the name, the chosen one filled with the accent.
 private struct EmojiTabBar: View {
     @Binding var selected: EmojiView.Tab
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     var body: some View {
         HStack(spacing: 6) {
@@ -127,7 +129,7 @@ private struct EmojiTabBar: View {
                             .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity, minHeight: 54)
-                    .foregroundColor(isOn ? .white : .primary)
+                    .foregroundColor(isOn ? Color.currentAccent(name: accentName, hex: accentHex).readableText : .primary)
                     .glassTile(RoundedRectangle(cornerRadius: 14, style: .continuous), isOn: isOn)
                     .contentShape(Rectangle())
                 }
@@ -146,6 +148,8 @@ struct OptionCard<Picture: View>: View {
     let isOn: Bool
     let action: () -> Void
     @ViewBuilder let picture: () -> Picture
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     var body: some View {
         Button(action: action) {
@@ -158,12 +162,11 @@ struct OptionCard<Picture: View>: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    // On the accent, in the text colour that reads on it (a light accent needs dark text).
+                    .foregroundColor(isOn ? Color.currentAccent(name: accentName, hex: accentHex).readableText : .primary)
             }
             .padding(6)
-            .glassTile(RoundedRectangle(cornerRadius: 14, style: .continuous), isOn: false)
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear), lineWidth: 2))
+            .glassTile(RoundedRectangle(cornerRadius: 14, style: .continuous), isOn: isOn)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -235,7 +238,7 @@ private struct EmojiGeneralTab: View {
                 HStack(spacing: 8) {
                     OptionCard(title: tr("Most recent"), isOn: order == "recent") { choose("recent") } picture: {
                         HStack(spacing: 4) {
-                            Image(systemName: "clock").foregroundStyle(.tint)
+                            Image(systemName: "clock").foregroundStyle(.secondary)
                             Text("😇😉😁")
                         }
                     }
@@ -244,7 +247,7 @@ private struct EmojiGeneralTab: View {
                             ForEach(0..<3, id: \.self) { index in
                                 VStack(spacing: 3) {
                                     Text(["😇", "😉", "😁"][index])
-                                    Capsule().fill(.tint).frame(width: 18, height: CGFloat(9 - index * 3))
+                                    Capsule().fill(.secondary).frame(width: 18, height: CGFloat(9 - index * 3))
                                 }
                             }
                         }
