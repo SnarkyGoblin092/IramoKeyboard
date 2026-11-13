@@ -302,6 +302,16 @@ enum GlassMetrics {
 
 // MARK: - Controls on glass screens
 
+/// The colour of the small icon in front of a setting's name (a slider's, a choice row's). In the accent they melted into
+/// the accent-tinted backdrop; these are bright colours that stand out on light and dark, a fixed one for each symbol so
+/// it is always the same colour.
+func rowIconColor(_ symbol: String) -> Color {
+    let palette: [Color] = [.orange, .teal, .pink, .green, .cyan, .red]
+    var hash = 0
+    for byte in symbol.utf8 { hash = (hash &* 31 &+ Int(byte)) & 0xFFFF }
+    return palette[hash % palette.count]
+}
+
 /// A slider bound straight to a stored value: it follows the value when something else changes it (a preset), and
 /// saves as the finger moves, so the previews above it change while dragging.
 struct GlassSlider: View {
@@ -374,7 +384,7 @@ struct ValueBar: View {
     private var header: some View {
         HStack(spacing: 8) {
             if let symbol = symbol {
-                Image(systemName: symbol).foregroundStyle(.tint)
+                Image(systemName: symbol).foregroundColor(rowIconColor(symbol))
             }
             Text(title).font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
                 .foregroundColor(isEnabled ? .primary : .secondary)
@@ -1009,7 +1019,11 @@ struct GlassChoiceLink<Value: Hashable>: View {
             GlassChoiceScreen(title: title, options: options, selected: selected, choose: choose)
         } label: {
             HStack {
-                Label(title, systemImage: symbol)
+                Label {
+                    Text(title)
+                } icon: {
+                    Image(systemName: symbol).foregroundColor(rowIconColor(symbol))
+                }
                 Spacer()
                 Text(currentName).foregroundColor(.secondary)
                 DisclosureChevron()
