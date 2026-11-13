@@ -2,95 +2,42 @@ import SwiftUI
 
 // MARK: - Liquid Glass look
 //
-// Every screen sits on the keybed (a field of faint keys in the accent colour), and its cards and controls are the
+// Every screen sits on one backdrop (soft, glowing washes of the accent colour), and its cards and controls are the
 // system's own Liquid Glass on top of it (`glassEffect`, iOS 26 and later; a frosted material before that). Nothing
 // is painted over the glass: its rim, its light and how clear or tinted it is are the system's, so it follows the
 // Liquid Glass setting of the phone (iOS 27's slider) like every system control.
 
-/// What the glass has behind it: the grouped background, a wash of the accent from the top, and the keybed. Glass
-/// bends what is under it, so it needs edges to bend: over the keys its rims show the refraction that a plain blur
-/// of colour never does.
+/// What the glass has behind it: the grouped background and a few large, soft glows of the accent (and of colours
+/// a little round the wheel from it) that spill in from the corners. Glass bends what is under it, so the glows
+/// give its rims light and colour to bend. A new accent fades in over the old one.
 struct GlassBackdrop: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @Environment(\.colorScheme) private var scheme
 
+    /// One glow: the colour at its middle, fading to nothing over `radius`.
+    private func glow(_ color: Color, _ strength: Double, at center: UnitPoint, radius: CGFloat) -> some View {
+        RadialGradient(colors: [color.opacity(strength), color.opacity(strength * 0.5), color.opacity(0)],
+                       center: center, startRadius: 0, endRadius: radius)
+    }
+
     var body: some View {
         let accent = Color.currentAccent(name: accentName, hex: accentHex)
-        let dark = scheme == .dark
-        return ZStack {
-            Color(.systemGroupedBackground)
-            LinearGradient(colors: [accent.opacity(dark ? 0.34 : 0.22),
-                                    accent.hueShifted(by: 0.07).opacity(dark ? 0.12 : 0.08),
-                                    Color.clear],
-                           startPoint: .topLeading, endPoint: .bottom)
-            Keybed(accent: accent, dark: dark)
+        let level: Double = scheme == .dark ? 1 : 0.72
+        return GeometryReader { proxy in
+            let reach = max(proxy.size.width, proxy.size.height)
+            ZStack {
+                Color(.systemGroupedBackground)
+                glow(accent, 0.46 * level, at: UnitPoint(x: 0.05, y: 0.0), radius: reach * 0.85)
+                glow(accent.hueShifted(by: 0.09), 0.32 * level, at: UnitPoint(x: 1.0, y: 0.3), radius: reach * 0.7)
+                glow(accent.hueShifted(by: -0.07), 0.26 * level, at: UnitPoint(x: 0.0, y: 0.75), radius: reach * 0.75)
+                glow(accent.hueShifted(by: 0.04), 0.22 * level, at: UnitPoint(x: 0.95, y: 1.0), radius: reach * 0.6)
+            }
         }
         // A new accent fades in over the old one.
         .animation(AccentTint.fade, value: accentName + accentHex)
         .ignoresSafeArea()
         .accessibilityHidden(true)
-    }
-}
-
-/// Rows of large, faint keys, staggered like a keyboard's and tilted a little, fading out down the screen.
-private struct Keybed: View, Animatable {
-    // The accent as numbers, so a new accent is eased in by the same animation as the wash above the keys (a Canvas
-    // would otherwise take the new colour at once).
-    var red: Double
-    var green: Double
-    var blue: Double
-    let dark: Bool
-
-    init(accent: Color, dark: Bool) {
-        let resolved = UIColor(accent).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
-        self.red = Double(r)
-        self.green = Double(g)
-        self.blue = Double(b)
-        self.dark = dark
-    }
-
-    var animatableData: AnimatablePair<AnimatablePair<Double, Double>, Double> {
-        get { return AnimatablePair(AnimatablePair(red, green), blue) }
-        set {
-            red = newValue.first.first
-            green = newValue.first.second
-            blue = newValue.second
-        }
-    }
-
-    var body: some View {
-        let accent = Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
-        return Canvas { context, size in
-            guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return }
-            let key: CGFloat = 60
-            let pitch: CGFloat = key + 11
-            let stagger: [CGFloat] = [0, 0.5, 0.25, 0.75]
-            // Turned about the middle; the rows reach past the edges so the corners stay covered.
-            let reach: CGFloat = max(size.width, size.height) * 0.7
-            context.translateBy(x: size.width / 2, y: size.height / 2)
-            context.rotate(by: .degrees(-11))
-            context.translateBy(x: -size.width / 2, y: -size.height / 2)
-            let rows = Int((size.height + reach) / pitch) + 2
-            let columns = Int((size.width + reach) / pitch) + 2
-            let base: Double = dark ? 0.10 : 0.07
-            for row in 0..<rows {
-                let y: CGFloat = CGFloat(row) * pitch - reach / 2
-                let depth: Double = Double(min(1, max(0, y / max(size.height, 1))))
-                let strength: Double = base * (1 - 0.85 * depth)
-                if strength < 0.004 { continue }
-                let shift: CGFloat = stagger[row % 4] * pitch
-                for column in 0..<columns {
-                    let x: CGFloat = CGFloat(column) * pitch - reach / 2 + shift
-                    let path = Path(roundedRect: CGRect(x: x, y: y, width: key, height: key), cornerRadius: 15,
-                                    style: .continuous)
-                    context.fill(path, with: .color(accent.opacity(strength)))
-                    context.stroke(path, with: .color(Color.white.opacity(strength * (dark ? 0.8 : 1.8))), lineWidth: 1)
-                }
-            }
-        }
     }
 }
 
@@ -206,8 +153,16 @@ extension View {
     }
 
     /// A tab's own list: clear, so the one backdrop behind the whole tab view shows and stays put when tabs change.
+    /// (The navigation stack's own background is cleared too; before iOS 18 it can't be, so the list draws the backdrop
+    /// itself.)
+    @ViewBuilder
     func tabScreen() -> some View {
-        return self.scrollContentBackground(.hidden)
+        if #available(iOS 18.0, *) {
+            self.scrollContentBackground(.hidden)
+                .containerBackground(for: .navigation) { Color.clear }
+        } else {
+            self.scrollContentBackground(.hidden).background(GlassBackdrop())
+        }
     }
 
     /// A screen of the app: its list or scroll view on the glass backdrop.

@@ -496,9 +496,17 @@ final class TabSlide: NSObject, UITabBarControllerDelegate, UIViewControllerAnim
     static var towardsEnd = true
     private weak var original: UITabBarControllerDelegate?
 
+    private static func clearBackgrounds(of controller: UIViewController) {
+        controller.view.backgroundColor = .clear
+        if let navigation = controller as? UINavigationController {
+            for page in navigation.viewControllers { page.view.backgroundColor = .clear }
+        }
+        for child in controller.children { clearBackgrounds(of: child) }
+    }
+
     static func install(on controller: UITabBarController) {
         // The backdrop is behind the whole tab view: nothing of the controller paints over it.
-        controller.view.backgroundColor = .clear
+        clearBackgrounds(of: controller)
         if controller.delegate is TabSlide { return }
         let slide = TabSlide()
         slide.original = controller.delegate

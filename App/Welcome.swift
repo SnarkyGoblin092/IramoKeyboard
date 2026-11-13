@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The welcome page, shown the first time the app opens and again from the More tab: what the keyboard does, how to
 /// turn it on, and its features, each with a small looping animation of it at work, and at the end where everything
-/// is in the app. It is built from the same pieces as the settings: the keybed behind, glass cards (the animation in
+/// is in the app. It is built from the same pieces as the settings: the backdrop behind, glass cards (the animation in
 /// one, the points in another, as rows with their keycaps), and the app's glass buttons. Swipe through, step with
 /// the buttons, or skip at any time.
 struct WelcomeView: View {
