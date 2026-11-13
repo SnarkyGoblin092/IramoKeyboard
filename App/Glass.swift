@@ -1110,7 +1110,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
             }
             // A UIKit pan that only begins on a sideways swipe: a SwiftUI drag here takes the vertical drags from
             // the scroll view too (iOS 18 and later), and the list would not scroll.
-            .gesture(SidewaysPan(enabled: canDelete, changed: changed, ended: ended))
+            .gesture(SidewaysPan(enabled: canDelete, open: offset < 0, changed: changed, ended: ended))
     }
 
     private func changed(_ dx: CGFloat) {
@@ -1158,6 +1158,8 @@ private struct SwipeToDeleteRow<Content: View>: View {
 @available(iOS 26.0, *)
 private struct SidewaysPan: UIGestureRecognizerRepresentable {
     let enabled: Bool
+    /// The row's Delete button is out: a swipe right closes it, and must not also take the screen back.
+    let open: Bool
     /// The sideways distance moved so far.
     let changed: (CGFloat) -> Void
     /// The distance moved and the speed at the end.
@@ -1176,6 +1178,7 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         recognizer.isEnabled = enabled
+        context.coordinator.isOpen = open
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
@@ -1188,6 +1191,8 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var isOpen = false
+
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
@@ -1204,12 +1209,16 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
         /// and a vertical drag (which this pan refuses at once) scrolls it as usual.
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            return isScrollPan(other)
+            if isScrollPan(other) { return true }
+            // With the Delete button out, the swipe that puts it away must not also be the swipe back (the edge
+            // swipe, or the whole-screen one of iOS 26): they wait for this one to fail.
+            return isOpen && other.view !== recognizer.view && (other is UIScreenEdgePanGestureRecognizer
+                || (other is UIPanGestureRecognizer && !(other.view is UIScrollView)))
         }
 
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            return !isScrollPan(other)
+            return !isScrollPan(other) && !(isOpen && other is UIPanGestureRecognizer)
         }
     }
 }

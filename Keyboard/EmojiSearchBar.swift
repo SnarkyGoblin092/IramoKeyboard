@@ -122,11 +122,14 @@ final class EmojiSearchBar: UIView {
         let side = 6 * bounds.width / 440      // the picker's side inset
         // The pill ends where the picker's does; the hide button stays outside it, in the gap beside it.
         let hideWidth = 60 + side
-        glass.frame = CGRect(x: side, y: topInset, width: max(0, bounds.width - 2 * side - 60), height: bounds.height - topInset)
+        let pill = CGRect(x: side, y: topInset, width: max(0, bounds.width - 2 * side - 60), height: bounds.height - topInset)
+        // (Set through bounds and centre, so it also works while the pill is being moved in (playEntrance).)
+        glass.bounds = CGRect(origin: .zero, size: pill.size)
+        glass.center = CGPoint(x: pill.midX, y: pill.midY)
         let area = glass.bounds
 
         backButton.frame = CGRect(x: 0, y: 0, width: 52, height: area.height)
-        hideButton.frame = CGRect(x: glass.frame.maxX, y: glass.frame.minY, width: hideWidth, height: glass.frame.height)
+        hideButton.frame = CGRect(x: pill.maxX, y: pill.minY, width: hideWidth, height: pill.height)
         hideButton.viewWithTag(77)?.frame = hideButton.bounds
 
         let queryWidth = min(max(110, area.width * 0.36), 170)
@@ -149,6 +152,51 @@ final class EmojiSearchBar: UIView {
             button.frame = CGRect(x: CGFloat(index) * itemWidth, y: 0, width: itemWidth, height: area.height)
         }
         scroll.contentSize = CGSize(width: itemWidth * CGFloat(resultButtons.count), height: area.height)
+    }
+
+    /// The search bar taking over from the picker's search field: the pill (and the placeholder in it) settles from where
+    /// the picker's was, the picker's magnifying glass fades out as the back arrow fades in, and the results slide in
+    /// from the right.
+    func playEntrance(from source: EmojiPanel.SearchGeometry) {
+        layoutIfNeeded()
+        let pill = CGRect(origin: .zero, size: glass.bounds.size)
+        let target = CGRect(x: glass.center.x - pill.width / 2, y: glass.center.y - pill.height / 2,
+                            width: pill.width, height: pill.height)
+        guard target.width > 1, target.height > 1 else { return }
+        glass.transform = CGAffineTransform(translationX: source.pill.midX - target.midX, y: source.pill.midY - target.midY)
+            .scaledBy(x: source.pill.width / target.width, y: source.pill.height / target.height)
+        // The placeholder starts where (and as big as) the picker's was.
+        let fromX = source.placeholder.minX - source.pill.minX
+        queryLabel.transform = CGAffineTransform(translationX: fromX - queryLabel.frame.minX, y: 0).scaledBy(x: 1.12, y: 1.12)
+        // The picker's magnifying glass, fading out where it was.
+        let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+        ghost.tintColor = look.secondaryText
+        ghost.contentMode = .scaleAspectFit
+        ghost.frame = CGRect(x: source.icon.minX - source.pill.minX, y: source.icon.minY - source.pill.minY,
+                             width: source.icon.width, height: source.icon.height)
+        glass.contentView.addSubview(ghost)
+        backButton.alpha = 0
+        iconView.alpha = 0
+        divider.alpha = 0
+        scroll.alpha = 0
+        scroll.transform = CGAffineTransform(translationX: bounds.width * 0.5, y: 0)
+        UIView.animate(withDuration: 0.42, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0.1,
+                       options: [.allowUserInteraction]) {
+            self.glass.transform = .identity
+            self.queryLabel.transform = .identity
+        }
+        UIView.animate(withDuration: 0.22, delay: 0.04, options: [.curveEaseOut]) {
+            ghost.alpha = 0
+            self.backButton.alpha = 1
+        } completion: { _ in
+            ghost.removeFromSuperview()
+        }
+        UIView.animate(withDuration: 0.34, delay: 0.1, options: [.curveEaseOut, .allowUserInteraction]) {
+            self.iconView.alpha = 1
+            self.divider.alpha = 1
+            self.scroll.alpha = 1
+            self.scroll.transform = .identity
+        }
     }
 
     /// The whole strip belongs to a control: the left end is the back button, the query area is dead

@@ -129,7 +129,6 @@ struct OptionCard<Picture: View>: View {
             VStack(spacing: 6) {
                 picture()
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.tertiarySystemFill)))
                 Text(title)
                     .font(.footnote.weight(.semibold))
                     .lineLimit(2)
@@ -195,7 +194,6 @@ private struct EmojiGeneralTab: View {
                         Text(emoji)
                             .font(.system(size: 26))
                             .frame(width: 40, height: 40)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.tertiarySystemFill)))
                     }
                 }
                 Spacer(minLength: 8)
@@ -526,7 +524,6 @@ private struct EmojiSkinToneTab: View {
                 Text(EmojiSkinToneTab.waves[current])
                     .font(.system(size: 26))
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(Color(.tertiarySystemFill)))
                 GlassSlider(title: tr("Hold to pick a tone"), symbol: "hand.tap", value: $holdDelay,
                             range: Settings.emojiHoldDelayRange, step: 0.01) { "\(Int(($0 * 1000).rounded())) ms" }
             }

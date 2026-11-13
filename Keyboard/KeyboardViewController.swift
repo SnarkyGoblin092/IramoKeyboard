@@ -1981,11 +1981,8 @@ final class KeyboardViewController: UIInputViewController {
             ])
             backdrops.append(native)
         }
-        // The picker rises from the bottom edge with a little spring while the keys sink back and fade; the keyboard
-        // and the picker are one move.
-        let rise = max(40, container.bounds.height * 0.35)
         panel.alpha = 0
-        panel.transform = CGAffineTransform(translationX: 0, y: rise).scaledBy(x: 0.98, y: 0.98)
+        panel.transform = CGAffineTransform(translationX: 0, y: 16)
         container.addSubview(panel)
         NSLayoutConstraint.activate([
             panel.topAnchor.constraint(equalTo: container.topAnchor),
@@ -2000,13 +1997,9 @@ final class KeyboardViewController: UIInputViewController {
             panel?.reload()
         }
         let leaving = hiddenForEmoji
-        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.3,
-                       options: [.allowUserInteraction]) {
-            panel.transform = .identity
-            for view in leaving { view.transform = CGAffineTransform(scaleX: 0.96, y: 0.96).translatedBy(x: 0, y: 10) }
-        }
-        UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+        UIView.animate(withDuration: 0.24, delay: 0, options: [.curveEaseOut]) {
             panel.alpha = 1
+            panel.transform = .identity
             for view in backdrops { view.alpha = 1 }
             for view in leaving { view.alpha = 0 }
         } completion: { [weak self, weak panel] _ in
@@ -2046,19 +2039,10 @@ final class KeyboardViewController: UIInputViewController {
         if animated && view.window != nil {
             panel.isUserInteractionEnabled = false
             let back = restored.isEmpty ? [stage] : restored
-            let sink = max(40, container.bounds.height * 0.35)
-            for view in back {
-                view.alpha = 0
-                view.transform = CGAffineTransform(scaleX: 0.96, y: 0.96).translatedBy(x: 0, y: 10)
-            }
-            // The keys come back up to size as the picker drops away.
-            UIView.animate(withDuration: 0.42, delay: 0, usingSpringWithDamping: 0.88, initialSpringVelocity: 0.2,
-                           options: [.allowUserInteraction]) {
-                panel.transform = CGAffineTransform(translationX: 0, y: sink).scaledBy(x: 0.98, y: 0.98)
-                for view in back { view.transform = .identity }
-            }
-            UIView.animate(withDuration: 0.24, delay: 0, options: [.curveEaseIn, .allowUserInteraction]) {
+            for view in back { view.alpha = 0 }
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseIn]) {
                 panel.alpha = 0
+                panel.transform = CGAffineTransform(translationX: 0, y: 12)
                 for view in backdrops { view.alpha = 0 }
                 for view in back { view.alpha = 1 }
             } completion: { _ in
@@ -2068,6 +2052,49 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             panel.removeFromSuperview()
             for view in backdrops { view.removeFromSuperview() }
+        }
+    }
+
+    /// The picker slides off to the right and the keyboard comes in from the left, while the picker's search field
+    /// settles into the search bar (EmojiSearchBar.playEntrance).
+    private func slideAwayPicker(toSearchFrom source: EmojiPanel.SearchGeometry?) {
+        let panel = emojiPanel
+        let backdrops = container.subviews.filter { $0.accessibilityIdentifier == "emojiNativeBackdrop" }
+        let restored = hiddenForEmoji
+        hiddenForEmoji = []
+        emojiPanel = nil
+        if panel != nil {
+            for view in restored {
+                view.layer.removeAllAnimations()
+                view.isHidden = false
+                view.alpha = 1
+                view.transform = .identity
+            }
+        }
+        stage.layer.removeAllAnimations()
+        stage.isHidden = false
+        stage.alpha = 1
+        stage.transform = .identity
+        applyHeight()
+        guard let leaving = panel else { return }
+        guard view.window != nil, let source = source else {
+            leaving.removeFromSuperview()
+            for backdrop in backdrops { backdrop.removeFromSuperview() }
+            return
+        }
+        container.layoutIfNeeded()
+        let width = max(container.bounds.width, 1)
+        leaving.hideSearchPill()
+        leaving.isUserInteractionEnabled = false
+        keyboardView.transform = CGAffineTransform(translationX: -width, y: 0)
+        searchBar.playEntrance(from: source)
+        UIView.animate(withDuration: 0.4, delay: 0, options: [.curveEaseInOut]) {
+            leaving.transform = CGAffineTransform(translationX: width, y: 0)
+            self.keyboardView.transform = .identity
+        } completion: { _ in
+            leaving.removeFromSuperview()
+            for backdrop in backdrops { backdrop.removeFromSuperview() }
+            self.keyboardView.transform = .identity
         }
     }
 
@@ -2081,7 +2108,8 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar.isHidden = true
         searchBar.isHidden = false
         reloadKeyboardLayout()
-        hideEmojiPanel(refresh: false, animated: true)
+        let source = emojiPanel?.searchGeometry(in: container)
+        slideAwayPicker(toSearchFrom: source)
         refreshEmojiSearch()
         EmojiStore.shared.loadSearchIfNeeded(languages: enabledLanguages + [.english]) { [weak self] in
             self?.refreshEmojiSearch()

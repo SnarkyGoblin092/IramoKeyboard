@@ -103,15 +103,28 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private let balanced: Bool
     /// The room at the sides of the preview.
     private let horizontalPadding: CGFloat
+    /// The preview is the full keyboard (LiveKeyboard): the pane is as tall as the keyboard is at the width of the
+    /// settings below it, plus `keyboardExtra` for what else is in the pane.
+    private let keyboard: Bool
+    private let keyboardExtra: CGFloat
+    // Read so the pane follows the keyboard's size as it is set.
+    @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
+    @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
 
     /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
     init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = true,
          minimumHeight: CGFloat = 150, balanced: Bool = false, horizontalPadding: CGFloat = 16,
+         keyboard: Bool = false, keyboardExtra: CGFloat = 0,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
         self.minimumFills = minimumHeight
         self.balanced = balanced
         self.horizontalPadding = horizontalPadding
+        self.keyboard = keyboard
+        self.keyboardExtra = keyboardExtra
         self.edgeToEdge = edgeToEdge
         self.preview = preview
         self.content = content
@@ -129,6 +142,11 @@ struct PinnedPreview<Preview: View, Content: View>: View {
 
     /// The pane's height: the one it starts at, or what `aspect` makes of the full width.
     private func wantedHeight(width: CGFloat) -> CGFloat {
+        if keyboard {
+            _ = (keyHeight, rowGap, numberRow, barHeight, languageCode)
+            return LiveKeyboard.cardHeight(width: width - 2 * horizontalPadding)
+                + PinnedPreview.topPadding + PinnedPreview.bottomPadding + keyboardExtra
+        }
         guard let aspect = aspect, aspect > 0 else { return startHeight }
         return (width - 32) / aspect + PinnedPreview.topPadding + PinnedPreview.bottomPadding
     }
@@ -159,9 +177,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                 .padding(.top, balanced ? 9 : PinnedPreview.topPadding)
                 .padding(.bottom, balanced ? 9 : PinnedPreview.bottomPadding)
                 .frame(height: height)
-                .clipped()
                 .zIndex(1)
-                Divider().opacity(0.6)
                 // The list scrolls under the preview, never over it (also while a menu is still closing).
                 content()
                     .safeAreaInset(edge: .bottom, spacing: 0) {

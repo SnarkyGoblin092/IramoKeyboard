@@ -34,7 +34,7 @@ struct ThemesView: View {
 
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
-        PinnedPreview(height: 240, fills: true, edgeToEdge: true) {
+        PinnedPreview(height: 240, fills: true, edgeToEdge: true, keyboard: true, keyboardExtra: 44) {
             VStack(spacing: 8) {
                 LiveKeyboard()
                 SegmentedChoice(names: [tr("Auto"), tr("Light"), tr("Dark")],

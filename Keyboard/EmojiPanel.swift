@@ -559,6 +559,28 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         return EmojiItem(base: match, variants: [item.base] + item.variants.filter { $0 != match })
     }
 
+    /// Where the search field is and what is in it, in `host`'s coordinates (for the move into the search bar).
+    struct SearchGeometry {
+        let pill: CGRect
+        let icon: CGRect
+        let placeholder: CGRect
+        let text: String
+        let font: UIFont
+    }
+
+    func searchGeometry(in host: UIView) -> SearchGeometry? {
+        guard searchShown, !searchGlass.isHidden, searchGlass.bounds.width > 1 else { return nil }
+        return SearchGeometry(pill: convert(searchGlass.frame, to: host),
+                              icon: searchGlass.contentView.convert(searchIcon.frame, to: host),
+                              placeholder: searchGlass.contentView.convert(searchLabel.frame, to: host),
+                              text: searchLabel.text ?? "", font: searchLabel.font)
+    }
+
+    /// The field is carried on by the search bar: this one is not drawn any more.
+    func hideSearchPill() {
+        searchGlass.alpha = 0
+    }
+
     private func updateEmptyState() {
         let store = EmojiStore.shared
         if !store.isReady {

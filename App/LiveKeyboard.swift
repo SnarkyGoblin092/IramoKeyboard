@@ -8,6 +8,20 @@ import UIKit.UIGestureRecognizerSubclass
 /// write nothing: the bar always shows the same few words, so its look can be seen. Shift and the number and symbol
 /// pages work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
 struct LiveKeyboard: View {
+    /// Room all round the keys inside the glass card.
+    static let room: CGFloat = 18
+
+    /// The height of the card (its room included) that shows the keyboard at the scale that fits `width`: the keyboard
+    /// as wide as the settings below it.
+    static func cardHeight(width: CGFloat) -> CGFloat {
+        let s = Settings.shared
+        let natural = LiveKeyboardView.naturalSize(keyHeight: s.keyHeight, rowGap: s.rowGap, numberRow: s.numberRow,
+                                                   barHeight: s.suggestionHeight,
+                                                   language: LiveKeyboardView.openingLanguage(code: s.languageCode))
+        let scale = max(0.3, (width - 2 * room) / natural.width)
+        return natural.height * scale + 2 * room
+    }
+
     /// The Effects screen's settings as they are being edited (nil: the stored ones).
     var effects: EffectsConfig? = nil
     /// Only the suggestion bar, cycling through a few words (the Suggestions screen).
@@ -38,7 +52,7 @@ struct LiveKeyboard: View {
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode),
                                                     barOnly: barOnly)
             // Room all round the keys inside the glass, so square-cornered keys and their outlines are not cut off.
-            let room: CGFloat = barOnly ? 0 : 18
+            let room: CGFloat = barOnly ? 0 : LiveKeyboard.room
             let scale = min((geometry.size.width - 2 * room) / size.width, (geometry.size.height - 2 * room) / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)

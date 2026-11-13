@@ -284,6 +284,11 @@ private struct ThemeSection: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @Environment(\.openScreen) private var openScreen
+    // Read so the preview follows the keyboard's size as it is set.
+    @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
 
@@ -299,7 +304,7 @@ private struct ThemeSection: View {
             // The keyboard itself, in the same card as the Effects and Keys screens' (the pinned pane there is 260 pt
             // with 12 above and 6 below the keyboard, 16 at the sides).
             LiveKeyboard()
-                .frame(height: 242)
+                .frame(height: LiveKeyboard.cardHeight(width: CGFloat(DeviceMetrics.keyboardWidth) - 32))
                 .environment(\.layoutDirection, .leftToRight)
                 .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
                 .glassOutsideCard()
