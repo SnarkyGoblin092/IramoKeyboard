@@ -8,6 +8,7 @@ struct TapAccuracyView: View {
     @State private var wide = false
     @State private var selected: String?
     @State private var confirmReset = false
+    @State private var exaggerate = false
     @State private var bias = TapBias.savedOffsets()
     @AppStorage(SettingKey.tapAdaptive, store: SharedStore.defaults) private var adaptive = SettingDefault.tapAdaptive
     @AppStorage(SettingKey.tapLearnSpeed, store: SharedStore.defaults) private var speed = SettingDefault.tapLearnSpeed
@@ -15,6 +16,12 @@ struct TapAccuracyView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var layout: TapMapData.Layout { return map.layout(landscape: wide) }
+
+    /// The aim over the keyboard as it is now (what the keyboard reads taps with).
+    private var field: TapAimField {
+        let base = wide ? 2 : 0
+        return TapAimField(layout: layout, priorLeft: (bias[base].x, bias[base].y), priorRight: (bias[base + 1].x, bias[base + 1].y))
+    }
 
     private func reload() {
         map = TapAccuracy.load()
@@ -36,13 +43,13 @@ struct TapAccuracyView: View {
                     StatTile(value: number(layout.total), label: tr("Taps recorded"), symbol: "hand.tap.fill", color: .teal)
                     StatTile(value: layout.meanMiss.map { percent($0) } ?? "\u{2014}", label: tr("Average miss"),
                              symbol: "scope", color: .orange)
-                    StatTile(value: number(layout.keys.count), label: tr("Keys mapped"), symbol: "keyboard", color: .indigo)
+                    StatTile(value: number(layout.tapped.count), label: tr("Keys mapped"), symbol: "keyboard", color: .indigo)
                     StatTile(value: shiftText, label: tr("Aim shift"), symbol: "arrow.up.left.and.arrow.down.right", color: .pink)
                 }
                 .padding(.vertical, 4)
                 .glassOutsideCard()
             } footer: {
-                Text(tr("The average miss is how far taps land from the middle of the key, as a share of the key."))
+                Text(tr("Average miss is how far taps land from the middle of their key, as a share of the key's size. Aim shift is the most the keyboard now moves a tap on any key to correct for this."))
             }
             .glassRows()
 
@@ -69,8 +76,27 @@ struct TapAccuracyView: View {
             .glassRows()
 
             Section {
+                if layout.keys.isEmpty {
+                    emptyState
+                } else {
+                    TapHitAreas(layout: layout, field: field, magnify: exaggerate ? 4 : 1)
+                        .padding(.vertical, 6)
+                }
+                GlassToggle(title: tr("Exaggerate shifts"),
+                            subtitle: tr("Draws every shift four times larger so it is easy to see"),
+                            isOn: $exaggerate)
+                    .searchAnchor("tap.exaggerate")
+            } header: {
+                SectionHeader(tr("Hit areas"), symbol: "square.on.square.dashed", color: .pink)
+            } footer: {
+                Text(tr("Dashed outlines are the keys as drawn. The coloured shapes are where a tap counts for each key now: their edges tilt and bend where your taps land off-centre, and the more a key has moved the stronger its colour.")
+                     + (exaggerate ? " " + tr("Shown four times larger than they are.") : ""))
+            }
+            .glassRows()
+
+            Section {
                 GlassToggle(title: tr("Adaptive aim"),
-                            subtitle: tr("Reads each tap from where your thumbs tend to land, so letters are hit more often"),
+                            subtitle: tr("Each key learns where your taps for it land and moves its hit area to match"),
                             isOn: $adaptive)
                     .searchAnchor("tap.adaptive")
                 SegmentedChoice(title: tr("Learning speed"), names: [tr("Slow"), tr("Normal"), tr("Fast")], selected: speed) { index in
@@ -79,12 +105,12 @@ struct TapAccuracyView: View {
                 .opacity(adaptive ? 1 : 0.45)
                 .disabled(!adaptive)
                 .searchAnchor("tap.speed")
-                thumbRow(tr("Left thumb"), slot: wide ? 2 : 0, symbol: "hand.point.left.fill")
-                thumbRow(tr("Right thumb"), slot: wide ? 3 : 1, symbol: "hand.point.right.fill")
+                thumbRow(tr("Left half"), slot: wide ? 2 : 0, symbol: "hand.point.left.fill")
+                thumbRow(tr("Right half"), slot: wide ? 3 : 1, symbol: "hand.point.right.fill")
             } header: {
                 SectionHeader(tr("Adaptive mode"), symbol: "wand.and.stars", color: .pink)
             } footer: {
-                Text(tr("The aim moves by a fifth of a key at most and only drifts slowly, so one odd tap changes nothing."))
+                Text(tr("The shapes bend smoothly from key to key. A key with too few taps follows the average of its half of the keyboard, shown in the rows: \"4% left, 6% below\" means taps there land that much left of and below the middle, so they are read 4% to the right and 6% higher. A key moves by at most 30% of its size, and slowly, so one odd tap does nothing."))
             }
             .glassRows()
 
@@ -193,12 +219,17 @@ struct TapAccuracyView: View {
         return parts.joined(separator: ", ")
     }
 
-    /// How far the aim is moved now (the larger of the two halves), when adaptive aim is on.
+    /// The most any key's aim is moved by now (as a share of a key), when adaptive aim is on.
     private var shiftText: String {
         guard adaptive else { return tr("Off") }
+        let aim = field
+        let most = aim.anchors.map { anchor -> Double in
+            let o = aim.offset(at: CGPoint(x: anchor.cx, y: anchor.cy))
+            return hypot(Double(o.x) / aim.unitW, Double(o.y) / aim.unitH)
+        }.max()
+        if let most = most { return percent(most) }
         let slots = wide ? [bias[2], bias[3]] : [bias[0], bias[1]]
-        let most = slots.map { ($0.x * $0.x + $0.y * $0.y).squareRoot() }.max() ?? 0
-        return percent(most)
+        return percent(slots.map { ($0.x * $0.x + $0.y * $0.y).squareRoot() }.max() ?? 0)
     }
 
     private func percent(_ value: Double) -> String {
@@ -229,7 +260,7 @@ private struct TapHeatmap: View {
         GeometryReader { proxy in
             let width = proxy.size.width, height = proxy.size.height
             ZStack(alignment: .topLeading) {
-                ForEach(layout.keys.keys.sorted(), id: \.self) { letter in
+                ForEach(layout.tapped.keys.sorted(), id: \.self) { letter in
                     if let key = layout.keys[letter] {
                         cell(letter, key, width: width, height: height)
                     }
@@ -276,5 +307,47 @@ private struct TapHeatmap: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(letter.uppercased())
         .accessibilityValue("\(key.count)")
+    }
+}
+
+/// The keys' hit areas as they are now: each key's rectangle moved by the aim at its corners, so the shapes tile the
+/// keyboard with edges that tilt and bend where the thumbs land off-centre. The dashed outline is the key as drawn.
+private struct TapHitAreas: View {
+    let layout: TapMapData.Layout
+    let field: TapAimField
+    /// 1 shows the shifts as they are; more draws them larger.
+    let magnify: Double
+
+    var body: some View {
+        let aspect = min(0.8, max(0.2, layout.aspect))
+        Canvas { context, size in
+            for (letter, key) in layout.keys where key.w > 0 && key.h > 0 {
+                let corners = [(key.cx - key.w / 2, key.cy - key.h / 2), (key.cx + key.w / 2, key.cy - key.h / 2),
+                               (key.cx + key.w / 2, key.cy + key.h / 2), (key.cx - key.w / 2, key.cy + key.h / 2)]
+                let nominal = CGRect(x: (key.cx - key.w / 2) * size.width, y: (key.cy - key.h / 2) * size.height,
+                                     width: key.w * size.width, height: key.h * size.height).insetBy(dx: 1.5, dy: 1.5)
+                context.stroke(Path(roundedRect: nominal, cornerRadius: min(nominal.width, nominal.height) * 0.2),
+                               with: .color(.primary.opacity(0.22)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                var shape = Path()
+                for (index, corner) in corners.enumerated() {
+                    let offset = field.offset(at: CGPoint(x: corner.0, y: corner.1))
+                    let point = CGPoint(x: (corner.0 + magnify * Double(offset.x)) * size.width,
+                                        y: (corner.1 + magnify * Double(offset.y)) * size.height)
+                    if index == 0 { shape.move(to: point) } else { shape.addLine(to: point) }
+                }
+                shape.closeSubpath()
+                let centre = field.offset(at: CGPoint(x: key.cx, y: key.cy))
+                let moved = hypot(Double(centre.x) / field.unitW, Double(centre.y) / field.unitH)
+                context.fill(shape, with: .color(.accentColor.opacity(0.1 + min(0.5, moved * 2.5))))
+                context.stroke(shape, with: .color(.accentColor.opacity(0.8)), style: StrokeStyle(lineWidth: 1, lineJoin: .round))
+                let label = CGPoint(x: (key.cx + magnify * Double(centre.x)) * size.width,
+                                    y: (key.cy + magnify * Double(centre.y)) * size.height)
+                context.draw(Text(letter.uppercased()).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundColor(.primary),
+                             at: label)
+            }
+        }
+        .aspectRatio(1 / aspect, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
     }
 }

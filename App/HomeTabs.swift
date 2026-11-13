@@ -18,7 +18,7 @@ struct TypingTab: View {
             KeyboardSection().glassRows()
             CorrectionsSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .scrollDismissesKeyboard(.interactively)
         .environment(\.searchScope, AppTab.typing.scope)
         .navigationTitle(AppTab.typing.title)
@@ -265,7 +265,7 @@ struct LookTab: View {
             KeysAndEffectsSection().glassRows()
             AccentSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .environment(\.searchScope, AppTab.look.scope)
         .navigationTitle(AppTab.look.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -424,7 +424,7 @@ struct TouchTab: View {
             GesturesSection().glassRows()
             HoldsSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .environment(\.searchScope, AppTab.touch.scope)
         .navigationTitle(AppTab.touch.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -508,7 +508,7 @@ struct MoreTab: View {
             DataSection().glassRows()
             AboutSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .environment(\.searchScope, AppTab.more.scope)
         .navigationTitle(AppTab.more.title)
         .navigationBarTitleDisplayMode(.inline)

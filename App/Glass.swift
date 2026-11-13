@@ -205,6 +205,11 @@ extension View {
             .toolbarBackground(.hidden, for: .navigationBar)
     }
 
+    /// A tab's own list: clear, so the one backdrop behind the whole tab view shows and stays put when tabs change.
+    func tabScreen() -> some View {
+        return self.scrollContentBackground(.hidden)
+    }
+
     /// A screen of the app: its list or scroll view on the glass backdrop.
     func glassScreen() -> some View {
         return self

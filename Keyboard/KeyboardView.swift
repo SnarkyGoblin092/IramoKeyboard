@@ -591,6 +591,36 @@ final class KeyboardView: UIView {
         }
     }
 
+    /// The aim over the letter keys as they are now: each key's learned aim at its place, over the average of its half.
+    /// Nil when there is nothing to go by (the keys are not laid out).
+    private func aimField() -> TapAimField? {
+        guard hitRects.count == rows.count, bounds.width > 1, bounds.height > 1 else { return nil }
+        let wide = bounds.width > 500
+        var anchors: [TapAimField.Anchor] = []
+        for (r, rects) in hitRects.enumerated() where r < rows.count {
+            for (c, rect) in rects.enumerated() where c < rows[r].count {
+                guard let typed = letter(of: rows[r][c]),
+                      let aim = TapAccuracy.shared.aim(of: String(typed), landscape: wide) else { continue }
+                anchors.append(TapAimField.Anchor(cx: Double((rect.midX - bounds.minX) / bounds.width),
+                                                  cy: Double((rect.midY - bounds.minY) / bounds.height),
+                                                  w: Double(rect.width / bounds.width), h: Double(rect.height / bounds.height),
+                                                  ox: aim.x, oy: aim.y, confidence: TapAimField.confidence(taps: aim.taps)))
+            }
+        }
+        let size = letterKeySize()
+        let prior = TapBias.shared.prior(landscape: wide)
+        return TapAimField(anchors: anchors, unitW: Double(size.width / bounds.width), unitH: Double(size.height / bounds.height),
+                           priorLeft: prior.left, priorRight: prior.right)
+    }
+
+    /// `point` moved by what is known of this user's aim at that place on the keyboard.
+    private func aimedPoint(_ point: CGPoint) -> CGPoint {
+        guard let field = aimField() else { return point }
+        let share = CGPoint(x: (point.x - bounds.minX) / bounds.width, y: (point.y - bounds.minY) / bounds.height)
+        let shift = field.offset(at: share)
+        return CGPoint(x: point.x - shift.x * bounds.width, y: point.y - shift.y * bounds.height)
+    }
+
     /// The key under (or nearest to) a point. Rows and keys tile the whole area, so there are no dead gaps.
     private func keyIndex(at point: CGPoint) -> (row: Int, col: Int)? {
         if hitRects.count != rows.count, !rows.isEmpty, bounds.width > 0 { layoutIfNeeded() }
@@ -700,16 +730,16 @@ final class KeyboardView: UIView {
                 continue
             }
             // The key is chosen from where this user's thumbs tend to land (TapBias), not from the raw point.
-            let aimed = page == .letters && Prefs.tapAdaptive
-                ? TapBias.shared.corrected(point, in: bounds, keySize: letterKeySize()) : point
+            let aimed = page == .letters && Prefs.tapAdaptive ? aimedPoint(point) : point
             guard let index = keyIndex(at: aimed) else { continue }
             let key = keyViews[index.row][index.col]
             if page == .letters, let typed = letter(of: key.spec), let rect = hitRect(of: key) {
                 if Prefs.tapAdaptive {
                     TapBias.shared.learn(point, keyCenter: CGPoint(x: rect.midX, y: rect.midY), in: bounds, keySize: letterKeySize())
                 }
-                if Prefs.tapRecord {
-                    TapAccuracy.shared.record(letter: String(typed), point: point, cell: rect, in: bounds)
+                if Prefs.tapRecord || Prefs.tapAdaptive {
+                    TapAccuracy.shared.press(letter: String(typed), point: point, cell: rect, in: bounds,
+                                             record: Prefs.tapRecord, learn: Prefs.tapAdaptive, speed: Prefs.tapLearnSpeed)
                 }
             }
             // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
@@ -1623,11 +1653,10 @@ final class TapBias {
         return landscape + right
     }
 
-    /// `point` moved by what is known of this user's aim.
-    func corrected(_ point: CGPoint, in bounds: CGRect, keySize: CGSize) -> CGPoint {
-        guard keySize.width > 1, keySize.height > 1 else { return point }
-        let offset = offsets[slot(for: point, in: bounds)]
-        return CGPoint(x: point.x - CGFloat(offset.x) * keySize.width, y: point.y - CGFloat(offset.y) * keySize.height)
+    /// The average aim of the left and right half (key sizes), for the keys that have not learned their own yet.
+    func prior(landscape wide: Bool) -> (left: (x: Double, y: Double), right: (x: Double, y: Double)) {
+        let base = wide ? 2 : 0
+        return ((offsets[base].x, offsets[base].y), (offsets[base + 1].x, offsets[base + 1].y))
     }
 
     /// A press at `point` was resolved to the key centred at `keyCenter`.

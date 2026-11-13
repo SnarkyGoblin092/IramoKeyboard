@@ -404,7 +404,7 @@ struct SearchTab: View {
                     SettingsSearchResults(query: query, open: open)
                 }
             }
-            .glassScreen()
+            .tabScreen()
             // The search field floats over the bottom: room under the last setting for it.
             // (only when the list is long enough to reach it)
             .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: needsRoom ? 56 : 0) }
