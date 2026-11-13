@@ -50,7 +50,7 @@ struct ThemesView: View {
                 grid
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 28)
+            .padding(.bottom, 12)
         }
         }
         .environment(\.modeWaves, waves)

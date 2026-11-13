@@ -3,6 +3,9 @@ import Foundation
 // MARK: - Keys and defaults (shared by the app's SwiftUI bindings and the keyboard)
 
 enum SettingKey {
+    /// The size ("width,height" in points) the keyboard last had with its emoji picker open, upright: the app's
+    /// Emoji preview is drawn at exactly this size.
+    static let lastEmojiSize = "hunkeys.lastEmojiSize"
     // Feel
     static let holdDelay = "hunkeys.holdDelay"
     static let vibration = "hunkeys.vibrationStrength"
@@ -79,6 +82,28 @@ enum SettingKey {
     static let suggestionTransition = "hunkeys.suggestionTransition"
     static let suggestionTransitionDuration = "hunkeys.suggestionTransitionDuration"
     static let swipeTrailLength = "hunkeys.swipeTrailLength"
+    // Emoji picker (the app's Emoji screen)
+    /// The emoji key opens the system's emoji keyboard instead of the picker of this keyboard.
+    static let emojiNative = "hunkeys.emojiNative"
+    static let emojiShowRecents = "hunkeys.emojiShowRecents"
+    static let emojiRecentOrder = "hunkeys.emojiRecentOrder"
+    static let emojiRecentLimit = "hunkeys.emojiRecentLimit"
+    static let emojiSpaceAfter = "hunkeys.emojiSpaceAfter"
+    static let emojiScroll = "hunkeys.emojiScroll"
+    static let emojiSwipeTabs = "hunkeys.emojiSwipeTabs"
+    static let emojiRows = "hunkeys.emojiRows"
+    static let emojiSize = "hunkeys.emojiSize"
+    static let emojiSpacing = "hunkeys.emojiSpacing"
+    static let emojiSearchPosition = "hunkeys.emojiSearchPosition"
+    static let emojiTabsPosition = "hunkeys.emojiTabsPosition"
+    static let emojiTabStyle = "hunkeys.emojiTabStyle"
+    static let emojiBackspaceKey = "hunkeys.emojiBackspaceKey"
+    static let emojiCategoryOrder = "hunkeys.emojiCategoryOrder"
+    static let emojiHiddenCategories = "hunkeys.emojiHiddenCategories"
+    static let emojiSkinTone = "hunkeys.emojiSkinTone"
+    static let emojiHoldDelay = "hunkeys.emojiHoldDelay"
+    /// Emoji -> how often it was picked (data for the "Most used" order; not a preference).
+    static let emojiUseCounts = "hunkeys.emojiUseCounts"
     /// The swipe trail's look (the Gestures screen): shown at all, its width, opacity, colour ("" = the theme's) and
     /// style ("fade", "solid", "dotted" or "rainbow").
     static let swipeTrailShown = "hunkeys.swipeTrailShown"
@@ -103,7 +128,11 @@ enum SettingKey {
     /// Curly quotes in the language's style, and a space typed after . , ! ? ; :
     static let smartQuotes = "hunkeys.smartQuotes"
     static let spaceAfterPunctuation = "hunkeys.spaceAfterPunctuation"
+    /// A space after what the bar's suggestions write: a picked word, an emoji, a calculation's answer, a conversion.
     static let spaceAfterSuggestion = "hunkeys.spaceAfterSuggestion"
+    static let spaceAfterEmoji = "hunkeys.spaceAfterEmoji"
+    static let spaceAfterResult = "hunkeys.spaceAfterResult"
+    static let spaceAfterConversion = "hunkeys.spaceAfterConversion"
     /// Tap accuracy (the Tap accuracy screen): letters are resolved from where the thumbs tend to land, how fast that
     /// is learned (0 slow, 1 normal, 2 fast), and the per-key map of where taps landed is kept.
     static let tapAdaptive = "hunkeys.tapAdaptive"
@@ -122,6 +151,7 @@ enum SettingKey {
     static let keyRoundness = "hunkeys.keyRoundness"
     // Data
     static let language = "hunkeys.language"
+    static let recentEmoji = "hunkeys.recentEmoji"
     static let enabledLanguages = "hunkeys.enabledLanguages"
     static let shortcuts = "hunkeys.shortcuts"
     /// Key style (the Keys screen): "auto" follows the theme.
@@ -169,9 +199,12 @@ enum SettingKey {
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, accent, accentHex, appearance, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, suggestionStyle, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
+        emojiNative, emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
+        emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
+        emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay,
         swipeTrailShown, swipeTrailWidth, swipeTrailOpacity, swipeTrailColor, swipeTrailStyle,
         spaceSelect, cursorSpeed, deleteRepeatInterval, letterLayouts,
-        inlineMath, unitConversion, unitTarget, resultDecimals, smartQuotes, spaceAfterPunctuation, spaceAfterSuggestion,
+        inlineMath, unitConversion, unitTarget, resultDecimals, smartQuotes, spaceAfterPunctuation, spaceAfterSuggestion, spaceAfterEmoji, spaceAfterResult, spaceAfterConversion,
         tapAdaptive, tapLearnSpeed, tapRecord,
         dateFormat, customDateFormat, timeFormat, timeSeconds, statsEnabled,
         keyboardTools,
@@ -263,6 +296,34 @@ enum SettingDefault {
     static let suggestionTransitionDuration: Double = 0.25
     /// How long the swipe line stays behind the finger, in points of path (the older part fades out).
     static let swipeTrailLength: Double = 220
+    // Emoji picker: the defaults are the system emoji keyboard's look.
+    static let emojiNative = false
+    static let emojiShowRecents = true
+    /// "recent" (last picked first) or "used" (most picked first).
+    static let emojiRecentOrder = "recent"
+    static let emojiRecentLimit: Double = 32
+    static let emojiSpaceAfter = false
+    /// "horizontal" (one strip, like the system's) or "vertical".
+    static let emojiScroll = "horizontal"
+    static let emojiSwipeTabs = false
+    static let emojiRows: Double = 4
+    /// The emoji's size, as a share of its cell.
+    static let emojiSize: Double = 0.79
+    /// Extra points between neighbouring emoji.
+    static let emojiSpacing: Double = 0
+    /// "top", "bottom" or "hidden".
+    static let emojiSearchPosition = "top"
+    static let emojiTabsPosition = "bottom"
+    /// "symbols" (outline icons) or "emoji".
+    static let emojiTabStyle = "symbols"
+    static let emojiBackspaceKey = true
+    /// The tabs' order ("recent" and the category keys); empty: the system's order.
+    static let emojiCategoryOrder: [String] = []
+    static let emojiHiddenCategories: [String] = []
+    /// 0: the yellow default, 1...5: light ... dark.
+    static let emojiSkinTone: Double = 0
+    /// How long to hold an emoji for its skin tones, in seconds.
+    static let emojiHoldDelay: Double = 0.30
     static let swipeTrailShown = true
     static let swipeTrailWidth: Double = 7
     static let swipeTrailOpacity: Double = 0.55
@@ -280,6 +341,9 @@ enum SettingDefault {
     static let smartQuotes = true
     static let spaceAfterPunctuation = false
     static let spaceAfterSuggestion = true
+    static let spaceAfterEmoji = true
+    static let spaceAfterResult = true
+    static let spaceAfterConversion = true
     static let tapAdaptive = true
     static let tapLearnSpeed = 1
     static let tapRecord = true
@@ -481,6 +545,24 @@ final class Settings {
             SettingKey.suggestionTransition: SettingDefault.suggestionTransition,
             SettingKey.suggestionTransitionDuration: SettingDefault.suggestionTransitionDuration,
             SettingKey.swipeTrailLength: SettingDefault.swipeTrailLength,
+            SettingKey.emojiNative: SettingDefault.emojiNative,
+            SettingKey.emojiShowRecents: SettingDefault.emojiShowRecents,
+            SettingKey.emojiRecentOrder: SettingDefault.emojiRecentOrder,
+            SettingKey.emojiRecentLimit: SettingDefault.emojiRecentLimit,
+            SettingKey.emojiSpaceAfter: SettingDefault.emojiSpaceAfter,
+            SettingKey.emojiScroll: SettingDefault.emojiScroll,
+            SettingKey.emojiSwipeTabs: SettingDefault.emojiSwipeTabs,
+            SettingKey.emojiRows: SettingDefault.emojiRows,
+            SettingKey.emojiSize: SettingDefault.emojiSize,
+            SettingKey.emojiSpacing: SettingDefault.emojiSpacing,
+            SettingKey.emojiSearchPosition: SettingDefault.emojiSearchPosition,
+            SettingKey.emojiTabsPosition: SettingDefault.emojiTabsPosition,
+            SettingKey.emojiTabStyle: SettingDefault.emojiTabStyle,
+            SettingKey.emojiBackspaceKey: SettingDefault.emojiBackspaceKey,
+            SettingKey.emojiCategoryOrder: SettingDefault.emojiCategoryOrder,
+            SettingKey.emojiHiddenCategories: SettingDefault.emojiHiddenCategories,
+            SettingKey.emojiSkinTone: SettingDefault.emojiSkinTone,
+            SettingKey.emojiHoldDelay: SettingDefault.emojiHoldDelay,
             SettingKey.swipeTrailShown: SettingDefault.swipeTrailShown,
             SettingKey.swipeTrailWidth: SettingDefault.swipeTrailWidth,
             SettingKey.swipeTrailOpacity: SettingDefault.swipeTrailOpacity,
@@ -496,6 +578,9 @@ final class Settings {
             SettingKey.smartQuotes: SettingDefault.smartQuotes,
             SettingKey.spaceAfterPunctuation: SettingDefault.spaceAfterPunctuation,
             SettingKey.spaceAfterSuggestion: SettingDefault.spaceAfterSuggestion,
+            SettingKey.spaceAfterEmoji: SettingDefault.spaceAfterEmoji,
+            SettingKey.spaceAfterResult: SettingDefault.spaceAfterResult,
+            SettingKey.spaceAfterConversion: SettingDefault.spaceAfterConversion,
             SettingKey.tapAdaptive: SettingDefault.tapAdaptive,
             SettingKey.tapLearnSpeed: SettingDefault.tapLearnSpeed,
             SettingKey.tapRecord: SettingDefault.tapRecord,
@@ -704,6 +789,12 @@ final class Settings {
     static let suggestionDelayRange: ClosedRange<Double> = 0.05...0.50
     static let suggestionTransitionDurationRange: ClosedRange<Double> = 0.10...0.50
     static let swipeTrailLengthRange: ClosedRange<Double> = 60...600
+    static let emojiRecentLimitRange: ClosedRange<Double> = 8...64
+    static let emojiRowsRange: ClosedRange<Double> = 3...7
+    static let emojiSizeRange: ClosedRange<Double> = 0.40...1.00
+    static let emojiSpacingRange: ClosedRange<Double> = 0...12
+    static let emojiSkinToneRange: ClosedRange<Double> = 0...5
+    static let emojiHoldDelayRange: ClosedRange<Double> = 0.15...0.80
 
     var keyHeight: Double { return clamp(readDouble(SettingKey.keyHeight), Settings.keyHeightRange) }
     var landscapeSeparate: Bool { return readBool(SettingKey.landscapeSeparate) }
@@ -732,6 +823,27 @@ final class Settings {
     var suggestionTransition: String { return readString(SettingKey.suggestionTransition) ?? SettingDefault.suggestionTransition }
     var swipeTrailLength: Double { return clamp(readDouble(SettingKey.swipeTrailLength), Settings.swipeTrailLengthRange) }
 
+    // MARK: Emoji picker
+
+    var emojiNative: Bool { return readBool(SettingKey.emojiNative) }
+    var emojiShowRecents: Bool { return readBool(SettingKey.emojiShowRecents) }
+    var emojiRecentOrder: String { return readString(SettingKey.emojiRecentOrder) ?? SettingDefault.emojiRecentOrder }
+    var emojiRecentLimit: Int { return Int(clamp(readDouble(SettingKey.emojiRecentLimit), Settings.emojiRecentLimitRange).rounded()) }
+    var emojiSpaceAfter: Bool { return readBool(SettingKey.emojiSpaceAfter) }
+    var emojiScroll: String { return readString(SettingKey.emojiScroll) ?? SettingDefault.emojiScroll }
+    var emojiSwipeTabs: Bool { return readBool(SettingKey.emojiSwipeTabs) }
+    var emojiRows: Int { return Int(clamp(readDouble(SettingKey.emojiRows), Settings.emojiRowsRange).rounded()) }
+    var emojiSize: Double { return clamp(readDouble(SettingKey.emojiSize), Settings.emojiSizeRange) }
+    var emojiSpacing: Double { return clamp(readDouble(SettingKey.emojiSpacing), Settings.emojiSpacingRange) }
+    var emojiSearchPosition: String { return readString(SettingKey.emojiSearchPosition) ?? SettingDefault.emojiSearchPosition }
+    var emojiTabsPosition: String { return readString(SettingKey.emojiTabsPosition) ?? SettingDefault.emojiTabsPosition }
+    var emojiTabStyle: String { return readString(SettingKey.emojiTabStyle) ?? SettingDefault.emojiTabStyle }
+    var emojiBackspaceKey: Bool { return readBool(SettingKey.emojiBackspaceKey) }
+    var emojiCategoryOrder: [String] { return readStringArray(SettingKey.emojiCategoryOrder) ?? [] }
+    var emojiHiddenCategories: [String] { return readStringArray(SettingKey.emojiHiddenCategories) ?? [] }
+    var emojiSkinTone: Int { return Int(clamp(readDouble(SettingKey.emojiSkinTone), Settings.emojiSkinToneRange).rounded()) }
+    var emojiHoldDelay: Double { return clamp(readDouble(SettingKey.emojiHoldDelay), Settings.emojiHoldDelayRange) }
+
     static let swipeTrailWidthRange: ClosedRange<Double> = 2...16
     static let swipeTrailOpacityRange: ClosedRange<Double> = 0.15...1
     static let cursorSpeedRange: ClosedRange<Double> = 0.4...2.5
@@ -755,6 +867,9 @@ final class Settings {
     var smartQuotes: Bool { return readBool(SettingKey.smartQuotes) }
     var spaceAfterPunctuation: Bool { return readBool(SettingKey.spaceAfterPunctuation) }
     var spaceAfterSuggestion: Bool { return readBool(SettingKey.spaceAfterSuggestion) }
+    var spaceAfterEmoji: Bool { return readBool(SettingKey.spaceAfterEmoji) }
+    var spaceAfterResult: Bool { return readBool(SettingKey.spaceAfterResult) }
+    var spaceAfterConversion: Bool { return readBool(SettingKey.spaceAfterConversion) }
     var tapAdaptive: Bool { return readBool(SettingKey.tapAdaptive) }
     var tapLearnSpeed: Int { return min(2, max(0, Int(readDouble(SettingKey.tapLearnSpeed)))) }
     var tapRecord: Bool { return readBool(SettingKey.tapRecord) }
@@ -804,6 +919,11 @@ final class Settings {
     var languageCode: String {
         get { return readString(SettingKey.language) ?? SettingDefault.language }
         set { put(newValue, SettingKey.language) }
+    }
+
+    var recentEmoji: [String] {
+        get { return readStringArray(SettingKey.recentEmoji) ?? [] }
+        set { put(newValue, SettingKey.recentEmoji) }
     }
 
     /// The words the keyboard learned, shared by every language. The per-language lists of earlier versions are
@@ -947,6 +1067,45 @@ final class Settings {
 
     func setLanguageUsage(_ usage: [String: Double]) {
         put(usage, SettingKey.languageUsage)
+    }
+
+    func clearRecentEmoji() {
+        put(nil, SettingKey.recentEmoji)
+        put(nil, SettingKey.emojiUseCounts)
+    }
+
+    /// How often each recent emoji was picked.
+    var emojiUseCounts: [String: Int] {
+        get { return value(SettingKey.emojiUseCounts) as? [String: Int] ?? [:] }
+        set { put(newValue, SettingKey.emojiUseCounts) }
+    }
+
+    /// Notes a picked emoji: first among the recents and counted once more, keeping only as many as the user
+    /// chose.
+    func rememberEmoji(_ emoji: String) {
+        var recents = recentEmoji.filter { $0 != emoji }
+        recents.insert(emoji, at: 0)
+        recents = Array(recents.prefix(emojiRecentLimit))
+        var counts = emojiUseCounts
+        counts[emoji, default: 0] += 1
+        let kept = Set(recents)
+        counts = counts.filter { kept.contains($0.key) }
+        recentEmoji = recents
+        emojiUseCounts = counts
+    }
+
+    /// The recents in the chosen order (Most recent; or Most used, the latest first among equals), as many as
+    /// the user keeps.
+    func orderedRecentEmoji() -> [String] {
+        let recents = Array(recentEmoji.prefix(emojiRecentLimit))
+        guard emojiRecentOrder == "used" else { return recents }
+        let counts = emojiUseCounts
+        return recents.enumerated()
+            .sorted { a, b in
+                let ca = counts[a.element] ?? 0, cb = counts[b.element] ?? 0
+                return ca != cb ? ca > cb : a.offset < b.offset
+            }
+            .map { $0.element }
     }
 
     func clearLearnedWords() {

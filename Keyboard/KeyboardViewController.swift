@@ -8,7 +8,10 @@ final class KeyboardViewController: UIInputViewController {
     private let container = UIView()
     private var stage = UIView()
     private var suggestionBar = SuggestionBar()
+    private var searchBar = EmojiSearchBar()
     private var keyboardView = KeyboardView()
+    private var emojiPanel: EmojiPanel?
+    private var hiddenForEmoji: [UIView] = []
     /// The Functions panel, shown in place of the keys (the suggestion bar's left button).
     private var toolsPanel: ToolsPanel?
     /// What the case tool last wrote (it cannot re-select it, so it finds it again before the caret).
@@ -68,6 +71,7 @@ final class KeyboardViewController: UIInputViewController {
     private enum DeletedPiece {
         case text(String)
         case composing(String)
+        case search(String)
     }
     /// The words deleted by the current slide, oldest first (nil: a step that found nothing to delete).
     private var wordDeleteStack: [DeletedPiece?] = []
@@ -77,6 +81,10 @@ final class KeyboardViewController: UIInputViewController {
     private var shownFix: (before: String, fix: String?)?
     private var refreshScheduled = false
     private var suggestionWork: DispatchWorkItem?
+
+    // Emoji search (typing on the normal keys while the picker's search field is "active")
+    private var isSearchingEmoji = false
+    private var searchQuery = ""
 
     // Languages typed by sound (Jyutping, Pinyin, romaji): the letters typed so far, shown underlined in the field
     // (marked text) until a word is picked for them, and the words the bar offers for them.
@@ -290,6 +298,20 @@ final class KeyboardViewController: UIInputViewController {
         updatePhoneLandscape()
         if let built = builtSplit, built != KeyboardLayoutMode.split { reloadKeyboardLayout() }
         applyHeight()
+        recordEmojiSize()
+    }
+
+    /// The keyboard's real size while the emoji picker is open, kept for the app's Emoji preview (upright only: a
+    /// landscape keyboard is not recorded).
+    private func recordEmojiSize() {
+        guard emojiPanel != nil else { return }
+        let size = view.bounds.size
+        let screen = UIScreen.main.bounds.size
+        guard size.width > 100, size.height > 100, size.width <= min(screen.width, screen.height) + 1 else { return }
+        let text = "\(Int(size.width.rounded())),\(Int(size.height.rounded()))"
+        if SharedStore.defaults.string(forKey: SettingKey.lastEmojiSize) != text {
+            SharedStore.defaults.set(text, forKey: SettingKey.lastEmojiSize)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -371,6 +393,9 @@ final class KeyboardViewController: UIInputViewController {
         Prefs.refresh()
         Theme.reload()
         validateLanguage()
+        hideEmojiPanel(refresh: false)
+        isSearchingEmoji = false
+        searchQuery = ""
         toolsPanel = nil   // goes with the old stage
         for sub in container.subviews { sub.removeFromSuperview() }
 
@@ -394,18 +419,22 @@ final class KeyboardViewController: UIInputViewController {
 
         stage = UIView()
         suggestionBar = SuggestionBar()
+        searchBar = EmojiSearchBar()
         keyboardView = KeyboardView()
 
         suggestionBar.delegate = self
         suggestionBar.showsToolsButton = !availableTools().isEmpty
+        searchBar.delegate = self
         keyboardView.delegate = self
         keyboardView.popupHost = container
+        searchBar.isHidden = true
 
-        for item in [stage, suggestionBar, keyboardView] as [UIView] {
+        for item in [stage, suggestionBar, searchBar, keyboardView] as [UIView] {
             item.translatesAutoresizingMaskIntoConstraints = false
         }
         container.addSubview(stage)
         stage.addSubview(suggestionBar)
+        stage.addSubview(searchBar)
         stage.addSubview(keyboardView)
 
         let barHeight = suggestionBar.heightAnchor.constraint(equalToConstant: 44)
@@ -421,6 +450,11 @@ final class KeyboardViewController: UIInputViewController {
             suggestionBar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
             suggestionBar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
             barHeight,
+
+            searchBar.topAnchor.constraint(equalTo: suggestionBar.topAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: suggestionBar.leadingAnchor),
+            searchBar.trailingAnchor.constraint(equalTo: suggestionBar.trailingAnchor),
+            searchBar.bottomAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
 
             keyboardView.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
             keyboardView.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
@@ -455,7 +489,24 @@ final class KeyboardViewController: UIInputViewController {
         // The letter rows (Thai has four), the bottom row and the number row.
         let rowCount = CGFloat(language.letterRows.count + 1 + (Prefs.numberRow ? 1 : 0))
         let barHeight = CGFloat(Prefs.suggestionHeight) * (isLandscape ? 36.0 / 44.0 : 1.0)
-        let total = barHeight + 8 + rowCount * (keyHeight + CGFloat(Prefs.rowGap))
+        var total = barHeight + 8 + rowCount * (keyHeight + CGFloat(Prefs.rowGap))
+        // The emoji picker always shows four full rows: the keyboard grows to fit while it is open. An iPhone in
+        // landscape always has that height, so the keyboard never jumps between letters, picker and search.
+        // (The view may not have its final width yet when the picker opens, so fall back to the screen width.)
+        let width = view.bounds.width > 100 ? view.bounds.width : UIScreen.main.bounds.width
+        let panelScale = EmojiPanel.scale(forWidth: width)
+        if emojiPanel != nil || isSearchingEmoji || isLandscape {
+            total = max(total, EmojiPanel.requiredHeight(forWidth: width))
+        }
+        var suggestions = barHeight
+        if isSearchingEmoji {
+            // Same height and top gap as the picker, so the search field stays exactly where it was.
+            EmojiSearchBar.topInset = (5 * panelScale).rounded()
+            // (The picker's pill is a full 44pt in its wide layout: iPad, iPhone in landscape.)
+            let wide = EmojiPanel.usesWideLayout(width: width, height: total)
+            suggestions = (wide ? 44 : 44 * panelScale) + EmojiSearchBar.topInset
+        }
+
         if let constraint = totalHeight {
             if constraint.constant != total { constraint.constant = total }
         } else {
@@ -464,8 +515,8 @@ final class KeyboardViewController: UIInputViewController {
             constraint.isActive = true
             totalHeight = constraint
         }
-        if let constraint = suggestionHeight, constraint.constant != barHeight {
-            constraint.constant = barHeight
+        if let constraint = suggestionHeight, constraint.constant != suggestions {
+            constraint.constant = suggestions
         }
     }
 
@@ -489,6 +540,13 @@ final class KeyboardViewController: UIInputViewController {
                                       returnTitle: returnTitle,
                                       numberRow: Prefs.numberRow,
                                       showHints: Prefs.keyHints)
+        if isSearchingEmoji {
+            // While searching for an emoji the emoji key has no use, so it is left out.
+            rows = rows.map { row in row.filter { spec in
+                if case .emoji = spec.action { return false }
+                return true
+            } }
+        }
         // The space bar: the language's name, or its code with "Language code" on.
         let spaceTitle = Prefs.spaceLanguageCode ? language.rawValue.uppercased() : language.displayName
         rows = rows.map { row in row.map { spec in
@@ -643,7 +701,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func updateAutoShift() {
-        guard page == .letters, shift != .locked else { return }
+        guard page == .letters, shift != .locked, !isSearchingEmoji else { return }
         let newState: ShiftState = shouldAutoCapitalize() ? .once : .off
         if newState != shift {
             shift = newState
@@ -699,6 +757,15 @@ final class KeyboardViewController: UIInputViewController {
             case .off: break
             case .once, .locked: output = language.uppercase(text)
             }
+        }
+        if isSearchingEmoji {
+            searchQuery += output
+            if shift == .once {
+                shift = .off
+                keyboardView.setShift(shift)
+            }
+            refreshEmojiSearch()
+            return
         }
         if language.usesPhoneticInput && textDocumentProxy.isSecureTextEntry != true {
             // Letters build up the spelling; anything else first turns all the letters so far into words.
@@ -968,6 +1035,11 @@ final class KeyboardViewController: UIInputViewController {
         }
         let pendingMarker = autoSpaceMarker
         autoSpaceMarker = nil
+        if isSearchingEmoji {
+            if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
+            refreshEmojiSearch()
+            return
+        }
         punctuationSpaceMarker = nil
         if language.usesPhoneticInput {
             // Space writes the best word for the letters (no spaces between words); with nothing typed, a space.
@@ -1115,6 +1187,13 @@ final class KeyboardViewController: UIInputViewController {
 
     private func handleEnter() {
         hangul.reset()
+        if isSearchingEmoji {
+            // Enter picks the first match, like pressing search in the system keyboard.
+            if let first = EmojiStore.shared.search(searchQuery, limit: 1).first {
+                pickEmoji(EmojiStore.shared.toned(first, tone: Prefs.emojiSkinTone).base)
+            }
+            return
+        }
         punctuationSpaceMarker = nil
         if deleteSelection() {
             textDocumentProxy.insertText("\n")
@@ -1150,6 +1229,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleBackspace() {
+        if isSearchingEmoji {
+            if !searchQuery.isEmpty { searchQuery.removeLast() }
+            refreshEmojiSearch()
+            return
+        }
         punctuationSpaceMarker = nil
         TypingStats.shared.delete()
         if deleteSelection() {
@@ -1201,6 +1285,16 @@ final class KeyboardViewController: UIInputViewController {
     @discardableResult
     private func deleteWordBackward() -> DeletedPiece? {
         hangul.reset()
+        if isSearchingEmoji {
+            guard !searchQuery.isEmpty else { return nil }
+            let previous = searchQuery
+            var characters = Array(searchQuery)
+            while let last = characters.last, last == " " { characters.removeLast() }
+            while let last = characters.last, last != " " { characters.removeLast() }
+            searchQuery = String(characters)
+            refreshEmojiSearch()
+            return .search(previous)
+        }
         if !composing.isEmpty {
             // The letters typed so far go all at once.
             let previous = composing
@@ -1238,6 +1332,10 @@ final class KeyboardViewController: UIInputViewController {
     /// Puts back what a delete took away.
     private func restore(_ piece: DeletedPiece) {
         switch piece {
+        case .search(let previous):
+            searchQuery = previous
+            refreshEmojiSearch()
+            return
         case .composing(let previous):
             composing = previous
             showComposing()
@@ -1255,7 +1353,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func learnWord(endingAt before: String) {
-        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         var prefix = TextFolding.normalizeApostrophes(currentPrefix(in: before))
         while prefix.hasSuffix("'") { prefix.removeLast() }
         guard !prefix.isEmpty else { return }
@@ -1306,7 +1404,7 @@ final class KeyboardViewController: UIInputViewController {
     /// Counts a finished word: a dictionary word ranks higher from now on (in the dictionary that has it, the active
     /// language first); a word no enabled dictionary knows is learned. `delta` -1 takes back a swiped word.
     private func noteWordUse(_ word: String, delta: Int = 1) {
-        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         let cleaned = TextFolding.normalizeApostrophes(word).lowercased()
         guard cleaned.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
         if delta > 0 {
@@ -1340,7 +1438,7 @@ final class KeyboardViewController: UIInputViewController {
     /// (and from then on suggested, and never corrected away). Only the exact spelling counts as known: a
     /// dictionary word with the same letters but other accents ("omaga" for "omágá") must not block it.
     private func learnTappedWord(_ word: String, pin: Bool = false) {
-        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         let cleaned = TextFolding.normalizeApostrophes(word)
         let key = TextFolding.key(cleaned)
         guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
@@ -1354,7 +1452,7 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Remembers which word followed which, for next-word suggestions.
     private func recordBigram(contextBefore: String, next: String) {
-        guard Prefs.suggestions, textDocumentProxy.isSecureTextEntry != true else { return }
+        guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         var text = contextBefore
         let typed = currentPrefix(in: text)
         if !typed.isEmpty, text.hasSuffix(typed) { text = String(text.dropLast(typed.count)) }
@@ -1593,6 +1691,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshSuggestions() {
         shownFix = nil
+        if isSearchingEmoji { return }
         shownSmart = nil
         shownConversions = []
         shownEmojiPhrase = nil
@@ -1795,6 +1894,13 @@ final class KeyboardViewController: UIInputViewController {
 
     private func commitSwipe(_ words: [String]) {
         guard let first = words.first else { return }
+        if isSearchingEmoji {
+            if !searchQuery.isEmpty && !searchQuery.hasSuffix(" ") { searchQuery += " " }
+            searchQuery += first
+            refreshEmojiSearch()
+            return
+        }
+
         let word = applyShift(to: first)
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         recordBigram(contextBefore: before, next: first)
@@ -1835,6 +1941,114 @@ final class KeyboardViewController: UIInputViewController {
         let newText = replacement + " "
         textDocumentProxy.insertText(newText)
         lastSwipeInserted = newText
+    }
+
+    // MARK: Emoji
+
+    private func pickEmoji(_ emoji: String) {
+        textDocumentProxy.insertText(Prefs.emojiSpaceAfter ? emoji + " " : emoji)
+        settings.rememberEmoji(emoji)
+        lastSpaceTime = Date.distantPast
+        clearSwipeState()
+    }
+
+    private func showEmojiPanel() {
+        guard emojiPanel == nil else { return }
+        finishComposing()
+        Prefs.refresh()   // the Emoji screen's settings, which do not rebuild the keyboard
+        let panel = EmojiPanel()
+        panel.delegate = self
+        panel.language = language
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        // The picker shows only the system keyboard backdrop (like the native emoji picker): hide any theme
+        // backdrop, and supply a native one when the root itself is see-through (Liquid Glass).
+        hiddenForEmoji = container.subviews.filter { !$0.isHidden }
+        for sub in hiddenForEmoji { sub.isHidden = true }
+        if !rootIsKeyboardStyle {
+            let native = UIInputView(frame: .zero, inputViewStyle: .keyboard)
+            native.translatesAutoresizingMaskIntoConstraints = false
+            native.accessibilityIdentifier = "emojiNativeBackdrop"
+            container.addSubview(native)
+            NSLayoutConstraint.activate([
+                native.topAnchor.constraint(equalTo: container.topAnchor),
+                native.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                native.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                native.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        }
+        container.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.topAnchor.constraint(equalTo: container.topAnchor),
+            panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+        ])
+        emojiPanel = panel
+        applyHeight()
+        // The picker replaces the keyboard completely: nothing may show through from behind it.
+        stage.isHidden = true
+        panel.reload()
+        EmojiStore.shared.loadIfNeeded { [weak panel] in
+            panel?.reload()
+        }
+    }
+
+    private func hideEmojiPanel(refresh: Bool = true) {
+        if emojiPanel != nil {
+            for sub in container.subviews where sub.accessibilityIdentifier == "emojiNativeBackdrop" { sub.removeFromSuperview() }
+            for sub in hiddenForEmoji { sub.isHidden = false }
+            hiddenForEmoji = []
+        }
+        emojiPanel?.removeFromSuperview()
+        emojiPanel = nil
+        applyHeight()
+        stage.isHidden = false
+        if refresh { scheduleRefresh() }
+    }
+
+    private func beginEmojiSearch() {
+        hideEmojiPanel(refresh: false)
+        isSearchingEmoji = true
+        applyHeight()
+        searchQuery = ""
+        page = .letters
+        shift = .off
+        reloadKeyboardLayout()
+        suggestionBar.isHidden = true
+        searchBar.isHidden = false
+        refreshEmojiSearch()
+        EmojiStore.shared.loadSearchIfNeeded(languages: enabledLanguages + [.english]) { [weak self] in
+            self?.refreshEmojiSearch()
+        }
+    }
+
+    private func endEmojiSearch(returnToPicker: Bool) {
+        isSearchingEmoji = false
+        applyHeight()
+        searchQuery = ""
+        searchBar.isHidden = true
+        suggestionBar.isHidden = false
+        // The search left the emoji key out: put it back.
+        reloadKeyboardLayout()
+        updateAutoShift()
+        if returnToPicker {
+            showEmojiPanel()
+        } else {
+            scheduleRefresh()
+        }
+    }
+
+    private func refreshEmojiSearch() {
+        let placeholder = language.strings.searchEmoji
+        searchBar.setQuery(searchQuery, placeholder: placeholder)
+        if searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Recent ones as they were picked (each still offers its other skin tones when held).
+            searchBar.setResults(settings.orderedRecentEmoji().map { EmojiStore.shared.toned($0, tone: 0) })
+        } else {
+            // In the skin tone chosen in the app, like the picker.
+            let tone = Prefs.emojiSkinTone
+            searchBar.setResults(EmojiStore.shared.search(searchQuery, limit: 60).map { EmojiStore.shared.toned($0, tone: tone) })
+        }
     }
 
     // MARK: Panels
@@ -1879,8 +2093,15 @@ extension KeyboardViewController: KeyboardViewDelegate {
             page = .moreSymbols
             reloadKeyboardLayout()
         case .emoji:
-            // The system's emoji picker is the next keyboard (iOS has no call that opens it directly).
-            advanceToNextInputMode()
+            Prefs.refresh()   // the Emoji screen's choice does not rebuild the keyboard
+            if Prefs.emojiNative && !isSearchingEmoji {
+                // The system's emoji keyboard is the next keyboard (iOS has no call that opens it directly).
+                advanceToNextInputMode()
+            } else if isSearchingEmoji {
+                endEmojiSearch(returnToPicker: true)
+            } else {
+                showEmojiPanel()
+            }
         case .spacer: break
         }
     }
@@ -1890,7 +2111,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
     }
 
     func keyboardView(_ view: KeyboardView, didMoveCursorBy offset: Int) {
-        guard offset != 0 else { return }
+        guard offset != 0, !isSearchingEmoji else { return }
         finishComposing()
         // In right-to-left text, sliding right goes back towards the start of the text.
         var move = language.isRightToLeft ? -offset : offset
@@ -1979,7 +2200,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
     }
 
     func keyboardView(_ view: KeyboardView, didUpdateSwipe path: [CGPoint]) {
-        guard textDocumentProxy.isSecureTextEntry != true else { return }
+        guard !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         if liveSwipe == nil { liveSwipe = makeSwipeContext() }
         guard liveSwipe != nil else { return }
         // Handed to the decoder only once the delay has passed (a decode that is still busy picks it up after).
@@ -2002,7 +2223,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
         guard let swipe = context else { return }
         let decoder = self.decoder
         swipesDecoding += 1
-        let multiWord = Prefs.multiWordSwipe
+        let multiWord = Prefs.multiWordSwipe && !isSearchingEmoji
         swipeQueue.async { [weak self] in
             var words = decoder.decode(path: path, keyCenters: swipe.centers, keySize: swipe.keySize, sources: swipe.sources)
             // Multi-word glides: a phrase that fits clearly better goes first, the single words stay as alternatives.
@@ -2163,6 +2384,7 @@ extension KeyboardViewController: SuggestionBarDelegate {
         if language.usesPhoneticInput && suggestion.kind == .emoji {
             // The emoji goes after the picked word (the word is not replaced by its emoji).
             textDocumentProxy.insertText(suggestion.text)
+            settings.rememberEmoji(suggestion.text)
             lastPickedWord = nil
             scheduleRefresh()
             return
@@ -2180,7 +2402,8 @@ extension KeyboardViewController: SuggestionBarDelegate {
             guard let smart = picked else { return }
             for _ in 0..<smart.result.replaceCount { textDocumentProxy.deleteBackward() }
             var inserted = smart.result.insert
-            if Prefs.spaceAfterSuggestion && !inserted.hasSuffix(" ") { inserted += " " }
+            let wantsSpace = smart.isCalculation ? Prefs.spaceAfterResult : Prefs.spaceAfterConversion
+            if wantsSpace && !inserted.hasSuffix(" ") { inserted += " " }
             textDocumentProxy.insertText(inserted)
             TypingStats.shared.note(smart.isCalculation ? .calculation : .conversion)
             shownSmart = nil
@@ -2225,7 +2448,8 @@ extension KeyboardViewController: SuggestionBarDelegate {
             }
             for _ in 0..<replaced { textDocumentProxy.deleteBackward() }
             let needsSpace = replaced == 0 && (before.last?.isWhitespace == false)
-            textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + (Prefs.spaceAfterSuggestion ? " " : ""))
+            textDocumentProxy.insertText((needsSpace ? " " : "") + suggestion.text + (Prefs.spaceAfterEmoji ? " " : ""))
+            settings.rememberEmoji(suggestion.text)
             TypingStats.shared.note(.emoji)
             lastSpaceTime = Date.distantPast
             clearSwipeState()
@@ -2346,5 +2570,48 @@ extension KeyboardViewController: ToolsPanelDelegate {
 
     func toolsPanel(_ panel: ToolsPanel, isAvailable tool: KeyboardTool) -> Bool {
         return true
+    }
+}
+
+// MARK: - EmojiPanelDelegate
+
+extension KeyboardViewController: EmojiPanelDelegate {
+    func emojiPanel(_ panel: EmojiPanel, didSelect emoji: String) {
+        pickEmoji(emoji)
+    }
+
+    func emojiPanelDidTapBackspace(_ panel: EmojiPanel) {
+        textDocumentProxy.deleteBackward()
+    }
+
+    func emojiPanelDidTapSearch(_ panel: EmojiPanel) {
+        beginEmojiSearch()
+    }
+
+    func emojiPanelDidClose(_ panel: EmojiPanel) {
+        hideEmojiPanel()
+    }
+
+    func emojiPanelDidTapHide(_ panel: EmojiPanel) {
+        hideEmojiPanel(refresh: false)
+        dismissKeyboard()
+    }
+}
+
+// MARK: - EmojiSearchBarDelegate
+
+extension KeyboardViewController: EmojiSearchBarDelegate {
+    func emojiSearchBar(_ bar: EmojiSearchBar, didSelect emoji: String) {
+        pickEmoji(emoji)
+        refreshEmojiSearch()
+    }
+
+    func emojiSearchBarDidTapBack(_ bar: EmojiSearchBar) {
+        endEmojiSearch(returnToPicker: true)
+    }
+
+    func emojiSearchBarDidTapHide(_ bar: EmojiSearchBar) {
+        endEmojiSearch(returnToPicker: false)
+        dismissKeyboard()
     }
 }

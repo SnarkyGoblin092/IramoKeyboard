@@ -115,12 +115,17 @@ private struct LanguageRow: View {
     }
 }
 
-/// The languages that are not enabled yet, with a search field; picking one adds it and goes back.
+/// The languages that are not enabled yet, with a search field; picking one adds it and stays, to add more.
 private struct AddLanguageView: View {
-    let enabled: [String]
     let add: (Language) -> Void
+    /// The languages enabled so far, this visit's additions included (picking one leaves the list open for more).
+    @State private var enabled: [String]
     @State private var query = ""
-    @Environment(\.dismiss) private var dismiss
+
+    init(enabled: [String], add: @escaping (Language) -> Void) {
+        self._enabled = State(initialValue: enabled)
+        self.add = add
+    }
 
     /// The languages left, by name; with something typed, the ones whose name (in the app's language or their
     /// own) or code has it.
@@ -145,7 +150,7 @@ private struct AddLanguageView: View {
                     ForEach(matches, id: \.rawValue) { language in
                         Button {
                             add(language)
-                            dismiss()
+                            withAnimation(.easeOut(duration: 0.2)) { enabled.append(language.rawValue) }
                         } label: {
                             HStack {
                                 LanguageName(language: language)

@@ -57,6 +57,25 @@ struct GlassRowFill: View {
     }
 }
 
+/// A card of clear Liquid Glass (a thin frosted material before iOS 26): the backdrop of the previews, which show
+/// the keys over whatever is behind them, as the keyboard itself does.
+struct ClearGlassCard: View {
+    var cornerRadius: CGFloat = 16
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(Glass.clear, in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial)
+        }
+        #else
+        shape.fill(.ultraThinMaterial)
+        #endif
+    }
+}
+
 extension Color {
     /// The same colour turned round the colour wheel (a share of a full turn).
     func hueShifted(by turn: Double) -> Color {
@@ -499,6 +518,13 @@ enum DeviceMetrics {
     static var portraitWidth: Double {
         let bounds = UIScreen.main.bounds
         return Double(min(bounds.width, bounds.height))
+    }
+
+    /// The room the home indicator takes at the bottom of the window (0 on a phone with a home button).
+    static var bottomInset: CGFloat {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first
+        return window?.safeAreaInsets.bottom ?? 0
     }
 
     /// The previews' keyboard width: the screen's short side (the previews are always upright).
@@ -1146,13 +1172,38 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
         let dx = recognizer.translation(in: recognizer.view).x
         switch recognizer.state {
-        case .began, .changed: changed(dx)
-        case .ended, .cancelled, .failed: ended(dx, recognizer.velocity(in: recognizer.view).x)
+        case .began:
+            // A sideways swipe: the list under it stops scrolling until the finger is lifted.
+            context.coordinator.lockScrolling(from: recognizer.view)
+            changed(dx)
+        case .changed:
+            changed(dx)
+        case .ended, .cancelled, .failed:
+            context.coordinator.unlockScrolling()
+            ended(dx, recognizer.velocity(in: recognizer.view).x)
         default: break
         }
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        private weak var locked: UIScrollView?
+
+        /// Stops the scroll view the row is in from scrolling (its own pan is switched off, which cancels a scroll
+        /// already begun).
+        func lockScrolling(from view: UIView?) {
+            var current = view?.superview
+            while let candidate = current, !(candidate is UIScrollView) { current = candidate.superview }
+            guard let scroll = current as? UIScrollView, locked !== scroll else { return }
+            unlockScrolling()
+            scroll.panGestureRecognizer.isEnabled = false
+            locked = scroll
+        }
+
+        func unlockScrolling() {
+            locked?.panGestureRecognizer.isEnabled = true
+            locked = nil
+        }
+
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)

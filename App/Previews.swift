@@ -17,7 +17,7 @@ struct PreviewCard<Content: View>: View {
             VStack(spacing: 10) {
                 content()
                     .padding(10)
-                    .background(look.backdrop())
+                    .background(ClearGlassCard(cornerRadius: 16))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     // The keyboard is laid out left to right, also when the app reads right to left.
                     .environment(\.layoutDirection, .leftToRight)
@@ -48,7 +48,8 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     let aspect: CGFloat?
     /// The height the pane has.
     let startHeight: CGFloat
-    /// The scrolling content runs down to the screen's bottom edge, under the home indicator.
+    /// The scrolling content runs down to the screen's bottom edge, under the home indicator (it keeps clear of it
+    /// when scrolled to the end).
     let edgeToEdge: Bool
 
     /// The card preview's own height, measured (0 until it has been laid out once).
@@ -62,7 +63,7 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private let balanced: Bool
 
     /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
-    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = false,
+    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = true,
          minimumHeight: CGFloat = 150, balanced: Bool = false,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
@@ -120,6 +121,9 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                 Divider().opacity(0.6)
                 // The list scrolls under the preview, never over it (also while a menu is still closing).
                 content()
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear.frame(height: edgeToEdge ? DeviceMetrics.bottomInset : 0)
+                    }
                     .frame(maxHeight: .infinity)
                     .clipped()
             }

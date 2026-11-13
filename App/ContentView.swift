@@ -36,7 +36,7 @@ enum AppTab: String, Hashable, CaseIterable {
     static func owning(_ screen: Screen) -> AppTab {
         switch screen {
         case .tab(let name): return AppTab(rawValue: name) ?? .typing
-        case .languages, .languageLayout, .suggestions, .smartTyping, .shortcuts, .learnedWords: return .typing
+        case .languages, .languageLayout, .suggestions, .smartTyping, .shortcuts, .learnedWords, .emoji: return .typing
         case .themes, .themeEditor, .keys, .effects: return .look
         case .gestures, .haptics, .longPress, .functions, .tapAccuracy: return .touch
         case .stats, .appLanguage, .licences: return .more
@@ -308,7 +308,7 @@ private struct TabRoot: View {
 /// The screens the tabs open.
 enum Screen: Hashable {
     case languages, appLanguage, suggestions, gestures, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
-    case smartTyping, stats, longPress, tapAccuracy
+    case smartTyping, stats, longPress, tapAccuracy, emoji
     /// The letter layout of one language (its code).
     case languageLayout(String)
     /// A tab's own list (AppTab's name): not a screen that is opened, but a place the search can point at.
@@ -325,6 +325,7 @@ enum Screen: Hashable {
         case .stats: StatsView()
         case .longPress: LongPressCharactersView()
         case .tapAccuracy: TapAccuracyView()
+        case .emoji: EmojiView()
         case .languageLayout(let code): LanguageLayoutView(language: Language(rawValue: code) ?? .english)
         case .languages: LanguagesView()
         case .appLanguage: AppLanguageView()

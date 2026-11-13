@@ -8,7 +8,6 @@ struct TapAccuracyView: View {
     @State private var wide = false
     @State private var selected: String?
     @State private var confirmReset = false
-    @State private var exaggerate = false
     @State private var bias = TapBias.savedOffsets()
     @AppStorage(SettingKey.tapAdaptive, store: SharedStore.defaults) private var adaptive = SettingDefault.tapAdaptive
     @AppStorage(SettingKey.tapLearnSpeed, store: SharedStore.defaults) private var speed = SettingDefault.tapLearnSpeed
@@ -79,18 +78,13 @@ struct TapAccuracyView: View {
                 if layout.keys.isEmpty {
                     emptyState
                 } else {
-                    TapHitAreas(layout: layout, field: field, magnify: exaggerate ? 4 : 1)
+                    TapHitAreas(layout: layout, field: field)
                         .padding(.vertical, 6)
                 }
-                GlassToggle(title: tr("Exaggerate shifts"),
-                            subtitle: tr("Draws every shift four times larger so it is easy to see"),
-                            isOn: $exaggerate)
-                    .searchAnchor("tap.exaggerate")
             } header: {
                 SectionHeader(tr("Hit areas"), symbol: "square.on.square.dashed", color: .pink)
             } footer: {
-                Text(tr("Dashed outlines are the keys as drawn. The coloured shapes are where a tap counts for each key now: their edges tilt and bend where your taps land off-centre, and the more a key has moved the stronger its colour.")
-                     + (exaggerate ? " " + tr("Shown four times larger than they are.") : ""))
+                Text(tr("Dashed outlines are the keys as drawn. The coloured shapes are where a tap counts for each key now: their edges tilt and bend where your taps land off-centre, and the more a key has moved the stronger its colour."))
             }
             .glassRows()
 
@@ -315,8 +309,6 @@ private struct TapHeatmap: View {
 private struct TapHitAreas: View {
     let layout: TapMapData.Layout
     let field: TapAimField
-    /// 1 shows the shifts as they are; more draws them larger.
-    let magnify: Double
 
     /// A shape through the corners, each one rounded like a key's (a curve from `radius` before the corner to `radius`
     /// after it), and drawn in by `inset` all round so neighbours do not touch.
@@ -363,16 +355,16 @@ private struct TapHitAreas: View {
                 var points: [CGPoint] = []
                 for corner in corners {
                     let offset = field.offset(at: CGPoint(x: corner.0, y: corner.1))
-                    points.append(CGPoint(x: (corner.0 + magnify * Double(offset.x)) * size.width,
-                                          y: (corner.1 + magnify * Double(offset.y)) * size.height))
+                    points.append(CGPoint(x: (corner.0 + Double(offset.x)) * size.width,
+                                          y: (corner.1 + Double(offset.y)) * size.height))
                 }
                 let shape = TapHitAreas.rounded(points, radius: min(nominal.width, nominal.height) * 0.2, inset: 1.5)
                 let centre = field.offset(at: CGPoint(x: key.cx, y: key.cy))
                 let moved = hypot(Double(centre.x) / field.unitW, Double(centre.y) / field.unitH)
                 context.fill(shape, with: .color(.accentColor.opacity(0.1 + min(0.5, moved * 2.5))))
                 context.stroke(shape, with: .color(.accentColor.opacity(0.8)), style: StrokeStyle(lineWidth: 1, lineJoin: .round))
-                let label = CGPoint(x: (key.cx + magnify * Double(centre.x)) * size.width,
-                                    y: (key.cy + magnify * Double(centre.y)) * size.height)
+                let label = CGPoint(x: (key.cx + Double(centre.x)) * size.width,
+                                    y: (key.cy + Double(centre.y)) * size.height)
                 context.draw(Text(letter.uppercased()).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundColor(.primary),
                              at: label)
             }

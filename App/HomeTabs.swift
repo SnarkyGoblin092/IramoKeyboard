@@ -203,6 +203,9 @@ private struct KeyboardSection: View {
             ScreenRow(.smartTyping) {
                 SettingsRow(title: tr("Calculator & units"), symbol: "function", color: .cyan, value: smartSummary)
             }
+            ScreenRow(.emoji) {
+                SettingsRow(title: tr("Emoji"), symbol: "face.smiling.fill", color: .yellow)
+            }
             ScreenRow(.learnedWords) {
                 SettingsRow(title: tr("Learned words"), symbol: "character.book.closed", color: .brown,
                             value: learnedCount > 0 ? "\(learnedCount)" : nil)
@@ -246,7 +249,7 @@ private struct CorrectionsSection: View {
                 .searchAnchor("main.spaceAfter")
             SettingToggle(tr("Space after suggestions"), key: SettingKey.spaceAfterSuggestion,
                           defaultValue: SettingDefault.spaceAfterSuggestion,
-                          subtitle: tr("A space goes after a picked word, emoji, result or conversion"),
+                          subtitle: tr("A space goes after a word picked in the suggestion bar"),
                           symbol: "space", color: .cyan)
                 .searchAnchor("main.spaceAfterSuggestion")
         } header: {

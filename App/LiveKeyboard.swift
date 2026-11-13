@@ -40,22 +40,9 @@ struct LiveKeyboard: View {
             let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)
-                    // A transparent backdrop shows only the keys, over whatever the screen has behind them.
-                    .background(
-                        Group {
-                            if waves.isEmpty {
-                                // Without a wave it fades with the keys (LiveKeyboardView.modeFade).
-                                look.backdrop(scale: scale)
-                                    .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
-                            } else {
-                                // Under the Themes screen's wave (WindowWave), which carries the change across
-                                // the whole window: the new look at once.
-                                look.backdrop(scale: scale)
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                    )
+                    // The keys sit on clear Liquid Glass, as the keyboard's own keys do over the app; the keys and the bar
+                    // keep the theme.
+                    .background(ClearGlassCard(cornerRadius: 14))
             }
             // The backdrop is drawn in the keys' mode, not the app's: light keys and the bar's dark words would
             // be lost on a dark backdrop.
