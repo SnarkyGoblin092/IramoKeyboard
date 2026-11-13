@@ -259,7 +259,16 @@ final class EmojiStore {
         if keywords[language] == nil {
             keywords[language] = EmojiStore.loadKeywords(language)   // small file, loaded once per language
         }
-        guard let matches = keywords[language]?[key] else { return [] }
+        var found = keywords[language]?[key]
+        if found == nil, key.count > 3, key.hasSuffix("s") {
+            found = keywords[language]?[String(key.dropLast())]   // "hearts" -> "heart"
+        }
+        guard var matches = found else { return [] }
+        // Among the emoji for one word, the ones people use most come first (stable: the rest keep their order).
+        let ranked = matches.enumerated().map { (index: $0.offset, emoji: $0.element, rank: EmojiStore.rank(of: $0.element)) }
+        if ranked.contains(where: { $0.rank != Int.max }) {
+            matches = ranked.sorted { $0.rank != $1.rank ? $0.rank < $1.rank : $0.index < $1.index }.map { $0.emoji }
+        }
         var result: [String] = []
         for emoji in matches where EmojiSupport.isSupported(emoji) {
             result.append(emoji)
@@ -311,12 +320,65 @@ final class EmojiStore {
             if count == words.count && before.count > 80 { continue }
             let phrase = tail.joined(separator: " ")
             for language in languages {
-                if let emoji = suggestions(for: phrase, language: language, limit: 1).first {
+                if let emoji = suggestions(for: phrase, language: language, limit: 1).first
+                    ?? fuzzyPhrase(tail.map { TextFolding.fold(String($0)) }, language: language) {
                     return (emoji, phrase.count + trailing)
                 }
             }
         }
         return nil
+    }
+
+    private static let fillerWords: Set<String> = ["with", "of", "the", "a", "an", "and", "in", "on", "to", "for", "at", "by", "from"]
+
+    private struct PhraseEntry {
+        let content: Set<String>
+        let emoji: String
+        let rank: Int
+    }
+    private var phraseIndex: [Language: [PhraseEntry]] = [:]
+
+    private func phraseEntries(_ language: Language) -> [PhraseEntry] {
+        if let cached = phraseIndex[language] { return cached }
+        if keywords[language] == nil { keywords[language] = EmojiStore.loadKeywords(language) }
+        var entries: [PhraseEntry] = []
+        for (key, emojis) in keywords[language] ?? [:] where key.contains(" ") {
+            let words = Set(key.split(separator: " ").map { String($0) })
+            let content = words.subtracting(EmojiStore.fillerWords)
+            for (position, emoji) in emojis.enumerated() {
+                entries.append(PhraseEntry(content: content.isEmpty ? words : content, emoji: emoji, rank: position))
+            }
+        }
+        phraseIndex[language] = entries
+        return entries
+    }
+
+    /// Name words typed in any order, with or without "with / of / the ...": "tears joy face" -> 😂.
+    /// The same words as a name match best; typed words that are only part of a longer name match too.
+    private func fuzzyPhrase(_ typed: [String], language: Language) -> String? {
+        let words = Set(typed).subtracting(EmojiStore.fillerWords)
+        guard words.count >= 2 else { return nil }
+        var best: (score: Int, emoji: String)?
+        for entry in phraseEntries(language) {
+            var score: Int
+            if entry.content == words {
+                score = 1000
+            } else if words.isSubset(of: entry.content), entry.content.count <= words.count + 2 {
+                score = 500 - (entry.content.count - words.count) * 10
+            } else {
+                continue
+            }
+            score -= entry.rank
+            if EmojiStore.rank(of: entry.emoji) != Int.max { score += 5 }
+            if let current = best, current.score >= score { continue }
+            guard EmojiSupport.isSupported(entry.emoji) else { continue }
+            best = (score, entry.emoji)
+        }
+        return best?.emoji
+    }
+
+    private static func rank(of emoji: String) -> Int {
+        popularity[emoji.replacingOccurrences(of: "\u{FE0F}", with: "")] ?? Int.max
     }
 
     /// The most used emoji, most used first (rank by emoji -> index; variation selectors removed).
