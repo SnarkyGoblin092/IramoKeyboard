@@ -29,9 +29,9 @@ struct GlassBackdrop: View {
             ZStack {
                 Color(.systemGroupedBackground)
                 glow(accent, 0.46 * level, at: UnitPoint(x: 0.05, y: 0.0), radius: reach * 0.85)
-                glow(accent.hueShifted(by: 0.09), 0.32 * level, at: UnitPoint(x: 1.0, y: 0.3), radius: reach * 0.7)
-                glow(accent.hueShifted(by: -0.07), 0.26 * level, at: UnitPoint(x: 0.0, y: 0.75), radius: reach * 0.75)
-                glow(accent.hueShifted(by: 0.04), 0.22 * level, at: UnitPoint(x: 0.95, y: 1.0), radius: reach * 0.6)
+                glow(accent.hueShifted(by: 0.17), 0.38 * level, at: UnitPoint(x: 1.0, y: 0.28), radius: reach * 0.7)
+                glow(accent.hueShifted(by: -0.15), 0.34 * level, at: UnitPoint(x: 0.0, y: 0.72), radius: reach * 0.75)
+                glow(accent.hueShifted(by: 0.09), 0.28 * level, at: UnitPoint(x: 0.95, y: 1.0), radius: reach * 0.6)
             }
         }
         // A new accent fades in over the old one.

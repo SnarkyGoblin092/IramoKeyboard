@@ -581,6 +581,11 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         searchGlass.alpha = 0
     }
 
+    /// The field is drawn again (the search bar's has settled into its place).
+    func showSearchPill() {
+        UIView.animate(withDuration: 0.18) { self.searchGlass.alpha = 1 }
+    }
+
     private func updateEmptyState() {
         let store = EmojiStore.shared
         if !store.isReady {

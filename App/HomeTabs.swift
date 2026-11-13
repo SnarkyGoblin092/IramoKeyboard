@@ -252,6 +252,21 @@ private struct CorrectionsSection: View {
                           subtitle: tr("A space goes after a word picked in the suggestion bar"),
                           symbol: "space", color: .cyan)
                 .searchAnchor("main.spaceAfterSuggestion")
+            SettingToggle(tr("Space after emoji suggestions"), key: SettingKey.spaceAfterEmoji,
+                          defaultValue: SettingDefault.spaceAfterEmoji,
+                          subtitle: tr("A space goes after an emoji picked in the suggestion bar"),
+                          symbol: "face.smiling", color: .yellow)
+                .searchAnchor("main.spaceAfterEmoji")
+            SettingToggle(tr("Space after the answer"), key: SettingKey.spaceAfterResult,
+                          defaultValue: SettingDefault.spaceAfterResult,
+                          subtitle: tr("A space goes after the answer written in place of a calculation"),
+                          symbol: "plus.forwardslash.minus", color: .orange)
+                .searchAnchor("main.spaceAfterResult")
+            SettingToggle(tr("Space after the conversion"), key: SettingKey.spaceAfterConversion,
+                          defaultValue: SettingDefault.spaceAfterConversion,
+                          subtitle: tr("A space goes after the converted measurement written in place of the original"),
+                          symbol: "ruler", color: .teal)
+                .searchAnchor("main.spaceAfterConversion")
         } header: {
             SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }

@@ -2109,14 +2109,15 @@ final class KeyboardViewController: UIInputViewController {
         searchBar.isHidden = false
         reloadKeyboardLayout()
         let source = emojiPanel?.searchGeometry(in: container)
-        slideAwayPicker(toSearchFrom: source)
         refreshEmojiSearch()
+        slideAwayPicker(toSearchFrom: source)
         EmojiStore.shared.loadSearchIfNeeded(languages: enabledLanguages + [.english]) { [weak self] in
             self?.refreshEmojiSearch()
         }
     }
 
     private func endEmojiSearch(returnToPicker: Bool) {
+        if returnToPicker, view.window != nil, emojiPanel == nil, slideBackToPicker() { return }
         isSearchingEmoji = false
         searchQuery = ""
         searchBar.isHidden = true
@@ -2131,6 +2132,80 @@ final class KeyboardViewController: UIInputViewController {
             applyHeight()
             scheduleRefresh()
         }
+    }
+
+    /// Back from the search to the picker: the keys slide out to the left, the picker comes in from the right, and the
+    /// search bar's pill settles into the picker's search field (EmojiSearchBar.playExit). False if it cannot be shown
+    /// (the plain way is used then).
+    private func slideBackToPicker() -> Bool {
+        finishComposing()
+        Prefs.refresh()
+        let panel = EmojiPanel()
+        panel.delegate = self
+        panel.language = language
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        hiddenForEmoji = container.subviews.filter { !$0.isHidden }
+        var backdrops: [UIView] = []
+        if !rootIsKeyboardStyle {
+            let native = UIInputView(frame: .zero, inputViewStyle: .keyboard)
+            native.translatesAutoresizingMaskIntoConstraints = false
+            native.accessibilityIdentifier = "emojiNativeBackdrop"
+            native.alpha = 0
+            container.addSubview(native)
+            NSLayoutConstraint.activate([
+                native.topAnchor.constraint(equalTo: container.topAnchor),
+                native.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                native.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                native.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+            backdrops.append(native)
+        }
+        container.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.topAnchor.constraint(equalTo: container.topAnchor),
+            panel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            panel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            panel.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+        ])
+        emojiPanel = panel
+        panel.reload()
+        EmojiStore.shared.loadIfNeeded { [weak panel] in panel?.reload() }
+        container.layoutIfNeeded()
+        guard let target = panel.searchGeometry(in: container) else {
+            // No search field to settle into (hidden in the picker's settings): the plain way.
+            panel.removeFromSuperview()
+            for backdrop in backdrops { backdrop.removeFromSuperview() }
+            emojiPanel = nil
+            hiddenForEmoji = []
+            return false
+        }
+        let width = max(container.bounds.width, 1)
+        let leaving = hiddenForEmoji
+        panel.hideSearchPill()
+        panel.transform = CGAffineTransform(translationX: width, y: 0)
+        searchBar.playExit(to: target) { }
+        UIView.animate(withDuration: 0.4, delay: 0, options: [.curveEaseInOut]) {
+            panel.transform = .identity
+            self.keyboardView.transform = CGAffineTransform(translationX: -width, y: 0)
+            for backdrop in backdrops { backdrop.alpha = 1 }
+        } completion: { [weak self, weak panel] _ in
+            guard let self = self, let panel = panel else { return }
+            // The search is over: the keys and the bar are put back for the next time, behind the picker.
+            self.isSearchingEmoji = false
+            self.searchQuery = ""
+            self.searchBar.isHidden = true
+            self.searchBar.resetAfterExit()
+            self.suggestionBar.isHidden = false
+            self.keyboardView.transform = .identity
+            self.reloadKeyboardLayout()
+            self.updateAutoShift()
+            for view in leaving { view.isHidden = true }
+            self.stage.isHidden = true
+            panel.showSearchPill()
+            self.applyHeight()
+        }
+        applyHeight()
+        return true
     }
 
     private func refreshEmojiSearch() {

@@ -29,20 +29,9 @@ struct EmojiView: View {
     }
 
     @State private var tab: Tab = .general
-    @AppStorage(SettingKey.spaceAfterEmoji, store: SharedStore.defaults) private var spaceAfterSuggestion = SettingDefault.spaceAfterEmoji
 
     var body: some View {
         GlassList {
-            Section {
-                GlassToggle(title: tr("Space after emoji suggestions"),
-                            subtitle: tr("A space goes after an emoji picked in the suggestion bar."),
-                            isOn: $spaceAfterSuggestion)
-                    .searchAnchor("emoji.spaceSuggestion")
-            } header: {
-                SectionHeader(tr("Suggestions"), symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo)
-            }
-            .glassRows()
-
             Group {
                 Section {
                     EmojiTabBar(selected: $tab)
@@ -180,29 +169,49 @@ private struct EmojiGeneralTab: View {
     @AppStorage(SettingKey.emojiRecentLimit, store: SharedStore.defaults) private var limit = SettingDefault.emojiRecentLimit
     @AppStorage(SettingKey.emojiSpaceAfter, store: SharedStore.defaults) private var spaceAfter = SettingDefault.emojiSpaceAfter
     @State private var recents: [String] = []
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
 
     var body: some View {
         Section {
             GlassToggle(title: tr("Show recent emoji"),
                         subtitle: tr("A tab of the emoji you used lately. Move it anywhere on the Categories tab."),
                         isOn: $showRecents)
-            HStack(spacing: 6) {
-                if recents.isEmpty {
-                    Text(tr("No recent emoji yet")).foregroundColor(.secondary)
-                } else {
-                    ForEach(recents.prefix(6), id: \.self) { emoji in
-                        Text(emoji)
-                            .font(.system(size: 26))
-                            .frame(width: 40, height: 40)
+            HStack(spacing: 10) {
+                // The recent ones on a card of glass.
+                HStack(spacing: 6) {
+                    if recents.isEmpty {
+                        Text(tr("No recent emoji yet")).foregroundColor(.secondary)
+                    } else {
+                        ForEach(recents.prefix(6), id: \.self) { emoji in
+                            Text(emoji)
+                                .font(.system(size: 26))
+                                .frame(width: 40, height: 40)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 8)
-                Button(tr("Clear")) {
+                .padding(.horizontal, 10)
+                .frame(minHeight: 52)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                let accent = Color.currentAccent(name: accentName, hex: accentHex)
+                Button {
                     Settings.shared.clearRecentEmoji()
                     Feedback.delete()
                     withAnimation(.easeOut(duration: 0.2)) { recents = [] }
+                } label: {
+                    Text(tr("Clear"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(accent.readableText)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .glassShape(Capsule(), tint: accent, interactive: true)
+                        .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
                 .disabled(recents.isEmpty)
+                .opacity(recents.isEmpty ? 0.45 : 1)
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text(tr("Order")).font(.subheadline).foregroundColor(.secondary)

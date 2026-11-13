@@ -7,8 +7,6 @@ struct SmartTypingView: View {
     @AppStorage(SettingKey.unitConversion, store: SharedStore.defaults) private var units = SettingDefault.unitConversion
     @AppStorage(SettingKey.unitTarget, store: SharedStore.defaults) private var target = SettingDefault.unitTarget
     @AppStorage(SettingKey.resultDecimals, store: SharedStore.defaults) private var decimals = SettingDefault.resultDecimals
-    @AppStorage(SettingKey.spaceAfterResult, store: SharedStore.defaults) private var spaceAfterResult = SettingDefault.spaceAfterResult
-    @AppStorage(SettingKey.spaceAfterConversion, store: SharedStore.defaults) private var spaceAfterConversion = SettingDefault.spaceAfterConversion
     @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
     @State private var tryText = "(12+3)*4^2"
 
@@ -70,12 +68,6 @@ struct SmartTypingView: View {
                         .searchAnchor("smart.math")
                     exampleRow(mathExamples)
                         .opacity(inlineMath ? 1 : 0.45)
-                    GlassToggle(title: tr("Space after the answer"),
-                                subtitle: tr("A space goes after the answer written in place of the calculation"),
-                                isOn: $spaceAfterResult)
-                        .searchAnchor("smart.spaceResult")
-                        .disabled(!inlineMath)
-                        .opacity(inlineMath ? 1 : 0.45)
                 } header: {
                     SectionHeader(tr("Calculator"), symbol: "plus.forwardslash.minus", color: .orange)
                 } footer: {
@@ -92,10 +84,6 @@ struct SmartTypingView: View {
                         SegmentedChoice(title: tr("Convert"), names: [tr("Both ways"), tr("To metric"), tr("To imperial")],
                                         selected: targets.firstIndex(of: target)) { target = targets[$0] }
                         exampleRow(unitExamples)
-                        GlassToggle(title: tr("Space after the conversion"),
-                                    subtitle: tr("A space goes after the converted measurement written in place of the original"),
-                                    isOn: $spaceAfterConversion)
-                            .searchAnchor("smart.spaceConversion")
                     }
                     .disabled(!units)
                     .opacity(units ? 1 : 0.45)

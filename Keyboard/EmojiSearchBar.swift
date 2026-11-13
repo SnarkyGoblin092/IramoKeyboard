@@ -15,7 +15,6 @@ final class EmojiSearchBar: UIView {
     private lazy var glass = FlatPanel(background: look.fill, allowGlass: look.glass, forceGlass: look.glass)
     private let backButton = HitButton(type: .system)
     private let hideButton = HitButton(type: .system)
-    private let iconView = UIImageView()
     private let queryLabel = UILabel()
     private let divider = UIView()
     private let scroll = UIScrollView()
@@ -53,10 +52,6 @@ final class EmojiSearchBar: UIView {
         hideButton.addTarget(self, action: #selector(hideTapped), for: .touchUpInside)
         addSubview(hideButton)
 
-        iconView.image = UIImage(systemName: "magnifyingglass")
-        iconView.tintColor = look.secondaryText
-        iconView.contentMode = .scaleAspectFit
-        glass.contentView.addSubview(iconView)
 
         queryLabel.font = UIFont.systemFont(ofSize: 16)
         queryLabel.lineBreakMode = .byTruncatingHead
@@ -136,10 +131,9 @@ final class EmojiSearchBar: UIView {
         // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).
         let isWide = bounds.width > 500   // the picker's wide layout (iPad, iPhone in landscape)
         let f = EmojiPanel.scale(forWidth: bounds.width)
-        let iconSide = isWide ? 16 : 17 * f
         queryLabel.font = UIFont.systemFont(ofSize: isWide ? 16 : 20 * f)
-        iconView.frame = CGRect(x: 44, y: (area.height - iconSide) / 2, width: iconSide, height: iconSide)
-        let queryX = 44 + iconSide + 6
+        // (No magnifying glass here: the back arrow is the icon of the active search.)
+        let queryX: CGFloat = 46
         queryLabel.frame = CGRect(x: queryX, y: 0, width: queryWidth - (queryX - 44) - 2, height: area.height)
 
         // The divider sits as far from the text as from the first result emoji (about 10pt each side).
@@ -176,10 +170,9 @@ final class EmojiSearchBar: UIView {
                              width: source.icon.width, height: source.icon.height)
         glass.contentView.addSubview(ghost)
         backButton.alpha = 0
-        iconView.alpha = 0
         divider.alpha = 0
-        scroll.alpha = 0
-        scroll.transform = CGAffineTransform(translationX: bounds.width * 0.5, y: 0)
+        // The results come in from the right edge of the strip, and never from beyond it (the hide button is there).
+        scroll.contentOffset = CGPoint(x: -scroll.bounds.width, y: 0)
         UIView.animate(withDuration: 0.42, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0.1,
                        options: [.allowUserInteraction]) {
             self.glass.transform = .identity
@@ -191,12 +184,67 @@ final class EmojiSearchBar: UIView {
         } completion: { _ in
             ghost.removeFromSuperview()
         }
-        UIView.animate(withDuration: 0.34, delay: 0.1, options: [.curveEaseOut, .allowUserInteraction]) {
-            self.iconView.alpha = 1
+        UIView.animate(withDuration: 0.36, delay: 0.08, options: [.curveEaseOut, .allowUserInteraction]) {
             self.divider.alpha = 1
-            self.scroll.alpha = 1
-            self.scroll.transform = .identity
+            self.scroll.contentOffset = .zero
         }
+    }
+
+    /// The way back: the results slide out to the right inside the strip, the placeholder grows back to the picker's
+    /// size as the pill settles into the picker's, and the back arrow fades into the magnifying glass.
+    func playExit(to target: EmojiPanel.SearchGeometry, completion: @escaping () -> Void) {
+        layoutIfNeeded()
+        let pill = CGRect(origin: .zero, size: glass.bounds.size)
+        let here = CGRect(x: glass.center.x - pill.width / 2, y: glass.center.y - pill.height / 2,
+                          width: pill.width, height: pill.height)
+        guard here.width > 1, here.height > 1 else {
+            completion()
+            return
+        }
+        // The magnifying glass the arrow turns into, where the picker's is.
+        let ghost = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+        ghost.tintColor = look.secondaryText
+        ghost.contentMode = .scaleAspectFit
+        ghost.frame = CGRect(x: target.icon.minX - target.pill.minX, y: target.icon.minY - target.pill.minY,
+                             width: target.icon.width, height: target.icon.height)
+        ghost.alpha = 0
+        glass.contentView.addSubview(ghost)
+        exitGhost = ghost
+        let toX = target.placeholder.minX - target.pill.minX
+        UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.92, initialSpringVelocity: 0.1,
+                       options: [.allowUserInteraction]) {
+            self.glass.transform = CGAffineTransform(translationX: target.pill.midX - here.midX, y: target.pill.midY - here.midY)
+                .scaledBy(x: target.pill.width / here.width, y: target.pill.height / here.height)
+            self.queryLabel.transform = CGAffineTransform(translationX: toX - self.queryLabel.frame.minX, y: 0).scaledBy(x: 1.12, y: 1.12)
+        } completion: { _ in
+            completion()
+        }
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseIn]) {
+            self.backButton.alpha = 0
+            self.divider.alpha = 0
+        }
+        UIView.animate(withDuration: 0.24, delay: 0.1, options: [.curveEaseOut]) {
+            ghost.alpha = 1
+        }
+        // Out through the right end of the strip, inside it.
+        UIView.animate(withDuration: 0.34, delay: 0, options: [.curveEaseIn]) {
+            self.scroll.contentOffset = CGPoint(x: -self.scroll.bounds.width, y: 0)
+        }
+    }
+
+    private var exitGhost: UIImageView?
+
+    /// Puts the bar as it was after `playExit`, for the next time it is shown.
+    func resetAfterExit() {
+        exitGhost?.removeFromSuperview()
+        exitGhost = nil
+        glass.layer.removeAllAnimations()
+        glass.transform = .identity
+        queryLabel.transform = .identity
+        backButton.alpha = 1
+        divider.alpha = 1
+        scroll.contentOffset = .zero
+        setNeedsLayout()
     }
 
     /// The whole strip belongs to a control: the left end is the back button, the query area is dead

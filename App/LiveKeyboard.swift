@@ -253,6 +253,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// The words on show: the same few, or (bar only) a new set each time round.
     private var shownWords: [String] {
         guard barOnly else { return starters }
+        // A bar that fits more words or scrolls is shown full, with enough words to scroll it.
+        if Prefs.suggestionScroll || Prefs.suggestionFit {
+            let pool: [String] = language == .hungarian
+                ? ["Szia", "Nem", "Igen", "Köszönöm", "Jó", "De", "Hogy", "Az", "Ez", "Én", "A", "Mi", "Most", "Majd", "Itt", "Ott"]
+                : ["Hello", "Thanks", "The", "It", "My", "So", "You", "We", "This", "I", "What", "Yes", "Please", "Good", "Sure", "Maybe"]
+            let wanted = min(SuggestionBar.capacity, pool.count)
+            let start = (cycleStep * 3) % pool.count
+            return (0..<wanted).map { pool[(start + $0) % pool.count] }
+        }
         let sets: [[String]] = language == .hungarian
             ? [["Szia", "Nem", "Igen"], ["Köszönöm", "Jó", "De"], ["Hogy", "Az", "Ez"], ["Én", "A", "Szia"]]
             : [["Hello", "Thanks", "The"], ["It", "My", "So"], ["You", "We", "This"], ["I", "Hello", "Thanks"]]
