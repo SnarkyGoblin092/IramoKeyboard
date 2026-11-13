@@ -29,34 +29,10 @@ struct EmojiView: View {
     }
 
     @State private var tab: Tab = .general
-    @AppStorage(SettingKey.emojiNative, store: SharedStore.defaults) private var native = SettingDefault.emojiNative
     @AppStorage(SettingKey.spaceAfterEmoji, store: SharedStore.defaults) private var spaceAfterSuggestion = SettingDefault.spaceAfterEmoji
 
     var body: some View {
         GlassList {
-            Section {
-                GlassToggle(title: tr("Use the system emoji keyboard"),
-                            subtitle: tr("The emoji key switches to the emoji keyboard of iOS instead of this keyboard's own picker."),
-                            isOn: $native)
-                    .searchAnchor("emoji.native")
-                if native {
-                    Label {
-                        Text(tr("The system emoji keyboard has to be added in the phone's Settings: General > Keyboard > Keyboards > Add New Keyboard > Emoji. Without it the emoji key has nowhere to go."))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-                    }
-                }
-            } header: {
-                SectionHeader(tr("Emoji key"), symbol: "face.smiling", color: .yellow)
-            } footer: {
-                Text(native ? tr("The settings of this keyboard's picker are switched off while the system's is used.")
-                            : tr("Touch and hold the emoji key to open this app."))
-            }
-            .glassRows()
-
             Section {
                 GlassToggle(title: tr("Space after emoji suggestions"),
                             subtitle: tr("A space goes after an emoji picked in the suggestion bar."),
@@ -67,7 +43,6 @@ struct EmojiView: View {
             }
             .glassRows()
 
-            // The picker's own settings: nothing to set while the system's keyboard is used.
             Group {
                 Section {
                     EmojiTabBar(selected: $tab)
@@ -83,8 +58,6 @@ struct EmojiView: View {
                 case .skinTones: EmojiSkinToneTab()
                 }
             }
-            .disabled(native)
-            .opacity(native ? 0.45 : 1)
         }
         .glassScreen()
         .navigationTitle(tr("Emoji"))

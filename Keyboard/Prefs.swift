@@ -53,7 +53,6 @@ final class Prefs {
     static var suggestionTransition = SettingDefault.suggestionTransition
     static var suggestionTransitionDuration = SettingDefault.suggestionTransitionDuration
     static var swipeTrailLength = SettingDefault.swipeTrailLength
-    static var emojiNative = SettingDefault.emojiNative
     static var emojiShowRecents = SettingDefault.emojiShowRecents
     static var emojiSpaceAfter = SettingDefault.emojiSpaceAfter
     static var emojiVertical = false
@@ -171,7 +170,6 @@ final class Prefs {
         suggestionTransition = s.suggestionTransition
         suggestionTransitionDuration = s.suggestionTransitionDuration
         swipeTrailLength = s.swipeTrailLength
-        emojiNative = s.emojiNative
         emojiShowRecents = s.emojiShowRecents
         emojiSpaceAfter = s.emojiSpaceAfter
         emojiVertical = s.emojiScroll == "vertical"

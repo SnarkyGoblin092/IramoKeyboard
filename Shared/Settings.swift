@@ -82,8 +82,6 @@ enum SettingKey {
     static let suggestionTransitionDuration = "hunkeys.suggestionTransitionDuration"
     static let swipeTrailLength = "hunkeys.swipeTrailLength"
     // Emoji picker (the app's Emoji screen)
-    /// The emoji key opens the system's emoji keyboard instead of the picker of this keyboard.
-    static let emojiNative = "hunkeys.emojiNative"
     static let emojiShowRecents = "hunkeys.emojiShowRecents"
     static let emojiRecentOrder = "hunkeys.emojiRecentOrder"
     static let emojiRecentLimit = "hunkeys.emojiRecentLimit"
@@ -198,7 +196,7 @@ enum SettingKey {
         autoCapitalize, doubleSpacePeriod, autoCorrect, cursorControl, swipeDownHide, deleteSwipe, deleteRepeatDelay, numberRow, keyHints, extraKeys, extraKeysLeft, commaKey, periodKey, emojiKey, commaHold, periodHold,
         theme, accent, accentHex, appearance, keyRoundness, enabledLanguages, keySurface, keyBorderStyle, keyGlow, keyFont,
         keyHeight, landscapeSeparate, landscapeKeyHeight, keyboardWidth, keyGap, rowGap, alwaysCapitals, letterSize, hintPosition, hintSize, spaceTextSize, spaceLanguageCode, hapticSharpness, cursorStartHaptic, cursorTickHaptic, separatorStyle, suggestionFollowTheme, suggestionHeight, suggestionFit, suggestionScroll, suggestionScrollThree, suggestionDelay, suggestionTransition, suggestionTransitionDuration, swipeTrailLength,
-        emojiNative, emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
+        emojiShowRecents, emojiRecentOrder, emojiRecentLimit, emojiSpaceAfter, emojiScroll, emojiSwipeTabs, emojiRows,
         emojiSize, emojiSpacing, emojiSearchPosition, emojiTabsPosition, emojiTabStyle, emojiBackspaceKey,
         emojiCategoryOrder, emojiHiddenCategories, emojiSkinTone, emojiHoldDelay,
         swipeTrailShown, swipeTrailWidth, swipeTrailOpacity, swipeTrailColor, swipeTrailStyle,
@@ -295,7 +293,6 @@ enum SettingDefault {
     /// How long the swipe line stays behind the finger, in points of path (the older part fades out).
     static let swipeTrailLength: Double = 220
     // Emoji picker: the defaults are the system emoji keyboard's look.
-    static let emojiNative = false
     static let emojiShowRecents = true
     /// "recent" (last picked first) or "used" (most picked first).
     static let emojiRecentOrder = "recent"
@@ -542,7 +539,6 @@ final class Settings {
             SettingKey.suggestionTransition: SettingDefault.suggestionTransition,
             SettingKey.suggestionTransitionDuration: SettingDefault.suggestionTransitionDuration,
             SettingKey.swipeTrailLength: SettingDefault.swipeTrailLength,
-            SettingKey.emojiNative: SettingDefault.emojiNative,
             SettingKey.emojiShowRecents: SettingDefault.emojiShowRecents,
             SettingKey.emojiRecentOrder: SettingDefault.emojiRecentOrder,
             SettingKey.emojiRecentLimit: SettingDefault.emojiRecentLimit,
@@ -821,7 +817,6 @@ final class Settings {
 
     // MARK: Emoji picker
 
-    var emojiNative: Bool { return readBool(SettingKey.emojiNative) }
     var emojiShowRecents: Bool { return readBool(SettingKey.emojiShowRecents) }
     var emojiRecentOrder: String { return readString(SettingKey.emojiRecentOrder) ?? SettingDefault.emojiRecentOrder }
     var emojiRecentLimit: Int { return Int(clamp(readDouble(SettingKey.emojiRecentLimit), Settings.emojiRecentLimitRange).rounded()) }

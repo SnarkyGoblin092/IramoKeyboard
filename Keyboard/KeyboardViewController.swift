@@ -2095,15 +2095,7 @@ extension KeyboardViewController: KeyboardViewDelegate {
             page = .moreSymbols
             reloadKeyboardLayout()
         case .emoji:
-            Prefs.refresh()   // the Emoji screen's choice does not rebuild the keyboard
-            if Prefs.emojiNative && !isSearchingEmoji {
-                // The system's emoji keyboard is the next keyboard (iOS has no call that opens it directly).
-                advanceToNextInputMode()
-            } else if isSearchingEmoji {
-                endEmojiSearch(returnToPicker: true)
-            } else {
-                showEmojiPanel()
-            }
+            if isSearchingEmoji { endEmojiSearch(returnToPicker: true) } else { showEmojiPanel() }
         case .spacer: break
         }
     }
