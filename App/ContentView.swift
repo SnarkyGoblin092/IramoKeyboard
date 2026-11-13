@@ -38,7 +38,7 @@ enum AppTab: String, Hashable, CaseIterable {
         case .tab(let name): return AppTab(rawValue: name) ?? .typing
         case .languages, .languageLayout, .suggestions, .smartTyping, .shortcuts, .learnedWords: return .typing
         case .themes, .themeEditor, .keys, .effects: return .look
-        case .gestures, .haptics, .longPress, .functions: return .touch
+        case .gestures, .haptics, .longPress, .functions, .tapAccuracy: return .touch
         case .stats, .appLanguage, .licences: return .more
         }
     }
