@@ -53,7 +53,7 @@ struct TapAccuracyView: View {
             .glassRows()
 
             Section {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     if layout.total == 0 {
                         emptyState
                     } else {
@@ -79,7 +79,7 @@ struct TapAccuracyView: View {
                     emptyState
                 } else {
                     TapHitAreas(layout: layout, field: field)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 2)
                 }
             } header: {
                 SectionHeader(tr("Hit areas"), symbol: "square.on.square.dashed", color: .pink)
@@ -250,13 +250,14 @@ private struct TapHeatmap: View {
     private static let enoughForSpread = 10
 
     var body: some View {
-        let aspect = min(0.8, max(0.2, layout.aspect))
+        let extent = layout.verticalSpan
+        let aspect = min(0.8, max(0.1, layout.aspect * extent.span))
         GeometryReader { proxy in
             let width = proxy.size.width, height = proxy.size.height
             ZStack(alignment: .topLeading) {
                 ForEach(layout.tapped.keys.sorted(), id: \.self) { letter in
                     if let key = layout.keys[letter] {
-                        cell(letter, key, width: width, height: height)
+                        cell(letter, key, width: width, height: height, top: extent.top, span: extent.span)
                     }
                 }
             }
@@ -265,8 +266,9 @@ private struct TapHeatmap: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func cell(_ letter: String, _ key: TapMapData.Key, width: CGFloat, height: CGFloat) -> some View {
-        let w = max(4, CGFloat(key.w) * width - 3), h = max(4, CGFloat(key.h) * height - 3)
+    private func cell(_ letter: String, _ key: TapMapData.Key, width: CGFloat, height: CGFloat,
+                      top: Double, span: Double) -> some View {
+        let w = max(4, CGFloat(key.w) * width - 3), h = max(4, CGFloat(key.h / span) * height - 3)
         let share = layout.maxCount > 0 ? Double(key.count) / Double(layout.maxCount) : 0
         let heat = TapHeatmap.lowest + (TapHeatmap.highest - TapHeatmap.lowest) * pow(share, 0.6)
         let shape = RoundedRectangle(cornerRadius: min(w, h) * 0.22, style: .continuous)
@@ -297,7 +299,7 @@ private struct TapHeatmap: View {
             Feedback.tap()
             withAnimation(.easeInOut(duration: 0.15)) { selected = isSelected ? nil : letter }
         }
-        .position(x: CGFloat(key.cx) * width, y: CGFloat(key.cy) * height)
+        .position(x: CGFloat(key.cx) * width, y: CGFloat((key.cy - top) / span) * height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(letter.uppercased())
         .accessibilityValue("\(key.count)")
@@ -343,20 +345,23 @@ private struct TapHitAreas: View {
     }
 
     var body: some View {
-        let aspect = min(0.8, max(0.2, layout.aspect))
+        let extent = layout.verticalSpan
+        let aspect = min(0.8, max(0.1, layout.aspect * extent.span))
         Canvas { context, size in
+            // Heights are shares of the keyboard's; the picture starts at the first row and ends at the last.
+            func down(_ y: Double) -> CGFloat { return CGFloat((y - extent.top) / extent.span) * size.height }
             for (letter, key) in layout.keys where key.w > 0 && key.h > 0 {
                 let corners = [(key.cx - key.w / 2, key.cy - key.h / 2), (key.cx + key.w / 2, key.cy - key.h / 2),
                                (key.cx + key.w / 2, key.cy + key.h / 2), (key.cx - key.w / 2, key.cy + key.h / 2)]
-                let nominal = CGRect(x: (key.cx - key.w / 2) * size.width, y: (key.cy - key.h / 2) * size.height,
-                                     width: key.w * size.width, height: key.h * size.height).insetBy(dx: 1.5, dy: 1.5)
+                let nominal = CGRect(x: (key.cx - key.w / 2) * size.width, y: down(key.cy - key.h / 2),
+                                     width: key.w * size.width, height: key.h / extent.span * size.height).insetBy(dx: 1.5, dy: 1.5)
                 context.stroke(Path(roundedRect: nominal, cornerRadius: min(nominal.width, nominal.height) * 0.2),
                                with: .color(.primary.opacity(0.22)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 var points: [CGPoint] = []
                 for corner in corners {
                     let offset = field.offset(at: CGPoint(x: corner.0, y: corner.1))
                     points.append(CGPoint(x: (corner.0 + Double(offset.x)) * size.width,
-                                          y: (corner.1 + Double(offset.y)) * size.height))
+                                          y: down(corner.1 + Double(offset.y))))
                 }
                 let shape = TapHitAreas.rounded(points, radius: min(nominal.width, nominal.height) * 0.2, inset: 1.5)
                 let centre = field.offset(at: CGPoint(x: key.cx, y: key.cy))
@@ -364,7 +369,7 @@ private struct TapHitAreas: View {
                 context.fill(shape, with: .color(.accentColor.opacity(0.1 + min(0.5, moved * 2.5))))
                 context.stroke(shape, with: .color(.accentColor.opacity(0.8)), style: StrokeStyle(lineWidth: 1, lineJoin: .round))
                 let label = CGPoint(x: (key.cx + Double(centre.x)) * size.width,
-                                    y: (key.cy + Double(centre.y)) * size.height)
+                                    y: down(key.cy + Double(centre.y)))
                 context.draw(Text(letter.uppercased()).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundColor(.primary),
                              at: label)
             }

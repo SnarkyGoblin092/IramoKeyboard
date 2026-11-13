@@ -1154,7 +1154,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
 }
 
 /// A pan for SwipeToDeleteRow that begins only when the drag starts out sideways, leaving vertical drags to the
-/// scroll view. It runs alongside the scroll view's own pan, so the row follows the finger from the first point.
+/// scroll view. The scroll view waits for it to fail, so a sideways swipe never scrolls the list.
 @available(iOS 26.0, *)
 private struct SidewaysPan: UIGestureRecognizerRepresentable {
     let enabled: Bool
@@ -1181,47 +1181,35 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
         let dx = recognizer.translation(in: recognizer.view).x
         switch recognizer.state {
-        case .began:
-            // A sideways swipe: the list under it stops scrolling until the finger is lifted.
-            context.coordinator.lockScrolling(from: recognizer.view)
-            changed(dx)
-        case .changed:
-            changed(dx)
-        case .ended, .cancelled, .failed:
-            context.coordinator.unlockScrolling()
-            ended(dx, recognizer.velocity(in: recognizer.view).x)
+        case .began, .changed: changed(dx)
+        case .ended, .cancelled, .failed: ended(dx, recognizer.velocity(in: recognizer.view).x)
         default: break
         }
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        private weak var locked: UIScrollView?
-
-        /// Stops the scroll view the row is in from scrolling (its own pan is switched off, which cancels a scroll
-        /// already begun).
-        func lockScrolling(from view: UIView?) {
-            var current = view?.superview
-            while let candidate = current, !(candidate is UIScrollView) { current = candidate.superview }
-            guard let scroll = current as? UIScrollView, locked !== scroll else { return }
-            unlockScrolling()
-            scroll.panGestureRecognizer.isEnabled = false
-            locked = scroll
-        }
-
-        func unlockScrolling() {
-            locked?.panGestureRecognizer.isEnabled = true
-            locked = nil
-        }
-
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
             return abs(velocity.x) > abs(velocity.y)
         }
 
+        /// The pan of a scroll view (the list the row is in).
+        private func isScrollPan(_ other: UIGestureRecognizer) -> Bool {
+            guard let scroll = other.view as? UIScrollView else { return false }
+            return other === scroll.panGestureRecognizer
+        }
+
+        /// The list waits for this pan to fail before it scrolls: a sideways swipe on a row never scrolls the list,
+        /// and a vertical drag (which this pan refuses at once) scrolls it as usual.
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            return isScrollPan(other)
+        }
+
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            return true
+            return !isScrollPan(other)
         }
     }
 }

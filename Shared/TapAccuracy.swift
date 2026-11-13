@@ -49,6 +49,17 @@ struct TapMapData: Codable, Equatable {
         var keys: [String: Key] = [:]
         var aspect = 0.0
 
+        /// The part of the keyboard's height the keys cover, as shares of it (the pictures are cut to it, so they have
+        /// no empty room under the last row).
+        var verticalSpan: (top: Double, span: Double) {
+            let known = keys.values.filter { $0.w > 0 && $0.h > 0 }
+            guard let top = known.map({ $0.cy - $0.h / 2 }).min(), let bottom = known.map({ $0.cy + $0.h / 2 }).max() else {
+                return (0, 1)
+            }
+            let low = max(0, top), high = min(1, bottom)
+            return high > low ? (low, high - low) : (0, 1)
+        }
+
         /// The keys with taps recorded (the others only carry an aim).
         var tapped: [String: Key] { return keys.filter { $0.value.count > 0 } }
         var total: Int { return keys.values.reduce(0) { $0 + $1.count } }

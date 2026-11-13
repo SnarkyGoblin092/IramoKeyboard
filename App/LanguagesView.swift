@@ -68,7 +68,8 @@ struct LanguagesView: View {
         if ordered.count > enabled.count { Feedback.success() } else { Feedback.delete() }
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
-        LanguageData.prepareInBackground(enabled: ordered)
+        // (A removed language's files are left for now: the keyboard may be reading them as they are removed.)
+        LanguageData.prepareInBackground(enabled: ordered, removeOthers: false)
     }
 }
 

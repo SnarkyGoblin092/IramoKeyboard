@@ -289,6 +289,9 @@ struct ThemePreview: View {
     /// The real keyboard's width over its height in keys only (440pt wide), for the preview's proportions.
     static var aspectKeysOnly: CGFloat { return 440 / keysHeight }
 
+    /// The same with the suggestion bar above the keys.
+    static var aspectWithStrip: CGFloat { return 440 / (keysHeight + CGFloat(stored(SettingKey.suggestionHeight))) }
+
     /// The rows of keys (the number row adds one) at the key height and row gap, and the padding.
     private static var keysHeight: CGFloat {
         let rows = (SharedStore.defaults.bool(forKey: SettingKey.numberRow) ? 5.0 : 4.0) + Double(extraLetterRows)

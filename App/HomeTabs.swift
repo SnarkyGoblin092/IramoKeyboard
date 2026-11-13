@@ -303,8 +303,8 @@ private struct ThemeSection: View {
                 openScreen(.themes)
             } label: {
                 ZStack {
-                    ThemePreview(theme: shown, accent: accent, showsStrip: false, cornerRadius: 20, glassBackdrop: true)
-                        .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+                    ThemePreview(theme: shown, accent: accent, showsStrip: true, cornerRadius: 20, glassBackdrop: true)
+                        .aspectRatio(ThemePreview.aspectWithStrip, contentMode: .fit)
                         .animation(AccentTint.fade, value: accentName + accentHex)
                         .allowsHitTesting(false)
                 }

@@ -37,9 +37,13 @@ struct LiveKeyboard: View {
                                                     barHeight: barHeight,
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode),
                                                     barOnly: barOnly)
-            let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
+            // Room all round the keys inside the glass, so square-cornered keys and their outlines are not cut off.
+            let room: CGFloat = barOnly ? 4 : 10
+            let scale = min((geometry.size.width - 2 * room) / size.width, (geometry.size.height - 2 * room) / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)
+                    .frame(width: size.width * scale, height: size.height * scale)
+                    .padding(room)
                     // The keys sit on clear Liquid Glass, as the keyboard's own keys do over the app; the keys and the bar
                     // keep the theme.
                     .background(ClearGlassCard(cornerRadius: 14))
@@ -47,7 +51,6 @@ struct LiveKeyboard: View {
             // The backdrop is drawn in the keys' mode, not the app's: light keys and the bar's dark words would
             // be lost on a dark backdrop.
             .environment(\.colorScheme, scheme)
-            .frame(width: size.width * scale, height: size.height * scale)
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
