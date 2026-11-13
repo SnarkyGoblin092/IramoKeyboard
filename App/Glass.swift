@@ -57,8 +57,8 @@ struct GlassRowFill: View {
     }
 }
 
-/// A card of clear Liquid Glass (a thin frosted material before iOS 26): the backdrop of the previews, which show
-/// the keys over whatever is behind them, as the keyboard itself does.
+/// A card of translucent Liquid Glass, light in light mode and dark in dark mode (a thin frosted material before
+/// iOS 26): the backdrop of the previews, which show the keys over whatever is behind them, as the keyboard does.
 struct ClearGlassCard: View {
     var cornerRadius: CGFloat = 16
 
@@ -66,7 +66,7 @@ struct ClearGlassCard: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(Glass.clear, in: shape)
+            Color.clear.glassEffect(Glass.regular, in: shape)
         } else {
             shape.fill(.ultraThinMaterial)
         }

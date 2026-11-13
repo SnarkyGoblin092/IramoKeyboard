@@ -8,6 +8,8 @@ struct ThemePreview: View {
     let accent: Color
     var showsStrip = true
     var cornerRadius: CGFloat = 14
+    /// Clear Liquid Glass behind the keys (in the keys' light or dark mode) instead of the theme's keyboard backdrop.
+    var glassBackdrop = false
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
     @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
     @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
@@ -318,7 +320,12 @@ struct ThemePreview: View {
             let shift = (width - 2 * s - rowWidth) / 2 * side
 
             ZStack(alignment: .top) {
-                look.backdrop(scale: s)
+                if glassBackdrop {
+                    ClearGlassCard(cornerRadius: cornerRadius)
+                        .environment(\.colorScheme, look.dark ? .dark : .light)
+                } else {
+                    look.backdrop(scale: s)
+                }
                 VStack(spacing: 0) {
                     if showsStrip { strip(height: stripHeight, scale: s) }
                     VStack(spacing: 0) {

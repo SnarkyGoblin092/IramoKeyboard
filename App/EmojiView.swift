@@ -72,6 +72,8 @@ struct EmojiView: View {
                 Section {
                     EmojiTabBar(selected: $tab)
                         .glassOutsideCard()
+                } header: {
+                    SectionHeader(tr("Picker"), symbol: "square.grid.3x3.fill", color: .orange)
                 }
                 switch tab {
                 case .general: EmojiGeneralTab()

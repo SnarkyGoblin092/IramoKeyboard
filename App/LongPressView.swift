@@ -288,7 +288,7 @@ private struct HoldKeyboard: View {
         CurrentThemeLook { look in
             board(look)
                 .padding(10)
-                .background(look.backdrop())
+                .background(ClearGlassCard(cornerRadius: 18).environment(\.colorScheme, look.dark ? .dark : .light))
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }

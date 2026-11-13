@@ -2007,15 +2007,16 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func beginEmojiSearch() {
-        hideEmojiPanel(refresh: false)
+        // Everything is set for the search before the picker goes, so the keyboard never shows (or changes its
+        // height) in between.
         isSearchingEmoji = true
-        applyHeight()
         searchQuery = ""
         page = .letters
         shift = .off
-        reloadKeyboardLayout()
         suggestionBar.isHidden = true
         searchBar.isHidden = false
+        reloadKeyboardLayout()
+        hideEmojiPanel(refresh: false)
         refreshEmojiSearch()
         EmojiStore.shared.loadSearchIfNeeded(languages: enabledLanguages + [.english]) { [weak self] in
             self?.refreshEmojiSearch()
@@ -2024,7 +2025,6 @@ final class KeyboardViewController: UIInputViewController {
 
     private func endEmojiSearch(returnToPicker: Bool) {
         isSearchingEmoji = false
-        applyHeight()
         searchQuery = ""
         searchBar.isHidden = true
         suggestionBar.isHidden = false
@@ -2032,8 +2032,10 @@ final class KeyboardViewController: UIInputViewController {
         reloadKeyboardLayout()
         updateAutoShift()
         if returnToPicker {
+            // (The picker sets the height itself, so the keyboard does not shrink and grow in between.)
             showEmojiPanel()
         } else {
+            applyHeight()
             scheduleRefresh()
         }
     }
