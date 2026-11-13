@@ -371,10 +371,18 @@ enum WindowWave {
     }
 
     /// Called as the wave sets off, before the setting changes.
-    static func start(for wave: ModeWave) {
+    /// The picture of the window as it is now. Taken BEFORE the wave is made (its clock starts when it is made), so the
+    /// time this takes is not counted as the wave's and it does not set off already on its way. Nothing is waiting to
+    /// be drawn at this point, so the screen need not be updated first (which would stall the main thread).
+    static func snapshot() -> UIImage? {
+        guard let root = window?.rootViewController?.view else { return nil }
+        return picture(of: root, afterScreenUpdates: false)
+    }
+
+    static func start(for wave: ModeWave, old taken: UIImage? = nil) {
         end()
         guard let window = window, let root = window.rootViewController?.view,
-              let old = picture(of: root, afterScreenUpdates: true) else { return }
+              let old = taken ?? picture(of: root, afterScreenUpdates: false) else { return }
         let model = WindowWaveModel(wave: wave, old: old)
         let host = UIHostingController(rootView: WindowWaveView(model: model))
         host.view.backgroundColor = .clear

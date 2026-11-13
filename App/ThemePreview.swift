@@ -8,6 +8,9 @@ struct ThemePreview: View {
     let accent: Color
     var showsStrip = true
     var cornerRadius: CGFloat = 14
+    /// Extra room (in the keyboard's points) between the keys and the edge, for small previews whose rounded corners
+    /// would cut the keys off.
+    var contentInset: CGFloat = 0
     /// Clear Liquid Glass behind the keys (in the keys' light or dark mode) instead of the theme's keyboard backdrop.
     var glassBackdrop = false
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
@@ -340,10 +343,15 @@ struct ThemePreview: View {
                     .glassKeyGroup(theme.kind == .liquidGlass, spacing: 2 * s)
                     .padding(.vertical, verticalPadding)
                 }
+                // Small previews: the whole set of keys is shrunk evenly toward the middle, so there is room around
+                // the edge and the spacing between the keys stays as it was.
+                .scaleEffect(max(0.5, 1 - 2 * contentInset * s / max(width, 1)), anchor: .center)
             }
             .frame(width: width, height: height)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        // A new accent fades in with the backdrop's.
+        .animation(AccentTint.fade, value: accentName + accentHex)
         // The keyboard is laid out left to right, also when the app reads right to left.
         .environment(\.layoutDirection, .leftToRight)
         .allowsHitTesting(false)

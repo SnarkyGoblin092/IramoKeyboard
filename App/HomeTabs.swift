@@ -372,6 +372,7 @@ private struct AppearanceSwitch: View {
         let theme = themeID
         // Once the switch has played its little slide to the new choice.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let picture = WindowWave.snapshot()   // before the wave's clock starts
             ModeWave.count += 1
             let id = ModeWave.count
             let frame = window.bounds
@@ -379,7 +380,7 @@ private struct AppearanceSwitch: View {
                                 newTheme: theme, source: source, minX: frame.minX, minY: frame.minY,
                                 width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
             running = true
-            WindowWave.start(for: wave)
+            WindowWave.start(for: wave, old: picture)
             ModeWave.running.append(wave)
             mode = new
             pending = nil

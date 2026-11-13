@@ -119,6 +119,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var shift: ShiftState = .off
     private var lastShiftTap = Date.distantPast
     private var builtSignature = ""
+    private var builtAccent = ""
+    private func accentKey() -> String {
+        return Settings.shared.accentName + "|" + (SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "")
+    }
     private var refreshQueued = false
     /// A setting changed while this keyboard was not on screen: it reads the settings when it is shown again.
     private var stale = false
@@ -219,6 +223,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         Theme.reload()
         overrideUserInterfaceStyle = Theme.appearanceStyle
         builtSignature = signature()
+        builtAccent = accentKey()
         // The picked mode is the one built even if the view's traits have not caught up yet (a second build for
         // them would cut the fade short).
         builtStyle = LiveKeyboardView.effectiveStyle
@@ -330,8 +335,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             guard self.signature() != self.builtSignature else { return }
             // Light to dark (the Themes screen's switch): the new keys fade in over the old ones where there is no wave
             // (with a wave, the picture of the old window it took (WindowWave) hides the change until it gets there).
-            if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
-                UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
+            // A new accent fades in the same way, over the time the backdrop takes.
+            let accentChanged = self.accentKey() != self.builtAccent
+            if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle || accentChanged {
+                UIView.transition(with: self, duration: target != self.builtStyle ? LiveKeyboardView.modeFade : 0.7,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
                                   animations: { self.rebuild() })
             } else {

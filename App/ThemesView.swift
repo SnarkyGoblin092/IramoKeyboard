@@ -145,6 +145,7 @@ struct ThemesView: View {
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
     private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) {
         let frame = WindowWave.window?.bounds ?? screenFrame
+        let picture = WindowWave.snapshot()   // before the wave's clock starts
         ModeWave.count += 1
         let id = ModeWave.count
         let new = ModeWave(id: id, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
@@ -152,7 +153,7 @@ struct ThemesView: View {
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         // A picture of the whole window is taken now, before the setting changes anything on it: the wave carries
         // all of it across, the navigation bar, the keyboard, the buttons and labels, bent by the same lens.
-        WindowWave.start(for: new)
+        WindowWave.start(for: new, old: picture)
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
@@ -397,7 +398,7 @@ private struct ThemeThumbnail: View {
         let width = ThemeThumbnail.renderWidth
         let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
         func preview() -> some View {
-            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14, contentInset: 6)
                 .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
         }
