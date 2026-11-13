@@ -347,7 +347,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
                                    withConfiguration: UIImage.SymbolConfiguration(weight: .medium))
         searchIcon.tintColor = searchLook.secondaryText
         searchIcon.contentMode = .scaleAspectFit
-        searchLabel.font = UIFont.systemFont(ofSize: 20)
+        searchLabel.font = UIFont.systemFont(ofSize: 18)
         searchLabel.textColor = searchLook.secondaryText
         searchGlass.contentView.addSubview(searchIcon)
         searchGlass.contentView.addSubview(searchLabel)
@@ -756,7 +756,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         // iPad: the same icon and text size as the active search field (EmojiSearchBar).
         let iconSide = wide ? 19 : 21 * f
         searchIcon.frame = CGRect(x: 13 * ix, y: (searchHeight - iconSide) / 2, width: iconSide, height: iconSide)
-        searchLabel.font = UIFont.systemFont(ofSize: wide ? 16 : 20 * f)
+        searchLabel.font = UIFont.systemFont(ofSize: wide ? 15 : 18 * f)
         let labelX = wide ? 13 * ix + iconSide + 6 : 13 * ix + iconSide + 7 * ix
         searchLabel.frame = CGRect(x: labelX, y: 0, width: max(0, searchGlass.bounds.width - labelX - 13 * ix), height: searchHeight)
 
@@ -831,7 +831,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
             let ix = wide ? f : xf
             let iconSide = wide ? 19 : 21 * f
             searchIcon.frame = CGRect(x: 13 * ix, y: (pill - iconSide) / 2, width: iconSide, height: iconSide)
-            searchLabel.font = UIFont.systemFont(ofSize: wide ? 16 : 20 * f)
+            searchLabel.font = UIFont.systemFont(ofSize: wide ? 15 : 18 * f)
             let labelX = wide ? 13 * ix + iconSide + 6 : 13 * ix + iconSide + 7 * ix
             searchLabel.frame = CGRect(x: labelX, y: 0, width: max(0, searchGlass.bounds.width - labelX - 13 * ix), height: pill)
         }

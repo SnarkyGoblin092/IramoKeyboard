@@ -224,8 +224,8 @@ struct GesturesView: View {
                             trailColor = hex
                         } label: {
                             ZStack {
-                                Circle().fill(swatch).frame(width: 30, height: 30)
-                                    .overlay(Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 1))
+                                Color.clear.frame(width: 30, height: 30)
+                                    .glassShape(Circle(), tint: swatch, interactive: true)
                                 if hex.isEmpty {
                                     Text(tr("Theme")).font(.system(size: 8, weight: .bold)).foregroundColor(.white)
                                 }

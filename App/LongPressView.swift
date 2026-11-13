@@ -79,12 +79,6 @@ struct LongPressCharactersView: View {
     private var legend: some View {
         let keys = counts.count
         return HStack(spacing: 6) {
-            Text("3")
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(width: 14, height: 14)
-                .background(Circle().fill(Color.accentColor))
-                .accessibilityHidden(true)
             Text(keys == 0
                  ? tr("Keys with your characters show how many they have.")
                  : (keys == 1 ? tr("1 key has your characters.") : tr("%@ keys have your characters.", "\(keys)")))

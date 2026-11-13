@@ -158,8 +158,13 @@ struct HoldEditor: View {
     /// The field, and how many of the places are taken.
     private var entry: some View {
         HStack(spacing: 10) {
-            Image(systemName: isFull ? "checkmark.circle.fill" : "plus.circle.fill")
-                .foregroundColor(isFull ? .secondary : .accentColor)
+            // A glass button in the accent, so it stands out from the field.
+            let accent = Color.currentAccent(name: accentName, hex: accentHex)
+            Image(systemName: isFull ? "checkmark" : "plus")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(isFull ? .secondary : accent.readableText)
+                .frame(width: 30, height: 30)
+                .glassShape(Circle(), tint: isFull ? nil : accent)
                 .accessibilityHidden(true)
             CharacterEntryField(placeholder: isFull ? tr("Full. Remove one to add another.") : tr("Type or paste characters"),
                                 tint: Color.currentAccent(name: accentName, hex: accentHex),
@@ -231,13 +236,19 @@ struct HoldCell: View {
     let own: Bool
 
     var body: some View {
-        Text(character)
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        let cell = Text(character)
             .font(.system(size: 21, weight: .medium))
             .foregroundColor(own ? .primary : .secondary)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(own ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06)))
-            .contentShape(Rectangle())
+        return Group {
+            if own {
+                // The user's own: Liquid Glass tinted with the accent.
+                cell.glassShape(shape, tint: Color.accentColor.opacity(0.55))
+            } else {
+                cell.background(shape.fill(Color.primary.opacity(0.06)))
+            }
+        }
+        .contentShape(Rectangle())
     }
 }

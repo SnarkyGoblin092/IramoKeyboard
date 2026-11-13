@@ -13,6 +13,8 @@ struct ThemePreview: View {
     var contentInset: CGFloat = 0
     /// Clear Liquid Glass behind the keys (in the keys' light or dark mode) instead of the theme's keyboard backdrop.
     var glassBackdrop = false
+    /// Nothing behind the keys at all (the card they are drawn on shows through).
+    var noBackdrop = false
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
     @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
     @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
@@ -328,7 +330,7 @@ struct ThemePreview: View {
                 if glassBackdrop {
                     ClearGlassCard(cornerRadius: cornerRadius)
                         .environment(\.colorScheme, look.dark ? .dark : .light)
-                } else {
+                } else if !noBackdrop {
                     look.backdrop(scale: s)
                 }
                 VStack(spacing: 0) {

@@ -244,11 +244,6 @@ private struct ThemeCard: View {
                                 .padding(6)
                         }
                     }
-                    // The shadow of a plain card shape, not of the whole miniature keyboard (far cheaper to draw).
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.black)
-                            .shadow(color: Color.black.opacity(0.14), radius: 6, x: 0, y: 3))
                 HStack(spacing: 4) {
                     Text(theme.name)
                         .font(.subheadline.weight(isSelected ? .semibold : .regular))
@@ -286,6 +281,9 @@ private struct ThemeThumbnail: View {
     @State private var previous: UIImage?
     @State private var fade: Double = 1
     @State private var shownKey = ""
+    /// The mode of the picture on show, and whether it was taken away for a mode change (its new one fades in).
+    @State private var shownDark: Bool?
+    @State private var cleared = false
     @State private var wantedKey = ""
     /// Counts the pictures of the other mode that arrive while a wave crosses, to draw them.
     @State private var arrived = 0
@@ -313,6 +311,8 @@ private struct ThemeThumbnail: View {
             }
         }
         .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+        // The keys sit on a card of glass.
+        .background(ClearGlassCard(cornerRadius: 14))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // The other mode's picture is drawn too, when nothing else is to be: a wave then has both ready, and none
         // is drawn while it crosses (each takes the main thread, and the wave's frames with it).
@@ -356,21 +356,25 @@ private struct ThemeThumbnail: View {
         return image
     }
 
-    /// Until it is drawn: the keyboard's backdrop.
+    /// Until it is drawn: just the glass card.
     private func placeholder(dark: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+        Color.clear
     }
 
     /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view) or while a wave
     /// crosses (the wave shows the change); over the picture it replaces otherwise, faded in.
-    private func show(_ new: UIImage?, key: String) {
+    private func show(_ new: UIImage?, key: String, dark: Bool) {
         guard let new = new else { return }
-        let replaces = image != nil && shownKey != key && ModeWave.running.isEmpty
+        // Faded over the old picture only when it is the same mode (an edit): the other mode's picture is never kept
+        // on show under the new one.
+        let replaces = image != nil && shownDark == dark && shownKey != key && ModeWave.running.isEmpty
+        let fadesIn = replaces || (cleared && ModeWave.running.isEmpty)
+        cleared = false
         previous = replaces ? image : nil
         image = new
         shownKey = key
-        guard replaces else {
+        shownDark = dark
+        guard fadesIn else {
             fade = 1
             return
         }
@@ -386,7 +390,7 @@ private struct ThemeThumbnail: View {
         // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
         // it is seeded anew each run, so pictures saved on disk would never be found again).
         let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|\(ThumbnailCache.settingsSignature())"
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|onglass|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -401,14 +405,17 @@ private struct ThemeThumbnail: View {
                                     idle: Bool, done: @escaping (UIImage?) -> Void) {
         let width = ThemeThumbnail.renderWidth
         let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
-        func preview() -> some View {
-            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14, contentInset: ThemeThumbnail.inset)
+        // The real glass photographs with its own glass card behind the keys; the others are drawn without a backdrop
+        // and sit on the card's glass (ThemeThumbnail.body).
+        func preview(glass: Bool = false) -> some View {
+            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14,
+                                contentInset: ThemeThumbnail.inset, glassBackdrop: glass, noBackdrop: !glass)
                 .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
         }
         ThumbnailCache.shared.render(key: key, idle: idle) {
             if theme.kind == .liquidGlass,
-               let shot = await GlassSnapshot.take(AnyView(preview()), size: size, dark: dark, scale: scale,
+               let shot = await GlassSnapshot.take(AnyView(preview(glass: true)), size: size, dark: dark, scale: scale,
                                                    backdrop: ThemePreviewBackdrop.color(theme: theme, dark: dark)) {
                 return shot
             }
@@ -432,14 +439,21 @@ private struct ThemeThumbnail: View {
         wantedKey = key
         guard key != shownKey || image == nil else { return }
         if let cached = ThumbnailCache.shared.image(for: key) {
-            show(cached, key: key)
+            show(cached, key: key, dark: dark)
             return
+        }
+        // Not drawn yet: the other mode's picture must not stay on show (wrong for a moment, then faded away).
+        if let shown = shownDark, shown != dark, image != nil {
+            image = nil
+            previous = nil
+            shownKey = ""
+            cleared = true
         }
         queue(theme: theme, dark: dark, key: key) { rendered in
             // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
             // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
             guard wantedKey == key else { return }
-            show(rendered, key: key)
+            show(rendered, key: key, dark: dark)
         }
     }
 }
@@ -510,7 +524,7 @@ final class ThumbnailCache {
             // The idle ones are spaced out (a scroll stays smooth), and wait for a wave to end.
             if self.queue.isEmpty {
                 repeat {
-                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    try? await Task.sleep(nanoseconds: 50_000_000)
                 } while self.queue.isEmpty && !ModeWave.running.isEmpty
             }
             let job = self.queue.isEmpty ? self.idle.removeFirst() : self.queue.removeFirst()

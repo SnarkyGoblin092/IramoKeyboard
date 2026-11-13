@@ -80,9 +80,13 @@ final class EmojiSearchBar: UIView {
         query = text
         placeholder = newPlaceholder
         if text.isEmpty {
+            queryLabel.adjustsFontSizeToFitWidth = false   // the placeholder keeps the size it has in the picker
+            queryLabel.lineBreakMode = .byTruncatingTail
             queryLabel.text = placeholder
             queryLabel.textColor = look.secondaryText
         } else {
+            queryLabel.adjustsFontSizeToFitWidth = true
+            queryLabel.lineBreakMode = .byTruncatingHead
             queryLabel.text = text
             queryLabel.textColor = look.text
         }
@@ -131,7 +135,7 @@ final class EmojiSearchBar: UIView {
         // iPhone: the picker's icon and text size (iPad keeps 16pt, which the picker matches there).
         let isWide = bounds.width > 500   // the picker's wide layout (iPad, iPhone in landscape)
         let f = EmojiPanel.scale(forWidth: bounds.width)
-        queryLabel.font = UIFont.systemFont(ofSize: isWide ? 16 : 20 * f)
+        queryLabel.font = UIFont.systemFont(ofSize: isWide ? 15 : 18 * f)
         // (No magnifying glass here: the back arrow is the icon of the active search.)
         let queryX: CGFloat = 46
         queryLabel.frame = CGRect(x: queryX, y: 0, width: queryWidth - (queryX - 44) - 2, height: area.height)
@@ -241,12 +245,8 @@ final class EmojiSearchBar: UIView {
     /// to fit its narrow frame, so that is allowed for: the text ends up exactly as big as the picker's, not a bit less.
     /// (Scaled about the label's centre, so the move is worked out for that.)
     private func placeholderTransform(toLeft left: CGFloat, fontSize: CGFloat) -> CGAffineTransform {
-        let frame = queryLabel.frame
-        let natural = ((queryLabel.text ?? "") as NSString).size(withAttributes: [.font: queryLabel.font as Any]).width
-        let shrink: CGFloat = natural > frame.width && natural > 0 ? max(queryLabel.minimumScaleFactor, frame.width / natural) : 1
-        let scale = fontSize / max(queryLabel.font.pointSize * shrink, 1)
-        let move = left - frame.minX - frame.width / 2 + scale * frame.width / 2
-        return CGAffineTransform(translationX: move, y: 0).scaledBy(x: scale, y: scale)
+        // The text is the same size here and in the picker (the placeholder is never shrunk, see setQuery): it only moves.
+        return CGAffineTransform(translationX: left - queryLabel.frame.minX, y: 0)
     }
 
     /// Puts the bar as it was after `playExit`, for the next time it is shown.

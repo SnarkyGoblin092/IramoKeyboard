@@ -337,8 +337,24 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             // (with a wave, the picture of the old window it took (WindowWave) hides the change until it gets there).
             // A new accent fades in the same way, over the time the backdrop takes.
             let accentChanged = self.accentKey() != self.builtAccent
-            if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle || accentChanged {
-                UIView.transition(with: self, duration: target != self.builtStyle ? LiveKeyboardView.modeFade : 0.7,
+            if self.window != nil, ModeWave.running.isEmpty, target == self.builtStyle, accentChanged {
+                // Everything stays where it is: the keyboard is built anew with no animation of its own (nothing
+                // slides or jumps), and a picture of the old one over it fades away.
+                let old = self.snapshotView(afterScreenUpdates: false)
+                UIView.performWithoutAnimation {
+                    self.rebuild()
+                    self.layoutIfNeeded()
+                }
+                if let old = old {
+                    old.frame = self.bounds
+                    old.isUserInteractionEnabled = false
+                    self.addSubview(old)
+                    UIView.animate(withDuration: 0.7, delay: 0, options: [.curveEaseInOut, .allowUserInteraction],
+                                   animations: { old.alpha = 0 },
+                                   completion: { _ in old.removeFromSuperview() })
+                }
+            } else if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
+                UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
                                   animations: { self.rebuild() })
             } else {
