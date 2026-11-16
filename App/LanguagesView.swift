@@ -179,7 +179,7 @@ private struct AddLanguageView: View {
 
 // MARK: - Learned words
 
-/// Words the keyboard learned (ones no dictionary has, used at least twice), one list for every language, with a
+/// Words the keyboard learned (ones no dictionary has, used at least three times), one list for every language, with a
 /// field to add words of the user's own, a search field and swipe to remove. Added and kept words (the pin) are
 /// never forgotten; the others fade when they go unused.
 struct LearnedWordsView: View {
@@ -236,7 +236,7 @@ struct LearnedWordsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         IconTile(symbol: "character.book.closed", color: .brown)
                         Text(tr("No learned words yet")).font(.headline)
-                        Text(tr("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar. Learned words work in every language."))
+                        Text(tr("A word that isn't in the dictionary is learned once you have typed it three times, or when you tap it in the suggestion bar. Learned words work in every language."))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -260,7 +260,7 @@ struct LearnedWordsView: View {
                 }
             } footer: {
                 if !words.isEmpty && !matches.isEmpty {
-                    Text(tr("Pinned words are never forgotten; the others fade after a few months without use. Swipe a word left to remove it."))
+                    Text(tr("Pinned words are never forgotten; the others fade after a few weeks without use. Swipe a word left to remove it."))
                 }
             }
             .glassRows()

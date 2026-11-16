@@ -971,13 +971,13 @@ final class Settings {
     }
 
     /// The words the keyboard has learned (used at least `learnAfter` times), alphabetically.
-    func learnedWordList(learnAfter: Int = 2) -> [String] {
+    func learnedWordList(learnAfter: Int = WordStore.learnAfter) -> [String] {
         return learnedWords().filter { $0.value >= learnAfter }.keys
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     /// The learned words as the user writes them ("Zsófi", "iOS"): the stored (lower-case) word and the form to show.
-    func learnedWordEntries(learnAfter: Int = 2) -> [(word: String, shown: String)] {
+    func learnedWordEntries(learnAfter: Int = WordStore.learnAfter) -> [(word: String, shown: String)] {
         let forms = writtenForms()
         return learnedWordList(learnAfter: learnAfter).map { (word: $0, shown: forms[$0] ?? $0) }
     }
@@ -1033,7 +1033,7 @@ final class Settings {
         let written = Settings.customWritten(text)
         let lower = written.lowercased()
         var words = learnedWords()
-        words[lower] = max(words[lower] ?? 0, 3)
+        words[lower] = max(words[lower] ?? 0, WordStore.learnAfter)
         setLearnedWords(words)
         var days = learnedWordDays()
         days[lower] = Int(Date().timeIntervalSince1970 / 86_400)

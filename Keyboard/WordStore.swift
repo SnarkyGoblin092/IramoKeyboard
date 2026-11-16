@@ -828,19 +828,20 @@ final class WordStore {
 
     // MARK: Learning
 
-    /// Remembers a word the dictionary does not know (names, slang) so it can be suggested later.
+    /// Counts a use of a word the dictionary does not know (names, slang); after `learnAfter` uses it is learned and
+    /// suggested. One word typed and finished with space is one use only: most such words are slips.
     /// - Parameter asTyped: keep this exact spelling even though the dictionary has the word with accents (an
-    ///   auto-fix the user took back), so it is never fixed again.
-    func learn(_ word: String, asTyped: Bool = false) {
+    ///   auto-fix the user took back).
+    /// - Parameter uses: how many uses this counts as.
+    func learn(_ word: String, asTyped: Bool = false, uses: Int = 1) {
         let lower = TextFolding.normalizeApostrophes(word).lowercased()
         guard lower.count >= (asTyped ? 2 : 3), lower.count <= 24 else { return }
         let key = TextFolding.key(lower)
         let index = lowerBound(of: key)
         if !asTyped, index < entries.count, entries[index].folded == key { return }   // already known
 
-        // Taking back an auto-correction is a deliberate choice: the word counts as the user's own at once.
         // Learned once, it is the user's word in every language.
-        LearnedWords.shared.add(lower, key: key, by: asTyped ? WordStore.learnAfter : 1)
+        LearnedWords.shared.add(lower, key: key, by: max(1, uses))
         // Its capitals are learned with it ("Zsófi", "iOS"); a word written in ALL CAPS says nothing about them.
         let written = TextFolding.normalizeApostrophes(word)
         if written != lower, !(written.count > 1 && written == written.uppercased()) {
@@ -968,8 +969,10 @@ extension WordStore {
         return log10(Double(max(entry.freq, 1)) / entries.totalCount)
     }
 
-    /// An unknown word counts as the user's own after this many uses: a slip typed once is not a word.
-    static let learnAfter = 2
+    /// An unknown word counts as the user's own after this many uses: a slip typed once (or twice) is not a word.
+    static let learnAfter = 3
+    /// A typo of the user's is corrected to the word they retyped for it after this many times.
+    static let correctAfter = 2
 
     func isLearned(_ word: String) -> Bool {
         return (learned[word] ?? 0) >= WordStore.learnAfter
@@ -1037,7 +1040,7 @@ extension WordStore {
 // MARK: - The user's own typos
 
 extension WordStore {
-    /// The user deleted `typed` and wrote `meant` in its place: after `learnAfter` times, typing `typed` offers
+    /// The user deleted `typed` and wrote `meant` in its place: after `correctAfter` times, typing `typed` offers
     /// (and corrects to) `meant`.
     func learnCorrection(from typed: String, to meant: String) {
         let key = typed + "\t" + meant
@@ -1052,7 +1055,7 @@ extension WordStore {
     func correction(for typed: String) -> String? {
         let prefix = typed + "\t"
         var best: (word: String, count: Int)? = nil
-        for (key, count) in corrections where count >= WordStore.learnAfter && key.hasPrefix(prefix) {
+        for (key, count) in corrections where count >= WordStore.correctAfter && key.hasPrefix(prefix) {
             if count > (best?.count ?? 0) { best = (String(key.dropFirst(prefix.count)), count) }
         }
         return best?.word
@@ -1084,8 +1087,13 @@ final class LearnedWords {
     /// Words kept for good: the ones the user added on the Learned words screen (or kept there). They are never
     /// forgotten and rank first.
     private(set) var pinned: Set<String>
-    /// A word typed once and never again within this many days was a slip, not a word: it is forgotten.
-    private static let unconfirmedDays = 21
+    /// A word not yet learned (used fewer than `learnAfter` times) that goes this many days without another use was a
+    /// slip, not a word: it is forgotten.
+    private static let unconfirmedDays = 7
+    /// Days without use in which a learned word's strength halves.
+    private static let halfLife = 21.0
+    /// A learned word whose strength has faded below this is forgotten.
+    private static let forgetBelow = 0.5
 
     private init() {
         counts = Settings.shared.learnedWords()
@@ -1121,16 +1129,17 @@ final class LearnedWords {
         scheduleSave()
     }
 
-    /// Words learned by typing fade as they go unused (`effective` halves every ~45 days) and are forgotten once
-    /// they have faded away; the more a word was used, the longer that takes. A word typed only once is forgotten
-    /// after `unconfirmedDays` (most such words are slips). Kept words are never forgotten.
+    /// Words learned by typing fade as they go unused (`effective` halves every `halfLife` days) and are forgotten
+    /// once they have faded away: about two months for a word used 3 times, three for one used 10 times. A word not
+    /// yet learned is forgotten after `unconfirmedDays` without another use (most such words are slips). Kept words
+    /// are never forgotten.
     private func forgetUnused() {
         var forgotten = false
         let today = LearnedWords.today
         for word in counts.keys where !pinned.contains(word) {
             let age = days[word].map { today - $0 } ?? 0
             let unconfirmed = (counts[word] ?? 0) < WordStore.learnAfter && age > LearnedWords.unconfirmedDays
-            guard unconfirmed || effective(word) < 0.35 else { continue }
+            guard unconfirmed || effective(word) < LearnedWords.forgetBelow else { continue }
             counts.removeValue(forKey: word)
             days.removeValue(forKey: word)
             forms.removeValue(forKey: word)
@@ -1190,12 +1199,12 @@ final class LearnedWords {
 
     private static var today: Int { return Int(Date().timeIntervalSince1970 / 86_400) }
 
-    /// How much the word is used: its count, halving every ~45 days without use.
+    /// How much the word is used: its count, halving every `halfLife` days without use.
     func effective(_ word: String) -> Double {
         guard let count = counts[word] else { return 0 }
         if pinned.contains(word) { return Double(count) + 30 }   // never fades; the most strongly ranked
         let age = days[word].map { max(0, LearnedWords.today - $0) } ?? 0
-        return Double(count) * pow(0.5, Double(age) / 45)
+        return Double(count) * pow(0.5, Double(age) / LearnedWords.halfLife)
     }
 
     func add(_ word: String, key: String, by amount: Int) {

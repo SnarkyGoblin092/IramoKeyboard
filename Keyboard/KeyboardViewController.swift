@@ -1294,7 +1294,8 @@ final class KeyboardViewController: UIInputViewController {
             TypingStats.shared.note(.correctionUndone)
             for _ in 0..<fix.inserted.count { textDocumentProxy.deleteBackward() }
             textDocumentProxy.insertText(fix.typed)
-            stores[language]?.learn(fix.typed, asTyped: true)
+            // One use short of learned: the next time it is written (and not corrected away) it is the user's word.
+            stores[language]?.learn(fix.typed, asTyped: true, uses: WordStore.learnAfter - 1)
             // Taking back the capitals of a word the user writes with them: it is written as typed from now on.
             let lowerTyped = TextFolding.normalizeApostrophes(fix.typed).lowercased()
             if LearnedWords.shared.forms[lowerTyped] == fix.inserted.trimmingCharacters(in: .whitespaces) {
@@ -1426,8 +1427,6 @@ final class KeyboardViewController: UIInputViewController {
             forms.setForm(nil, for: lower)
         } else if known == nil {
             forms.setForm(normalized, for: lower)
-            // A capitalised word in the middle of a sentence that no dictionary has is a name: learned at once.
-            if !atStart, normalized.first?.isUppercase == true { learnTappedWord(normalized) }
         } else if formVotes[lower] == normalized {
             formVotes.removeValue(forKey: lower)
             forms.setForm(normalized, for: lower)
@@ -1486,7 +1485,7 @@ final class KeyboardViewController: UIInputViewController {
         guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
         ensureStores()
         let known = stores.values.contains { $0.isLoaded && $0.dictionaryHas(word: cleaned) }
-        if !known { stores[language]?.learn(cleaned, asTyped: true) }
+        if !known { stores[language]?.learn(cleaned, asTyped: true, uses: WordStore.learnAfter) }
     }
 
     /// Remembers which word followed which, for next-word suggestions.
