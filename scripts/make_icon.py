@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draws the 1024x1024 app icon in a light and a dark version (iOS shows the dark one when the phone is in dark
-mode): keycaps on a blue-violet gradient with a swipe trail swooping across them. Drawn at 4x and scaled down for
-smooth edges. Needs Pillow and NumPy:  pip install pillow numpy"""
+mode): one keycap with a rainbow side and a swipe swoop across its face. Drawn at 4x and scaled down for smooth
+edges. Needs Pillow and NumPy:  pip install pillow numpy"""
 import math
 from pathlib import Path
 
@@ -59,77 +59,70 @@ def shadow(img, mask, offset, blur, colour, alpha):
     paste_colour(img, m.filter(ImageFilter.GaussianBlur(blur)), colour, alpha)
 
 
-def draw(dark):
-    """The icon: light (white keys on blue-violet) or dark (graphite keys on a deep night violet)."""
-    # Background, lit from the top left.
-    if dark:
-        img = gradient([(0, "#1B1F3B"), (0.55, "#241B45"), (1, "#371A57")], 55)
-        img.alpha_composite(radial((S * 0.25, S * 0.1), S * 0.8, (120, 110, 255), 0.22))
-    else:
-        img = gradient([(0, "#6C7BFF"), (1, "#A35CFF")], 55)
-        img.alpha_composite(radial((S * 0.25, S * 0.1), S * 0.8, (255, 255, 255), 0.25))
+RAINBOW = ["#14C8D8", "#2F7BFF", "#7B4DFF", "#E8287A"]
 
-    # Keycaps in keyboard rows (4, 3 shifted by half a key, 4), each with an edge below it.
-    key, gap, radius, depth = 168 * F, 26 * F, 46 * F, 12 * F
-    rows = [(4, 0.0), (3, 0.5), (4, 0.0)]
-    width, height = 4 * key + 3 * gap, 3 * key + 2 * gap
-    left, top = (S - width) // 2, (S - height) // 2
-    keys = [(left + int((i + offset) * (key + gap)), top + row * (key + gap))
-            for row, (count, offset) in enumerate(rows) for i in range(count)]
-    shade = (5, 4, 20) if dark else (40, 30, 120)
-    for x0, y0 in keys:   # all shadows first, so none falls on a neighbouring key
-        shadow(img, rrect_mask((x0, y0 + depth, x0 + key, y0 + key + depth), radius), (0, 14 * F), 22 * F,
-               shade, 0.45 if dark else 0.22)
-    face_fill = gradient([(0, "#4A4F6E"), (1, "#383C57")] if dark else [(0, "#FFFFFF"), (1, "#EEF0FA")], 90)
-    edge = (34, 36, 56) if dark else (206, 210, 238)
-    for x0, y0 in keys:
-        paste_colour(img, rrect_mask((x0, y0 + depth, x0 + key, y0 + key + depth), radius), edge)
-        face = face_fill.copy()
-        face.putalpha(rrect_mask((x0, y0, x0 + key, y0 + key), radius))
-        img.alpha_composite(face)
 
-    # The swipe trail: one swoop, as a finger swipes a word: a quick dip from the left, then a long sweep rising to
-    # the top right; it thickens towards the end, with a shadow under it.
-    p0 = (left + width * 0.05, top + height * 0.46)
-    p1 = (left + width * 0.16, top + height * 1.22)
-    p2 = (left + width * 0.58, top + height * 0.66)
-    p3 = (left + width * 0.95, top + height * 0.13)
-    points = []
-    for i in range(1201):
-        u = i / 1200
+def bezier(p0, p1, p2, p3, n):
+    pts = []
+    for i in range(n + 1):
+        u = i / n
         a, b, c, d = (1 - u) ** 3, 3 * (1 - u) ** 2 * u, 3 * (1 - u) * u ** 2, u ** 3
-        points.append((a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]))
-    w_start, w_end = 26 * F, 74 * F
-    stops = ["#2FA8FF", "#5B63FF", "#A23CF2", "#FF3D8E"] if dark else ["#0A8DFF", "#3F48F2", "#8E2BE8", "#E8287A"]
-    colours = [np.array(hexrgb(c), float) for c in stops]
-    trail_mask = Image.new("L", img.size, 0)
-    trail = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw_mask, draw_trail = ImageDraw.Draw(trail_mask), ImageDraw.Draw(trail)
+        pts.append((a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]))
+    return pts
+
+
+def colour_at(u, stops):
+    cols = [np.array(hexrgb(c), float) for c in stops]
+    t = u * (len(cols) - 1)
+    k = min(int(t), len(cols) - 2)
+    return tuple(int(v) for v in cols[k] + (cols[k + 1] - cols[k]) * (t - k))
+
+
+def draw(dark):
+    """The icon: one keycap whose side glows with the rainbow, a swipe swoop across its face. Light: a white key on
+    a pastel wash. Dark: a navy key on a deep navy, the swoop glowing."""
+    C = S / 2
+    if dark:
+        img = gradient([(0, "#121733"), (0.5, "#1A1640"), (1, "#26143A")], 120)
+        img.alpha_composite(radial((C, C + 120 * F), S * 0.6, (110, 70, 255), 0.35))
+    else:
+        img = gradient([(0, "#DCEBFF"), (0.5, "#EADFFF"), (1, "#FFDDEB")], 120)
+
+    # The keycap: a soft coloured shadow, the rainbow side below, the face on top.
+    box = (C - 330 * F, C - 340 * F, C + 330 * F, C + 300 * F)
+    radius, depth = 140 * F, 34 * F
+    face_mask = rrect_mask(box, radius)
+    side = Image.new("L", (S, S), 0)
+    side.paste(face_mask, (0, depth))
+    shadow(img, side, (0, 22 * F), 36 * F, (120, 60, 255) if dark else (120, 60, 200), 0.55 if dark else 0.4)
+    edge = gradient([(i / (len(RAINBOW) - 1), c) for i, c in enumerate(RAINBOW)], 0)
+    edge.putalpha(side)
+    img.alpha_composite(edge)
+    face = gradient([(0, "#2A3058"), (1, "#1E2346")] if dark else [(0, "#FFFFFF"), (1, "#ECEEFA")], 90)
+    face.putalpha(face_mask)
+    img.alpha_composite(face)
+
+    # The swoop, as a finger swipes a word: a quick dip, then a long sweep up to the top right. It thickens
+    # towards the end and runs cyan, blue, violet, pink; it sits centred on the key face.
+    curve = [(x * 0.76 * F, y * 0.76 * F) for x, y in ((-270, 230), (-90, 450), (70, -310), (270, -80))]
+    points = bezier(*curve, 1600)
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    dx, dy = C - (min(xs) + max(xs)) / 2, C - 22 * F - (min(ys) + max(ys)) / 2
+    points = [(x + dx, y + dy) for x, y in points]
+    w_start, w_end = 34 * F, 92 * F
+    swoop_mask = Image.new("L", img.size, 0)
+    swoop = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw_mask, draw_swoop = ImageDraw.Draw(swoop_mask), ImageDraw.Draw(swoop)
     for i, (x, y) in enumerate(points):
         u = i / (len(points) - 1)
-        t = u * (len(colours) - 1)
-        k = min(int(t), len(colours) - 2)
-        colour = colours[k] + (colours[k + 1] - colours[k]) * (t - k)
-        r = (w_start + (w_end - w_start) * u ** 0.7) / 2
+        r = (w_start + (w_end - w_start) * u ** 0.8) / 2
         draw_mask.ellipse((x - r, y - r, x + r, y + r), fill=255)
-        draw_trail.ellipse((x - r, y - r, x + r, y + r), fill=tuple(int(v) for v in colour) + (255,))
+        draw_swoop.ellipse((x - r, y - r, x + r, y + r), fill=colour_at(u, RAINBOW) + (255,))
     if dark:
-        # A coloured glow under the line instead of a shadow, which would not show on the dark.
-        shadow(img, trail_mask, (0, 6 * F), 34 * F, hexrgb("#7A4DFF"), 0.75)
-        shadow(img, trail_mask, (0, 14 * F), 14 * F, (0, 0, 0), 0.55)
+        shadow(img, swoop_mask, (0, 0), 34 * F, hexrgb("#7B4DFF"), 0.6)   # a glow; a shadow would not show
     else:
-        shadow(img, trail_mask, (0, 24 * F), 28 * F, (30, 14, 100), 0.9)   # wide and soft...
-        shadow(img, trail_mask, (0, 24 * F), 28 * F, (30, 14, 100), 0.6)
-        shadow(img, trail_mask, (0, 9 * F), 9 * F, (30, 14, 100), 0.6)     # ...and tight under the line
-    img.alpha_composite(trail)
-
-    # Where the finger lifts: a white dot with a pink glow.
-    x, y = points[-1]
-    r = 44 * F
-    dot = Image.new("L", img.size, 0)
-    ImageDraw.Draw(dot).ellipse((x - r, y - r, x + r, y + r), fill=255)
-    shadow(img, dot, (0, 0), 28 * F, hexrgb("#FF3D8E" if dark else "#E8287A"), 1.0 if dark else 0.9)
-    paste_colour(img, dot, (255, 255, 255))
+        shadow(img, swoop_mask, (0, 12 * F), 16 * F, (60, 30, 140), 0.15)
+    img.alpha_composite(swoop)
     return img.convert("RGB").resize((1024, 1024), Image.LANCZOS)   # no alpha: iOS rejects icons with it
 
 
