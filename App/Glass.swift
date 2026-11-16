@@ -1124,7 +1124,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
             }
             // A UIKit pan that only begins on a sideways swipe: a SwiftUI drag here takes the vertical drags from
             // the scroll view too (iOS 18 and later), and the list would not scroll.
-            .gesture(SidewaysPan(enabled: canDelete, open: offset < 0, changed: changed, ended: ended))
+            .gesture(SidewaysPan(enabled: canDelete && !deleting, open: offset < 0, changed: changed, ended: ended))
     }
 
     private func changed(_ dx: CGFloat) {
@@ -1163,7 +1163,8 @@ private struct SwipeToDeleteRow<Content: View>: View {
         deleting = true
         offset = 0
         settled = 0
-        DispatchQueue.main.async { onDelete() }
+        // A moment later, so the pan has finished and the row is not taken out from under a live gesture.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { onDelete() }
     }
 }
 

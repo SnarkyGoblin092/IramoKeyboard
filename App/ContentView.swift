@@ -142,6 +142,8 @@ struct ContentView: View {
                 Feedback.prepare()
                 // The enabled languages' data is unpacked now, so the keyboard finds it ready.
                 LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
+                // Every theme's card, light and dark, is drawn in the background so the Themes screen finds them ready.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { ThemeCardPrewarm.run() }
             }
     }
 

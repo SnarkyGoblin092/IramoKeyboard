@@ -167,18 +167,7 @@ struct ThemesView: View {
     /// Every theme's light and dark picture, drawn ahead (one by one, when nothing else is wanted), so cards and
     /// the light / dark switch never wait for one.
     private func prewarm() {
-        let edits = SystemEdits.decode(systemEdits)
-        let scale = UIScreen.main.scale
-        for section in ThemeCatalog.pickerSections {
-            for base in section.themes {
-                let theme = edited(base, edits)
-                for dark in [previewScheme == .dark, previewScheme != .dark] {
-                    let key = ThemeThumbnail.key(theme: theme, dark: dark)
-                    guard ThumbnailCache.shared.image(for: key) == nil else { continue }
-                    ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: scale, dark: dark, key: key, idle: true) { _ in }
-                }
-            }
-        }
+        ThemeCardPrewarm.run()
     }
 
     /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
@@ -390,7 +379,7 @@ private struct ThemeThumbnail: View {
         // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
         // it is seeded anew each run, so pictures saved on disk would never be found again).
         let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|onglass|\(ThumbnailCache.settingsSignature())"
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|onglass2|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -416,7 +405,7 @@ private struct ThemeThumbnail: View {
         ThumbnailCache.shared.render(key: key, idle: idle) {
             if theme.kind == .liquidGlass,
                let shot = await GlassSnapshot.take(AnyView(preview(glass: true)), size: size, dark: dark, scale: scale,
-                                                   backdrop: ThemePreviewBackdrop.color(theme: theme, dark: dark)) {
+                                                   backdrop: UIColor.clear) {
                 return shot
             }
             let renderer = ImageRenderer(content: preview().environment(\.staticGlass, true))
@@ -458,6 +447,38 @@ private struct ThemeThumbnail: View {
     }
 }
 
+/// Draws every theme's light and dark card picture in the background, from when the app opens (and again whenever
+/// the Themes screen opens, for what changed since), so the cards are there before the screen is.
+@MainActor
+enum ThemeCardPrewarm {
+    static func run() {
+        let defaults = SharedStore.defaults
+        let edits = SystemEdits.decode(defaults.string(forKey: SettingKey.systemEdits) ?? SettingDefault.systemEdits)
+        let accent = Color.currentAccent(name: defaults.string(forKey: SettingKey.accent) ?? SettingDefault.accent,
+                                         hex: defaults.string(forKey: SettingKey.accentHex) ?? SettingDefault.accentHex)
+        let mode = defaults.string(forKey: SettingKey.appearance) ?? SettingDefault.appearance
+        let systemDark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
+        let currentDark = mode == "auto" ? systemDark : mode == "dark"
+        let scale = UIScreen.main.scale
+        for section in ThemeCatalog.pickerSections {
+            for base in section.themes {
+                var theme = base
+                if let style = edits[base.id] {
+                    theme.systemStyle = style
+                    theme.isEdited = true
+                }
+                for dark in [currentDark, !currentDark] {
+                    let key = ThemeThumbnail.key(theme: theme, dark: dark)
+                    guard ThumbnailCache.shared.image(for: key) == nil, ThumbnailCache.shared.markQueued(key) else { continue }
+                    ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: scale, dark: dark, key: key, idle: true) { _ in
+                        ThumbnailCache.shared.unmarkQueued(key)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The theme cards' pictures, and a queue that draws them one per run-loop turn so that a screenful of new cards
 /// never stalls a scroll.
 @MainActor
@@ -481,6 +502,11 @@ final class ThumbnailCache {
     init() {
         images.countLimit = 160
     }
+
+    /// Keys a background draw is already waiting for (so running the prewarm twice does not draw anything twice).
+    private var queuedKeys = Set<String>()
+    func markQueued(_ key: String) -> Bool { return queuedKeys.insert(key).inserted }
+    func unmarkQueued(_ key: String) { queuedKeys.remove(key) }
 
     /// The picture in memory, else the one kept on disk from an earlier run (a theme is drawn once, ever, until
     /// what it depends on changes: the key holds all of that).
@@ -524,7 +550,7 @@ final class ThumbnailCache {
             // The idle ones are spaced out (a scroll stays smooth), and wait for a wave to end.
             if self.queue.isEmpty {
                 repeat {
-                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    try? await Task.sleep(nanoseconds: 8_000_000)
                 } while self.queue.isEmpty && !ModeWave.running.isEmpty
             }
             let job = self.queue.isEmpty ? self.idle.removeFirst() : self.queue.removeFirst()

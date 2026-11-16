@@ -154,8 +154,12 @@ enum LanguageData {
             try? output.close()
         }
         do {
+            // (FileHandle.write(_:) raises an Objective-C exception when the disk is full or the file is gone,
+            // which cannot be caught and ends the process; write(contentsOf:) throws.)
+            var writeFailed = false
             let filter = try OutputFilter(.decompress, using: .lzma) { data in
-                if let data = data { output.write(data) }
+                guard let data = data, !writeFailed else { return }
+                do { try output.write(contentsOf: data) } catch { writeFailed = true }
             }
             while true {
                 let chunk = input.readData(ofLength: 256 * 1024)
@@ -163,7 +167,7 @@ enum LanguageData {
                 try filter.write(chunk)
             }
             try filter.finalize()
-            return true
+            return !writeFailed
         } catch {
             return false
         }

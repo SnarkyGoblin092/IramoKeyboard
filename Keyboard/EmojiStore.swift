@@ -319,12 +319,76 @@ final class EmojiStore {
             // The first word must start there (not be the end of a longer word cut off by the 80 characters).
             if count == words.count && before.count > 80 { continue }
             let phrase = tail.joined(separator: " ")
+            let folded = tail.map { TextFolding.fold(String($0)) }
             for language in languages {
-                if let emoji = suggestions(for: phrase, language: language, limit: 1).first
-                    ?? fuzzyPhrase(tail.map { TextFolding.fold(String($0)) }, language: language) {
+                // The names and words the emoji search uses first (it finds "piros szív" -> ❤️), then the suggestion
+                // keywords, then the same words in any order.
+                if let emoji = namedPhrase(folded, language: language)
+                    ?? suggestions(for: phrase, language: language, limit: 1).first
+                    ?? fuzzyPhrase(folded, language: language) {
                     return (emoji, phrase.count + trailing)
                 }
             }
+        }
+        return nil
+    }
+
+    private struct NameEntry {
+        let emoji: String
+        let name: [String]          // the full name, word by word
+        let keywords: Set<String>   // every other search word
+    }
+    private var nameIndex: [Language: [NameEntry]] = [:]
+
+    /// The emoji of a language by name and search words (the data the emoji search box reads), kept per language.
+    private func nameEntries(_ language: Language) -> [NameEntry] {
+        if let cached = nameIndex[language] { return cached }
+        var entries: [NameEntry] = []
+        for (emoji, words) in EmojiStore.loadSearchWords(language) {
+            guard let name = words.first else { continue }
+            entries.append(NameEntry(emoji: emoji, name: name.split(separator: " ").map { String($0) },
+                                     keywords: Set(words.dropFirst())))
+        }
+        nameIndex[language] = entries
+        return entries
+    }
+
+    /// The emoji whose name has typed words in it (any order; the others of its name may be left out), the rest of
+    /// the typed words being its search words: "red heart", "piros szív" -> ❤️. At least one word must be one of
+    /// the name's own. Short words ("with", "de", "mit") may be left out of what was typed. Names that are
+    /// exactly what was typed win, then the shorter and the more used emoji.
+    private func namedPhrase(_ typed: [String], language: Language) -> String? {
+        var variants = [typed]
+        let longer = typed.filter { $0.count > 3 }
+        if longer.count >= 2 && longer.count < typed.count { variants.append(longer) }
+        let entries = nameEntries(language)
+        for tokens in variants {
+            var best: (score: Int, order: Int, emoji: String)?
+            for entry in entries {
+                var total = 0
+                var nameHits = 0
+                var matched = true
+                for token in tokens {
+                    if entry.name.contains(token) {
+                        total += 6
+                        nameHits += 1
+                    } else if entry.keywords.contains(token) {
+                        total += 3
+                    } else {
+                        matched = false
+                        break
+                    }
+                }
+                guard matched, nameHits > 0 else { continue }
+                var score = total * 10 - max(0, entry.name.count - nameHits) * 3
+                if entry.name == tokens { score += 1000 }
+                if EmojiStore.rank(of: entry.emoji) != Int.max { score += 25 }
+                let order = orderIndex[entry.emoji] ?? Int.max
+                if let current = best, current.score > score || (current.score == score && current.order <= order) { continue }
+                guard EmojiSupport.isSupported(entry.emoji) else { continue }
+                best = (score, order, entry.emoji)
+            }
+            if let found = best { return found.emoji }
         }
         return nil
     }

@@ -768,9 +768,8 @@ struct ThemeLook {
             // The keyboard's frosted panel over the app (Theme.panelBackground).
             Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
         } else {
-            // Liquid Glass has no panel of its own; the preview shows it over the plain light or dark keyboard
-            // backdrop of the system.
-            Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
+            // Liquid Glass has no panel of its own: nothing is drawn behind it.
+            Color.clear
         }
     }
 

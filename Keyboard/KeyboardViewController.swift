@@ -131,15 +131,21 @@ final class KeyboardViewController: UIInputViewController {
         view = inputView
     }
 
-    /// The keyboard always follows the open app's mode. While the phone turns, the system briefly reports the
-    /// wrong mode (the keyboard flashes dark in light apps), so the mode in use is held until the turn is over.
+    /// The mode picked in the app (Light / Dark); with Auto the keyboard follows the open app's mode.
+    private func applyAppearance() {
+        let picked = Theme.appearanceStyle
+        if view.overrideUserInterfaceStyle != picked { view.overrideUserInterfaceStyle = picked }
+    }
+
+    /// While the phone turns, the system briefly reports the wrong mode (the keyboard flashes dark in light apps),
+    /// so the mode in use is held until the turn is over.
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         let held = view.traitCollection.userInterfaceStyle
         if held != .unspecified { view.overrideUserInterfaceStyle = held }
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             guard let self = self else { return }
-            self.view.overrideUserInterfaceStyle = .unspecified
+            self.view.overrideUserInterfaceStyle = Theme.appearanceStyle
             self.keyboardView.refreshGlassTints()
         }
     }
@@ -259,6 +265,7 @@ final class KeyboardViewController: UIInputViewController {
 
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
+        applyAppearance()
         if settingsSignature() != builtSignature {
             buildInterface()
         }
@@ -392,6 +399,7 @@ final class KeyboardViewController: UIInputViewController {
     private func buildInterface() {
         Prefs.refresh()
         Theme.reload()
+        applyAppearance()
         validateLanguage()
         hideEmojiPanel(refresh: false)
         isSearchingEmoji = false
