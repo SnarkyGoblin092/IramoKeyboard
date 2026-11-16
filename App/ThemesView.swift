@@ -379,7 +379,7 @@ private struct ThemeThumbnail: View {
         // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
         // it is seeded anew each run, so pictures saved on disk would never be found again).
         let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|onglass3|\(ThumbnailCache.settingsSignature())"
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|flatglass|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -403,11 +403,8 @@ private struct ThemeThumbnail: View {
                 .environment(\.colorScheme, dark ? .dark : .light)
         }
         ThumbnailCache.shared.render(key: key, idle: idle) {
-            if theme.kind == .liquidGlass,
-               let shot = await GlassSnapshot.take(AnyView(preview(glass: true)), size: size, dark: dark, scale: scale,
-                                                   backdrop: UIColor.clear) {
-                return shot
-            }
+            // Liquid Glass too is drawn flat (staticGlass): every key alike, on the card's own glass. (A photograph of
+            // the real glass has nothing behind it to bend, and its keys came out unevenly dark.)
             let renderer = ImageRenderer(content: preview().environment(\.staticGlass, true))
             renderer.scale = scale
             return renderer.uiImage
