@@ -115,7 +115,12 @@ final class KeyboardView: UIView {
         var isWordDeleting = false
         /// Backspace was held long enough to repeat: it has deleted already, so lifting deletes nothing more.
         var backspaceRepeated = false
+        /// Words deleted by this slide so far (restored ones taken off).
         var wordSteps = 0
+        /// Words the slide's distance asks for, and the ones added (or, negative, taken back) by holding the finger at
+        /// an end of the stretched backspace: the words deleted are their sum.
+        var wordSlideSteps = 0
+        var wordEdgeSteps = 0
         /// A flick on a letter: 1 = up (capital), -1 = down (first accent), 0 = none.
         var flick = 0
         /// Another thumb took this swipe over: this finger no longer adds to it.
@@ -1021,6 +1026,7 @@ final class KeyboardView: UIView {
         }
 
         if state.isWordDeleting {
+            stopEdgeScroll(state)
             setWordDeleteAppearance(nil)
             delegate?.keyboardViewDidEndWordDelete(self)
             return
@@ -1246,7 +1252,27 @@ final class KeyboardView: UIView {
             delegate?.keyboardViewDidBeginWordDelete(self)
             setWordDeleteAppearance(state.key)
         }
-        let steps = dx < -activation ? Int((-dx - activation) / 38) + 1 : 0
+        state.wordSlideSteps = dx < -activation ? Int((-dx - activation) / 38) + 1 : 0
+        syncWordSteps(state)
+
+        // Held at the left end of the stretched key: words keep going, one after another; held at its right end
+        // while words are gone: they come back the same way, until none is left to restore.
+        let ends = wordDeleteEnds(state)
+        let margin: CGFloat = 24
+        var direction = 0
+        if point.x <= ends.left + margin {
+            direction = -1
+        } else if point.x >= ends.right - margin && state.wordSteps > 0 {
+            direction = 1
+        }
+        startWordEdgeRepeat(state, direction: direction)
+    }
+
+    /// Deletes or restores words until as many are gone as the slide and the held ends ask for.
+    private func syncWordSteps(_ state: TouchState) {
+        let steps = max(0, state.wordSlideSteps + state.wordEdgeSteps)
+        // Restoring past where the slide began brings back nothing more: the held steps never go below that.
+        state.wordEdgeSteps = steps - state.wordSlideSteps
         while state.wordSteps < steps {
             state.wordSteps += 1
             delegate?.keyboardViewDidRequestDeleteWord(self)
@@ -1257,6 +1283,33 @@ final class KeyboardView: UIView {
             delegate?.keyboardViewDidRequestRestoreWord(self)
             Haptics.shared.tick()
         }
+    }
+
+    /// The left and right ends of the backspace while it is stretched across its row (the keyboard's edges when it
+    /// is not known).
+    private func wordDeleteEnds(_ state: TouchState) -> (left: CGFloat, right: CGFloat) {
+        if let key = wordDeleteKey ?? state.key, key.superview != nil { return (key.frame.minX, key.frame.maxX) }
+        return (bounds.minX, bounds.maxX)
+    }
+
+    /// Repeats a word step every moment while the finger is held at an end (-1 left: delete, 1 right: restore).
+    private func startWordEdgeRepeat(_ state: TouchState, direction: Int) {
+        guard direction != state.edgeDirection else { return }
+        stopEdgeScroll(state)
+        guard direction != 0 else { return }
+        state.edgeDirection = direction
+        let timer = Timer(timeInterval: 0.22, repeats: true) { [weak self, weak state] timer in
+            guard let self = self, let state = state, state.isWordDeleting else {
+                timer.invalidate()
+                return
+            }
+            state.wordEdgeSteps += direction < 0 ? 1 : -1
+            self.syncWordSteps(state)
+            // Everything restored: nothing more to bring back.
+            if direction > 0 && state.wordSteps == 0 { self.stopEdgeScroll(state) }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        state.edgeTimer = timer
     }
 
     /// Fades every key's glyphs but `key`'s and stretches `key` across its row (nil puts everything back).
