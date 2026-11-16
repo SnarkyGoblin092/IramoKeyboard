@@ -1100,8 +1100,21 @@ final class LearnedWords {
         days = Settings.shared.learnedWordDays()
         forms = Settings.shared.writtenForms()
         pinned = Settings.shared.learnedPinned()
+        raisePinned()
         forgetUnused()
         rebuildKeys()
+    }
+
+    /// A kept word is a learned one whatever its count: words pinned while fewer uses were enough are brought up to
+    /// `learnAfter`, so they are still suggested and never corrected away.
+    private func raisePinned() {
+        var raised = false
+        for word in pinned {
+            guard let count = counts[word], count < WordStore.learnAfter else { continue }
+            counts[word] = WordStore.learnAfter
+            raised = true
+        }
+        if raised { scheduleSave() }
     }
 
     /// The user picked the learned `word` in the suggestion bar: it counts as used once more, today (a pick says the
@@ -1232,8 +1245,9 @@ final class LearnedWords {
         days = Settings.shared.learnedWordDays()
         forms = Settings.shared.writtenForms()
         pinned = Settings.shared.learnedPinned()
-        forgetUnused()
         saveScheduled = false
+        raisePinned()
+        forgetUnused()
         rebuildKeys()
     }
 

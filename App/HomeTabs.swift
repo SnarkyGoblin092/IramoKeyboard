@@ -216,8 +216,9 @@ private struct KeyboardSection: View {
         .onAppear {
             languages = Settings.shared.enabledLanguages
             shortcutCount = Settings.shared.shortcuts.count
-            // Counted without putting them in order (this runs every time the tab is shown).
-            learnedCount = Settings.shared.learnedWords().filter { $0.value >= 2 }.count
+            // The same words the Learned words list shows (counted without putting them in order: this runs every
+            // time the tab is shown).
+            learnedCount = Settings.shared.learnedWordCount()
         }
     }
 }

@@ -215,7 +215,10 @@ final class TapAccuracy {
 
     /// A press at `point` was resolved to the letter `letter` whose touch cell is `cell`, in a keyboard of `bounds`.
     /// `record` adds it to the heatmap; `learn` moves the key's aim towards it (`speed`: 0 slow, 1 normal, 2 fast).
-    func press(letter: String, point: CGPoint, cell: CGRect, in bounds: CGRect, record: Bool, learn: Bool, speed: Int) {
+    /// `full`: the keyboard is laid out across its whole width (not split, not one-handed); only then is the key's
+    /// place on the keyboard saved, so the app's pictures always show the full keyboard.
+    func press(letter: String, point: CGPoint, cell: CGRect, in bounds: CGRect, record: Bool, learn: Bool, speed: Int,
+               full: Bool = true) {
         guard TapAccuracy.isKeyboard, record || learn, cell.width > 1, cell.height > 1, bounds.width > 1, bounds.height > 1 else { return }
         let dx = Double((point.x - cell.midX) / cell.width)
         let dy = Double((point.y - cell.midY) / cell.height)
@@ -240,12 +243,14 @@ final class TapAccuracy {
             key.aimX = max(-limit, min(limit, key.aimX + (dx - key.aimX) * rate))
             key.aimY = max(-limit, min(limit, key.aimY + (dy - key.aimY) * rate))
         }
-        key.cx = Double((cell.midX - bounds.minX) / bounds.width)
-        key.cy = Double((cell.midY - bounds.minY) / bounds.height)
-        key.w = Double(cell.width / bounds.width)
-        key.h = Double(cell.height / bounds.height)
+        if full {
+            key.cx = Double((cell.midX - bounds.minX) / bounds.width)
+            key.cy = Double((cell.midY - bounds.minY) / bounds.height)
+            key.w = Double(cell.width / bounds.width)
+            key.h = Double(cell.height / bounds.height)
+            layout.aspect = Double(bounds.height / bounds.width)
+        }
         layout.keys[letter] = key
-        layout.aspect = Double(bounds.height / bounds.width)
         if wide { data.landscape = layout } else { data.portrait = layout }
         unsaved += 1
         if unsaved >= 40 || Date().timeIntervalSince(lastSave) > 30 { flush() }

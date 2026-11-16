@@ -106,8 +106,10 @@ final class KeyboardView: UIView {
         var languageSwiped = false
         var cursorMoved = false
         var cursorLastX: CGFloat = 0
+        /// Where the slide on the space bar started (the edge scroll only starts on the side the finger slid to).
+        var cursorStartX: CGFloat = 0
         var cursorRemainder: CGFloat = 0
-        /// Selecting with the finger at the keyboard's edge: the cursor keeps going that way (-1 left, 1 right).
+        /// The finger held at an end of the space bar: the cursor keeps going that way (-1 left, 1 right).
         var edgeDirection = 0
         var edgeTimer: Timer?
         var isWordDeleting = false
@@ -741,7 +743,8 @@ final class KeyboardView: UIView {
                 }
                 if Prefs.tapRecord || Prefs.tapAdaptive {
                     TapAccuracy.shared.press(letter: String(typed), point: point, cell: rect, in: bounds,
-                                             record: Prefs.tapRecord, learn: Prefs.tapAdaptive, speed: Prefs.tapLearnSpeed)
+                                             record: Prefs.tapRecord, learn: Prefs.tapAdaptive, speed: Prefs.tapLearnSpeed,
+                                             full: !KeyboardLayoutMode.split && KeyboardLayoutMode.oneHandedSide == 0)
                 }
             }
             // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
@@ -848,17 +851,14 @@ final class KeyboardView: UIView {
     private func press(_ state: TouchState, key: KeyView) {
         state.key = key
         state.startKey = key
-        // A letter key's press effects wait a moment (and play at once if the finger is lifted first): if a swipe
-        // begins meanwhile, the key plays none.
+        // A letter key's press effects wait until it is clear the finger is pressing it, not setting off on a swipe
+        // (watchDeferredEffects); if a swipe begins, the key plays none.
         let swipeMayBegin = Prefs.swipe && swipeAllowed && page == .letters && letter(of: key.spec) != nil
         key.defersEffects = swipeMayBegin
         key.isPressed = true
         if swipeMayBegin {
             state.effectTimer?.invalidate()
-            state.effectTimer = makeTimer(after: 0.07, repeats: false) { [weak key, weak state] in
-                state?.effectTimer = nil
-                key?.playDeferredEffects()
-            }
+            watchDeferredEffects(state, key: key, travelled: 0)
         }
         Haptics.shared.keyPress()
         showPreview(for: key)
@@ -916,6 +916,22 @@ final class KeyboardView: UIView {
             startHoldTimer(state, delay: popupDelay)
         } else if newKey.spec.action == .emoji {
             startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
+        }
+    }
+
+    /// A letter's press effects play once the finger has clearly stopped on the key: it has moved (almost) no further
+    /// over the last moment. While it keeps moving it may be setting off on a swipe, which plays no key's effects (not
+    /// even the first one's), so they keep waiting; a finger that lifts without swiping plays them then (finish).
+    private func watchDeferredEffects(_ state: TouchState, key: KeyView, travelled: CGFloat) {
+        state.effectTimer = makeTimer(after: 0.1, repeats: false) { [weak self, weak key, weak state] in
+            guard let self = self, let state = state, let key = key, !state.isSwiping else { return }
+            state.effectTimer = nil
+            let now = self.travel(of: state)
+            if now - travelled <= 3 {
+                key.playDeferredEffects()
+            } else {
+                self.watchDeferredEffects(state, key: key, travelled: now)
+            }
         }
     }
 
@@ -993,10 +1009,10 @@ final class KeyboardView: UIView {
         if state.isSelectionFinger { return }
         state.holdTimer?.invalidate()
         state.repeatTimer?.invalidate()
-        // A tap lifted before its effects started plays them now.
-        if !state.isSwiping { state.effectTimer?.fire() }
+        // A tap lifted before its effects started plays them now (a swipe plays none).
         state.effectTimer?.invalidate()
         state.effectTimer = nil
+        if !state.isSwiping { state.startKey?.playDeferredEffects() }
         state.key?.isPressed = false
         hidePreview()
         // Another finger may still be holding a key (two-thumb typing): keep its preview.
@@ -1122,6 +1138,7 @@ final class KeyboardView: UIView {
         state.holdTimer?.invalidate()
         state.holdTimer = nil
         state.cursorLastX = point.x
+        state.cursorStartX = point.x
         state.cursorRemainder = 0
         hidePreview()
         setCursorAppearance(true)
@@ -1140,10 +1157,29 @@ final class KeyboardView: UIView {
             state.cursorRemainder -= CGFloat(steps) * step
             delegate?.keyboardView(self, didMoveCursorBy: steps)   // which ticks, when that is switched on
         }
-        // Selecting with the finger at either edge: the cursor goes on by itself, so the selection keeps growing.
-        let margin: CGFloat = 28
-        let direction = !state.isSelecting ? 0 : (point.x <= margin ? -1 : (point.x >= bounds.width - margin ? 1 : 0))
+        // The finger slid to an end of the space bar (or past it) and stays there: the cursor goes on by itself
+        // that way, moving or selecting, until the finger comes back or lifts. Only on the side it slid to, so a
+        // hold that starts near an end does not set the cursor off.
+        let ends = spaceBarEnds()
+        let margin: CGFloat = 20
+        let slid = point.x - state.cursorStartX
+        var direction = 0
+        if point.x <= ends.left + margin && slid < -margin {
+            direction = -1
+        } else if point.x >= ends.right - margin && slid > margin {
+            direction = 1
+        }
         startEdgeScroll(state, direction: direction)
+    }
+
+    /// The space bar's left and right ends (the keyboard's edges when there is none).
+    private func spaceBarEnds() -> (left: CGFloat, right: CGFloat) {
+        for row in keyViews {
+            if let space = row.first(where: { $0.spec.action == .space && $0.superview != nil }) {
+                return (space.frame.minX, space.frame.maxX)
+            }
+        }
+        return (bounds.minX, bounds.maxX)
     }
 
     private func startEdgeScroll(_ state: TouchState, direction: Int) {
@@ -1155,7 +1191,7 @@ final class KeyboardView: UIView {
         // The Cursor speed setting again: about ten characters a second at the middle speed.
         let interval = 1 / (10 * max(0.2, Prefs.cursorSpeed))
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self, weak state] _ in
-            guard let self = self, let state = state, state.isCursorMode, state.isSelecting else { return }
+            guard let self = self, let state = state, state.isCursorMode else { return }
             state.cursorMoved = true
             self.delegate?.keyboardView(self, didMoveCursorBy: direction)
         }

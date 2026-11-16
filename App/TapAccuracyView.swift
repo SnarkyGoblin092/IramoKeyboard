@@ -5,6 +5,8 @@ import SwiftUI
 /// drew it, brighter the more it was tapped, with the average landing point and the spread of the taps on it.
 struct TapAccuracyView: View {
     @State private var map = TapMapData()
+    /// The saved layout of the orientation shown, with every key where the full keyboard has it (fullKeyboard).
+    @State private var layout = TapMapData.Layout()
     @State private var wide = false
     @State private var selected: String?
     @State private var confirmReset = false
@@ -14,7 +16,6 @@ struct TapAccuracyView: View {
     @AppStorage(SettingKey.tapRecord, store: SharedStore.defaults) private var record = SettingDefault.tapRecord
     @Environment(\.scenePhase) private var scenePhase
 
-    private var layout: TapMapData.Layout { return map.layout(landscape: wide) }
 
     /// The aim over the keyboard as it is now (what the keyboard reads taps with).
     private var field: TapAimField {
@@ -25,6 +26,57 @@ struct TapAccuracyView: View {
     private func reload() {
         map = TapAccuracy.load()
         bias = TapBias.savedOffsets()
+        layout = TapAccuracyView.fullKeyboard(map.layout(landscape: wide), wide: wide)
+    }
+
+    /// `saved` with every key placed where the full keyboard (not split, not one-handed) has it, in the layout of the
+    /// language the keyboard opens in: the places saved with the taps may be from a split or one-handed keyboard, or
+    /// from another layout, and the pictures would come out jumbled. Keys that layout lacks are left out.
+    static func fullKeyboard(_ saved: TapMapData.Layout, wide: Bool) -> TapMapData.Layout {
+        let settings = Settings.shared
+        let language = LiveKeyboardView.openingLanguage(code: settings.languageCode)
+        let rows = LayoutBuilder.rows(language: language, page: .letters, returnTitle: language.strings.returnKey,
+                                      numberRow: settings.numberRow, showHints: false)
+        let screen = UIScreen.main.bounds
+        let width = Double(wide ? max(screen.width, screen.height) : min(screen.width, screen.height))
+        guard !rows.isEmpty, width > 0 else { return saved }
+        // The keyboard's height over its width as last seen (else as the settings make it).
+        let estimated = (Double(rows.count) * (settings.keyHeight + settings.rowGap) + 8) / width
+        let aspect = saved.aspect > 0 ? saved.aspect : estimated
+        let height = width * aspect
+        // As KeyboardView.layoutSubviews lays the rows out across the whole width (a narrower keyboard centred).
+        let keysWidth = (width - 2) * min(1, settings.keyboardWidth)
+        let left = 1 + (width - 2 - keysWidth) / 2
+        let rowHeight = (height - 8) / Double(rows.count)
+        var cells: [String: (cx: Double, cy: Double, w: Double, h: Double)] = [:]
+        for (r, row) in rows.enumerated() {
+            let total = row.reduce(0.0) { $0 + Double($1.weight) }
+            guard total > 0 else { continue }
+            let unit = keysWidth / total
+            var x = left
+            let y = 4 + Double(r) * rowHeight
+            for spec in row {
+                let w = Double(spec.weight) * unit
+                if case .character(let text) = spec.action, text.count == 1,
+                   let letter = text.lowercased().first, letter.isLetter, cells[String(letter)] == nil {
+                    cells[String(letter)] = ((x + w / 2) / width, (y + rowHeight / 2) / height, w / width, rowHeight / height)
+                }
+                x += w
+            }
+        }
+        var shown = saved
+        shown.keys = [:]
+        shown.aspect = aspect
+        for (letter, key) in saved.keys {
+            guard let cell = cells[letter] else { continue }
+            var placed = key
+            placed.cx = cell.cx
+            placed.cy = cell.cy
+            placed.w = cell.w
+            placed.h = cell.h
+            shown.keys[letter] = placed
+        }
+        return shown
     }
 
     var body: some View {
@@ -32,7 +84,10 @@ struct TapAccuracyView: View {
             Section {
                 SegmentedChoice(names: [tr("Portrait"), tr("Landscape")], selected: wide ? 1 : 0) { index in
                     selected = nil
-                    withAnimation(.easeInOut(duration: 0.25)) { wide = index == 1 }
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        wide = index == 1
+                        layout = TapAccuracyView.fullKeyboard(map.layout(landscape: wide), wide: wide)
+                    }
                 }
             }
             .glassRows()

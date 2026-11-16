@@ -972,8 +972,19 @@ final class Settings {
 
     /// The words the keyboard has learned (used at least `learnAfter` times), alphabetically.
     func learnedWordList(learnAfter: Int = WordStore.learnAfter) -> [String] {
-        return learnedWords().filter { $0.value >= learnAfter }.keys
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return learnedKeys(learnAfter: learnAfter).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// How many words the Learned words list shows.
+    func learnedWordCount() -> Int {
+        return learnedKeys(learnAfter: WordStore.learnAfter).count
+    }
+
+    /// The learned words: used at least `learnAfter` times, or kept for good (a pinned word is learned whatever its
+    /// count). Words not yet used that often are still being counted and are not shown.
+    private func learnedKeys(learnAfter: Int) -> [String] {
+        let pinned = learnedPinned()
+        return learnedWords().filter { $0.value >= learnAfter || pinned.contains($0.key) }.map { $0.key }
     }
 
     /// The learned words as the user writes them ("Zsófi", "iOS"): the stored (lower-case) word and the form to show.
