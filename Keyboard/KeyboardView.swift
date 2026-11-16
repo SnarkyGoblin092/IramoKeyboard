@@ -863,7 +863,7 @@ final class KeyboardView: UIView {
         key.isPressed = true
         if swipeMayBegin {
             state.effectTimer?.invalidate()
-            watchDeferredEffects(state, key: key, travelled: 0)
+            watchDeferredEffects(state, key: key, travelled: 0, still: 0)
         }
         Haptics.shared.keyPress()
         showPreview(for: key)
@@ -914,8 +914,16 @@ final class KeyboardView: UIView {
         state.key?.isPressed = false
 
         state.key = newKey
-        newKey.defersEffects = false
+        // A finger sliding from letter to letter may be the start of a swipe that has not been recognized yet: the
+        // new key's effects wait as the first one's do.
+        let swipeMayBegin = Prefs.swipe && swipeAllowed && page == .letters && state.startedOnLetter
+            && letter(of: newKey.spec) != nil
+        newKey.defersEffects = swipeMayBegin
         newKey.isPressed = true
+        if swipeMayBegin {
+            state.effectTimer?.invalidate()
+            watchDeferredEffects(state, key: newKey, travelled: travel(of: state), still: 0)
+        }
         showPreview(for: newKey)
         if !newKey.spec.alternates.isEmpty {
             startHoldTimer(state, delay: popupDelay)
@@ -924,21 +932,26 @@ final class KeyboardView: UIView {
         }
     }
 
-    /// A letter's press effects play once the finger has clearly stopped on the key: it has moved (almost) no further
-    /// over the last moment. While it keeps moving it may be setting off on a swipe, which plays no key's effects (not
-    /// even the first one's), so they keep waiting; a finger that lifts without swiping plays them then (finish).
-    private func watchDeferredEffects(_ state: TouchState, key: KeyView, travelled: CGFloat) {
-        state.effectTimer = makeTimer(after: 0.1, repeats: false) { [weak self, weak key, weak state] in
+    /// A letter's press effects play when the finger lifts without swiping (finish), or once it has rested on the key
+    /// for `effectsHold` without moving: a finger that lands and pauses a moment before it sets off on a swipe must
+    /// not have played them already (a swipe plays no key's effects, not even the first one's).
+    private func watchDeferredEffects(_ state: TouchState, key: KeyView, travelled: CGFloat, still: TimeInterval) {
+        let tick: TimeInterval = 0.06
+        state.effectTimer = makeTimer(after: tick, repeats: false) { [weak self, weak key, weak state] in
             guard let self = self, let state = state, let key = key, !state.isSwiping else { return }
             state.effectTimer = nil
             let now = self.travel(of: state)
-            if now - travelled <= 3 {
+            let resting = now - travelled <= 2 ? still + tick : 0
+            if resting >= KeyboardView.effectsHold {
                 key.playDeferredEffects()
             } else {
-                self.watchDeferredEffects(state, key: key, travelled: now)
+                self.watchDeferredEffects(state, key: key, travelled: now, still: resting)
             }
         }
     }
+
+    /// How long a finger rests on a letter, still, before its press effects play while it is still down (a held key).
+    private static let effectsHold: TimeInterval = 0.35
 
     /// Long-press delay for accent popups: never so short that a slow, careful tap opens one.
     private var popupDelay: TimeInterval { return max(0.30, Prefs.holdDelay) }
@@ -1017,7 +1030,7 @@ final class KeyboardView: UIView {
         // A tap lifted before its effects started plays them now (a swipe plays none).
         state.effectTimer?.invalidate()
         state.effectTimer = nil
-        if !state.isSwiping { state.startKey?.playDeferredEffects() }
+        if !state.isSwiping { (state.key ?? state.startKey)?.playDeferredEffects() }
         state.key?.isPressed = false
         hidePreview()
         // Another finger may still be holding a key (two-thumb typing): keep its preview.

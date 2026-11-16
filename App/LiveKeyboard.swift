@@ -504,11 +504,12 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     }
 }
 
-/// Keeps the screen's swipe back (from the edge, and on iOS 26 from anywhere on the screen) from starting on the
-/// keyboard, so a swipe there stays with the keys (swipe typing, the effects) instead of leaving the screen. It
-/// recognizes as soon as a finger lands on the keyboard, which fails the navigation's swipe back for that touch,
-/// and only that: every touch still reaches the keys and the bar, and no other gesture is held up. A swipe from
-/// the edge beside the keyboard and the back button go back as before.
+/// Keeps the screen's swipe back (from the edge, and on iOS 26 from anywhere on the screen) and the scrolling of the
+/// page the keyboard is on (the Look tab's list) from starting on the keyboard, so a swipe there stays with the keys
+/// (swipe typing, the effects, the space bar's cursor) instead of leaving or scrolling the screen. It recognizes as
+/// soon as a finger lands on the keyboard, which fails those gestures for that touch, and only those: every touch
+/// still reaches the keys and the bar, and no other gesture is held up. A swipe beside the keyboard scrolls and goes
+/// back as before.
 final class BackSwipeBlocker: UIGestureRecognizer {
     private var fingers = 0
 
@@ -554,9 +555,17 @@ final class BackSwipeBlocker: UIGestureRecognizer {
         fingers = 0
     }
 
-    /// It stops only the swipe back; the keys' and the screen's other gestures go on alongside it.
+    /// It stops only the swipe back and the page's scrolling; the keys' and the screen's other gestures go on
+    /// alongside it.
     override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return isBackSwipe(preventedGestureRecognizer)
+        return isBackSwipe(preventedGestureRecognizer) || isPageScroll(preventedGestureRecognizer)
+    }
+
+    /// The pan of a scroll view the keyboard is inside.
+    private func isPageScroll(_ recognizer: UIGestureRecognizer) -> Bool {
+        guard let scroll = recognizer.view as? UIScrollView, recognizer === scroll.panGestureRecognizer,
+              let keyboard = view else { return false }
+        return keyboard.isDescendant(of: scroll)
     }
 
     override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool {
