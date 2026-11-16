@@ -2,14 +2,6 @@
   "fill": {
     "automatic-gradient": "display-p3:0.89804,0.88627,1.00000,1.00000"
   },
-  "fill-specializations": [
-    {
-      "appearance": "dark",
-      "value": {
-        "automatic-gradient": "display-p3:0.10196,0.09412,0.25098,1.00000"
-      }
-    }
-  ],
   "groups": [
     {
       "name": "Swoop",
@@ -43,13 +35,7 @@
         {
           "name": "face",
           "image-name": "key-face.png",
-          "glass": true,
-          "image-name-specializations": [
-            {
-              "appearance": "dark",
-              "value": "key-face-dark.png"
-            }
-          ]
+          "glass": true
         },
         {
           "name": "side",

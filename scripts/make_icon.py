@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Draws the 1024x1024 app icon in a light and a dark version (iOS shows the dark one when the phone is in dark
-mode): one keycap with a rainbow side and a swipe swoop across its face. Drawn at 4x and scaled down for smooth
-edges. Needs Pillow and NumPy:  pip install pillow numpy"""
+"""Draws the app icon, one keycap with a rainbow side and a swipe swoop across its face: the home screen icon as
+Icon Composer layers (App/AppIcon.icon), and the app's own logo in a light and a dark version that match how iOS
+shows that icon. Drawn at 4x and scaled down for smooth edges. Needs Pillow and NumPy:  pip install pillow numpy"""
 import json
 import math
 from pathlib import Path
@@ -81,7 +81,7 @@ def colour_at(u, stops):
 
 KEY_BOX = (S / 2 - 330 * F, S / 2 - 340 * F, S / 2 + 330 * F, S / 2 + 300 * F)
 KEY_RADIUS, KEY_DEPTH = 140 * F, 34 * F
-FACE = {False: ["#FFFFFF", "#ECEEFA"], True: ["#2A3058", "#1E2346"]}
+FACE = ["#FFFFFF", "#ECEEFA"]
 
 
 def key_masks():
@@ -119,27 +119,32 @@ def swoop():
     return mask, layer
 
 
+def top_rim(mask, depth):
+    """The upper edge of a shape, where glass catches the light."""
+    lower = Image.new("L", (S, S), 0)
+    lower.paste(mask, (0, depth))
+    return ImageChops.subtract(mask, lower).filter(ImageFilter.GaussianBlur(depth / 2))
+
+
 def draw(dark):
-    """The flat icon, for the app's own logo: one keycap whose side glows with the rainbow, a
-    swipe swoop across its face. Light: a white key on a pastel wash. Dark: a navy key on a deep navy, the swoop
-    glowing."""
+    """The flat icon for the app's own logo, drawn to look like iOS renders AppIcon.icon as glass on the home
+    screen: the light keycap with its rainbow side and the swoop, on lavender (light mode) or near black (dark)."""
     C = S / 2
     if dark:
-        img = gradient([(0, "#121733"), (0.5, "#1A1640"), (1, "#26143A")], 120)
-        img.alpha_composite(radial((C, C + 120 * F), S * 0.6, (110, 70, 255), 0.35))
+        img = gradient([(0, "#202022"), (1, "#141416")], 90)
     else:
-        img = gradient([(0, "#DCEBFF"), (0.5, "#EADFFF"), (1, "#FFDDEB")], 120)
+        img = gradient([(0, "#E9E5FD"), (1, "#D8D3F5")], 90)
     face, side = key_masks()
-    shadow(img, side, (0, 22 * F), 36 * F, (120, 60, 255) if dark else (120, 60, 200), 0.55 if dark else 0.4)
+    shadow(img, side, (0, 18 * F), 30 * F, (0, 0, 0) if dark else (60, 50, 120), 0.5 if dark else 0.18)
     img.alpha_composite(coloured(side, RAINBOW, 0))
-    img.alpha_composite(coloured(face, FACE[dark], 90))
+    img.alpha_composite(coloured(face, ["#F4F4F7", "#D9DAE0"] if dark else ["#FFFFFF", "#EFEFF5"], 90))
+    paste_colour(img, top_rim(face, 6 * F), (255, 255, 255), 0.9)
     mask, layer = swoop()
-    if dark:
-        shadow(img, mask, (0, 0), 34 * F, hexrgb("#7B4DFF"), 0.6)   # a glow; a shadow would not show
-    else:
-        shadow(img, mask, (0, 12 * F), 16 * F, (60, 30, 140), 0.15)
+    shadow(img, mask, (0, 8 * F), 12 * F, (40, 30, 90), 0.2)
+    layer.putalpha(mask.point(lambda v: int(v * 0.9)))   # glass lets a little of the key through
     img.alpha_composite(layer)
-    return img.convert("RGB").resize((1024, 1024), Image.LANCZOS)   # no alpha: iOS rejects icons with it
+    paste_colour(img, top_rim(mask, 8 * F), (255, 255, 255), 0.45)
+    return img.convert("RGB").resize((1024, 1024), Image.LANCZOS)
 
 
 def small(img):
@@ -155,20 +160,16 @@ def write_glass_icon():
     face, side = key_masks()
     rim = ImageChops.subtract(side, face)   # only the part of the side below the face, so none shows through it
     small(coloured(rim, RAINBOW, 0)).save(assets / "key-side.png")
-    for dark, suffix in [(False, ""), (True, "-dark")]:
-        small(coloured(face, FACE[dark], 90)).save(assets / f"key-face{suffix}.png")
+    small(coloured(face, FACE, 90)).save(assets / "key-face.png")
     small(swoop()[1]).save(assets / "swoop.png")
     glass = {"shadow": {"kind": "neutral", "opacity": 0.5}, "translucency": {"enabled": True, "value": 0.4}}
+    # In dark mode iOS puts the same light key on its own dark background.
     icon = {
         "fill": {"automatic-gradient": "display-p3:0.89804,0.88627,1.00000,1.00000"},
-        "fill-specializations": [
-            {"appearance": "dark", "value": {"automatic-gradient": "display-p3:0.10196,0.09412,0.25098,1.00000"}},
-        ],
         "groups": [
             {"name": "Swoop", **glass, "layers": [{"name": "swoop", "image-name": "swoop.png", "glass": True}]},
             {"name": "Key", **glass, "layers": [
-                {"name": "face", "image-name": "key-face.png", "glass": True,
-                 "image-name-specializations": [{"appearance": "dark", "value": "key-face-dark.png"}]},
+                {"name": "face", "image-name": "key-face.png", "glass": True},
                 {"name": "side", "image-name": "key-side.png", "glass": True},
             ]},
         ],
