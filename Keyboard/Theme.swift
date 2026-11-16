@@ -316,6 +316,8 @@ enum Theme {
         let secondaryText: UIColor
         /// A real Liquid Glass pill (the fill is then unused).
         let glass: Bool
+        /// The mode the pill is drawn in (`.unspecified`: the keyboard's).
+        var style: UIUserInterfaceStyle = .unspecified
     }
 
     /// The emoji search pills match the keys: letter-key fill and label colours (the native theme keeps the stock
@@ -323,17 +325,18 @@ enum Theme {
     /// the picker follows the app's style, so it takes the base palette.
     static func searchLook(besideKeys: Bool) -> SearchLook {
         let p = palette
-        // Where real Liquid Glass exists the search fields are always glass, whatever the theme (its text follows
-        // the system's colours unless the theme is the glass one).
-        if GlassSupport.isAvailable && kind != .liquidGlass {
-            return SearchLook(fill: UIColor.clear, text: UIColor.label, secondaryText: UIColor.secondaryLabel, glass: true)
+        // Where real Liquid Glass exists the search fields are glass in every theme, drawn as the Liquid Glass theme
+        // draws them: in the mode of the backdrop they stand on (the open app's), with the system's text colours. A
+        // keyboard set to the other mode than the app would otherwise put light glass on the dark backdrop.
+        if GlassSupport.isAvailable {
+            let style: UIUserInterfaceStyle = hostIsDark.map { $0 ? UIUserInterfaceStyle.dark : .light } ?? .unspecified
+            return SearchLook(fill: UIColor.clear, text: UIColor.label, secondaryText: UIColor.secondaryLabel, glass: true,
+                              style: style)
         }
         switch kind {
         case .native:
             return SearchLook(fill: pick(black(0.08), white(0.14)), text: UIColor.label,
                               secondaryText: UIColor.secondaryLabel, glass: false)
-        case .liquidGlass where usesRealGlass:
-            return SearchLook(fill: UIColor.clear, text: p.keyText, secondaryText: p.keySecondaryText, glass: true)
         default:
             return SearchLook(fill: p.letterKey, text: p.keyText, secondaryText: p.keySecondaryText, glass: false)
         }

@@ -30,6 +30,7 @@ final class EmojiSearchBar: UIView {
         super.init(frame: frame)
         backgroundColor = UIColor.clear
         glass.capsule = true
+        glass.overrideUserInterfaceStyle = look.style
         addSubview(glass)
 
         backButton.setImage(UIImage(systemName: "chevron.left",

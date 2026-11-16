@@ -346,6 +346,7 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
 
         // Search field
         searchGlass.capsule = true
+        searchGlass.overrideUserInterfaceStyle = searchLook.style
         addSubview(searchGlass)
         searchIcon.image = UIImage(systemName: "magnifyingglass",
                                    withConfiguration: UIImage.SymbolConfiguration(weight: .medium))
