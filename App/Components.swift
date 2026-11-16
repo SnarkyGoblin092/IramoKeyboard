@@ -524,6 +524,18 @@ struct StatusChip: View {
     }
 }
 
+extension View {
+    /// A small capsule round a short text (an example to try, a shortcut's trigger): faint, or in `tint` (the
+    /// accent, when it is the one picked). The same fill everywhere in the app.
+    func chip(tint: Color? = nil, horizontal: CGFloat = 12, vertical: CGFloat = 7) -> some View {
+        return self
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+            .background(Capsule().fill(tint.map { $0.opacity(0.2) } ?? Color.primary.opacity(0.07)))
+            .contentShape(Capsule())
+    }
+}
+
 /// Applies the chosen accent colour as the tint of everything inside.
 struct AccentTint: ViewModifier {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent

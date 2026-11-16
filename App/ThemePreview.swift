@@ -531,46 +531,16 @@ struct ThemePreview: View {
     }
 }
 
-private struct StaticGlassKey: EnvironmentKey { static let defaultValue = false }
-
-extension EnvironmentValues {
-    /// Draw Liquid Glass as a flat look, for pictures (the theme cards).
-    var staticGlass: Bool {
-        get { self[StaticGlassKey.self] }
-        set { self[StaticGlassKey.self] = newValue }
-    }
-}
-
 /// A key of the Liquid Glass theme: real Liquid Glass on iOS 26 and later; before that a frosted pane with the
 /// glass's bright rim and sheen, as the keyboard's fallback blur looks.
 private struct GlassKeyShape: View {
     let radius: CGFloat
     let tint: Color?
     let dark: Bool
-    @Environment(\.staticGlass) private var staticGlass
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        if staticGlass {
-            // For a picture (ImageRenderer can't draw live glass or blur): a clear pane with the glass's look, drawn
-            // once: a body of light, a specular highlight at the top left, light gathering at the lower rim, and a
-            // rim that is bright where the light hits it.
-            shape
-                .fill((tint ?? Color.clear).opacity(0.5))
-                .overlay(shape.fill(Color.white.opacity(dark ? 0.10 : 0.42)))
-                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.30 : 0.65), Color.white.opacity(0)],
-                                                   startPoint: .topLeading, endPoint: UnitPoint(x: 0.7, y: 0.55))))
-                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(0), Color.white.opacity(dark ? 0.12 : 0.25)],
-                                                   startPoint: UnitPoint(x: 0.5, y: 0.6), endPoint: .bottom)))
-                .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(dark ? 0.65 : 0.95),
-                                                                    Color.white.opacity(dark ? 0.08 : 0.25),
-                                                                    Color.white.opacity(dark ? 0.35 : 0.7)],
-                                                           startPoint: .topLeading, endPoint: .bottomTrailing),
-                                            lineWidth: 1))
-                .shadow(color: Color.black.opacity(dark ? 0.35 : 0.18), radius: 3, x: 0, y: 1.5)
-        } else {
-            live(shape)
-        }
+        live(shape)
     }
 
     @ViewBuilder private func live(_ shape: RoundedRectangle) -> some View {

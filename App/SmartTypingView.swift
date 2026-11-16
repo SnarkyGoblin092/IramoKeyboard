@@ -123,10 +123,7 @@ struct SmartTypingView: View {
                         Text(example)
                             .font(.subheadline.monospaced())
                             .foregroundColor(.primary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(tryText == example
-                                                       ? Color.accentColor.opacity(0.28) : Color.primary.opacity(0.07)))
+                            .chip(tint: tryText == example ? Color.accentColor : nil)
                     }
                     .buttonStyle(.plain)
                 }

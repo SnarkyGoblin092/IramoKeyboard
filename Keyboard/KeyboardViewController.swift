@@ -1455,6 +1455,8 @@ final class KeyboardViewController: UIInputViewController {
             if let previous = lastCommitted, previous.head == head, previous.word != cleaned,
                isLikelyRetype(previous.word, cleaned) {
                 stores[language]?.learnCorrection(from: previous.word, to: cleaned)
+                // The word deleted was a typo, not a word of the user's: its use is taken back.
+                if stores[language]?.noteUse(previous.word, delta: -1) != true { LearnedWords.shared.takeBack(previous.word) }
             }
             lastCommitted = (head, cleaned)
         }
@@ -1462,8 +1464,13 @@ final class KeyboardViewController: UIInputViewController {
         for store in stores.values where store.language != language && store.isLoaded {
             if store.noteUse(cleaned, delta: delta) { return }
         }
+        if delta < 0 {
+            // A word the dictionaries lack (a learned one) taken back: one use less.
+            LearnedWords.shared.takeBack(cleaned)
+            return
+        }
         let key = TextFolding.key(cleaned)
-        guard delta > 0, cleaned.count >= 3, key.count >= 2 else { return }
+        guard cleaned.count >= 3, key.count >= 2 else { return }
         // Only unknown words are learned; known words in any enabled language (other spellings) are left alone.
         let known = stores.values.contains { $0.isLoaded && $0.dictionaryContains(key: key) }
         if !known { stores[language]?.learn(cleaned) }
@@ -1472,17 +1479,14 @@ final class KeyboardViewController: UIInputViewController {
     /// Tapping the word exactly as typed keeps it: a spelling that no enabled dictionary has is learned at once
     /// (and from then on suggested, and never corrected away). Only the exact spelling counts as known: a
     /// dictionary word with the same letters but other accents ("omaga" for "omágá") must not block it.
-    private func learnTappedWord(_ word: String, pin: Bool = false) {
+    private func learnTappedWord(_ word: String) {
         guard Prefs.suggestions, !isSearchingEmoji, textDocumentProxy.isSecureTextEntry != true else { return }
         let cleaned = TextFolding.normalizeApostrophes(word)
         let key = TextFolding.key(cleaned)
         guard key.count >= 2, cleaned.allSatisfy({ Predictor.isWordCharacter($0) }) else { return }
         ensureStores()
         let known = stores.values.contains { $0.isLoaded && $0.dictionaryHas(word: cleaned) }
-        if !known {
-            stores[language]?.learn(cleaned, asTyped: true)
-            if pin { LearnedWords.shared.pin(TextFolding.normalizeApostrophes(cleaned).lowercased()) }
-        }
+        if !known { stores[language]?.learn(cleaned, asTyped: true) }
     }
 
     /// Remembers which word followed which, for next-word suggestions.
@@ -2616,15 +2620,15 @@ extension KeyboardViewController: SuggestionBarDelegate {
             afterTyping()
         case .literal, .word:
             guard !suggestion.text.isEmpty else { return }
-            if suggestion.kind == .literal { learnTappedWord(suggestion.text, pin: true) }
+            if suggestion.kind == .literal { learnTappedWord(suggestion.text) }
             if let shortcut = shownShortcut, shortcut.shown == suggestion.text {
                 // A shortcut picked in the bar: its filled-in phrase, with the cursor where {cursor} is.
                 TypingStats.shared.note(.shortcut)
                 replacePrefix(with: shortcut.expanded,
                               length: shortcutLength(in: textDocumentProxy.documentContextBeforeInput ?? ""))
             } else {
-                // A learned word picked in the bar is kept for good and ranked first from now on.
-                LearnedWords.shared.pin(TextFolding.normalizeApostrophes(suggestion.text).lowercased())
+                // A learned word picked in the bar counts as used again today (it ranks higher and fades later).
+                LearnedWords.shared.confirm(TextFolding.normalizeApostrophes(suggestion.text).lowercased())
                 TypingStats.shared.note(.suggestion)
                 replacePrefix(with: suggestion.text)
             }

@@ -141,10 +141,7 @@ struct ShortcutsView: View {
                             Text(example.phrase).font(.subheadline).lineLimit(1)
                         }
                         .foregroundColor(.primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(Color.accentColor.opacity(0.18)))
-                        .contentShape(Capsule())
+                        .chip(tint: .accentColor)
                     }
                     .buttonStyle(.plain)
                 }
@@ -213,9 +210,7 @@ private struct ShortcutRow: View {
                 Text(item.trigger)
                     .font(.subheadline.monospaced().weight(.semibold))
                     .foregroundColor(.primary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.accentColor.opacity(0.2)))
+                    .chip(tint: .accentColor, horizontal: 9, vertical: 3)
                 Text(item.phrase)
                     .font(.subheadline)
                     .foregroundColor(.secondary)

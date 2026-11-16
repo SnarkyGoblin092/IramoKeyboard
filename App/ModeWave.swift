@@ -372,17 +372,18 @@ enum WindowWave {
 
     /// Called as the wave sets off, before the setting changes.
     /// The picture of the window as it is now. Taken BEFORE the wave is made (its clock starts when it is made), so the
-    /// time this takes is not counted as the wave's and it does not set off already on its way. Nothing is waiting to
-    /// be drawn at this point, so the screen need not be updated first (which would stall the main thread).
+    /// time this takes is not counted as the wave's and it does not set off already on its way. Drawn afresh
+    /// (afterScreenUpdates): live Liquid Glass (the Liquid Glass theme card's keys on their glass card) taken from the
+    /// last frame came out with a broken reflection, which showed for as long as the wave's pictures were up.
     static func snapshot() -> UIImage? {
         guard let root = window?.rootViewController?.view else { return nil }
-        return picture(of: root, afterScreenUpdates: false)
+        return picture(of: root, afterScreenUpdates: true)
     }
 
     static func start(for wave: ModeWave, old taken: UIImage? = nil) {
         end()
         guard let window = window, let root = window.rootViewController?.view,
-              let old = taken ?? picture(of: root, afterScreenUpdates: false) else { return }
+              let old = taken ?? picture(of: root, afterScreenUpdates: true) else { return }
         let model = WindowWaveModel(wave: wave, old: old)
         let host = UIHostingController(rootView: WindowWaveView(model: model))
         host.view.backgroundColor = .clear

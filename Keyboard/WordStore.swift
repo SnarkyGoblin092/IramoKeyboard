@@ -476,8 +476,11 @@ final class WordStore {
             }
         }
 
-        for (word, count) in learned where count >= WordStore.learnAfter {
-            guard let learnedKey = learnedKeys[word], learnedKey.hasPrefix(key) else { continue }
+        // Only the learned words that start with the key (a binary search), not all of them on every key.
+        let learnedCounts = learned
+        for item in LearnedWords.shared.words(withKeyPrefix: key) {
+            let word = item.word
+            guard let count = learnedCounts[word], count >= WordStore.learnAfter else { continue }
             if contractionsOnly && !word.contains("'") { continue }
             var score = 0.50 + min(0.35, log(LearnedWords.shared.effective(word) + 1) * 0.12)
             if word.hasPrefix(typedLower) { score += 0.12 }
@@ -1078,8 +1081,11 @@ final class LearnedWords {
     /// lower-case word -> how the user writes it ("zsófi" -> "Zsófi", "ios" -> "iOS"); only words written other
     /// than their default (all lower case for learned words, the dictionary's form for the others).
     private(set) var forms: [String: String]
-    /// Words the user picked in the suggestion bar: they are never forgotten and come first.
+    /// Words kept for good: the ones the user added on the Learned words screen (or kept there). They are never
+    /// forgotten and rank first.
     private(set) var pinned: Set<String>
+    /// A word typed once and never again within this many days was a slip, not a word: it is forgotten.
+    private static let unconfirmedDays = 21
 
     private init() {
         counts = Settings.shared.learnedWords()
@@ -1090,18 +1096,41 @@ final class LearnedWords {
         rebuildKeys()
     }
 
-    /// The user picked `word` in the suggestion bar: it stays for good and is ranked above the rest.
-    func pin(_ word: String) {
-        guard (counts[word] ?? 0) >= WordStore.learnAfter else { return }
-        if pinned.insert(word).inserted { scheduleSave() }
+    /// The user picked the learned `word` in the suggestion bar: it counts as used once more, today (a pick says the
+    /// word is wanted, but only the words added on the Learned words screen are kept for good).
+    func confirm(_ word: String) {
+        guard let count = counts[word], count >= WordStore.learnAfter else { return }
+        counts[word] = count + 1
         days[word] = LearnedWords.today
+        scheduleSave()
+    }
+
+    /// Takes back one use of `word`: it was a typo the user then retyped, or a swiped word they deleted. A word that
+    /// is left with no uses is forgotten; a kept one stays.
+    func takeBack(_ word: String) {
+        guard let count = counts[word], !pinned.contains(word) else { return }
+        if count <= 1 {
+            counts.removeValue(forKey: word)
+            days.removeValue(forKey: word)
+            forms.removeValue(forKey: word)
+            if let key = keys.removeValue(forKey: word), !keys.values.contains(key) { keySet.remove(key) }
+            byKey = nil
+        } else {
+            counts[word] = count - 1
+        }
+        scheduleSave()
     }
 
     /// Words learned by typing fade as they go unused (`effective` halves every ~45 days) and are forgotten once
-    /// they have faded away; the more a word was used, the longer that takes. Pinned words are never forgotten.
+    /// they have faded away; the more a word was used, the longer that takes. A word typed only once is forgotten
+    /// after `unconfirmedDays` (most such words are slips). Kept words are never forgotten.
     private func forgetUnused() {
         var forgotten = false
-        for word in counts.keys where !pinned.contains(word) && effective(word) < 0.35 {
+        let today = LearnedWords.today
+        for word in counts.keys where !pinned.contains(word) {
+            let age = days[word].map { today - $0 } ?? 0
+            let unconfirmed = (counts[word] ?? 0) < WordStore.learnAfter && age > LearnedWords.unconfirmedDays
+            guard unconfirmed || effective(word) < 0.35 else { continue }
             counts.removeValue(forKey: word)
             days.removeValue(forKey: word)
             forms.removeValue(forKey: word)
@@ -1130,6 +1159,33 @@ final class LearnedWords {
         keys = [:]
         for word in counts.keys { keys[word] = TextFolding.key(word) }
         keySet = Set(keys.values)
+        byKey = nil
+    }
+
+    /// (match key, word) of every learned word, sorted by the key's bytes (so the words sharing a beginning are
+    /// together), made again after the list changes.
+    private var byKey: [(key: String, word: String)]?
+
+    /// The learned words whose match key starts with `prefix`.
+    func words(withKeyPrefix prefix: String) -> ArraySlice<(key: String, word: String)> {
+        let sorted: [(key: String, word: String)]
+        if let ready = byKey {
+            sorted = ready
+        } else {
+            sorted = keys.map { (key: $0.value, word: $0.key) }
+                .sorted { $0.key.utf8.lexicographicallyPrecedes($1.key.utf8) }
+            byKey = sorted
+        }
+        guard !prefix.isEmpty else { return sorted[...] }
+        let bytes = Array(prefix.utf8)
+        var low = 0, high = sorted.count
+        while low < high {
+            let middle = (low + high) / 2
+            if sorted[middle].key.utf8.lexicographicallyPrecedes(bytes) { low = middle + 1 } else { high = middle }
+        }
+        var end = low
+        while end < sorted.count, sorted[end].key.utf8.starts(with: bytes) { end += 1 }
+        return sorted[low..<end]
     }
 
     private static var today: Int { return Int(Date().timeIntervalSince1970 / 86_400) }
@@ -1150,11 +1206,13 @@ final class LearnedWords {
             for weak in weakest {
                 counts.removeValue(forKey: weak)
                 days.removeValue(forKey: weak)
+                forms.removeValue(forKey: weak)
             }
             rebuildKeys()
         } else if keys[word] == nil {
             keys[word] = key
             keySet.insert(key)
+            byKey = nil
         }
         scheduleSave()
     }

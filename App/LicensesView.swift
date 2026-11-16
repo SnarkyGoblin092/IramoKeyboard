@@ -26,12 +26,14 @@ struct LicensesView: View {
             Section {
                 ForEach(Licenses.data) { item in row(item) }.glassRows()
             } header: {
-                Text(tr("Words and emoji"))
+                SectionHeader(tr("Words and emoji"), symbol: "character.book.closed.fill")
             } footer: {
                 Text(tr("The keyboard's dictionaries are adapted from FrequencyWords and are shared under the same licence, CC BY-SA 4.0."))
             }
-            Section(tr("Emoji tab icons")) {
+            Section {
                 ForEach(Licenses.icons) { item in row(item) }.glassRows()
+            } header: {
+                SectionHeader(tr("Emoji tab icons"), symbol: "face.smiling.fill")
             }
         }
         .glassScreen()

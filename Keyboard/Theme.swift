@@ -78,6 +78,7 @@ enum Theme {
         let theme = ThemeCatalog.theme(id: storedID())
         definition = theme
         palette = applying(theme.systemStyle, to: makePalette(for: theme))
+        fontCache.removeAll()
     }
 
     /// A system theme's editor solidity laid over its palette (the palette as it is for no edits).
@@ -174,8 +175,20 @@ enum Theme {
     /// The keys' and the suggestion bar's typeface at a size (KeyFont, the Keys screen's Font). Named fonts have
     /// one weight; the system designs keep the weight asked for.
     static func keyFont(ofSize size: CGFloat, weight asked: UIFont.Weight = .regular) -> UIFont {
-        let weight = asked
-        let choice = KeyFont.named(definition.fontID(chosen: Prefs.keyFont))
+        // Asked for on every suggestion update and key build: a font (and its descriptor) is made once and kept.
+        let fontID = definition.fontID(chosen: Prefs.keyFont)
+        let cacheKey = "\(fontID)|\(size)|\(asked.rawValue)"
+        if let cached = fontCache[cacheKey] { return cached }
+        let font = makeKeyFont(fontID: fontID, size: size, weight: asked)
+        if fontCache.count > 64 { fontCache.removeAll() }
+        fontCache[cacheKey] = font
+        return font
+    }
+
+    private static var fontCache: [String: UIFont] = [:]
+
+    private static func makeKeyFont(fontID: String, size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let choice = KeyFont.named(fontID)
         if let name = choice.postScriptName, let font = UIFont(name: name, size: size) { return font }
         let system = UIFont.systemFont(ofSize: size, weight: weight)
         let design: UIFontDescriptor.SystemDesign
@@ -282,6 +295,29 @@ enum Theme {
     static var panelBackground: UIColor { return palette.panelBackground }
     static var stripFill: UIColor { return palette.stripFill }
     static var separator: UIColor { return onBackdrop(palette.separator, strength: 0.2) }
+
+    // MARK: Legibility on any background
+
+    /// The keyboard has no panel of its own (Transparent, Liquid Glass): what is written straight on it stands over
+    /// whatever the app shows behind the keyboard.
+    static var isSeeThrough: Bool { return kind == .transparent || kind == .liquidGlass }
+
+    /// A soft halo of the opposite tone round text or a symbol drawn straight over what is behind a see-through
+    /// keyboard (dark words get a light one, light words a dark one), so it reads on any background, light or dark,
+    /// without a backdrop being drawn. Other themes stand on the system's keyboard backdrop: no halo.
+    static func applyHalo(to layer: CALayer, color: UIColor, traits: UITraitCollection, strength: Float = 1) {
+        guard isSeeThrough, strength > 0 else {
+            layer.shadowOpacity = 0
+            return
+        }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.resolvedColor(with: traits).getRed(&r, green: &g, blue: &b, alpha: &a)
+        let lightText = 0.299 * r + 0.587 * g + 0.114 * b > 0.55
+        layer.shadowColor = (lightText ? UIColor.black : UIColor.white).cgColor
+        layer.shadowOffset = .zero
+        layer.shadowRadius = lightText ? 2.5 : 3
+        layer.shadowOpacity = (lightText ? 0.75 : 0.95) * strength
+    }
 
     /// How the emoji search pills are drawn.
     struct SearchLook {

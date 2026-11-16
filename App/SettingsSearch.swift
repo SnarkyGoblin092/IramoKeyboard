@@ -112,6 +112,8 @@ enum SettingsIndex {
                         symbol: "keyboard.badge.ellipsis", color: .blue, screen: .languages, anchor: "languages.list"),
             SearchEntry(id: "learned", title: tr("Learned words"), place: keyboard, keywords: ["dictionary", "words", "learned"],
                         symbol: "character.book.closed", color: .brown, screen: .learnedWords, anchor: nil),
+            SearchEntry(id: "learned.add", title: tr("Add a word"), place: keyboard, keywords: ["custom", "dictionary", "word", "name", "add"],
+                        symbol: "plus.circle", color: .green, screen: .learnedWords, anchor: "learned.add"),
             SearchEntry(id: "emojiPicker", title: tr("Emoji"), place: keyboard,
                         keywords: ["emoji", "picker", "smiley", "recent", "skin tone", "categories", "search", "grid"],
                         symbol: "face.smiling.fill", color: .yellow, screen: .emoji, anchor: nil),

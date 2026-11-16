@@ -1004,6 +1004,65 @@ final class Settings {
         bumpPersonalRevision()
     }
 
+    /// Why a word typed on the Learned words screen can't be added.
+    enum CustomWordProblem {
+        case notAWord   // spaces, digits or symbols (the keyboard's words are letters and apostrophes)
+        case length     // shorter than 2 or longer than 24 letters
+    }
+
+    /// `text` trimmed, with straight apostrophes: how a custom word is written.
+    private static func customWritten(_ text: String) -> String {
+        return TextFolding.normalizeApostrophes(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Why `text` can't be a custom word, or nil when it can.
+    static func customWordProblem(_ text: String) -> CustomWordProblem? {
+        let written = customWritten(text)
+        guard written.allSatisfy({ Predictor.isWordCharacter($0) }), written.contains(where: { $0.isLetter }) else {
+            return .notAWord
+        }
+        return written.count >= 2 && written.count <= 24 ? nil : .length
+    }
+
+    /// A word the user added on the Learned words screen: learned at once in every language, written exactly as it
+    /// was typed ("Zsófi", "iOS", "NASA"), and kept for good (never forgotten, never corrected away). Returns the
+    /// stored (lower-case) word, or nil when `text` is not a word.
+    @discardableResult
+    func addCustomWord(_ text: String) -> String? {
+        guard Settings.customWordProblem(text) == nil else { return nil }
+        let written = Settings.customWritten(text)
+        let lower = written.lowercased()
+        var words = learnedWords()
+        words[lower] = max(words[lower] ?? 0, 3)
+        setLearnedWords(words)
+        var days = learnedWordDays()
+        days[lower] = Int(Date().timeIntervalSince1970 / 86_400)
+        setLearnedWordDays(days)
+        var forms = writtenForms()
+        if written != lower { forms[lower] = written } else { forms.removeValue(forKey: lower) }
+        setWrittenForms(forms)
+        var pinned = learnedPinned()
+        pinned.insert(lower)
+        setLearnedPinned(pinned)
+        bumpPersonalRevision()
+        return lower
+    }
+
+    /// Keeps a learned word for good (or lets it fade again when it goes unused).
+    func setLearnedWordKept(_ word: String, kept: Bool) {
+        var pinned = learnedPinned()
+        let changed = kept ? pinned.insert(word).inserted : pinned.remove(word) != nil
+        guard changed else { return }
+        setLearnedPinned(pinned)
+        if !kept {
+            // It starts to fade from today, not from whenever it was last typed.
+            var days = learnedWordDays()
+            days[word] = Int(Date().timeIntervalSince1970 / 86_400)
+            setLearnedWordDays(days)
+        }
+        bumpPersonalRevision()
+    }
+
     func bumpPersonalRevision() {
         put(personalRevision + 1, SettingKey.personalRevision)
     }
@@ -1118,13 +1177,7 @@ final class Settings {
     }
 
     var shortcuts: [TextShortcut] {
-        get {
-            guard let data = readData(SettingKey.shortcuts),
-                  let list = try? JSONDecoder().decode([TextShortcut].self, from: data) else {
-                return []
-            }
-            return list
-        }
+        get { return decodedShortcuts().list }
         set {
             if let data = try? JSONEncoder().encode(newValue) {
                 put(data, SettingKey.shortcuts)
@@ -1136,10 +1189,26 @@ final class Settings {
     func shortcutPhrase(for typed: String) -> String? {
         let key = typed.lowercased()
         guard !key.isEmpty else { return nil }
-        for shortcut in shortcuts where shortcut.trigger.lowercased() == key {
-            return shortcut.phrase
+        return decodedShortcuts().byTrigger[key]
+    }
+
+    /// The shortcuts as last decoded, and the stored data they came from: the keyboard looks a shortcut up several
+    /// times on every key, and decoding the list each time made typing heavier the more shortcuts there were.
+    private var shortcutCache: (data: Data, list: [TextShortcut], byTrigger: [String: String])?
+    private let shortcutLock = NSLock()
+
+    private func decodedShortcuts() -> (list: [TextShortcut], byTrigger: [String: String]) {
+        guard let data = readData(SettingKey.shortcuts) else { return ([], [:]) }
+        shortcutLock.lock()
+        defer { shortcutLock.unlock() }
+        if let cache = shortcutCache, cache.data == data { return (cache.list, cache.byTrigger) }
+        let list = (try? JSONDecoder().decode([TextShortcut].self, from: data)) ?? []
+        var byTrigger: [String: String] = [:]
+        for shortcut in list where byTrigger[shortcut.trigger.lowercased()] == nil {
+            byTrigger[shortcut.trigger.lowercased()] = shortcut.phrase   // the first one wins, as before
         }
-        return nil
+        shortcutCache = (data, list, byTrigger)
+        return (list, byTrigger)
     }
 
     func resetPreferences() {

@@ -90,13 +90,8 @@ struct ThemesView: View {
                 openScreen(.themeEditor)
             } label: {
                 Label(tr("Customize %@", "\(theme.name)"), systemImage: "paintbrush.pointed.fill")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .foregroundColor(.white)
-                    .glassTile(Capsule(), isOn: true)
-                    .contentShape(Capsule())
             }
-            .buttonStyle(PressableStyle())
+            .buttonStyle(ActionButtonStyle())
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -186,11 +181,15 @@ struct ThemesView: View {
                     }
                 } header: {
                     HStack(spacing: 10) {
-                        Text(tr(section.title)).font(.title3.weight(.semibold)).foregroundColor(.secondary)
+                        Text(tr(section.title)).font(.subheadline.weight(.semibold))
                         Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 1)
-                        Text("\(section.themes.count)").font(.subheadline).foregroundColor(.secondary)
+                        Text("\(section.themes.count)").font(.subheadline).monospacedDigit()
                     }
-                    .padding(.top, 8)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 10)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                 }
             }
         }
@@ -257,7 +256,8 @@ private struct ThemeCard: View {
 
 /// A card's miniature keyboard as a picture, drawn once when the card first comes into view and kept
 /// (ThumbnailCache) until the theme, the look settings or light/dark mode change. Liquid Glass is a live system
-/// material that can't be drawn into a picture, so its card is a picture of a flat glass look (staticGlass).
+/// material that can't be drawn into a picture, so its card is drawn live: real glass keys on the card's glass,
+/// bending the screen behind them, as the keyboard's do over an app.
 @MainActor
 private struct ThemeThumbnail: View {
     let theme: ThemeDefinition
@@ -283,7 +283,22 @@ private struct ThemeThumbnail: View {
     /// The light / dark waves (the theme waves are the main preview's).
     private var waves: [ModeWave] { return allWaves }
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if theme.kind == .liquidGlass {
+            liveGlass
+        } else {
+            pictureCard
+        }
+    }
+
+    /// The Liquid Glass card: the preview itself, with real glass (one card, so drawing it live costs little).
+    private var liveGlass: some View {
+        ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14,
+                     contentInset: ThemeThumbnail.inset, glassBackdrop: true)
+            .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+    }
+
+    private var pictureCard: some View {
         Group {
             if !waves.isEmpty {
                 // Under the window's wave (WindowWave), which carries the change across: the new look at once.
@@ -388,24 +403,20 @@ private struct ThemeThumbnail: View {
         ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: displayScale, dark: dark, key: key, idle: idle, done: done)
     }
 
-    /// The picture of a theme in one mode. Liquid Glass is drawn as the real glass keyboard (GlassSnapshot) and
-    /// photographed; the other themes go through ImageRenderer.
+    /// The picture of a theme in one mode, through ImageRenderer (Liquid Glass has none: its card is live).
     fileprivate static func enqueue(theme: ThemeDefinition, accent: Color, scale: CGFloat, dark: Bool, key: String,
                                     idle: Bool, done: @escaping (UIImage?) -> Void) {
         let width = ThemeThumbnail.renderWidth
         let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
-        // The real glass photographs with its own glass card behind the keys; the others are drawn without a backdrop
-        // and sit on the card's glass (ThemeThumbnail.body).
-        func preview(glass: Bool = false) -> some View {
+        // Drawn without a backdrop: the keys sit on the card's glass (ThemeThumbnail.body).
+        func preview() -> some View {
             return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14,
                                 contentInset: ThemeThumbnail.inset, glassBackdrop: false, noBackdrop: true)
                 .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
         }
         ThumbnailCache.shared.render(key: key, idle: idle) {
-            // Liquid Glass too is drawn flat (staticGlass): every key alike, on the card's own glass. (A photograph of
-            // the real glass has nothing behind it to bend, and its keys came out unevenly dark.)
-            let renderer = ImageRenderer(content: preview().environment(\.staticGlass, true))
+            let renderer = ImageRenderer(content: preview())
             renderer.scale = scale
             return renderer.uiImage
         } done: { rendered in
@@ -458,7 +469,7 @@ enum ThemeCardPrewarm {
         let currentDark = mode == "auto" ? systemDark : mode == "dark"
         let scale = UIScreen.main.scale
         for section in ThemeCatalog.pickerSections {
-            for base in section.themes {
+            for base in section.themes where base.kind != .liquidGlass {
                 var theme = base
                 if let style = edits[base.id] {
                     theme.systemStyle = style
@@ -570,57 +581,6 @@ final class ThumbnailCache {
                     SettingKey.accent, SettingKey.accentHex, SettingKey.enabledLanguages, SettingKey.language]
         let defaults = SharedStore.defaults
         return keys.map { "\(defaults.object(forKey: $0) ?? "")" }.joined(separator: "|")
-    }
-}
-
-/// The keyboard's backdrop colour (ThemeLook.backdrop) for a snapshot to sit on, as a UIColor.
-enum ThemePreviewBackdrop {
-    static func color(theme: ThemeDefinition, dark: Bool) -> UIColor {
-        if theme.kind == .transparent { return dark ? UIColor(white: 0.12, alpha: 1) : UIColor(white: 0.93, alpha: 1) }
-        return dark ? UIColor(white: 0.17, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
-    }
-}
-
-/// Takes a picture of a view with real Liquid Glass in it: the view is put, on its backdrop, in the key window just
-/// off the screen (where the glass is drawn as on a real keyboard) and photographed once. One at a time.
-@MainActor
-enum GlassSnapshot {
-    private static var busy = false
-    private static var waiters: [CheckedContinuation<Void, Never>] = []
-
-    static func take(_ content: AnyView, size: CGSize, dark: Bool, scale: CGFloat, backdrop: UIColor) async -> UIImage? {
-        if busy {
-            await withCheckedContinuation { waiters.append($0) }
-        } else {
-            busy = true
-        }
-        defer { if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() } }
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
-        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
-        let container = UIView(frame: CGRect(x: window.bounds.maxX + 40, y: 0, width: size.width, height: size.height))
-        container.backgroundColor = backdrop
-        container.overrideUserInterfaceStyle = dark ? .dark : .light
-        let host = UIHostingController(rootView: AnyView(content.ignoresSafeArea()))
-        host.view.backgroundColor = .clear
-        if #available(iOS 16.4, *) { host.safeAreaRegions = [] }
-        host.view.frame = container.bounds
-        container.addSubview(host.view)
-        window.addSubview(container)
-        window.rootViewController?.addChild(host)
-        host.didMove(toParent: window.rootViewController)
-        defer {
-            host.willMove(toParent: nil)
-            host.removeFromParent()
-            container.removeFromSuperview()
-        }
-        container.layoutIfNeeded()
-        // Long enough for the glass to be laid out and drawn.
-        try? await Task.sleep(nanoseconds: 350_000_000)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            container.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
-        }
     }
 }
 
