@@ -379,7 +379,7 @@ private struct ThemeThumbnail: View {
         // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
         // it is seeded anew each run, so pictures saved on disk would never be found again).
         let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|onglass2|\(ThumbnailCache.settingsSignature())"
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|onglass3|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -398,7 +398,7 @@ private struct ThemeThumbnail: View {
         // and sit on the card's glass (ThemeThumbnail.body).
         func preview(glass: Bool = false) -> some View {
             return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14,
-                                contentInset: ThemeThumbnail.inset, glassBackdrop: glass, noBackdrop: !glass)
+                                contentInset: ThemeThumbnail.inset, glassBackdrop: false, noBackdrop: true)
                 .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
         }

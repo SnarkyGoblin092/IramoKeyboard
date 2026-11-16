@@ -132,9 +132,33 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     /// The mode picked in the app (Light / Dark); with Auto the keyboard follows the open app's mode.
+    /// Applied to the keys' container only, so the controller itself keeps seeing the open app's real mode. The
+    /// Liquid Glass theme is see-through and always follows what is behind it.
+    private var pickedStyle: UIUserInterfaceStyle {
+        return Theme.isLiquidGlass ? .unspecified : Theme.appearanceStyle
+    }
+
+    /// The picked mode is not the one the system draws the keyboard's own backdrop in (the open app's): what is
+    /// written straight on that backdrop (the suggestion bar's words and icons) then takes colours that read on it.
+    private var builtHostMismatch = false
+
+    private var hostMismatch: Bool {
+        let picked = pickedStyle
+        let host = traitCollection.userInterfaceStyle
+        return picked != .unspecified && host != .unspecified && picked != host
+    }
+
     private func applyAppearance() {
-        let picked = Theme.appearanceStyle
-        if view.overrideUserInterfaceStyle != picked { view.overrideUserInterfaceStyle = picked }
+        let picked = pickedStyle
+        if container.overrideUserInterfaceStyle != picked { container.overrideUserInterfaceStyle = picked }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        // The open app changed mode: the backdrop the keys sit on may need to appear or go.
+        if previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle, pickedStyle != .unspecified {
+            buildInterface()
+        }
     }
 
     /// While the phone turns, the system briefly reports the wrong mode (the keyboard flashes dark in light apps),
@@ -145,7 +169,8 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             guard let self = self else { return }
-            self.view.overrideUserInterfaceStyle = Theme.appearanceStyle
+            self.view.overrideUserInterfaceStyle = .unspecified
+            self.applyAppearance()
             self.keyboardView.refreshGlassTints()
         }
     }
@@ -266,7 +291,7 @@ final class KeyboardViewController: UIInputViewController {
         // Settings changed in the app while the keyboard was away: rebuild the look.
         Prefs.refresh()
         applyAppearance()
-        if settingsSignature() != builtSignature {
+        if settingsSignature() != builtSignature || hostMismatch != builtHostMismatch {
             buildInterface()
         }
         // A language given another letter layout: its dictionary is loaded again, so its typo model knows the new
@@ -406,6 +431,8 @@ final class KeyboardViewController: UIInputViewController {
         searchQuery = ""
         toolsPanel = nil   // goes with the old stage
         for sub in container.subviews { sub.removeFromSuperview() }
+        builtHostMismatch = hostMismatch
+        Theme.hostIsDark = hostMismatch ? (traitCollection.userInterfaceStyle == .dark) : nil
 
         if !rootIsKeyboardStyle && !Theme.isLiquidGlass {
             // The root was created see-through (Liquid Glass was active at load time) but this theme wants a

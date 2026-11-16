@@ -240,8 +240,18 @@ enum Theme {
 
     static var accent: UIColor { return palette.accent }
     static var onAccent: UIColor { return palette.onAccent }
-    static var text: UIColor { return palette.text }
-    static var secondaryText: UIColor { return palette.secondaryText }
+    /// Set while the mode picked for the keyboard is not the open app's (the system's keyboard backdrop is drawn in the
+    /// app's mode): true when that backdrop is dark. What is written straight on the backdrop then reads on it.
+    static var hostIsDark: Bool?
+
+    /// `color` as it is, or, on a backdrop of the other mode, white / near-black at the same strength.
+    private static func onBackdrop(_ color: UIColor, strength: CGFloat) -> UIColor {
+        guard let dark = hostIsDark else { return color }
+        return dark ? UIColor(white: 1, alpha: strength) : UIColor(white: 0.06, alpha: strength)
+    }
+
+    static var text: UIColor { return onBackdrop(palette.text, strength: 0.96) }
+    static var secondaryText: UIColor { return onBackdrop(palette.secondaryText, strength: 0.66) }
     static var keyText: UIColor { return palette.keyText }
     static var keySecondaryText: UIColor { return palette.keySecondaryText }
     static var letterKey: UIColor { return palette.letterKey }
@@ -271,7 +281,7 @@ enum Theme {
     static var popupFill: UIColor { return palette.popupFill }
     static var panelBackground: UIColor { return palette.panelBackground }
     static var stripFill: UIColor { return palette.stripFill }
-    static var separator: UIColor { return palette.separator }
+    static var separator: UIColor { return onBackdrop(palette.separator, strength: 0.2) }
 
     /// How the emoji search pills are drawn.
     struct SearchLook {

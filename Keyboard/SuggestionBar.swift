@@ -352,10 +352,15 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     /// Segments: the theme's letter keys, or a neutral wash.
     private var segmentColor: UIColor {
         if followTheme { return Theme.letterKey }
+        if let hostDark = Theme.hostIsDark {
+            return hostDark ? UIColor(white: 1, alpha: 0.12) : UIColor(white: 0, alpha: 0.07)
+        }
         return UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.12) : UIColor(white: 0, alpha: 0.06) }
     }
 
     private var textColor: UIColor {
+        // The words stand on the theme's own key-coloured segments (in the picked mode) or on the system backdrop.
+        if Theme.hostIsDark != nil && followTheme { return Theme.keyText }
         return Theme.suggestionText(onSegments: false)
     }
 
