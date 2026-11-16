@@ -2,17 +2,18 @@
 """Draws the 1024x1024 app icon in a light and a dark version (iOS shows the dark one when the phone is in dark
 mode): one keycap with a rainbow side and a swipe swoop across its face. Drawn at 4x and scaled down for smooth
 edges. Needs Pillow and NumPy:  pip install pillow numpy"""
+import json
 import math
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 F = 4             # supersampling factor
 S = 1024 * F
 ASSETS = Path(__file__).resolve().parent.parent / "App" / "Assets.xcassets"
-ICONS = ASSETS / "AppIcon.appiconset"
 LOGOS = ASSETS / "AppLogo.imageset"
+ICON_FILE = ASSETS.parent / "AppIcon.icon"
 
 
 def hexrgb(h):
@@ -78,59 +79,108 @@ def colour_at(u, stops):
     return tuple(int(v) for v in cols[k] + (cols[k + 1] - cols[k]) * (t - k))
 
 
+KEY_BOX = (S / 2 - 330 * F, S / 2 - 340 * F, S / 2 + 330 * F, S / 2 + 300 * F)
+KEY_RADIUS, KEY_DEPTH = 140 * F, 34 * F
+FACE = {False: ["#FFFFFF", "#ECEEFA"], True: ["#2A3058", "#1E2346"]}
+
+
+def key_masks():
+    """The keycap's face, and its side showing below the face."""
+    face = rrect_mask(KEY_BOX, KEY_RADIUS)
+    side = Image.new("L", (S, S), 0)
+    side.paste(face, (0, KEY_DEPTH))
+    return face, side
+
+
+def coloured(mask, stops, angle):
+    layer = gradient([(i / (len(stops) - 1), c) for i, c in enumerate(stops)], angle)
+    layer.putalpha(mask)
+    return layer
+
+
+def swoop():
+    """The swoop, as a finger swipes a word: a quick dip, then a long sweep up to the top right. It thickens towards
+    the end and runs cyan, blue, violet, pink; it sits centred on the key face. Returns its mask and its colours."""
+    C = S / 2
+    curve = [(x * 0.76 * F, y * 0.76 * F) for x, y in ((-270, 230), (-90, 450), (70, -310), (270, -80))]
+    points = bezier(*curve, 1600)
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    dx, dy = C - (min(xs) + max(xs)) / 2, C - 22 * F - (min(ys) + max(ys)) / 2
+    w_start, w_end = 34 * F, 92 * F
+    mask = Image.new("L", (S, S), 0)
+    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    draw_mask, draw_layer = ImageDraw.Draw(mask), ImageDraw.Draw(layer)
+    for i, (x, y) in enumerate(points):
+        x, y = x + dx, y + dy
+        u = i / (len(points) - 1)
+        r = (w_start + (w_end - w_start) * u ** 0.8) / 2
+        draw_mask.ellipse((x - r, y - r, x + r, y + r), fill=255)
+        draw_layer.ellipse((x - r, y - r, x + r, y + r), fill=colour_at(u, RAINBOW) + (255,))
+    return mask, layer
+
+
 def draw(dark):
-    """The icon: one keycap whose side glows with the rainbow, a swipe swoop across its face. Light: a white key on
-    a pastel wash. Dark: a navy key on a deep navy, the swoop glowing."""
+    """The flat icon, for the app's own logo: one keycap whose side glows with the rainbow, a
+    swipe swoop across its face. Light: a white key on a pastel wash. Dark: a navy key on a deep navy, the swoop
+    glowing."""
     C = S / 2
     if dark:
         img = gradient([(0, "#121733"), (0.5, "#1A1640"), (1, "#26143A")], 120)
         img.alpha_composite(radial((C, C + 120 * F), S * 0.6, (110, 70, 255), 0.35))
     else:
         img = gradient([(0, "#DCEBFF"), (0.5, "#EADFFF"), (1, "#FFDDEB")], 120)
-
-    # The keycap: a soft coloured shadow, the rainbow side below, the face on top.
-    box = (C - 330 * F, C - 340 * F, C + 330 * F, C + 300 * F)
-    radius, depth = 140 * F, 34 * F
-    face_mask = rrect_mask(box, radius)
-    side = Image.new("L", (S, S), 0)
-    side.paste(face_mask, (0, depth))
+    face, side = key_masks()
     shadow(img, side, (0, 22 * F), 36 * F, (120, 60, 255) if dark else (120, 60, 200), 0.55 if dark else 0.4)
-    edge = gradient([(i / (len(RAINBOW) - 1), c) for i, c in enumerate(RAINBOW)], 0)
-    edge.putalpha(side)
-    img.alpha_composite(edge)
-    face = gradient([(0, "#2A3058"), (1, "#1E2346")] if dark else [(0, "#FFFFFF"), (1, "#ECEEFA")], 90)
-    face.putalpha(face_mask)
-    img.alpha_composite(face)
-
-    # The swoop, as a finger swipes a word: a quick dip, then a long sweep up to the top right. It thickens
-    # towards the end and runs cyan, blue, violet, pink; it sits centred on the key face.
-    curve = [(x * 0.76 * F, y * 0.76 * F) for x, y in ((-270, 230), (-90, 450), (70, -310), (270, -80))]
-    points = bezier(*curve, 1600)
-    xs, ys = [p[0] for p in points], [p[1] for p in points]
-    dx, dy = C - (min(xs) + max(xs)) / 2, C - 22 * F - (min(ys) + max(ys)) / 2
-    points = [(x + dx, y + dy) for x, y in points]
-    w_start, w_end = 34 * F, 92 * F
-    swoop_mask = Image.new("L", img.size, 0)
-    swoop = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw_mask, draw_swoop = ImageDraw.Draw(swoop_mask), ImageDraw.Draw(swoop)
-    for i, (x, y) in enumerate(points):
-        u = i / (len(points) - 1)
-        r = (w_start + (w_end - w_start) * u ** 0.8) / 2
-        draw_mask.ellipse((x - r, y - r, x + r, y + r), fill=255)
-        draw_swoop.ellipse((x - r, y - r, x + r, y + r), fill=colour_at(u, RAINBOW) + (255,))
+    img.alpha_composite(coloured(side, RAINBOW, 0))
+    img.alpha_composite(coloured(face, FACE[dark], 90))
+    mask, layer = swoop()
     if dark:
-        shadow(img, swoop_mask, (0, 0), 34 * F, hexrgb("#7B4DFF"), 0.6)   # a glow; a shadow would not show
+        shadow(img, mask, (0, 0), 34 * F, hexrgb("#7B4DFF"), 0.6)   # a glow; a shadow would not show
     else:
-        shadow(img, swoop_mask, (0, 12 * F), 16 * F, (60, 30, 140), 0.15)
-    img.alpha_composite(swoop)
+        shadow(img, mask, (0, 12 * F), 16 * F, (60, 30, 140), 0.15)
+    img.alpha_composite(layer)
     return img.convert("RGB").resize((1024, 1024), Image.LANCZOS)   # no alpha: iOS rejects icons with it
 
 
-ICONS.mkdir(parents=True, exist_ok=True)
+def small(img):
+    return img.resize((1024, 1024), Image.LANCZOS)
+
+
+def write_glass_icon():
+    """The home screen icon as an Icon Composer file (AppIcon.icon): the background as a fill and the key and the
+    swoop as separate layers, so iOS 26 and later render them as Liquid Glass and can make the icon clear or tinted.
+    No shadows or glows are drawn into the layers: the system adds its own. The groups are listed front first."""
+    assets = ICON_FILE / "Assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    face, side = key_masks()
+    rim = ImageChops.subtract(side, face)   # only the part of the side below the face, so none shows through it
+    small(coloured(rim, RAINBOW, 0)).save(assets / "key-side.png")
+    for dark, suffix in [(False, ""), (True, "-dark")]:
+        small(coloured(face, FACE[dark], 90)).save(assets / f"key-face{suffix}.png")
+    small(swoop()[1]).save(assets / "swoop.png")
+    glass = {"shadow": {"kind": "neutral", "opacity": 0.5}, "translucency": {"enabled": True, "value": 0.4}}
+    icon = {
+        "fill": {"automatic-gradient": "display-p3:0.89804,0.88627,1.00000,1.00000"},
+        "fill-specializations": [
+            {"appearance": "dark", "value": {"automatic-gradient": "display-p3:0.10196,0.09412,0.25098,1.00000"}},
+        ],
+        "groups": [
+            {"name": "Swoop", **glass, "layers": [{"name": "swoop", "image-name": "swoop.png", "glass": True}]},
+            {"name": "Key", **glass, "layers": [
+                {"name": "face", "image-name": "key-face.png", "glass": True,
+                 "image-name-specializations": [{"appearance": "dark", "value": "key-face-dark.png"}]},
+                {"name": "side", "image-name": "key-side.png", "glass": True},
+            ]},
+        ],
+        "supported-platforms": {"circles": ["watchOS"], "squares": "shared"},
+    }
+    (ICON_FILE / "icon.json").write_text(json.dumps(icon, indent=2) + "\n", encoding="utf-8")
+    print("wrote", ICON_FILE)
+
+
 LOGOS.mkdir(parents=True, exist_ok=True)
 for dark, suffix in [(False, ""), (True, "-dark")]:
-    icon = draw(dark)
-    icon.save(ICONS / f"icon{suffix}.png")
-    # A small copy for the app's own header (56 pt, at 3x).
-    icon.resize((168, 168), Image.LANCZOS).save(LOGOS / f"logo{suffix}.png")
-    print("wrote", ICONS / f"icon{suffix}.png", "and", LOGOS / f"logo{suffix}.png")
+    # The app's own logo (56 pt, at 3x), in the More tab and on the welcome screen.
+    draw(dark).resize((168, 168), Image.LANCZOS).save(LOGOS / f"logo{suffix}.png")
+    print("wrote", LOGOS / f"logo{suffix}.png")
+write_glass_icon()
