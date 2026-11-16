@@ -269,16 +269,6 @@ final class KeyView: UIView {
             let glowColor = textColor.resolvedColor(with: traitCollection).cgColor
             label.layer.shadowColor = glowColor
             iconView.layer.shadowColor = glowColor
-        } else {
-            // A see-through key (Transparent, Liquid Glass) shows the app behind it: its label gets a soft halo of
-            // the opposite tone so it reads on any background. Drawn once into a bitmap (rasterized), so the halos
-            // cost nothing while typing; the accent keys are solid and need none.
-            let onClearKey = Theme.isSeeThrough && own == nil && spec.action != .enter && !usesAccent
-            for view in [label, iconView, hintLabel] as [UIView] {
-                Theme.applyHalo(to: view.layer, color: textColor, traits: traitCollection, strength: onClearKey ? 0.8 : 0)
-                view.layer.shouldRasterize = onClearKey
-                view.layer.rasterizationScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : UIScreen.main.scale
-            }
         }
 
         let fill: UIColor

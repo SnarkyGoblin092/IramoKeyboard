@@ -5,8 +5,12 @@ enum EmojiLook {
     private static func pick(_ light: UIColor, _ dark: UIColor) -> UIColor {
         return UIColor { trait in trait.userInterfaceStyle == .dark ? dark : light }
     }
-    static let text = UIColor.label
-    static let secondary = UIColor.secondaryLabel
+    /// The picker stands on the system backdrop, in the open app's mode: in an app of the other mode than the
+    /// keyboard's its words and symbols are white (a dark app) or black (a light one), as the suggestion bar's are.
+    static var text: UIColor { return Theme.hostIsDark.map { $0 ? UIColor.white : UIColor(white: 0.06, alpha: 1) } ?? .label }
+    static var secondary: UIColor {
+        return Theme.hostIsDark.map { UIColor(white: $0 ? 1 : 0.06, alpha: 0.66) } ?? .secondaryLabel
+    }
     static let separator = pick(UIColor(white: 0, alpha: 0.12), UIColor(white: 1, alpha: 0.20))
     static let selection = pick(UIColor(white: 0, alpha: 0.30), UIColor(white: 1, alpha: 0.30))
     static let popup = pick(UIColor.white, UIColor(white: 0.42, alpha: 1))

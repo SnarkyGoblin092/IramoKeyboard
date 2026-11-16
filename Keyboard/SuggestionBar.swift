@@ -251,7 +251,6 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         }
 
         refreshVisibility()
-        refreshHalos()
     }
 
     required init?(coder: NSCoder) {
@@ -360,8 +359,8 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     }
 
     private var textColor: UIColor {
-        // The words stand on the theme's own key-coloured segments (in the picked mode) or on the system backdrop.
-        if Theme.hostIsDark != nil && followTheme { return Theme.keyText }
+        // The words stand on the system backdrop, in the open app's mode: in an app of the other mode they are white
+        // (a dark app) or black (a light one), whatever the theme (Theme.text).
         return Theme.suggestionText(onSegments: false)
     }
 
@@ -489,9 +488,6 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
         labels[index].font = suggestions[index].kind == .emoji ? UIFont.systemFont(ofSize: 26)
             : Theme.keyFont(ofSize: 17, weight: onPill ? .semibold : .regular)
         labels[index].textColor = onPill ? pillTextColor : textColor
-        // Off the pill the words stand straight over the app on a see-through keyboard: a halo keeps them readable.
-        Theme.applyHalo(to: labels[index].layer, color: textColor, traits: traitCollection,
-                        strength: onPill || suggestions[index].kind == .emoji ? 0 : 1)
         if suggestions[index].kind == .command {
             labels[index].attributedText = SuggestionBar.commandLabel(suggestions[index].text,
                                                                       color: onPill ? pillTextColor : textColor)
@@ -667,18 +663,6 @@ final class SuggestionBar: UIView, UIGestureRecognizerDelegate {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         separatorLayer.strokeColor = separatorColor.resolvedColor(with: traitCollection).cgColor
-        refreshHalos()
-    }
-
-    /// The halos of everything written straight on the bar (Theme.applyHalo), in the current mode.
-    private func refreshHalos() {
-        Theme.applyHalo(to: hintLabel.layer, color: Theme.secondaryText, traits: traitCollection)
-        Theme.applyHalo(to: previewLabel.layer, color: textColor, traits: traitCollection)
-        Theme.applyHalo(to: dismissIcon.layer, color: Theme.barIcons, traits: traitCollection, strength: 0.7)
-        Theme.applyHalo(to: toolsIcon.layer, color: Theme.barIcons, traits: traitCollection, strength: 0.7)
-        for index in labels.indices where index < suggestions.count {
-            styleLabel(index, onPill: index == highlightedIndex || index == pressedIndex)
-        }
     }
 
     /// The width of each suggestion's slot.

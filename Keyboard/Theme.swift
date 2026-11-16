@@ -265,8 +265,15 @@ enum Theme {
 
     static var text: UIColor { return onBackdrop(palette.text, strength: 0.96) }
     static var secondaryText: UIColor { return onBackdrop(palette.secondaryText, strength: 0.66) }
-    static var keyText: UIColor { return palette.keyText }
-    static var keySecondaryText: UIColor { return palette.keySecondaryText }
+    /// The key labels. The keys of a see-through theme (Transparent, Liquid Glass) show the app behind them, so in
+    /// an app of the other mode their labels take its colours (white in a dark app, black in a light one), as the
+    /// suggestion bar's words do; the other themes' keys are solid and keep their own.
+    static var keyText: UIColor { return isSeeThrough ? onBackdrop(palette.keyText, strength: 0.96) : palette.keyText }
+    static var keySecondaryText: UIColor {
+        return isSeeThrough ? onBackdrop(palette.keySecondaryText, strength: 0.66) : palette.keySecondaryText
+    }
+    /// Labels on the key popups, which have a solid fill of their own in the keyboard's mode.
+    static var popupText: UIColor { return palette.keyText }
     static var letterKey: UIColor { return palette.letterKey }
     static var functionKey: UIColor { return palette.functionKey }
     static var letterKeyPressed: UIColor { return palette.letterKeyPressed }
@@ -301,23 +308,6 @@ enum Theme {
     /// The keyboard has no panel of its own (Transparent, Liquid Glass): what is written straight on it stands over
     /// whatever the app shows behind the keyboard.
     static var isSeeThrough: Bool { return kind == .transparent || kind == .liquidGlass }
-
-    /// A soft halo of the opposite tone round text or a symbol drawn straight over what is behind a see-through
-    /// keyboard (dark words get a light one, light words a dark one), so it reads on any background, light or dark,
-    /// without a backdrop being drawn. Other themes stand on the system's keyboard backdrop: no halo.
-    static func applyHalo(to layer: CALayer, color: UIColor, traits: UITraitCollection, strength: Float = 1) {
-        guard isSeeThrough, strength > 0 else {
-            layer.shadowOpacity = 0
-            return
-        }
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        color.resolvedColor(with: traits).getRed(&r, green: &g, blue: &b, alpha: &a)
-        let lightText = 0.299 * r + 0.587 * g + 0.114 * b > 0.55
-        layer.shadowColor = (lightText ? UIColor.black : UIColor.white).cgColor
-        layer.shadowOffset = .zero
-        layer.shadowRadius = lightText ? 2.5 : 3
-        layer.shadowOpacity = (lightText ? 0.75 : 0.95) * strength
-    }
 
     /// How the emoji search pills are drawn.
     struct SearchLook {
