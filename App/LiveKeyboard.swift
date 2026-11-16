@@ -354,9 +354,11 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
                                    completion: { _ in old.removeFromSuperview() })
                 }
             } else if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
+                // Only a fade: the new keys are laid out where they belong at once (built inside the transition's
+                // animation they would slide in from nowhere).
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
-                                  animations: { self.rebuild() })
+                                  animations: { UIView.performWithoutAnimation { self.rebuild(); self.layoutIfNeeded() } })
             } else {
                 self.rebuild()
             }
@@ -366,16 +368,39 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     override func didMoveToWindow() {
         super.didMoveToWindow()
         updateCycle()
-        // Back on screen: the settings changed meanwhile are read now.
+        // Back on screen (the Themes screen closed over it): the settings changed meanwhile are read at once, before
+        // it is drawn, and the keyboard is simply there as it now is: no fade, and nothing slides in with the screen's
+        // own animation.
         if window != nil, stale {
             stale = false
-            queueRefresh()
+            catchUp()
+        }
+    }
+
+    /// Builds the keyboard for the current settings without any animation, if they changed since it was built.
+    private func catchUp() {
+        UIView.performWithoutAnimation {
+            Settings.shared.refresh()
+            Prefs.refresh()
+            applyEffects()
+            if signature() != builtSignature || LiveKeyboardView.effectiveStyle != builtStyle {
+                rebuild()
+            } else if overrideUserInterfaceStyle != Theme.appearanceStyle {
+                overrideUserInterfaceStyle = Theme.appearanceStyle
+            }
+            layoutIfNeeded()
         }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        if traitCollection.userInterfaceStyle != builtStyle { rebuild() }
+        // Not animated: this can come in the middle of a screen's slide (the keys would slide in with it).
+        if traitCollection.userInterfaceStyle != builtStyle {
+            UIView.performWithoutAnimation {
+                rebuild()
+                layoutIfNeeded()
+            }
+        }
     }
 
     // MARK: The bar
