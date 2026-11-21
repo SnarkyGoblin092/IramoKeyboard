@@ -110,11 +110,19 @@ struct ThemesView: View {
         // The switch is drawn with its new choice first, then (once it has settled) the wave sets off and the mode changes.
         pendingMode = mode
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
-        // Once the switch has played its little slide to the new choice.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        // Once the switch has played its slide to the new choice to the end (longer for iOS 26's Liquid Glass switch).
+        let slide: TimeInterval
+        if #available(iOS 26.0, *) { slide = 0.75 } else { slide = 0.45 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + slide) {
             launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
-            previewMode = mode
-            pendingMode = nil
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            UIView.performWithoutAnimation {
+                withTransaction(instant) {
+                    previewMode = mode
+                    pendingMode = nil
+                }
+            }
         }
     }
 
@@ -132,7 +140,12 @@ struct ThemesView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60) {
             choosing = false
             launch(source: source, newScheme: previewScheme, newTheme: id)
-            themeID = id
+            // At once, with nothing animating into it (the wave's picture of the new look is then the finished one).
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            UIView.performWithoutAnimation {
+                withTransaction(instant) { themeID = id }
+            }
         }
     }
 

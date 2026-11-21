@@ -89,29 +89,39 @@ struct ModeWave: Equatable, Identifiable {
     /// The most all the crests together can move the edge (a share of the radius); WaveLens.metal counts on it.
     private static let reach: CGFloat = 0.315
 
-    /// A new edge: crests picked at random, a few big, slow lobes and many smaller ripples, each with its own start,
-    /// travel and swell. Their heights add up to at most `reach`.
+    /// A new edge, a shape of its own for every wave: not a circle with spikes, but a soft, flowing blob. A few big,
+    /// smooth lobes give the wave its shape (stretched like an ellipse, lopsided like an egg or a drop, three- or
+    /// four-cornered and rounded, or anything between, by how strong each one happens to be), and they slowly turn and
+    /// swell so the shape keeps changing as it spreads. Over them run a couple of low, gentle ripples that travel
+    /// round the edge like waves along a shore. The heights add up to at most `reach`.
     static func makeCrests() -> [Crest] {
-        let wanted = Int.random(in: 7...11)
+        func turn() -> Double { return Double.random(in: 0..<(2 * .pi)) }
+        func either() -> Double { return Bool.random() ? 1 : -1 }
+        var lobes: [Crest] = []
+        // The shape: lobes once to four times round, each as strong as chance has it (squared, so one or two of them
+        // usually lead and the shapes differ a lot from wave to wave).
+        for count in 1...4 {
+            let weight = pow(Double.random(in: 0.05...1), 2) / pow(Double(count), 0.6)
+            lobes.append(Crest(count: Double(count), height: weight, phase: turn(),
+                               drift: Double.random(in: 0.3...1.4) * either(),
+                               pulse: Double.random(in: 1.2...3.2), pulsePhase: turn()))
+        }
+        let lobeTotal = lobes.reduce(0) { $0 + $1.height }
+        let lobeShare = Double(reach) * Double.random(in: 0.72...0.86)
+        lobes = lobes.map { Crest(count: $0.count, height: $0.height * lobeShare / max(lobeTotal, 0.0001), phase: $0.phase,
+                                  drift: $0.drift, pulse: $0.pulse, pulsePhase: $0.pulsePhase) }
+        // The ripples: low and smooth, travelling round the edge (a fast drift for their count).
+        var ripples: [Crest] = []
+        let rippleShare = Double(reach) - lobes.reduce(0) { $0 + $1.height }
         var counts = Set<Int>()
-        // At least two big lobes, the rest ripples of every size up to two dozen round the circle.
-        while counts.count < 2 { counts.insert(Int.random(in: 1...4)) }
-        while counts.count < wanted {
-            let pick = Int((pow(Double.random(in: 0..<1), 1.25) * 24).rounded(.down)) + 1
-            counts.insert(pick)
-        }
-        var crests: [Crest] = []
+        let wanted = Int.random(in: 2...3)
+        while counts.count < wanted { counts.insert(Int.random(in: 5...9)) }
         for count in counts.sorted() {
-            // Ripples fall off only gently with their count, so the edge stays visibly wavy all round.
-            let height = Double.random(in: 0.55...1.0) / pow(Double(count), 0.5)
-            crests.append(Crest(count: Double(count), height: height, phase: Double.random(in: 0..<(2 * .pi)),
-                                drift: Double.random(in: 1...5) * (Bool.random() ? 1 : -1) * (1 + Double(count) * 0.15),
-                                pulse: Double.random(in: 2...9), pulsePhase: Double.random(in: 0..<(2 * .pi))))
+            ripples.append(Crest(count: Double(count), height: rippleShare / Double(wanted) * Double.random(in: 0.6...1),
+                                 phase: turn(), drift: Double(count) * Double.random(in: 0.5...1.0) * either(),
+                                 pulse: Double.random(in: 2...5), pulsePhase: turn()))
         }
-        let total = crests.reduce(0) { $0 + $1.height }
-        let scale = Double(reach) * Double.random(in: 0.9...1.0) / max(total, 0.0001)
-        return crests.map { Crest(count: $0.count, height: $0.height * scale, phase: $0.phase, drift: $0.drift,
-                                  pulse: $0.pulse, pulsePhase: $0.pulsePhase) }
+        return lobes + ripples
     }
 
     /// The crests as the lens shader reads them: six numbers each.
@@ -440,7 +450,7 @@ enum WindowWave {
     /// How long after the setting changes the new picture is taken: long enough for everything to have been drawn
     /// anew (the keyboard rebuilds a couple of run-loop turns after the setting changes). The front has barely set off
     /// by then (the curve eases in).
-    private static let settle: TimeInterval = 0.1
+    private static let settle: TimeInterval = 0.15
 
     static var window: UIWindow? {
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
@@ -490,17 +500,31 @@ enum WindowWave {
             // Everything slow is done: the front sets off now, and runs smoothly from its first frame.
             wave.clock.begin()
             try? await Task.sleep(nanoseconds: UInt64(lifetime * 1_000_000_000))
-            if current?.model === model { end() }
+            if current?.model === model { end(fading: true) }
         }
     }
 
     private static weak var hiddenRoot: UIView?
 
-    private static func end() {
+    /// Takes the cover away. `fading`: at the end of a wave, the cover (by then the new picture, all of it) fades
+    /// out over the live window instead of vanishing, so anything that still differs from the picture (a control
+    /// that was still settling when it was taken) eases into place instead of snapping.
+    private static func end(fading: Bool = false) {
         hiddenRoot?.alpha = 1
         hiddenRoot = nil
-        current?.host.view.removeFromSuperview()
+        guard let view = current?.host.view else {
+            current = nil
+            return
+        }
         current = nil
+        guard fading else {
+            view.removeFromSuperview()
+            return
+        }
+        view.isUserInteractionEnabled = false   // the app answers again at once
+        UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseInOut, .beginFromCurrentState],
+                       animations: { view.alpha = 0 },
+                       completion: { _ in view.removeFromSuperview() })
     }
 
     private static func picture(of view: UIView, afterScreenUpdates: Bool) -> UIImage? {
