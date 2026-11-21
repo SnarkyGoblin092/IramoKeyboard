@@ -210,11 +210,10 @@ struct SettingToggle: View {
 /// darker skirt under it, as a key seen from the front.
 struct IconTile: View {
     let symbol: String
-    /// Kept for the callers; every settings icon is drawn in the user's accent (Keycap's default).
     var color: Color = .accentColor
 
     var body: some View {
-        Keycap {
+        Keycap(color: color) {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
         }
@@ -244,28 +243,13 @@ struct Keycap<Legend: View>: View {
     var color: Color = .accentColor
     var size: CGFloat = 32
     @ViewBuilder let legend: () -> Legend
-    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
-    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
-    @Environment(\.colorScheme) private var scheme
-
-    init(color: Color = .accentColor, size: CGFloat = 32, @ViewBuilder legend: @escaping () -> Legend) {
-        self.color = color
-        self.size = size
-        self.legend = legend
-    }
-
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
-        let dark = scheme == .dark
-        // The app's accent is the user's (a UIColor made from Color.accentColor would not follow the chosen one),
-        // made to stand out from the page in this mode (a white accent in light mode, a black one in dark mode).
-        let base = color == Color.accentColor ? Color.currentAccent(name: accentName, hex: accentHex) : color
-        let tint = base.legible(dark: dark)
-        // Liquid Glass tinted with the colour, no shadow; the legend black or white, whichever reads on it.
+        // Liquid Glass tinted with the colour, white on it, no shadow.
         legend()
-            .foregroundColor(tint.legendColor(dark: dark))
+            .foregroundColor(.white)
             .frame(width: size, height: size)
-            .glassShape(shape, tint: keycapTint(of: tint))
+            .glassShape(shape, tint: keycapTint(of: color))
     }
 }
 
@@ -309,14 +293,19 @@ extension Color {
         return self
     }
 
-    /// Near-black or white, whichever reads better on a glass tile tinted with this colour (the glass lets a
-    /// little of the page through).
-    func legendColor(dark: Bool) -> Color {
-        guard let c = rgb(dark: dark) else { return .white }
-        let page: CGFloat = dark ? 0.1 : 0.97
-        let seen = (red: c.red * 0.8 + page * 0.2, green: c.green * 0.8 + page * 0.2, blue: c.blue * 0.8 + page * 0.2)
-        let l = Color.luminance(seen)
-        return Color.contrastRatio(l, 1) >= Color.contrastRatio(l, 0.005) ? .white : Color(white: 0.08)
+    /// A shade of this colour for one icon: turned a little round the colour wheel and made more vivid, picked by
+    /// `seed` (the same seed always gets the same shade), so a screen's icons are varied but all in the accent's family.
+    func accentShade(seed: String) -> Color {
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(self).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else { return self }
+        // A grey accent has no hue to turn: it stays grey.
+        guard saturation > 0.12 else { return self }
+        let turns: [CGFloat] = [0, 0.07, -0.07, 0.14, -0.14, 0.04, -0.04, 0.10, -0.10]
+        let index = seed.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % turns.count
+        var shifted = (hue + turns[index]).truncatingRemainder(dividingBy: 1)
+        if shifted < 0 { shifted += 1 }
+        return Color(hue: Double(shifted), saturation: Double(min(1, max(saturation, 0.7))),
+                     brightness: Double(min(1, max(brightness, 0.75))), opacity: 1)
     }
 }
 
@@ -565,7 +554,8 @@ struct SectionHeader: View {
         HStack(spacing: 6) {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(Color.currentAccent(name: accentName, hex: accentHex).legible(dark: scheme == .dark, minimumContrast: 3))
+                .foregroundColor(Color.currentAccent(name: accentName, hex: accentHex).accentShade(seed: symbol)
+                    .legible(dark: scheme == .dark, minimumContrast: 3))
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(title)
