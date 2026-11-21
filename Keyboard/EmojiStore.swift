@@ -113,9 +113,49 @@ enum EmojiSupport {
         return set
     }()
 
+    /// Without drawing (drawing thousands of emoji filled the keyboard's small memory and the system closed it): a
+    /// sequence the font lacks is laid out with the empty glyph or in a fallback font (LastResort).
     private static func looksLikeMissingGlyph(_ text: String) -> Bool {
-        guard let pixels = render(text) else { return false }   // cannot tell: show it
-        return missingSignatures.contains(pixels)
+        let attributed = NSAttributedString(string: text, attributes: [.font: font])
+        let line = CTLineCreateWithAttributedString(attributed)
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return false }
+        let emojiName = CTFontCopyPostScriptName(ctFont) as String
+        for run in runs {
+            let attributes = CTRunGetAttributes(run) as NSDictionary
+            if let runFont = attributes[kCTFontAttributeName] {
+                let name = CTFontCopyPostScriptName(runFont as! CTFont) as String
+                if name != emojiName { return true }
+            }
+            let count = CTRunGetGlyphCount(run)
+            guard count > 0 else { continue }
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
+            if glyphs.contains(0) { return true }
+        }
+        return false
+    }
+
+    /// The emoji this iOS version cannot draw, worked out once per system version and kept (the check is slow).
+    private static let cacheKey = "emojiUnsupported." + ProcessInfo.processInfo.operatingSystemVersionString
+    private static var known: Set<String>? = {
+        guard let list = UserDefaults.standard.array(forKey: cacheKey) as? [String] else { return nil }
+        return Set(list)
+    }()
+    private static var found: Set<String> = []
+
+    /// `isSupported`, answered from the saved list when there is one.
+    static func isSupportedCached(_ emoji: String) -> Bool {
+        if let known = known { return !known.contains(emoji) }
+        let supported = autoreleasepool { isSupported(emoji) }
+        if !supported { found.insert(emoji) }
+        return supported
+    }
+
+    /// Saves what this run found, for the next time the picker loads.
+    static func saveCache() {
+        guard known == nil else { return }
+        UserDefaults.standard.set(Array(found), forKey: cacheKey)
+        known = found
     }
 
     /// For a single new character without a font-table glyph: it counts as drawn when the system renders
@@ -594,9 +634,9 @@ final class EmojiStore {
                 let variants = Array(raw.dropFirst())
                 everything[tab, default: []].append(EmojiItem(base: base, variants: variants))
                 total += 1
-                if EmojiSupport.isSupported(base) {
+                if EmojiSupport.isSupportedCached(base) {
                     shown += 1
-                    let usable = variants.filter { EmojiSupport.isSupported($0) }
+                    let usable = variants.filter { EmojiSupport.isSupportedCached($0) }
                     supported[tab, default: []].append(EmojiItem(base: base, variants: usable))
                 }
             }
@@ -604,6 +644,7 @@ final class EmojiStore {
 
         // Safety net: if the support check somehow rejects most emoji, trust the data instead.
         let useAll = total > 0 && shown * 2 < total
+        if !useAll { EmojiSupport.saveCache() }
         if useAll { shown = total }
         let source = useAll ? everything : supported
 

@@ -654,7 +654,7 @@ struct ThemeLook {
 
     /// A key's label colour (KeyView.refreshAppearance).
     func labelColor(_ kind: KeyKind, letter: String? = nil) -> Color {
-        if let role = ownRole(kind), let tones = tones { return Color(tones.label(role)) }
+        if let role = ownRole(kind), let tones = tones { return readable(Color(tones.label(role)), on: Color(tones.fill(role))) }
         if let tint = letterTint(kind, letter) { return tint }
         switch kind {
         case .returnKey, .accent, .shiftOn: return onAccent
@@ -665,7 +665,28 @@ struct ThemeLook {
     var hintColor: Color { return textColor.opacity(0.55) }
     var pillColor: Color { return accentColor }
     var onPill: Color { return onAccent }
-    var barIcons: Color { return accentColor }
+    /// The accent where it stands on the backdrop (Theme.barIcons): darker or lighter just enough to be seen.
+    var barIcons: Color {
+        return Color(Contrast.nudged(resolved(accentColor), awayFrom: resolved(backdropColor), minimum: 2.6))
+    }
+
+    /// Roughly what the keyboard stands on (Theme.backdrop).
+    private var backdropColor: Color {
+        switch theme.kind {
+        case .native, .keycap: return pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17))
+        case .transparent: return pick(Color(white: 0.92), Color(white: 0.10))
+        case .liquidGlass: return pick(Color(white: 0.96), Color(white: 0.08))
+        }
+    }
+
+    private func resolved(_ color: Color) -> UIColor {
+        return UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
+    }
+
+    /// `preferred` where it reads on `fill`, else black or white (Theme's Contrast.readable).
+    private func readable(_ preferred: Color, on fill: Color) -> Color {
+        return Color(Contrast.readable(resolved(preferred), on: resolved(fill)))
+    }
     /// The suggestion bar's words (Theme.suggestionText).
     func suggestionText(onSegments: Bool) -> Color {
         return onSegments ? textColor : stripText
@@ -678,9 +699,11 @@ struct ThemeLook {
     private var tones: ThemeTones? { return theme.colors?.tones(dark: dark) }
 
     /// Labels on the keys.
-    var textColor: Color { return tones.map { Color($0.text) } ?? pick(.black, .white) }
+    var textColor: Color { return tones.map { readable(Color($0.text), on: Color($0.key)) } ?? pick(.black, .white) }
     /// Text on the background (the suggestion bar), not on a key.
-    var stripText: Color { return tones.map { Color($0.stripText) } ?? pick(Color(white: 0.08), .white) }
+    var stripText: Color {
+        return tones.map { readable(Color($0.stripText), on: backdropColor) } ?? pick(Color(white: 0.08), .white)
+    }
 
     /// The letter keys' fill with the theme's own solidity, if it has one.
     var keyFill: Color {
@@ -722,7 +745,7 @@ struct ThemeLook {
 
     /// The user's accent; a keycap theme's return key colour.
     var accentColor: Color { return tones.map { Color($0.ret) } ?? accent }
-    var onAccent: Color { return tones.map { Color($0.label(.ret)) } ?? .white }
+    var onAccent: Color { return readable(tones.map { Color($0.label(.ret)) } ?? .white, on: accentColor) }
 
     /// Theme.keyCornerRadius: the roundness share of half the key's shorter side.
     func radius(width: CGFloat, height: CGFloat) -> CGFloat {

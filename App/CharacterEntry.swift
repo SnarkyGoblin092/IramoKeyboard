@@ -158,14 +158,6 @@ struct HoldEditor: View {
     /// The field, and how many of the places are taken.
     private var entry: some View {
         HStack(spacing: 10) {
-            // A glass button in the accent, so it stands out from the field.
-            let accent = Color.currentAccent(name: accentName, hex: accentHex)
-            Image(systemName: isFull ? "checkmark" : "plus")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(isFull ? .secondary : accent.readableText)
-                .frame(width: 30, height: 30)
-                .glassShape(Circle(), tint: isFull ? nil : accent)
-                .accessibilityHidden(true)
             CharacterEntryField(placeholder: isFull ? tr("Full. Remove one to add another.") : tr("Type or paste characters"),
                                 tint: Color.currentAccent(name: accentName, hex: accentHex),
                                 insert: { text in add(text) },

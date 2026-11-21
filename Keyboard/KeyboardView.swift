@@ -1417,7 +1417,7 @@ final class KeyboardView: UIView {
         } else if effects.trail {
             base = KeyView.effectColor(traits: traitCollection)
         } else {
-            base = Theme.swipeTrail
+            base = Theme.swipeTrail.resolvedColor(with: traitCollection)
         }
         trailLayer.isHidden = !Prefs.swipeTrailShown
         if effects.trail {

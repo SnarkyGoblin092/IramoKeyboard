@@ -77,7 +77,7 @@ enum Theme {
     static func reload() {
         let theme = ThemeCatalog.theme(id: storedID())
         definition = theme
-        palette = applying(theme.systemStyle, to: makePalette(for: theme))
+        palette = legible(applying(theme.systemStyle, to: makePalette(for: theme)), kind: theme.kind)
         fontCache.removeAll()
     }
 
@@ -289,8 +289,26 @@ enum Theme {
     static var hintText: UIColor { return keySecondaryText }
     static var pill: UIColor { return accent }
     static var onPill: UIColor { return onAccent }
-    static var barIcons: UIColor { return accent }
-    static var swipeTrail: UIColor { return accent }
+    /// The accent where it is drawn straight on the keyboard's backdrop (the bar's icons, a lit tool, the swipe
+    /// trail): made darker or lighter just enough to be seen there, whatever accent was picked and in either mode.
+    static var barIcons: UIColor { return accentOnBackdrop }
+    static var swipeTrail: UIColor { return accentOnBackdrop }
+    static var accentOnBackdrop: UIColor {
+        let accent = palette.accent
+        return UIColor { traits in
+            Contrast.nudged(accent.resolvedColor(with: traits), awayFrom: Theme.backdrop(for: traits), minimum: 2.6)
+        }
+    }
+
+    /// Roughly what the keyboard stands on in this mode (the system backdrop, the frosted panel, or the app).
+    static func backdrop(for traits: UITraitCollection) -> UIColor {
+        let dark = hostIsDark ?? (traits.userInterfaceStyle == .dark)
+        switch kind {
+        case .native, .keycap: return dark ? grey(0.17) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
+        case .transparent: return dark ? grey(0.10) : grey(0.92)
+        case .liquidGlass: return dark ? grey(0.08) : grey(0.96)
+        }
+    }
     /// The suggestion bar's words; on key-like segments the key labels' colour.
     static func suggestionText(onSegments: Bool) -> UIColor {
         return onSegments ? keyText : text
@@ -340,6 +358,39 @@ enum Theme {
         default:
             return SearchLook(fill: p.letterKey, text: p.keyText, secondaryText: p.keySecondaryText, glass: false)
         }
+    }
+
+    // MARK: Contrast
+
+    /// Every label is made to read on what it is drawn on, in light and dark mode: a theme or accent that would put
+    /// light on light (or dark on dark) gets black or white instead.
+    private static func legible(_ base: Palette, kind: ThemeDefinition.Kind) -> Palette {
+        var p = base
+        let accent = base.accent, onAccent = base.onAccent
+        p.onAccent = UIColor { traits in
+            Contrast.readable(onAccent.resolvedColor(with: traits), on: accent.resolvedColor(with: traits))
+        }
+        guard kind == .keycap else { return p }
+        // Keycap themes have solid keys and their own colours: the labels are checked against the keys, the bar's
+        // words against the system backdrop.
+        let keyText = base.keyText, key = base.letterKey, text = base.text
+        p.keyText = UIColor { traits in
+            Contrast.readable(keyText.resolvedColor(with: traits), on: key.resolvedColor(with: traits))
+        }
+        let fixedKeyText = p.keyText
+        p.keySecondaryText = UIColor { traits in fixedKeyText.resolvedColor(with: traits).withAlphaComponent(0.6) }
+        p.text = UIColor { traits in
+            Contrast.readable(text.resolvedColor(with: traits), on: Theme.backdrop(for: traits))
+        }
+        let fixedText = p.text
+        p.secondaryText = UIColor { traits in fixedText.resolvedColor(with: traits).withAlphaComponent(0.6) }
+        for (role, colour) in base.roles {
+            let fill = colour.fill, label = colour.text
+            p.roles[role] = RoleColor(fill: fill, text: UIColor { traits in
+                Contrast.readable(label.resolvedColor(with: traits), on: fill.resolvedColor(with: traits))
+            }, ring: colour.ring)
+        }
+        return p
     }
 
     // MARK: Palettes
@@ -469,5 +520,61 @@ enum Theme {
             palette.keyRing = maybeBoth { $0.keyRing }
             return palette
         }
+    }
+}
+
+/// WCAG contrast helpers for the keyboard's colours.
+enum Contrast {
+    private static func parts(_ color: UIColor) -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        if !color.getRed(&r, green: &g, blue: &b, alpha: &a) {
+            var white: CGFloat = 0
+            if color.getWhite(&white, alpha: &a) { r = white; g = white; b = white } else { a = 1 }
+        }
+        return (r, g, b, a)
+    }
+
+    /// `top` laid over an opaque `bottom`.
+    private static func flattened(_ top: UIColor, over bottom: UIColor) -> UIColor {
+        let t = parts(top), b = parts(bottom)
+        func mix(_ x: CGFloat, _ y: CGFloat) -> CGFloat { return x * t.a + y * (1 - t.a) }
+        return UIColor(red: mix(t.r, b.r), green: mix(t.g, b.g), blue: mix(t.b, b.b), alpha: 1)
+    }
+
+    static func luminance(_ color: UIColor) -> CGFloat {
+        let c = parts(color)
+        func linear(_ v: CGFloat) -> CGFloat {
+            let x = min(1, max(0, v))
+            return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
+    }
+
+    static func ratio(_ a: UIColor, _ b: UIColor) -> CGFloat {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    /// `preferred` if it reads on `fill` (3 : 1 or better), else near-black or white, whichever reads better.
+    static func readable(_ preferred: UIColor, on fill: UIColor, minimum: CGFloat = 3) -> UIColor {
+        let solidFill = flattened(fill, over: UIColor(white: 0.5, alpha: 1))
+        if ratio(flattened(preferred, over: solidFill), solidFill) >= minimum { return preferred }
+        let dark = UIColor(white: 0.08, alpha: parts(preferred).a), light = UIColor(white: 1, alpha: parts(preferred).a)
+        return ratio(UIColor(white: 0.08, alpha: 1), solidFill) >= ratio(.white, solidFill) ? dark : light
+    }
+
+    /// `color` darkened or lightened (away from `backdrop`) just enough to reach `minimum` contrast with it.
+    static func nudged(_ color: UIColor, awayFrom backdrop: UIColor, minimum: CGFloat) -> UIColor {
+        let c = parts(color)
+        let towardsWhite = luminance(backdrop) < 0.3
+        let target: CGFloat = towardsWhite ? 1 : 0
+        var step: CGFloat = 0
+        while step <= 0.9 {
+            let mixed = UIColor(red: c.r + (target - c.r) * step, green: c.g + (target - c.g) * step,
+                                blue: c.b + (target - c.b) * step, alpha: 1)
+            if ratio(mixed, backdrop) >= minimum { return step == 0 ? color : mixed.withAlphaComponent(c.a) }
+            step += 0.05
+        }
+        return towardsWhite ? UIColor(white: 1, alpha: c.a) : UIColor(white: 0.06, alpha: c.a)
     }
 }

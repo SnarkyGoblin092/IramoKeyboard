@@ -285,9 +285,6 @@ struct LearnedWordsView: View {
         case .notAWord?:
             problem = tr("Only letters and apostrophes, as one word.")
             Feedback.warning()
-        case .length?:
-            problem = tr("A word has 2 to 24 letters.")
-            Feedback.warning()
         case nil:
             guard Settings.shared.addCustomWord(newWord) != nil else { return }
             Feedback.success()

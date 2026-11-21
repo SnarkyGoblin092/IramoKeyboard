@@ -707,7 +707,7 @@ final class WordStore {
     func learnedEntries() -> [WordEntry] {
         return learned.compactMap { (word, count) -> WordEntry? in
             let folded = learnedKeys[word] ?? TextFolding.key(word)
-            guard folded.count >= 2, count >= WordStore.learnAfter else { return nil }
+            guard !folded.isEmpty, count >= WordStore.learnAfter else { return nil }
             let norm = min(0.9, 0.35 + log(1 + Double(count)) / 12)
             var entry = WordEntry(word: word, folded: folded, freq: count, norm: norm, length: folded.count)
             // (Swiping shows capitals and ALL CAPS; a mixed form such as "iPhone" shows in the suggestions only.)
@@ -835,7 +835,7 @@ final class WordStore {
     /// - Parameter uses: how many uses this counts as.
     func learn(_ word: String, asTyped: Bool = false, uses: Int = 1) {
         let lower = TextFolding.normalizeApostrophes(word).lowercased()
-        guard lower.count >= (asTyped ? 2 : 3), lower.count <= 24 else { return }
+        guard !lower.isEmpty, !TextFolding.key(lower).isEmpty else { return }
         let key = TextFolding.key(lower)
         let index = lowerBound(of: key)
         if !asTyped, index < entries.count, entries[index].folded == key { return }   // already known
@@ -853,7 +853,7 @@ final class WordStore {
     func learnBigram(previous: String, next: String) {
         let a = TextFolding.normalizeApostrophes(previous).lowercased()
         let b = TextFolding.normalizeApostrophes(next).lowercased()
-        guard !a.isEmpty, !b.isEmpty, a.count <= 24, b.count <= 24 else { return }
+        guard !a.isEmpty, !b.isEmpty else { return }
         let key = a + " " + b
         bigrams[key, default: 0] += 1
         touch(key)
@@ -866,7 +866,7 @@ final class WordStore {
         let a = TextFolding.normalizeApostrophes(first).lowercased()
         let b = TextFolding.normalizeApostrophes(second).lowercased()
         let c = TextFolding.normalizeApostrophes(next).lowercased()
-        guard !a.isEmpty, !b.isEmpty, !c.isEmpty, a.count <= 24, b.count <= 24, c.count <= 24 else { return }
+        guard !a.isEmpty, !b.isEmpty, !c.isEmpty else { return }
         let key = a + " " + b + " " + c
         trigrams[key, default: 0] += 1
         touch(key)
@@ -890,7 +890,7 @@ final class WordStore {
     func noteUse(_ word: String, delta: Int = 1) -> Bool {
         let lower = TextFolding.normalizeApostrophes(word).lowercased()
         let key = TextFolding.key(lower)
-        guard !key.isEmpty, lower.count <= 24 else { return false }
+        guard !key.isEmpty else { return false }
         var index = lowerBound(of: key)
         var found = false
         while index < entries.count, entries[index].folded == key {

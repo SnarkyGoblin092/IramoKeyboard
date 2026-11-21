@@ -385,6 +385,8 @@ final class EmojiPanel: UIView, UICollectionViewDataSource, UICollectionViewDele
         tabGlass.isHidden = !tabsShown
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: gridLayout)
         collectionView.backgroundColor = UIColor.clear
+        // Fewer emoji drawn ahead of the scroll: each one costs memory, and a keyboard has little.
+        collectionView.isPrefetchingEnabled = false
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.showsVerticalScrollIndicator = false
         collectionView.alwaysBounceHorizontal = !vertical

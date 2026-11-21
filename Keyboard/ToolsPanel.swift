@@ -59,7 +59,7 @@ final class ToolsPanel: UIScrollView {
             let changes = {
                 self.onFill.alpha = lit ? 1 : 0
                 self.onFill.transform = lit ? .identity : CGAffineTransform(scaleX: 0.85, y: 0.85)
-                self.icon.tintColor = lit ? Theme.accent : Theme.barIcons
+                self.icon.tintColor = Theme.barIcons
                 self.alpha = available ? 1 : 0.35
             }
             if window != nil {

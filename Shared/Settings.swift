@@ -1018,7 +1018,6 @@ final class Settings {
     /// Why a word typed on the Learned words screen can't be added.
     enum CustomWordProblem {
         case notAWord   // spaces, digits or symbols (the keyboard's words are letters and apostrophes)
-        case length     // shorter than 2 or longer than 24 letters
     }
 
     /// `text` trimmed, with straight apostrophes: how a custom word is written.
@@ -1032,7 +1031,7 @@ final class Settings {
         guard written.allSatisfy({ Predictor.isWordCharacter($0) }), written.contains(where: { $0.isLetter }) else {
             return .notAWord
         }
-        return written.count >= 2 && written.count <= 24 ? nil : .length
+        return nil
     }
 
     /// A word the user added on the Learned words screen: learned at once in every language, written exactly as it
