@@ -467,14 +467,16 @@ enum WindowWave {
         return picture(of: root, afterScreenUpdates: true)
     }
 
-    static func start(for wave: ModeWave, old taken: UIImage? = nil) {
+    /// `hole`: a part of the window (in its coordinates) left out of the pictures, where the live app shows through
+    /// all the while (the light / dark switch, so its slide plays without waiting). The live app is then kept drawn.
+    static func start(for wave: ModeWave, old taken: UIImage? = nil, hole: CGRect? = nil) {
         end()
         guard let window = window, let root = window.rootViewController?.view,
               let old = taken ?? picture(of: root, afterScreenUpdates: true) else {
             wave.clock.begin()
             return
         }
-        let model = WindowWaveModel(wave: wave, old: old)
+        let model = WindowWaveModel(wave: wave, old: old, hole: hole)
         let host = UIHostingController(rootView: WindowWaveView(model: model))
         host.view.backgroundColor = .clear
         if #available(iOS 16.4, *) { host.safeAreaRegions = [] }
@@ -493,7 +495,7 @@ enum WindowWave {
             model.new = picture(of: root, afterScreenUpdates: true)
             // Both pictures cover the window now: the live app under them (its glass above all) need not be drawn
             // for every frame of the wave.
-            if model.new != nil {
+            if model.new != nil, hole == nil {
                 root.alpha = 0
                 hiddenRoot = root
             }
@@ -541,11 +543,13 @@ enum WindowWave {
 private final class WindowWaveModel: ObservableObject {
     let wave: ModeWave
     let old: UIImage
+    let hole: CGRect?
     @Published var new: UIImage?
 
-    init(wave: ModeWave, old: UIImage) {
+    init(wave: ModeWave, old: UIImage, hole: CGRect?) {
         self.wave = wave
         self.old = old
+        self.hole = hole
     }
 }
 
@@ -568,6 +572,7 @@ private struct WindowWaveView: View {
                 }
             }
             .modifier(WindowLens(wave: wave, progress: progress, isOn: new != nil))
+            .mask(WindowHole(hole: model.hole).fill(style: FillStyle(eoFill: true)))
         }
         .overlay(GlassWaveBand(waves: [wave]))
         .ignoresSafeArea()
@@ -576,6 +581,21 @@ private struct WindowWaveView: View {
         .onTapGesture {}
         .gesture(DragGesture())
         .accessibilityHidden(true)
+    }
+}
+
+/// The whole window but the hole (a rounded cut, as the switch's own shape), where the live app shows through.
+private struct WindowHole: Shape {
+    let hole: CGRect?
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRect(CGRect(x: -4000, y: -4000, width: 8000, height: 8000))
+        if let hole = hole {
+            path.addRoundedRect(in: hole, cornerSize: CGSize(width: hole.height / 2, height: hole.height / 2),
+                                style: .continuous)
+        }
+        return path
     }
 }
 

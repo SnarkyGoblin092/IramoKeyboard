@@ -357,6 +357,7 @@ private struct AppearanceSwitch: View {
             switchMode(["auto", "light", "dark"][$0])
         }
         .background(TouchRecorder(touches: touches))
+        .background(SwitchMarker(touches: touches))
     }
 
     private func switchMode(_ new: String) {
@@ -371,11 +372,10 @@ private struct AppearanceSwitch: View {
         let source = touches.point ?? CGPoint(x: window.bounds.midX, y: window.bounds.midY)
         let oldScheme = scheme
         let theme = themeID
-        // Once the switch has played its slide to the new choice to the end (the Liquid Glass switch of iOS 26 takes
-        // longer): the picture of the old window must not catch it half way.
-        let slide: TimeInterval
-        if #available(iOS 26.0, *) { slide = 0.75 } else { slide = 0.45 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + slide) {
+        // The wave sets off straight away: the switch itself is left out of its pictures (a hole in the cover), so its
+        // slide to the new choice plays live while the wave crosses.
+        DispatchQueue.main.async {
+            let hole = touches.switchFrame
             let picture = WindowWave.snapshot()   // before the wave's clock starts
             ModeWave.count += 1
             let id = ModeWave.count
@@ -384,7 +384,7 @@ private struct AppearanceSwitch: View {
                                 newTheme: theme, source: source, minX: frame.minX, minY: frame.minY,
                                 width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
             running = true
-            WindowWave.start(for: wave, old: picture)
+            WindowWave.start(for: wave, old: picture, hole: hole)
             ModeWave.running.append(wave)
             // The new look at once, with nothing animating into it: the picture of it the wave takes is then the
             // finished look, and nothing changes when the wave ends and the live window shows again.

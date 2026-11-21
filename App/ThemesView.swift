@@ -41,6 +41,7 @@ struct ThemesView: View {
                                 selected: (pendingMode ?? previewMode) == "light" ? 1 : ((pendingMode ?? previewMode) == "dark" ? 2 : 0)) {
                     switchMode(["auto", "light", "dark"][$0])
                 }
+                .background(SwitchMarker(touches: touches))
             }
         } content: {
         ScrollView {
@@ -107,14 +108,12 @@ struct ThemesView: View {
             previewMode = mode
             return
         }
-        // The switch is drawn with its new choice first, then (once it has settled) the wave sets off and the mode changes.
+        // The switch shows its new choice at once and the wave sets off straight away: the switch itself is left out of
+        // the wave's pictures, so its slide plays live through the hole (WindowWave's `hole`).
         pendingMode = mode
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
-        // Once the switch has played its slide to the new choice to the end (longer for iOS 26's Liquid Glass switch).
-        let slide: TimeInterval
-        if #available(iOS 26.0, *) { slide = 0.75 } else { slide = 0.45 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + slide) {
-            launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
+        DispatchQueue.main.async {
+            launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID, hole: touches.switchFrame)
             var instant = Transaction()
             instant.disablesAnimations = true
             UIView.performWithoutAnimation {
@@ -151,7 +150,7 @@ struct ThemesView: View {
 
     /// Starts a wave across the whole window (before the setting itself changes: what that sets going, the keyboard's
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
-    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) {
+    private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String, hole: CGRect? = nil) {
         let frame = WindowWave.window?.bounds ?? screenFrame
         let picture = WindowWave.snapshot()   // before the wave's clock starts
         ModeWave.count += 1
@@ -161,7 +160,7 @@ struct ThemesView: View {
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         // A picture of the whole window is taken now, before the setting changes anything on it: the wave carries
         // all of it across, the navigation bar, the keyboard, the buttons and labels, bent by the same lens.
-        WindowWave.start(for: new, old: picture)
+        WindowWave.start(for: new, old: picture, hole: hole)
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
@@ -601,6 +600,28 @@ final class ThumbnailCache {
 /// touching redraws nothing).
 final class TouchPoint {
     var point: CGPoint?
+    /// The light / dark switch (SwitchMarker), whose slide plays live through the wave.
+    weak var switchView: UIView?
+
+    /// The switch's frame in the window, worked out now (it may have scrolled since it was laid out).
+    var switchFrame: CGRect? {
+        guard let view = switchView, view.window != nil, view.bounds.width > 0 else { return nil }
+        return view.convert(view.bounds, to: nil)
+    }
+}
+
+/// Marks the light / dark switch it is the background of, so the wave can leave it out of its pictures.
+struct SwitchMarker: UIViewRepresentable {
+    let touches: TouchPoint
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        touches.switchView = view
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) { touches.switchView = view }
 }
 
 /// Records where each touch lands, in the window, the moment it lands (before any button's action runs, which a
