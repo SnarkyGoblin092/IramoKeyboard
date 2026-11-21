@@ -153,7 +153,7 @@ struct ThemesView: View {
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
+            await new.waitUntilDone()
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
         }

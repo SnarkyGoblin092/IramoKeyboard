@@ -386,7 +386,7 @@ private struct AppearanceSwitch: View {
             mode = new
             pending = nil
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(wave.lifetime * 1_000_000_000))
+                await wave.waitUntilDone()
                 ModeWave.running.removeAll { $0.id == id }
                 running = false
             }
