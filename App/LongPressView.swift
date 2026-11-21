@@ -270,25 +270,31 @@ struct LongPressCharactersView: View {
     }
 }
 
-/// The keyboard to pick a key on: the digits and the letters in the chosen theme's look. The key being edited is
+/// The keyboard to pick a key on: the digits and the letters in the Liquid Glass look. The key being edited is
 /// lit in the accent; a key with characters of the user's own is ringed in the accent and carries their number.
 private struct HoldKeyboard: View {
     let rows: [[String]]
     let counts: [String: Int]
     let selected: String?
     let pick: (String) -> Void
-    @AppStorage(SettingKey.keyFont, store: SharedStore.defaults) private var keyFontID = SettingDefault.keyFont
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @Environment(\.colorScheme) private var scheme
+
+    /// Always the plain Liquid Glass look with rounded keys, keys only (no keyboard backdrop): none of the keyboard's
+    /// own settings (its theme, roundness, surface, border, glow or font) are followed. Only the accent is the user's.
+    private var look: ThemeLook {
+        return ThemeLook(theme: ThemeCatalog.liquidGlass, accent: Color.currentAccent(name: accentName, hex: accentHex),
+                         dark: scheme == .dark, roundness: 0.4, keySurface: "auto", keyBorderStyle: "auto",
+                         keyGlow: "off", accentHex: accentHex, accentName: accentName)
+    }
 
     var body: some View {
-        CurrentThemeLook { look in
-            board(look)
-                .padding(10)
-                .background(ZStack {
-                    ClearGlassCard(cornerRadius: 18).environment(\.colorScheme, look.dark ? .dark : .light)
-                    look.backdrop()   // the keyboard's own background behind the keys
-                })
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
+        let look = self.look
+        board(look)
+            .padding(10)
+            .background(ClearGlassCard(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func board(_ look: ThemeLook) -> some View {
@@ -314,14 +320,12 @@ private struct HoldKeyboard: View {
     private func keyButton(_ key: String, look: ThemeLook, width: CGFloat, height: CGFloat) -> some View {
         let isSelected = key == selected
         let count = counts[key] ?? 0
-        // The keyboard's own key shape, roundness and font (as ThemePreview draws its keys).
         let radius = look.radius(width: width, height: height)
-        let font = KeyFont.named(look.theme.fontID(chosen: keyFontID))
         return Button {
             pick(key)
         } label: {
             Text(key)
-                .font(font.font(size: min(21, width * 0.58), weight: count > 0 ? .semibold : .regular))
+                .font(.system(size: min(21, width * 0.58), weight: count > 0 ? .semibold : .regular))
                 .foregroundColor(isSelected ? look.onPill : look.labelColor(.letter, letter: key))
                 .frame(width: width, height: height)
                 .background(face(look, selected: isSelected, radius: radius))
