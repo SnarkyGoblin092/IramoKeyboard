@@ -26,6 +26,10 @@ struct ModeWave: Equatable, Identifiable {
     let startedDate: Date
     /// How long this wave takes to cross (the theme switch's is `duration`; a screen change's is shorter).
     var length: TimeInterval = ModeWave.duration
+    /// This wave's own edge, made up afresh for it: no two waves are alike.
+    var crests: [Crest] = ModeWave.makeCrests()
+    /// Where this wave's rainbow starts to swell and narrow round the rim.
+    var shift: Double = Double.random(in: 0..<(2 * .pi))
 
     static let duration: TimeInterval = 1.4
     /// The ring's thickness.
@@ -39,12 +43,48 @@ struct ModeWave: Equatable, Identifiable {
     static var running: [ModeWave] = []
     static var count = 0
 
-    /// The crests of the edge: how many around, how high (as a share of the radius), where they start and how far
-    /// they travel round as the wave spreads. No two are alike, so the edge never repeats itself.
-    private static let crests: [(count: Double, height: CGFloat, phase: Double, drift: Double)] = [
-        (2, 0.110, 0.4, 1.7), (3, 0.090, 2.1, -2.3), (5, 0.060, 4.0, 3.1), (7, 0.035, 1.1, -4.2), (11, 0.020, 5.3, 5.0)
-    ]
+    /// One crest of the edge: how many times it goes round, how high it is at most (a share of the radius), where it
+    /// starts, how far it travels round as the wave spreads, and how its height swells and ebbs on the way.
+    struct Crest: Equatable {
+        let count: Double
+        let height: Double
+        let phase: Double
+        let drift: Double
+        let pulse: Double
+        let pulsePhase: Double
+    }
+
+    /// The most all the crests together can move the edge (a share of the radius); WaveLens.metal counts on it.
     private static let reach: CGFloat = 0.315
+
+    /// A new edge: a handful of crests picked at random, low counts (big, slow lobes) more often and higher than
+    /// high ones (small ripples), each with its own start, travel and swell. Their heights add up to at most `reach`.
+    static func makeCrests() -> [Crest] {
+        let wanted = Int.random(in: 4...7)
+        var counts = Set<Int>()
+        while counts.count < wanted {
+            // Skewed toward the low counts.
+            let pick = Int((pow(Double.random(in: 0..<1), 1.6) * 14).rounded(.down)) + 1
+            counts.insert(pick)
+        }
+        var crests: [Crest] = []
+        for count in counts.sorted() {
+            let height = Double.random(in: 0.5...1.0) / pow(Double(count), 0.85)
+            crests.append(Crest(count: Double(count), height: height, phase: Double.random(in: 0..<(2 * .pi)),
+                                drift: Double.random(in: 1...5) * (Bool.random() ? 1 : -1) * (1 + Double(count) * 0.15),
+                                pulse: Double.random(in: 2...9), pulsePhase: Double.random(in: 0..<(2 * .pi))))
+        }
+        let total = crests.reduce(0) { $0 + $1.height }
+        let scale = Double(reach) * Double.random(in: 0.7...1.0) / max(total, 0.0001)
+        return crests.map { Crest(count: $0.count, height: $0.height * scale, phase: $0.phase, drift: $0.drift,
+                                  pulse: $0.pulse, pulsePhase: $0.pulsePhase) }
+    }
+
+    /// The crests as the lens shader reads them: six numbers each.
+    var crestFloats: [Float] {
+        return crests.flatMap { [Float($0.count), Float($0.height), Float($0.phase), Float($0.drift),
+                                 Float($0.pulse), Float($0.pulsePhase)] }
+    }
 
     /// The share of the way at which the whole ring has left the frame (the radius runs 15% past what that takes).
     static let doneShare: CGFloat = 1 / 1.15
@@ -92,9 +132,6 @@ struct ModeWave: Equatable, Identifiable {
 
     var center: CGPoint { return source }
 
-    /// Each wave has its own edge.
-    var shift: Double { return Double(id) * 1.618 }
-
     /// The share of the wave's way it has gone at `date`, on the animation's curve.
     func progress(at date: Date) -> CGFloat {
         return ModeWave.ease(CGFloat(date.timeIntervalSince(startedDate) / length))
@@ -115,11 +152,15 @@ struct ModeWave: Equatable, Identifiable {
 
     /// The radius of the cut at `angle`.
     private func radius(_ progress: CGFloat, angle: Double) -> CGFloat {
-        var swell: CGFloat = 1
-        for crest in ModeWave.crests {
-            swell += crest.height * CGFloat(sin(crest.count * angle + crest.phase + shift + crest.drift * Double(progress)))
+        var swell: Double = 1
+        let p = Double(progress)
+        for crest in crests {
+            // Each crest's height swells and ebbs as the wave spreads (never above its most), so the edge keeps
+            // changing its shape on the way out.
+            let height = crest.height * (0.65 + 0.35 * sin(crest.pulse * p + crest.pulsePhase))
+            swell += height * sin(crest.count * angle + crest.phase + crest.drift * p)
         }
-        return progress * endRadius * swell
+        return progress * endRadius * CGFloat(swell)
     }
 
     /// The ring's half thickness: the same all round, so the cut never shows outside the ring.
@@ -483,7 +524,7 @@ private struct WindowLens: ViewModifier {
             if #available(iOS 17.0, *) {
                 content.layerEffect(
                     ShaderLibrary.waveLens(.float2(wave.center), .float(Float(progress)), .float(Float(wave.endRadius)),
-                                           .float(Float(wave.shift)), .float(Float(ModeWave.band * 2.0)), .float(24)),
+                                           .float(Float(ModeWave.band * 2.0)), .float(24), .floatArray(wave.crestFloats)),
                     maxSampleOffset: CGSize(width: 24, height: 24),
                     isEnabled: isOn && progress > 0 && progress < ModeWave.doneShare)
             } else {

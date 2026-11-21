@@ -654,7 +654,7 @@ struct ThemeLook {
 
     /// A key's label colour (KeyView.refreshAppearance).
     func labelColor(_ kind: KeyKind, letter: String? = nil) -> Color {
-        if let role = ownRole(kind), let tones = tones { return readable(Color(tones.label(role)), on: Color(tones.fill(role))) }
+        if let role = ownRole(kind), let tones = tones { return readable(tones.label(role), on: tones.fill(role)) }
         if let tint = letterTint(kind, letter) { return tint }
         switch kind {
         case .returnKey, .accent, .shiftOn: return onAccent
@@ -666,27 +666,71 @@ struct ThemeLook {
     var pillColor: Color { return accentColor }
     var onPill: Color { return onAccent }
     /// The accent where it stands on the backdrop (Theme.barIcons): darker or lighter just enough to be seen.
+    /// Worked out on plain numbers (no UIColor round trips), so the same look always gives the same, equal colours:
+    /// colours made anew from UIColors on every redraw counted as changed and made the screen redraw and flicker.
     var barIcons: Color {
-        return Color(Contrast.nudged(resolved(accentColor), awayFrom: resolved(backdropColor), minimum: 2.6))
+        let accent = accentRGB
+        let nudged = ThemeLook.nudged(accent, awayFrom: backdropRGB, minimum: 2.6)
+        return nudged == accent ? accentColor : Color(.sRGB, red: nudged.r, green: nudged.g, blue: nudged.b, opacity: 1)
     }
 
     /// Roughly what the keyboard stands on (Theme.backdrop).
-    private var backdropColor: Color {
+    private var backdropRGB: ThemeRGBA {
         switch theme.kind {
-        case .native, .keycap: return pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17))
-        case .transparent: return pick(Color(white: 0.92), Color(white: 0.10))
-        case .liquidGlass: return pick(Color(white: 0.96), Color(white: 0.08))
+        case .native, .keycap: return dark ? ThemeRGBA(0.17, 0.17, 0.17) : ThemeRGBA(0.82, 0.84, 0.86)
+        case .transparent: return dark ? ThemeRGBA(0.10, 0.10, 0.10) : ThemeRGBA(0.92, 0.92, 0.92)
+        case .liquidGlass: return dark ? ThemeRGBA(0.08, 0.08, 0.08) : ThemeRGBA(0.96, 0.96, 0.96)
         }
     }
 
-    private func resolved(_ color: Color) -> UIColor {
-        return UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
+    /// The accent as numbers: a keycap theme's return key colour, else the user's (Color.currentAccent).
+    private var accentRGB: ThemeRGBA {
+        if let tones = tones { return tones.ret }
+        let rgb = HexColor.parse(accentHex) ?? (AccentChoice(rawValue: accentName) ?? .blue).rgb
+        return ThemeRGBA(rgb.red, rgb.green, rgb.blue)
     }
 
-    /// `preferred` where it reads on `fill`, else black or white (Theme's Contrast.readable).
-    private func readable(_ preferred: Color, on fill: Color) -> Color {
-        return Color(Contrast.readable(resolved(preferred), on: resolved(fill)))
+    private static func luminance(_ c: ThemeRGBA) -> Double {
+        func linear(_ v: Double) -> Double {
+            let x = min(1, max(0, v))
+            return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
     }
+
+    private static func ratio(_ a: ThemeRGBA, _ b: ThemeRGBA) -> Double {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    /// `top` laid over an opaque `bottom`.
+    private static func over(_ top: ThemeRGBA, _ bottom: ThemeRGBA) -> ThemeRGBA {
+        func mix(_ x: Double, _ y: Double) -> Double { return x * top.a + y * (1 - top.a) }
+        return ThemeRGBA(mix(top.r, bottom.r), mix(top.g, bottom.g), mix(top.b, bottom.b))
+    }
+
+    /// `preferred` where it reads on `fill` (3 : 1), else near-black or white (Theme's Contrast.readable).
+    private func readable(_ preferred: ThemeRGBA, on fill: ThemeRGBA) -> Color {
+        let solid = ThemeLook.over(fill, ThemeRGBA(0.5, 0.5, 0.5))
+        if ThemeLook.ratio(ThemeLook.over(preferred, solid), solid) >= 3 { return Color(preferred) }
+        let black = ThemeRGBA(0.08, 0.08, 0.08), white = ThemeRGBA(1, 1, 1)
+        return ThemeLook.ratio(black, solid) >= ThemeLook.ratio(white, solid)
+            ? Color(white: 0.08).opacity(preferred.a) : Color.white.opacity(preferred.a)
+    }
+
+    /// `color` darkened or lightened (away from `backdrop`) just enough to reach `minimum` contrast with it.
+    private static func nudged(_ color: ThemeRGBA, awayFrom backdrop: ThemeRGBA, minimum: Double) -> ThemeRGBA {
+        let target: Double = luminance(backdrop) < 0.3 ? 1 : 0
+        var step = 0.0
+        while step <= 0.9 {
+            let mixed = ThemeRGBA(color.r + (target - color.r) * step, color.g + (target - color.g) * step,
+                                  color.b + (target - color.b) * step)
+            if ratio(mixed, backdrop) >= minimum { return step == 0 ? color : mixed }
+            step += 0.05
+        }
+        return ThemeRGBA(target, target, target)
+    }
+
     /// The suggestion bar's words (Theme.suggestionText).
     func suggestionText(onSegments: Bool) -> Color {
         return onSegments ? textColor : stripText
@@ -699,10 +743,10 @@ struct ThemeLook {
     private var tones: ThemeTones? { return theme.colors?.tones(dark: dark) }
 
     /// Labels on the keys.
-    var textColor: Color { return tones.map { readable(Color($0.text), on: Color($0.key)) } ?? pick(.black, .white) }
+    var textColor: Color { return tones.map { readable($0.text, on: $0.key) } ?? pick(.black, .white) }
     /// Text on the background (the suggestion bar), not on a key.
     var stripText: Color {
-        return tones.map { readable(Color($0.stripText), on: backdropColor) } ?? pick(Color(white: 0.08), .white)
+        return tones.map { readable($0.stripText, on: backdropRGB) } ?? pick(Color(white: 0.08), .white)
     }
 
     /// The letter keys' fill with the theme's own solidity, if it has one.
@@ -745,7 +789,7 @@ struct ThemeLook {
 
     /// The user's accent; a keycap theme's return key colour.
     var accentColor: Color { return tones.map { Color($0.ret) } ?? accent }
-    var onAccent: Color { return readable(tones.map { Color($0.label(.ret)) } ?? .white, on: accentColor) }
+    var onAccent: Color { return readable(tones.map { $0.label(.ret) } ?? ThemeRGBA(1, 1, 1), on: accentRGB) }
 
     /// Theme.keyCornerRadius: the roundness share of half the key's shorter side.
     func radius(width: CGFloat, height: CGFloat) -> CGFloat {
