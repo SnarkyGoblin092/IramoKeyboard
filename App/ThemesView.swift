@@ -34,7 +34,7 @@ struct ThemesView: View {
 
     // The chosen theme stays pinned above the grid (PinnedPreview); drag the bar under it to make it smaller.
     var body: some View {
-        PinnedPreview(height: 240, fills: true, edgeToEdge: true) {
+        PinnedPreview(height: 240, fills: true, edgeToEdge: true, keyboard: true, keyboardExtra: 44) {
             VStack(spacing: 8) {
                 LiveKeyboard()
                 SegmentedChoice(names: [tr("Auto"), tr("Light"), tr("Dark")],
@@ -50,7 +50,7 @@ struct ThemesView: View {
                 grid
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 28)
+            .padding(.bottom, 12)
         }
         }
         .environment(\.modeWaves, waves)
@@ -90,13 +90,8 @@ struct ThemesView: View {
                 openScreen(.themeEditor)
             } label: {
                 Label(tr("Customize %@", "\(theme.name)"), systemImage: "paintbrush.pointed.fill")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .foregroundColor(.white)
-                    .glassTile(Capsule(), isOn: true)
-                    .contentShape(Capsule())
             }
-            .buttonStyle(PressableStyle())
+            .buttonStyle(ActionButtonStyle())
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -115,11 +110,19 @@ struct ThemesView: View {
         // The switch is drawn with its new choice first, then (once it has settled) the wave sets off and the mode changes.
         pendingMode = mode
         let source = touches.point ?? CGPoint(x: screenFrame.midX, y: screenFrame.midY)
-        // Once the switch has played its little slide to the new choice.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        // Once the switch has played its slide to the new choice to the end (longer for iOS 26's Liquid Glass switch).
+        let slide: TimeInterval
+        if #available(iOS 26.0, *) { slide = 0.75 } else { slide = 0.45 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + slide) {
             launch(source: source, newScheme: dark ? .dark : .light, newTheme: themeID)
-            previewMode = mode
-            pendingMode = nil
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            UIView.performWithoutAnimation {
+                withTransaction(instant) {
+                    previewMode = mode
+                    pendingMode = nil
+                }
+            }
         }
     }
 
@@ -137,7 +140,12 @@ struct ThemesView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60) {
             choosing = false
             launch(source: source, newScheme: previewScheme, newTheme: id)
-            themeID = id
+            // At once, with nothing animating into it (the wave's picture of the new look is then the finished one).
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            UIView.performWithoutAnimation {
+                withTransaction(instant) { themeID = id }
+            }
         }
     }
 
@@ -145,6 +153,7 @@ struct ThemesView: View {
     /// rebuild and the cards' new pictures, looks for the wave) and takes it away when it is done.
     private func launch(source: CGPoint, newScheme: ColorScheme, newTheme: String) {
         let frame = WindowWave.window?.bounds ?? screenFrame
+        let picture = WindowWave.snapshot()   // before the wave's clock starts
         ModeWave.count += 1
         let id = ModeWave.count
         let new = ModeWave(id: id, oldScheme: previewScheme, newScheme: newScheme, oldTheme: themeID,
@@ -152,12 +161,12 @@ struct ThemesView: View {
                            width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
         // A picture of the whole window is taken now, before the setting changes anything on it: the wave carries
         // all of it across, the navigation bar, the keyboard, the buttons and labels, bent by the same lens.
-        WindowWave.start(for: new)
+        WindowWave.start(for: new, old: picture)
         ModeWave.running.append(new)
         waves.append(new)
         // Nothing is updated while it crosses: everything that draws it reads the clock (ModeWave.progress).
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(new.lifetime * 1_000_000_000))
+            await new.waitUntilDone()
             waves.removeAll { $0.id == id }
             ModeWave.running.removeAll { $0.id == id }
         }
@@ -166,18 +175,7 @@ struct ThemesView: View {
     /// Every theme's light and dark picture, drawn ahead (one by one, when nothing else is wanted), so cards and
     /// the light / dark switch never wait for one.
     private func prewarm() {
-        let edits = SystemEdits.decode(systemEdits)
-        let scale = UIScreen.main.scale
-        for section in ThemeCatalog.pickerSections {
-            for base in section.themes {
-                let theme = edited(base, edits)
-                for dark in [previewScheme == .dark, previewScheme != .dark] {
-                    let key = ThemeThumbnail.key(theme: theme, dark: dark)
-                    guard ThumbnailCache.shared.image(for: key) == nil else { continue }
-                    ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: scale, dark: dark, key: key, idle: true) { _ in }
-                }
-            }
-        }
+        ThemeCardPrewarm.run()
     }
 
     /// The picker's sections (ThemeCatalog.pickerSections) in one lazy grid: only the cards in view are built.
@@ -196,11 +194,15 @@ struct ThemesView: View {
                     }
                 } header: {
                     HStack(spacing: 10) {
-                        Text(tr(section.title)).font(.title3.weight(.semibold)).foregroundColor(.secondary)
+                        Text(tr(section.title)).font(.subheadline.weight(.semibold))
                         Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 1)
-                        Text("\(section.themes.count)").font(.subheadline).foregroundColor(.secondary)
+                        Text("\(section.themes.count)").font(.subheadline).monospacedDigit()
                     }
-                    .padding(.top, 8)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 10)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                 }
             }
         }
@@ -243,11 +245,6 @@ private struct ThemeCard: View {
                                 .padding(6)
                         }
                     }
-                    // The shadow of a plain card shape, not of the whole miniature keyboard (far cheaper to draw).
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.black)
-                            .shadow(color: Color.black.opacity(0.14), radius: 6, x: 0, y: 3))
                 HStack(spacing: 4) {
                     Text(theme.name)
                         .font(.subheadline.weight(isSelected ? .semibold : .regular))
@@ -272,7 +269,8 @@ private struct ThemeCard: View {
 
 /// A card's miniature keyboard as a picture, drawn once when the card first comes into view and kept
 /// (ThumbnailCache) until the theme, the look settings or light/dark mode change. Liquid Glass is a live system
-/// material that can't be drawn into a picture, so its card is a picture of a flat glass look (staticGlass).
+/// material that can't be drawn into a picture, so its card is drawn live: real glass keys on the card's glass,
+/// bending the screen behind them, as the keyboard's do over an app.
 @MainActor
 private struct ThemeThumbnail: View {
     let theme: ThemeDefinition
@@ -285,6 +283,9 @@ private struct ThemeThumbnail: View {
     @State private var previous: UIImage?
     @State private var fade: Double = 1
     @State private var shownKey = ""
+    /// The mode of the picture on show, and whether it was taken away for a mode change (its new one fades in).
+    @State private var shownDark: Bool?
+    @State private var cleared = false
     @State private var wantedKey = ""
     /// Counts the pictures of the other mode that arrive while a wave crosses, to draw them.
     @State private var arrived = 0
@@ -295,7 +296,22 @@ private struct ThemeThumbnail: View {
     /// The light / dark waves (the theme waves are the main preview's).
     private var waves: [ModeWave] { return allWaves }
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if theme.kind == .liquidGlass {
+            liveGlass
+        } else {
+            pictureCard
+        }
+    }
+
+    /// The Liquid Glass card: the preview itself, with real glass (one card, so drawing it live costs little).
+    private var liveGlass: some View {
+        ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14,
+                     contentInset: ThemeThumbnail.inset, glassBackdrop: true)
+            .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+    }
+
+    private var pictureCard: some View {
         Group {
             if !waves.isEmpty {
                 // Under the window's wave (WindowWave), which carries the change across: the new look at once.
@@ -312,6 +328,8 @@ private struct ThemeThumbnail: View {
             }
         }
         .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
+        // The keys sit on a card of glass.
+        .background(ClearGlassCard(cornerRadius: 14))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // The other mode's picture is drawn too, when nothing else is to be: a wave then has both ready, and none
         // is drawn while it crosses (each takes the main thread, and the wave's frames with it).
@@ -336,6 +354,10 @@ private struct ThemeThumbnail: View {
 
     static let fadeAnimation = Animation.easeInOut(duration: 0.3)
 
+    /// The room around the keys in a card (the keyboard's points), so the card's rounded corners do not cut them off.
+    /// Part of every picture's key, so pictures saved with another value are drawn again.
+    fileprivate static let inset: CGFloat = 16
+
     /// The card in one mode, while a wave crosses.
     @ViewBuilder private func layer(dark: Bool) -> some View {
         if let picture = picture(dark: dark) {
@@ -351,21 +373,25 @@ private struct ThemeThumbnail: View {
         return image
     }
 
-    /// Until it is drawn: the keyboard's backdrop.
+    /// Until it is drawn: just the glass card.
     private func placeholder(dark: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(dark ? Color(white: 0.17) : Color(red: 0.82, green: 0.84, blue: 0.86))
+        Color.clear
     }
 
     /// Shows `new`: at once on a card that has no picture yet (it has just scrolled into view) or while a wave
     /// crosses (the wave shows the change); over the picture it replaces otherwise, faded in.
-    private func show(_ new: UIImage?, key: String) {
+    private func show(_ new: UIImage?, key: String, dark: Bool) {
         guard let new = new else { return }
-        let replaces = image != nil && shownKey != key && ModeWave.running.isEmpty
+        // Faded over the old picture only when it is the same mode (an edit): the other mode's picture is never kept
+        // on show under the new one.
+        let replaces = image != nil && shownDark == dark && shownKey != key && ModeWave.running.isEmpty
+        let fadesIn = replaces || (cleared && ModeWave.running.isEmpty)
+        cleared = false
         previous = replaces ? image : nil
         image = new
         shownKey = key
-        guard replaces else {
+        shownDark = dark
+        guard fadesIn else {
             fade = 1
             return
         }
@@ -381,7 +407,7 @@ private struct ThemeThumbnail: View {
         // Nothing here may change from one launch to the next without the picture being out of date (hashValue does:
         // it is seeded anew each run, so pictures saved on disk would never be found again).
         let style = theme.systemStyle.flatMap { try? ThumbnailCache.encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|\(ThumbnailCache.settingsSignature())"
+        return "\(ThumbnailCache.version)|\(theme.id)|\(style)|\(dark)|inset\(inset)|flatglass|\(ThumbnailCache.settingsSignature())"
     }
 
     /// Queues the picture for `key` (drawn once, then kept in the cache, on disk too).
@@ -390,24 +416,20 @@ private struct ThemeThumbnail: View {
         ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: displayScale, dark: dark, key: key, idle: idle, done: done)
     }
 
-    /// The picture of a theme in one mode. Liquid Glass is drawn as the real glass keyboard (GlassSnapshot) and
-    /// photographed; the other themes go through ImageRenderer.
+    /// The picture of a theme in one mode, through ImageRenderer (Liquid Glass has none: its card is live).
     fileprivate static func enqueue(theme: ThemeDefinition, accent: Color, scale: CGFloat, dark: Bool, key: String,
                                     idle: Bool, done: @escaping (UIImage?) -> Void) {
         let width = ThemeThumbnail.renderWidth
         let size = CGSize(width: width, height: width / ThemePreview.aspectKeysOnly)
+        // Drawn without a backdrop: the keys sit on the card's glass (ThemeThumbnail.body).
         func preview() -> some View {
-            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14)
+            return ThemePreview(theme: theme, accent: accent, showsStrip: false, cornerRadius: 14,
+                                contentInset: ThemeThumbnail.inset, glassBackdrop: false, noBackdrop: true)
                 .frame(width: size.width, height: size.height)
                 .environment(\.colorScheme, dark ? .dark : .light)
         }
         ThumbnailCache.shared.render(key: key, idle: idle) {
-            if theme.kind == .liquidGlass,
-               let shot = await GlassSnapshot.take(AnyView(preview()), size: size, dark: dark, scale: scale,
-                                                   backdrop: ThemePreviewBackdrop.color(theme: theme, dark: dark)) {
-                return shot
-            }
-            let renderer = ImageRenderer(content: preview().environment(\.staticGlass, true))
+            let renderer = ImageRenderer(content: preview())
             renderer.scale = scale
             return renderer.uiImage
         } done: { rendered in
@@ -427,14 +449,53 @@ private struct ThemeThumbnail: View {
         wantedKey = key
         guard key != shownKey || image == nil else { return }
         if let cached = ThumbnailCache.shared.image(for: key) {
-            show(cached, key: key)
+            show(cached, key: key, dark: dark)
             return
+        }
+        // Not drawn yet: the other mode's picture must not stay on show (wrong for a moment, then faded away).
+        if let shown = shownDark, shown != dark, image != nil {
+            image = nil
+            previous = nil
+            shownKey = ""
+            cleared = true
         }
         queue(theme: theme, dark: dark, key: key) { rendered in
             // iOS flips light/dark briefly while taking app-switcher snapshots; a picture queued for the
             // flipped look may finish after the card has switched back, so drop it unless it is still wanted.
             guard wantedKey == key else { return }
-            show(rendered, key: key)
+            show(rendered, key: key, dark: dark)
+        }
+    }
+}
+
+/// Draws every theme's light and dark card picture in the background, from when the app opens (and again whenever
+/// the Themes screen opens, for what changed since), so the cards are there before the screen is.
+@MainActor
+enum ThemeCardPrewarm {
+    static func run() {
+        let defaults = SharedStore.defaults
+        let edits = SystemEdits.decode(defaults.string(forKey: SettingKey.systemEdits) ?? SettingDefault.systemEdits)
+        let accent = Color.currentAccent(name: defaults.string(forKey: SettingKey.accent) ?? SettingDefault.accent,
+                                         hex: defaults.string(forKey: SettingKey.accentHex) ?? SettingDefault.accentHex)
+        let mode = defaults.string(forKey: SettingKey.appearance) ?? SettingDefault.appearance
+        let systemDark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
+        let currentDark = mode == "auto" ? systemDark : mode == "dark"
+        let scale = UIScreen.main.scale
+        for section in ThemeCatalog.pickerSections {
+            for base in section.themes where base.kind != .liquidGlass {
+                var theme = base
+                if let style = edits[base.id] {
+                    theme.systemStyle = style
+                    theme.isEdited = true
+                }
+                for dark in [currentDark, !currentDark] {
+                    let key = ThemeThumbnail.key(theme: theme, dark: dark)
+                    guard ThumbnailCache.shared.image(for: key) == nil, ThumbnailCache.shared.markQueued(key) else { continue }
+                    ThemeThumbnail.enqueue(theme: theme, accent: accent, scale: scale, dark: dark, key: key, idle: true) { _ in
+                        ThumbnailCache.shared.unmarkQueued(key)
+                    }
+                }
+            }
         }
     }
 }
@@ -462,6 +523,11 @@ final class ThumbnailCache {
     init() {
         images.countLimit = 160
     }
+
+    /// Keys a background draw is already waiting for (so running the prewarm twice does not draw anything twice).
+    private var queuedKeys = Set<String>()
+    func markQueued(_ key: String) -> Bool { return queuedKeys.insert(key).inserted }
+    func unmarkQueued(_ key: String) { queuedKeys.remove(key) }
 
     /// The picture in memory, else the one kept on disk from an earlier run (a theme is drawn once, ever, until
     /// what it depends on changes: the key holds all of that).
@@ -505,7 +571,7 @@ final class ThumbnailCache {
             // The idle ones are spaced out (a scroll stays smooth), and wait for a wave to end.
             if self.queue.isEmpty {
                 repeat {
-                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    try? await Task.sleep(nanoseconds: 8_000_000)
                 } while self.queue.isEmpty && !ModeWave.running.isEmpty
             }
             let job = self.queue.isEmpty ? self.idle.removeFirst() : self.queue.removeFirst()
@@ -528,57 +594,6 @@ final class ThumbnailCache {
                     SettingKey.accent, SettingKey.accentHex, SettingKey.enabledLanguages, SettingKey.language]
         let defaults = SharedStore.defaults
         return keys.map { "\(defaults.object(forKey: $0) ?? "")" }.joined(separator: "|")
-    }
-}
-
-/// The keyboard's backdrop colour (ThemeLook.backdrop) for a snapshot to sit on, as a UIColor.
-enum ThemePreviewBackdrop {
-    static func color(theme: ThemeDefinition, dark: Bool) -> UIColor {
-        if theme.kind == .transparent { return dark ? UIColor(white: 0.12, alpha: 1) : UIColor(white: 0.93, alpha: 1) }
-        return dark ? UIColor(white: 0.17, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
-    }
-}
-
-/// Takes a picture of a view with real Liquid Glass in it: the view is put, on its backdrop, in the key window just
-/// off the screen (where the glass is drawn as on a real keyboard) and photographed once. One at a time.
-@MainActor
-enum GlassSnapshot {
-    private static var busy = false
-    private static var waiters: [CheckedContinuation<Void, Never>] = []
-
-    static func take(_ content: AnyView, size: CGSize, dark: Bool, scale: CGFloat, backdrop: UIColor) async -> UIImage? {
-        if busy {
-            await withCheckedContinuation { waiters.append($0) }
-        } else {
-            busy = true
-        }
-        defer { if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() } }
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
-        guard let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first else { return nil }
-        let container = UIView(frame: CGRect(x: window.bounds.maxX + 40, y: 0, width: size.width, height: size.height))
-        container.backgroundColor = backdrop
-        container.overrideUserInterfaceStyle = dark ? .dark : .light
-        let host = UIHostingController(rootView: AnyView(content.ignoresSafeArea()))
-        host.view.backgroundColor = .clear
-        if #available(iOS 16.4, *) { host.safeAreaRegions = [] }
-        host.view.frame = container.bounds
-        container.addSubview(host.view)
-        window.addSubview(container)
-        window.rootViewController?.addChild(host)
-        host.didMove(toParent: window.rootViewController)
-        defer {
-            host.willMove(toParent: nil)
-            host.removeFromParent()
-            container.removeFromSuperview()
-        }
-        container.layoutIfNeeded()
-        // Long enough for the glass to be laid out and drawn.
-        try? await Task.sleep(nanoseconds: 350_000_000)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            container.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
-        }
     }
 }
 

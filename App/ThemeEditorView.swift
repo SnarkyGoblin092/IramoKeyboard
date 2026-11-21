@@ -9,7 +9,7 @@ struct ThemeEditorView: View {
     private var theme: ThemeDefinition { return ThemeCatalog.theme(id: themeID) }
 
     var body: some View {
-        PinnedPreview(height: 240, fills: true) {
+        PinnedPreview(height: 240, fills: true, keyboard: true) {
             LiveKeyboard()
         } content: {
         GlassList {

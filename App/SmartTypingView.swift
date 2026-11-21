@@ -123,10 +123,7 @@ struct SmartTypingView: View {
                         Text(example)
                             .font(.subheadline.monospaced())
                             .foregroundColor(.primary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(tryText == example
-                                                       ? Color.accentColor.opacity(0.28) : Color.primary.opacity(0.07)))
+                            .chip(tint: tryText == example ? Color.accentColor : nil)
                     }
                     .buttonStyle(.plain)
                 }
@@ -136,37 +133,12 @@ struct SmartTypingView: View {
     }
 }
 
-/// What was typed, then the bar's offer for it on the accent pill (or a dash when there is none).
+/// What was typed, then the bar's offer for it (or a dash when there is none).
 private struct SmartBarPreview: View {
     let typed: String
     let offer: String?
 
     var body: some View {
-        CurrentThemeLook { look in
-            HStack(spacing: 10) {
-                Text(typed)
-                    .font(.system(size: 15, design: .rounded))
-                    .foregroundColor(look.textColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(look.keyShape(.letter, radius: 8))
-                Image(systemName: "arrow.right")
-                    .foregroundColor(look.stripText.opacity(0.6))
-                Text(offer ?? "\u{2014}")
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                    .foregroundColor(offer == nil ? look.stripText.opacity(0.5) : look.onAccent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Group { if offer != nil { look.pill(radius: 15) } })
-                    .id(offer ?? "")
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer)
-        }
+        AccentOfferPreview(typed: typed, offer: offer)
     }
 }

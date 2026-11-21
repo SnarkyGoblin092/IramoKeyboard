@@ -71,6 +71,7 @@ jobs:
         if: steps.packed.outputs.cache-hit != 'true'
         run: |
           ls -la Keyboard/Resources
+          test -s Keyboard/Resources/emoji.json
           for f in en hu; do test -s Keyboard/Resources/dict_$f.bin; done
           for f in Keyboard/Resources/dict_*.bin; do
             test -s "$f" || { echo "::error::$f is empty"; exit 1; }
@@ -89,6 +90,18 @@ jobs:
           done
           wc -l Keyboard/Resources/phonetic_*.tsv || true
           du -ch Keyboard/Resources/dict_*.bin | tail -1
+          python3 - <<'PY'
+          import glob, json
+          data = json.load(open("Keyboard/Resources/emoji.json"))
+          total = sum(len(g["items"]) for g in data["groups"])
+          print("Unicode emoji", data["version"], "->", total, "emoji")
+          assert total > 1500, "emoji list looks too small"
+          for path in sorted(glob.glob("Keyboard/Resources/emoji_search_*.json")):
+              n = len(json.load(open(path)))
+              print(path, "searchable emoji:", n)
+              if n < 800:
+                  print(f"::warning::{path} looks thin; emoji search will be weak")
+          PY
 
       # words_<lang>.tsv is only read when dict_<lang>.bin is missing (WordStore.parse), so a language that has
       # its dictionary ships without the word list. The sizes show what the language data takes up.
@@ -100,7 +113,7 @@ jobs:
             dict="${f/words_/dict_}"
             if [ -s "${dict%.tsv}.bin" ]; then rm "$f"; fi
           done
-          for kind in dict lm words pairs accents phonetic; do
+          for kind in dict lm words pairs accents phonetic emoji; do
             echo "$kind: $(cat Keyboard/Resources/${kind}_* Keyboard/Resources/${kind}.* 2>/dev/null | wc -c | awk '{printf "%.1f MB", $1 / 1e6}')"
           done
           du -sh Keyboard/Resources
@@ -108,7 +121,7 @@ jobs:
       # Every language file ships compressed as an xz stream (LZMA2, which Apple's Compression framework reads
       # as .lzma; about 28% smaller than DEFLATE on this data); LanguageData unpacks a language's files only once
       # that language is enabled. The 1 MB dictionary costs under 1% of the size and keeps the memory the keyboard
-      # needs to unpack a file small.
+      # needs to unpack a file small. emoji.json, which every language uses, stays as it is.
       - name: Compress language data
         if: steps.packed.outputs.cache-hit != 'true'
         run: |
@@ -122,7 +135,7 @@ jobs:
               path.unlink()
 
           files = [path for path in sorted(pathlib.Path("Keyboard/Resources").iterdir())
-                   if path.is_file() and path.name != ".gitkeep" and path.suffix != ".lzma"]
+                   if path.is_file() and path.name not in ("emoji.json", ".gitkeep") and path.suffix != ".lzma"]
           # Threads, one file per core: lzma compresses outside Python's lock, and worker processes cannot
           # be started from a script read from standard input (they import the main script by its path).
           with concurrent.futures.ThreadPoolExecutor(os.cpu_count() or 2) as pool:

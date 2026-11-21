@@ -253,6 +253,62 @@ struct Keycap<Legend: View>: View {
     }
 }
 
+extension Color {
+    /// The colour's sRGB parts in the given mode.
+    fileprivate func rgb(dark: Bool) -> (red: CGFloat, green: CGFloat, blue: CGFloat)? {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        let resolved = UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
+        return resolved.getRed(&r, green: &g, blue: &b, alpha: &a) ? (r, g, b) : nil
+    }
+
+    /// WCAG relative luminance (0 black ... 1 white).
+    fileprivate static func luminance(_ c: (red: CGFloat, green: CGFloat, blue: CGFloat)) -> Double {
+        func channel(_ v: CGFloat) -> Double {
+            let x = Double(min(1, max(0, v)))
+            return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue)
+    }
+
+    fileprivate static func contrastRatio(_ a: Double, _ b: Double) -> Double {
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
+    /// The colour, darkened (light mode) or lightened (dark mode) just enough to stand out from the page behind
+    /// it: an icon or tile in it is always seen, whatever accent was picked.
+    func legible(dark: Bool, minimumContrast: Double = 2.2) -> Color {
+        guard let c = rgb(dark: dark) else { return self }
+        let page = dark ? 0.0 : 1.0
+        let target: CGFloat = dark ? 1 : 0
+        var step: CGFloat = 0
+        while step <= 0.9 {
+            let mixed = (red: c.red + (target - c.red) * step, green: c.green + (target - c.green) * step,
+                         blue: c.blue + (target - c.blue) * step)
+            if Color.contrastRatio(Color.luminance(mixed), page) >= minimumContrast || step >= 0.9 {
+                return step == 0 ? self : Color(.sRGB, red: Double(mixed.red), green: Double(mixed.green),
+                                                blue: Double(mixed.blue), opacity: 1)
+            }
+            step += 0.05
+        }
+        return self
+    }
+
+    /// A shade of this colour for one icon: turned a little round the colour wheel and made more vivid, picked by
+    /// `seed` (the same seed always gets the same shade), so a screen's icons are varied but all in the accent's family.
+    func accentShade(seed: String) -> Color {
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(self).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else { return self }
+        // A grey accent has no hue to turn: it stays grey.
+        guard saturation > 0.12 else { return self }
+        let turns: [CGFloat] = [0, 0.07, -0.07, 0.14, -0.14, 0.04, -0.04, 0.10, -0.10]
+        let index = seed.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % turns.count
+        var shifted = (hue + turns[index]).truncatingRemainder(dividingBy: 1)
+        if shifted < 0 { shifted += 1 }
+        return Color(hue: Double(shifted), saturation: Double(min(1, max(saturation, 0.7))),
+                     brightness: Double(min(1, max(brightness, 0.75))), opacity: 1)
+    }
+}
+
 /// The colour between its light-mode and dark-mode versions, so the same glass works in both.
 private func keycapTint(of color: Color) -> Color {
     // The app's accent is the tint itself (a UIColor made from it would not follow the chosen colour).
@@ -482,7 +538,11 @@ struct ActionButtonStyle: ButtonStyle {
 struct SectionHeader: View {
     let title: String
     let symbol: String
+    /// Kept for the callers; the group's icon is drawn in the user's accent.
     let color: Color
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @Environment(\.colorScheme) private var scheme
 
     init(_ title: String, symbol: String, color: Color = .accentColor) {
         self.title = title
@@ -494,7 +554,8 @@ struct SectionHeader: View {
         HStack(spacing: 6) {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(color)
+                .foregroundColor(Color.currentAccent(name: accentName, hex: accentHex).accentShade(seed: symbol)
+                    .legible(dark: scheme == .dark, minimumContrast: 3))
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(title)
@@ -524,14 +585,28 @@ struct StatusChip: View {
     }
 }
 
+extension View {
+    /// A small capsule round a short text (an example to try, a shortcut's trigger): faint, or in `tint` (the
+    /// accent, when it is the one picked). The same fill everywhere in the app.
+    func chip(tint: Color? = nil, horizontal: CGFloat = 12, vertical: CGFloat = 7) -> some View {
+        return self
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+            .background(Capsule().fill(tint.map { $0.opacity(0.2) } ?? Color.primary.opacity(0.07)))
+            .contentShape(Capsule())
+    }
+}
+
 /// Applies the chosen accent colour as the tint of everything inside.
 struct AccentTint: ViewModifier {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
         content
-            .tint(Color.currentAccent(name: accentName, hex: accentHex))
+            // Links, buttons and icons in the accent stay readable on the page in either mode.
+            .tint(Color.currentAccent(name: accentName, hex: accentHex).legible(dark: scheme == .dark, minimumContrast: 3))
             // A new accent fades in over the old one, wherever it is drawn.
             .animation(AccentTint.fade, value: accentName + accentHex)
     }

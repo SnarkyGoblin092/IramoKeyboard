@@ -112,6 +112,11 @@ enum SettingsIndex {
                         symbol: "keyboard.badge.ellipsis", color: .blue, screen: .languages, anchor: "languages.list"),
             SearchEntry(id: "learned", title: tr("Learned words"), place: keyboard, keywords: ["dictionary", "words", "learned"],
                         symbol: "character.book.closed", color: .brown, screen: .learnedWords, anchor: nil),
+            SearchEntry(id: "learned.add", title: tr("Add a word"), place: keyboard, keywords: ["custom", "dictionary", "word", "name", "add"],
+                        symbol: "plus.circle", color: .green, screen: .learnedWords, anchor: "learned.add"),
+            SearchEntry(id: "emojiPicker", title: tr("Emoji"), place: keyboard,
+                        keywords: ["emoji", "picker", "smiley", "recent", "skin tone", "categories", "search", "grid"],
+                        symbol: "face.smiling.fill", color: .yellow, screen: .emoji, anchor: nil),
             SearchEntry(id: "shortcuts", title: shortcuts, place: keyboard, keywords: ["shortcut", "replacement", "expand", "abbreviation"],
                         symbol: "bolt.fill", color: .orange, screen: .shortcuts, anchor: nil),
             SearchEntry(id: "placeholders", title: tr("Placeholders"), place: shortcuts,
@@ -132,7 +137,7 @@ enum SettingsIndex {
                         symbol: "face.smiling", color: .indigo, screen: .suggestions, anchor: "suggestions.words"),
             SearchEntry(id: "wordsShown", title: tr("Words shown"), place: bar, keywords: ["three", "scrolling", "fit"],
                         symbol: "text.line.first.and.arrowtriangle.forward", color: .indigo, screen: .suggestions, anchor: "suggestions.count"),
-            SearchEntry(id: "barLook", title: tr("Bar height"), place: at(bar, tr("Look")), keywords: ["height", "lines", "tiles", "separator"],
+            SearchEntry(id: "barLook", title: tr("Bar height"), place: at(bar, tr("Look")), keywords: ["height", "lines", "separator"],
                         symbol: "arrow.up.and.down", color: .indigo, screen: .suggestions, anchor: "suggestions.look"),
             SearchEntry(id: "switching", title: tr("Switching"), place: bar, keywords: ["animation", "fade", "slide", "transition"],
                         symbol: "arrow.left.arrow.right", color: .indigo, screen: .suggestions, anchor: "suggestions.switching"),
@@ -148,6 +153,14 @@ enum SettingsIndex {
                         symbol: "quote.opening", color: .teal, screen: AppTab.typing.scope, anchor: "main.smartQuotes"),
             SearchEntry(id: "spaceAfter", title: tr("Space after punctuation"), place: typing, keywords: ["space", "punctuation", "comma", "period"],
                         symbol: "space", color: .mint, screen: AppTab.typing.scope, anchor: "main.spaceAfter"),
+            SearchEntry(id: "spaceAfterSuggestion", title: tr("Space after suggestions"), place: typing, keywords: ["space", "suggestion", "word", "picked"],
+                        symbol: "space", color: .cyan, screen: AppTab.typing.scope, anchor: "main.spaceAfterSuggestion"),
+            SearchEntry(id: "spaceAfterEmoji", title: tr("Space after emoji suggestions"), place: typing, keywords: ["space", "emoji", "suggestion"],
+                        symbol: "face.smiling", color: .yellow, screen: AppTab.typing.scope, anchor: "main.spaceAfterEmoji"),
+            SearchEntry(id: "spaceAfterResult", title: tr("Space after the answer"), place: typing, keywords: ["space", "calculator", "answer", "result"],
+                        symbol: "plus.forwardslash.minus", color: .orange, screen: AppTab.typing.scope, anchor: "main.spaceAfterResult"),
+            SearchEntry(id: "spaceAfterConversion", title: tr("Space after the conversion"), place: typing, keywords: ["space", "unit", "conversion"],
+                        symbol: "ruler", color: .teal, screen: AppTab.typing.scope, anchor: "main.spaceAfterConversion"),
             SearchEntry(id: "smart", title: smart, place: typing, keywords: ["calculator", "math", "units", "convert"],
                         symbol: "function", color: .orange, screen: .smartTyping, anchor: nil),
             SearchEntry(id: "math", title: tr("Calculator"), place: smart, keywords: ["math", "calculate", "sum", "equals", "="],
@@ -158,6 +171,15 @@ enum SettingsIndex {
             SearchEntry(id: "decimals", title: tr("Decimal places"), place: smart, keywords: ["decimals", "rounding", "digits"],
                         symbol: "number", color: .orange, screen: .smartTyping, anchor: "smart.decimals"),
 
+            SearchEntry(id: "tapAccuracy", title: tr("Tap accuracy"), place: touch,
+                        keywords: ["tap", "accuracy", "aim", "heatmap", "miss", "typo", "thumb", "adaptive"],
+                        symbol: "scope", color: .orange, screen: .tapAccuracy, anchor: nil),
+            SearchEntry(id: "tapAdaptive", title: tr("Adaptive aim"), place: at(tr("Tap accuracy"), tr("Adaptive mode")),
+                        keywords: ["adaptive", "aim", "learn", "thumb", "tap", "accuracy"],
+                        symbol: "wand.and.stars", color: .pink, screen: .tapAccuracy, anchor: "tap.adaptive"),
+            SearchEntry(id: "tapRecord", title: tr("Record where I tap"), place: at(tr("Tap accuracy"), tr("Privacy & data")),
+                        keywords: ["heatmap", "record", "taps", "map", "privacy"],
+                        symbol: "square.grid.3x3.fill", color: .teal, screen: .tapAccuracy, anchor: "tap.record"),
             SearchEntry(id: "gestures", title: gestures, place: touch, keywords: ["gesture", "swipe", "touch"],
                         symbol: "hand.draw.fill", color: .teal, screen: .gestures, anchor: nil),
             SearchEntry(id: "swipe", title: tr("Swipe typing"), place: gestures, keywords: ["swipe", "glide", "slide", "thumb", "phrase"],
@@ -393,7 +415,7 @@ struct SearchTab: View {
                     SettingsSearchResults(query: query, open: open)
                 }
             }
-            .glassScreen()
+            .tabScreen()
             // The search field floats over the bottom: room under the last setting for it.
             // (only when the list is long enough to reach it)
             .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: needsRoom ? 56 : 0) }

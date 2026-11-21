@@ -8,6 +8,20 @@ import UIKit.UIGestureRecognizerSubclass
 /// write nothing: the bar always shows the same few words, so its look can be seen. Shift and the number and symbol
 /// pages work, so every key can be tried. Laid out at the keyboard's real size and shrunk to fit the pane.
 struct LiveKeyboard: View {
+    /// Room all round the keys inside the glass card.
+    static let room: CGFloat = 18
+
+    /// The height of the card (its room included) that shows the keyboard at the scale that fits `width`: the keyboard
+    /// as wide as the settings below it.
+    static func cardHeight(width: CGFloat) -> CGFloat {
+        let s = Settings.shared
+        let natural = LiveKeyboardView.naturalSize(keyHeight: s.keyHeight, rowGap: s.rowGap, numberRow: s.numberRow,
+                                                   barHeight: s.suggestionHeight,
+                                                   language: LiveKeyboardView.openingLanguage(code: s.languageCode))
+        let scale = max(0.3, (width - 2 * room) / natural.width)
+        return natural.height * scale + 2 * room
+    }
+
     /// The Effects screen's settings as they are being edited (nil: the stored ones).
     var effects: EffectsConfig? = nil
     /// Only the suggestion bar, cycling through a few words (the Suggestions screen).
@@ -37,30 +51,21 @@ struct LiveKeyboard: View {
                                                     barHeight: barHeight,
                                                     language: LiveKeyboardView.openingLanguage(code: languageCode),
                                                     barOnly: barOnly)
-            let scale = min(geometry.size.width / size.width, geometry.size.height / size.height)
+            // Room all round the keys inside the glass, so square-cornered keys and their outlines are not cut off.
+            let room: CGFloat = barOnly ? 0 : LiveKeyboard.room
+            let scale = min((geometry.size.width - 2 * room) / size.width, (geometry.size.height - 2 * room) / size.height)
             CurrentThemeLook { look in
                 LiveKeyboardStage(effects: effects, barOnly: barOnly, live: isFront)
-                    // A transparent backdrop shows only the keys, over whatever the screen has behind them.
-                    .background(
-                        Group {
-                            if waves.isEmpty {
-                                // Without a wave it fades with the keys (LiveKeyboardView.modeFade).
-                                look.backdrop(scale: scale)
-                                    .animation(.easeInOut(duration: LiveKeyboardView.modeFade), value: scheme)
-                            } else {
-                                // Under the Themes screen's wave (WindowWave), which carries the change across
-                                // the whole window: the new look at once.
-                                look.backdrop(scale: scale)
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                    )
+                    .frame(width: size.width * scale, height: size.height * scale)
+                    .padding(room)
+                    // The keys sit on clear Liquid Glass, as the keyboard's own keys do over the app; the keys and the bar
+                    // keep the theme.
+                    // (The bar alone: only the bar's own height.)
+                    .background(ClearGlassCard(cornerRadius: 14).padding(.vertical, barOnly ? 4.5 * scale : 0))
             }
             // The backdrop is drawn in the keys' mode, not the app's: light keys and the bar's dark words would
             // be lost on a dark backdrop.
             .environment(\.colorScheme, scheme)
-            .frame(width: size.width * scale, height: size.height * scale)
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minHeight: 60)
@@ -114,6 +119,10 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     private var shift: ShiftState = .off
     private var lastShiftTap = Date.distantPast
     private var builtSignature = ""
+    private var builtAccent = ""
+    private func accentKey() -> String {
+        return Settings.shared.accentName + "|" + (SharedStore.defaults.string(forKey: SettingKey.accentHex) ?? "")
+    }
     private var refreshQueued = false
     /// A setting changed while this keyboard was not on screen: it reads the settings when it is shown again.
     private var stale = false
@@ -191,7 +200,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             s.keyGlow, s.keyFont, s.enabledLanguages.joined(separator: ","), s.languageCode,
             "\(s.keyHeight)", "\(s.keyboardWidth)", "\(s.keyGap)", "\(s.rowGap)", "\(s.alwaysCapitals)", "\(s.letterSize)",
             s.hintPosition, "\(s.hintSize)", "\(s.spaceTextSize)", "\(s.spaceLanguageCode)", "\(s.splitKeyboard)", "\(KeyboardLayoutMode.split)", s.oneHanded,
-            s.suggestionStyle, s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
+            s.separatorStyle, "\(s.suggestionFollowTheme)", "\(s.suggestionHeight)",
             "\(s.suggestionsEnabled)", "\(s.suggestionFit)", "\(s.suggestionScroll)", "\(s.suggestionScrollThree)", s.extraKeys.joined(), s.extraKeysLeft.joined(), "\(s.commaKey)\(s.periodKey)\(s.emojiKey)", s.commaHold.joined(), s.periodHold.joined(),
             s.systemEditsJSON, layouts, holds
         ]
@@ -214,6 +223,7 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
         Theme.reload()
         overrideUserInterfaceStyle = Theme.appearanceStyle
         builtSignature = signature()
+        builtAccent = accentKey()
         // The picked mode is the one built even if the view's traits have not caught up yet (a second build for
         // them would cut the fade short).
         builtStyle = LiveKeyboardView.effectiveStyle
@@ -248,6 +258,15 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     /// The words on show: the same few, or (bar only) a new set each time round.
     private var shownWords: [String] {
         guard barOnly else { return starters }
+        // A bar that fits more words or scrolls is shown full, with enough words to scroll it.
+        if Prefs.suggestionScroll || Prefs.suggestionFit {
+            let pool: [String] = language == .hungarian
+                ? ["Szia", "Nem", "Igen", "Köszönöm", "Jó", "De", "Hogy", "Az", "Ez", "Én", "A", "Mi", "Most", "Majd", "Itt", "Ott"]
+                : ["Hello", "Thanks", "The", "It", "My", "So", "You", "We", "This", "I", "What", "Yes", "Please", "Good", "Sure", "Maybe"]
+            let wanted = min(SuggestionBar.capacity, pool.count)
+            let start = (cycleStep * 3) % pool.count
+            return (0..<wanted).map { pool[(start + $0) % pool.count] }
+        }
         let sets: [[String]] = language == .hungarian
             ? [["Szia", "Nem", "Igen"], ["Köszönöm", "Jó", "De"], ["Hogy", "Az", "Ez"], ["Én", "A", "Szia"]]
             : [["Hello", "Thanks", "The"], ["It", "My", "So"], ["You", "We", "This"], ["I", "Hello", "Thanks"]]
@@ -316,10 +335,30 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
             guard self.signature() != self.builtSignature else { return }
             // Light to dark (the Themes screen's switch): the new keys fade in over the old ones where there is no wave
             // (with a wave, the picture of the old window it took (WindowWave) hides the change until it gets there).
-            if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
+            // A new accent fades in the same way, over the time the backdrop takes.
+            let accentChanged = self.accentKey() != self.builtAccent
+            if self.window != nil, ModeWave.running.isEmpty, target == self.builtStyle, accentChanged {
+                // Everything stays where it is: the keyboard is built anew with no animation of its own (nothing
+                // slides or jumps), and a picture of the old one over it fades away.
+                let old = self.snapshotView(afterScreenUpdates: false)
+                UIView.performWithoutAnimation {
+                    self.rebuild()
+                    self.layoutIfNeeded()
+                }
+                if let old = old {
+                    old.frame = self.bounds
+                    old.isUserInteractionEnabled = false
+                    self.addSubview(old)
+                    UIView.animate(withDuration: 0.7, delay: 0, options: [.curveEaseInOut, .allowUserInteraction],
+                                   animations: { old.alpha = 0 },
+                                   completion: { _ in old.removeFromSuperview() })
+                }
+            } else if self.window != nil, ModeWave.running.isEmpty, target != self.builtStyle {
+                // Only a fade: the new keys are laid out where they belong at once (built inside the transition's
+                // animation they would slide in from nowhere).
                 UIView.transition(with: self, duration: LiveKeyboardView.modeFade,
                                   options: [.transitionCrossDissolve, .allowUserInteraction],
-                                  animations: { self.rebuild() })
+                                  animations: { UIView.performWithoutAnimation { self.rebuild(); self.layoutIfNeeded() } })
             } else {
                 self.rebuild()
             }
@@ -329,16 +368,39 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     override func didMoveToWindow() {
         super.didMoveToWindow()
         updateCycle()
-        // Back on screen: the settings changed meanwhile are read now.
+        // Back on screen (the Themes screen closed over it): the settings changed meanwhile are read at once, before
+        // it is drawn, and the keyboard is simply there as it now is: no fade, and nothing slides in with the screen's
+        // own animation.
         if window != nil, stale {
             stale = false
-            queueRefresh()
+            catchUp()
+        }
+    }
+
+    /// Builds the keyboard for the current settings without any animation, if they changed since it was built.
+    private func catchUp() {
+        UIView.performWithoutAnimation {
+            Settings.shared.refresh()
+            Prefs.refresh()
+            applyEffects()
+            if signature() != builtSignature || LiveKeyboardView.effectiveStyle != builtStyle {
+                rebuild()
+            } else if overrideUserInterfaceStyle != Theme.appearanceStyle {
+                overrideUserInterfaceStyle = Theme.appearanceStyle
+            }
+            layoutIfNeeded()
         }
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        if traitCollection.userInterfaceStyle != builtStyle { rebuild() }
+        // Not animated: this can come in the middle of a screen's slide (the keys would slide in with it).
+        if traitCollection.userInterfaceStyle != builtStyle {
+            UIView.performWithoutAnimation {
+                rebuild()
+                layoutIfNeeded()
+            }
+        }
     }
 
     // MARK: The bar
@@ -442,11 +504,12 @@ final class LiveKeyboardView: UIView, KeyboardViewDelegate, SuggestionBarDelegat
     }
 }
 
-/// Keeps the screen's swipe back (from the edge, and on iOS 26 from anywhere on the screen) from starting on the
-/// keyboard, so a swipe there stays with the keys (swipe typing, the effects) instead of leaving the screen. It
-/// recognizes as soon as a finger lands on the keyboard, which fails the navigation's swipe back for that touch,
-/// and only that: every touch still reaches the keys and the bar, and no other gesture is held up. A swipe from
-/// the edge beside the keyboard and the back button go back as before.
+/// Keeps the screen's swipe back (from the edge, and on iOS 26 from anywhere on the screen) and the scrolling of the
+/// page the keyboard is on (the Look tab's list) from starting on the keyboard, so a swipe there stays with the keys
+/// (swipe typing, the effects, the space bar's cursor) instead of leaving or scrolling the screen. It recognizes as
+/// soon as a finger lands on the keyboard, which fails those gestures for that touch, and only those: every touch
+/// still reaches the keys and the bar, and no other gesture is held up. A swipe beside the keyboard scrolls and goes
+/// back as before.
 final class BackSwipeBlocker: UIGestureRecognizer {
     private var fingers = 0
 
@@ -492,9 +555,17 @@ final class BackSwipeBlocker: UIGestureRecognizer {
         fingers = 0
     }
 
-    /// It stops only the swipe back; the keys' and the screen's other gestures go on alongside it.
+    /// It stops only the swipe back and the page's scrolling; the keys' and the screen's other gestures go on
+    /// alongside it.
     override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return isBackSwipe(preventedGestureRecognizer)
+        return isBackSwipe(preventedGestureRecognizer) || isPageScroll(preventedGestureRecognizer)
+    }
+
+    /// The pan of a scroll view the keyboard is inside.
+    private func isPageScroll(_ recognizer: UIGestureRecognizer) -> Bool {
+        guard let scroll = recognizer.view as? UIScrollView, recognizer === scroll.panGestureRecognizer,
+              let keyboard = view else { return false }
+        return keyboard.isDescendant(of: scroll)
     }
 
     override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool {

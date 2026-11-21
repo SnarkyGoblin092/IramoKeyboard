@@ -6,24 +6,21 @@ using namespace metal;
 // towards the front and split into its colours, the way light is at the edge of a thick lens, and darkened a
 // little just inside it.
 
-// The crests of the front (the same as ModeWave.crests): how many round the circle, how high, where they start
-// and how far they travel round as the wave spreads.
-constant float crestCount[5] = {2.0, 3.0, 5.0, 7.0, 11.0};
-constant float crestHeight[5] = {0.110, 0.090, 0.060, 0.035, 0.020};
-constant float crestPhase[5] = {0.4, 2.1, 4.0, 1.1, 5.3};
-constant float crestDrift[5] = {1.7, -2.3, 3.1, -4.2, 5.0};
-
-// The radius of the front at `angle` (ModeWave.radius).
-static float frontRadius(float angle, float progress, float endRadius, float shift) {
+// The radius of the front at `angle` (ModeWave.radius). Every wave has its own crests (ModeWave.makeCrests),
+// six numbers each: how many round the circle, how high at most, where it starts, how far it travels round as the
+// wave spreads, and how fast and from where its height swells and ebbs.
+static float frontRadius(float angle, float progress, float endRadius, device const float *crests, int count) {
     float swell = 1.0;
-    for (int i = 0; i < 5; i++) {
-        swell += crestHeight[i] * sin(crestCount[i] * angle + crestPhase[i] + shift + crestDrift[i] * progress);
+    for (int i = 0; i + 5 < count; i += 6) {
+        float height = crests[i + 1] * (0.65 + 0.35 * sin(crests[i + 4] * progress + crests[i + 5]));
+        swell += height * sin(crests[i] * angle + crests[i + 2] + crests[i + 3] * progress);
     }
     return progress * endRadius * swell;
 }
 
 [[ stitchable ]] half4 waveLens(float2 position, SwiftUI::Layer layer, float2 center, float progress,
-                                float endRadius, float shift, float reach, float strength) {
+                                float endRadius, float reach, float strength,
+                                device const float *crests, int crestCount) {
     if (progress <= 0.0 || progress >= 1.0) {
         return layer.sample(position);
     }
@@ -39,7 +36,7 @@ static float frontRadius(float angle, float progress, float endRadius, float shi
     }
     float2 direction = offset / max(distance, 0.001);
     // How far outside the front this point is (negative: inside).
-    float signedDistance = distance - frontRadius(atan2(offset.y, offset.x), progress, endRadius, shift);
+    float signedDistance = distance - frontRadius(atan2(offset.y, offset.x), progress, endRadius, crests, crestCount);
     float spread = reach;
     float scaled = signedDistance / spread;
     float profile = exp(-scaled * scaled);

@@ -43,7 +43,6 @@ final class Prefs {
     static var hapticSharpness = SettingDefault.hapticSharpness
     static var cursorStartHaptic = SettingDefault.cursorStartHaptic
     static var cursorTickHaptic = SettingDefault.cursorTickHaptic
-    static var suggestionStyle = SettingDefault.suggestionStyle
     static var separatorStyle = SettingDefault.separatorStyle
     static var suggestionFollowTheme = SettingDefault.suggestionFollowTheme
     static var suggestionHeight = SettingDefault.suggestionHeight
@@ -54,6 +53,21 @@ final class Prefs {
     static var suggestionTransition = SettingDefault.suggestionTransition
     static var suggestionTransitionDuration = SettingDefault.suggestionTransitionDuration
     static var swipeTrailLength = SettingDefault.swipeTrailLength
+    static var emojiShowRecents = SettingDefault.emojiShowRecents
+    static var emojiSpaceAfter = SettingDefault.emojiSpaceAfter
+    static var emojiVertical = false
+    static var emojiSwipeTabs = SettingDefault.emojiSwipeTabs
+    static var emojiRows = Int(SettingDefault.emojiRows)
+    static var emojiSize = SettingDefault.emojiSize
+    static var emojiSpacing = SettingDefault.emojiSpacing
+    static var emojiSearchPosition = SettingDefault.emojiSearchPosition
+    static var emojiTabsPosition = SettingDefault.emojiTabsPosition
+    static var emojiTabStyle = SettingDefault.emojiTabStyle
+    static var emojiBackspaceKey = SettingDefault.emojiBackspaceKey
+    static var emojiCategoryOrder = SettingDefault.emojiCategoryOrder
+    static var emojiHiddenCategories = SettingDefault.emojiHiddenCategories
+    static var emojiSkinTone = Int(SettingDefault.emojiSkinTone)
+    static var emojiHoldDelay = SettingDefault.emojiHoldDelay
     static var keySurface = SettingDefault.keySurface
     static var keyBorderStyle = SettingDefault.keyBorderStyle
     static var keyGlow = SettingDefault.keyGlow
@@ -84,6 +98,13 @@ final class Prefs {
     static var resultDecimals = Int(SettingDefault.resultDecimals)
     static var smartQuotes = SettingDefault.smartQuotes
     static var spaceAfterPunctuation = SettingDefault.spaceAfterPunctuation
+    static var spaceAfterSuggestion = SettingDefault.spaceAfterSuggestion
+    static var spaceAfterEmoji = SettingDefault.spaceAfterEmoji
+    static var spaceAfterResult = SettingDefault.spaceAfterResult
+    static var spaceAfterConversion = SettingDefault.spaceAfterConversion
+    static var tapAdaptive = SettingDefault.tapAdaptive
+    static var tapLearnSpeed = SettingDefault.tapLearnSpeed
+    static var tapRecord = SettingDefault.tapRecord
     static var statsEnabled = SettingDefault.statsEnabled
 
     /// The letter layout picked for a language (its own when none is).
@@ -139,7 +160,6 @@ final class Prefs {
         hapticSharpness = s.hapticSharpness
         cursorStartHaptic = s.cursorStartHaptic
         cursorTickHaptic = s.cursorTickHaptic
-        suggestionStyle = s.suggestionStyle
         separatorStyle = s.separatorStyle
         suggestionFollowTheme = s.suggestionFollowTheme
         suggestionHeight = s.suggestionHeight
@@ -150,6 +170,21 @@ final class Prefs {
         suggestionTransition = s.suggestionTransition
         suggestionTransitionDuration = s.suggestionTransitionDuration
         swipeTrailLength = s.swipeTrailLength
+        emojiShowRecents = s.emojiShowRecents
+        emojiSpaceAfter = s.emojiSpaceAfter
+        emojiVertical = s.emojiScroll == "vertical"
+        emojiSwipeTabs = s.emojiSwipeTabs
+        emojiRows = s.emojiRows
+        emojiSize = s.emojiSize
+        emojiSpacing = s.emojiSpacing
+        emojiSearchPosition = s.emojiSearchPosition
+        emojiTabsPosition = s.emojiTabsPosition
+        emojiTabStyle = s.emojiTabStyle
+        emojiBackspaceKey = s.emojiBackspaceKey
+        emojiCategoryOrder = s.emojiCategoryOrder
+        emojiHiddenCategories = s.emojiHiddenCategories
+        emojiSkinTone = s.emojiSkinTone
+        emojiHoldDelay = s.emojiHoldDelay
         keySurface = s.keySurface
         keyBorderStyle = s.keyBorderStyle
         keyGlow = s.keyGlow
@@ -185,6 +220,15 @@ final class Prefs {
         resultDecimals = s.resultDecimals
         smartQuotes = s.smartQuotes
         spaceAfterPunctuation = s.spaceAfterPunctuation
+        spaceAfterSuggestion = s.spaceAfterSuggestion
+        spaceAfterEmoji = s.spaceAfterEmoji
+        spaceAfterResult = s.spaceAfterResult
+        spaceAfterConversion = s.spaceAfterConversion
+        tapAdaptive = s.tapAdaptive
+        tapLearnSpeed = s.tapLearnSpeed
+        tapRecord = s.tapRecord
+        TapBias.shared.syncWithApp()
+        TapAccuracy.shared.syncWithApp()
         statsEnabled = s.statsEnabled
         if let stored = SharedStore.defaults.object(forKey: keyRoundnessKey) as? Double {
             keyRoundness = min(max(stored, 0), 1)

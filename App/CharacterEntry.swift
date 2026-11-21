@@ -158,9 +158,6 @@ struct HoldEditor: View {
     /// The field, and how many of the places are taken.
     private var entry: some View {
         HStack(spacing: 10) {
-            Image(systemName: isFull ? "checkmark.circle.fill" : "plus.circle.fill")
-                .foregroundColor(isFull ? .secondary : .accentColor)
-                .accessibilityHidden(true)
             CharacterEntryField(placeholder: isFull ? tr("Full. Remove one to add another.") : tr("Type or paste characters"),
                                 tint: Color.currentAccent(name: accentName, hex: accentHex),
                                 insert: { text in add(text) },
@@ -231,13 +228,19 @@ struct HoldCell: View {
     let own: Bool
 
     var body: some View {
-        Text(character)
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        let cell = Text(character)
             .font(.system(size: 21, weight: .medium))
             .foregroundColor(own ? .primary : .secondary)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(own ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06)))
-            .contentShape(Rectangle())
+        return Group {
+            if own {
+                // The user's own: Liquid Glass tinted with the accent.
+                cell.glassShape(shape, tint: Color.accentColor.opacity(0.55))
+            } else {
+                cell.background(shape.fill(Color.primary.opacity(0.06)))
+            }
+        }
+        .contentShape(Rectangle())
     }
 }

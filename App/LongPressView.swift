@@ -79,12 +79,6 @@ struct LongPressCharactersView: View {
     private var legend: some View {
         let keys = counts.count
         return HStack(spacing: 6) {
-            Text("3")
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(width: 14, height: 14)
-                .background(Circle().fill(Color.accentColor))
-                .accessibilityHidden(true)
             Text(keys == 0
                  ? tr("Keys with your characters show how many they have.")
                  : (keys == 1 ? tr("1 key has your characters.") : tr("%@ keys have your characters.", "\(keys)")))
@@ -123,7 +117,7 @@ struct LongPressCharactersView: View {
             }
         } header: {
             HStack(spacing: 8) {
-                KeycapLabel(text: key, size: 26)
+                KeycapLabel(text: key.uppercased(), size: 26)
                 Text(tr("Touch and hold for"))
                 Spacer(minLength: 0)
             }
@@ -188,7 +182,7 @@ struct LongPressCharactersView: View {
                         pick(item)
                     } label: {
                         HStack(spacing: 14) {
-                            KeycapLabel(text: item, color: item == selected ? .accentColor : .gray)
+                            KeycapLabel(text: item.uppercased(), color: item == selected ? .accentColor : .gray)
                             Text(own(item).joined(separator: "  "))
                                 .font(.body.monospaced())
                                 .foregroundColor(.primary)
@@ -276,21 +270,31 @@ struct LongPressCharactersView: View {
     }
 }
 
-/// The keyboard to pick a key on: the digits and the letters in the chosen theme's look. The key being edited is
+/// The keyboard to pick a key on: the digits and the letters in the Liquid Glass look. The key being edited is
 /// lit in the accent; a key with characters of the user's own is ringed in the accent and carries their number.
 private struct HoldKeyboard: View {
     let rows: [[String]]
     let counts: [String: Int]
     let selected: String?
     let pick: (String) -> Void
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+    @Environment(\.colorScheme) private var scheme
+
+    /// Always the plain Liquid Glass look with rounded keys, keys only (no keyboard backdrop): none of the keyboard's
+    /// own settings (its theme, roundness, surface, border, glow or font) are followed. Only the accent is the user's.
+    private var look: ThemeLook {
+        return ThemeLook(theme: ThemeCatalog.liquidGlass, accent: Color.currentAccent(name: accentName, hex: accentHex),
+                         dark: scheme == .dark, roundness: 0.4, keySurface: "auto", keyBorderStyle: "auto",
+                         keyGlow: "off", accentHex: accentHex, accentName: accentName)
+    }
 
     var body: some View {
-        CurrentThemeLook { look in
-            board(look)
-                .padding(10)
-                .background(look.backdrop())
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
+        let look = self.look
+        board(look)
+            .padding(10)
+            .background(ClearGlassCard(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func board(_ look: ThemeLook) -> some View {
@@ -316,15 +320,16 @@ private struct HoldKeyboard: View {
     private func keyButton(_ key: String, look: ThemeLook, width: CGFloat, height: CGFloat) -> some View {
         let isSelected = key == selected
         let count = counts[key] ?? 0
+        let radius = look.radius(width: width, height: height)
         return Button {
             pick(key)
         } label: {
             Text(key)
                 .font(.system(size: min(21, width * 0.58), weight: count > 0 ? .semibold : .regular))
-                .foregroundColor(isSelected ? look.onAccent : look.textColor)
+                .foregroundColor(isSelected ? look.onPill : look.labelColor(.letter, letter: key))
                 .frame(width: width, height: height)
-                .background(face(look, selected: isSelected))
-                .overlay(mark(count, look: look, selected: isSelected))
+                .background(face(look, selected: isSelected, radius: radius))
+                .overlay(mark(count, look: look, selected: isSelected, radius: radius))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -333,20 +338,20 @@ private struct HoldKeyboard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    @ViewBuilder private func face(_ look: ThemeLook, selected: Bool) -> some View {
+    @ViewBuilder private func face(_ look: ThemeLook, selected: Bool, radius: CGFloat) -> some View {
         if selected {
-            look.pill(radius: 8)
+            look.pill(radius: radius)
         } else {
-            look.keyShape(.letter, radius: 8)
+            look.keyShape(.letter, radius: radius, letter: nil)
         }
     }
 
     /// The mark of a key that has characters of the user's own: a ring in the accent, and their number in the
     /// corner.
-    @ViewBuilder private func mark(_ count: Int, look: ThemeLook, selected: Bool) -> some View {
+    @ViewBuilder private func mark(_ count: Int, look: ThemeLook, selected: Bool, radius: CGFloat) -> some View {
         if count > 0 {
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(look.accent, lineWidth: selected ? 0 : 1.5)
                 Text("\(count)")
                     .font(.system(size: 9, weight: .bold, design: .rounded))

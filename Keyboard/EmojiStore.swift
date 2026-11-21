@@ -1,10 +1,54 @@
 import UIKit
 import CoreText
 
+struct EmojiItem {
+    let base: String
+    let variants: [String]   // skin tones etc., not including `base`
+}
+
+/// One tab of the picker, laid out like the system keyboard's emoji categories.
+struct EmojiCategory {
+    let key: String
+    let symbol: String         // SF Symbol for the tab
+    let fallbackIcon: String   // used if the symbol does not exist on this iOS version
+    let items: [EmojiItem]
+
+    func title(for language: Language) -> String {
+        if key == "people" { return language.peopleCategoryTitle }
+        return language.strings.categoryTitle(key) ?? key
+    }
+
+    /// Display order, names, and tab icons - the same order as the system emoji keyboard.
+    static let layout: [(key: String, symbol: String, fallback: String)] = [
+        ("smileys", "face.smiling", "😀"),
+        ("animals", "pawprint", "🐶"),
+        ("food", "fork.knife", "🍎"),
+        ("activity", "sportscourt", "⚽"),
+        ("travel", "car", "🚗"),
+        ("objects", "lightbulb", "💡"),
+        ("symbols", "heart", "❤️"),
+        ("flags", "flag", "🏁")
+    ]
+
+    static let recentSymbol = "clock"
+    static let recentFallback = "🕘"
+}
+
+private struct EmojiFile: Decodable {
+    struct Group: Decodable {
+        let name: String
+        let icon: String
+        let items: [[String]]   // [base, variant, variant, ...]
+    }
+    let version: String
+    let groups: [Group]
+}
+
 /// Whether THIS iPhone can actually draw an emoji.
 ///
-/// The emoji keywords are generated from the newest Unicode data at build time, which can be newer
-/// than the emoji font on the phone. Anything the phone cannot draw is never suggested.
+/// The emoji list is generated from the newest Unicode data at build time, which can be newer
+/// than the emoji font on the phone. Anything the phone cannot draw is hidden instead of
+/// showing an empty box.
 enum EmojiSupport {
     private static let font: UIFont = UIFont(name: "AppleColorEmoji", size: 24) ?? UIFont.systemFont(ofSize: 24)
     private static let ctFont: CTFont = CTFontCreateWithName(font.fontName as CFString, 24, nil)
@@ -69,9 +113,49 @@ enum EmojiSupport {
         return set
     }()
 
+    /// Without drawing (drawing thousands of emoji filled the keyboard's small memory and the system closed it): a
+    /// sequence the font lacks is laid out with the empty glyph or in a fallback font (LastResort).
     private static func looksLikeMissingGlyph(_ text: String) -> Bool {
-        guard let pixels = render(text) else { return false }   // cannot tell: show it
-        return missingSignatures.contains(pixels)
+        let attributed = NSAttributedString(string: text, attributes: [.font: font])
+        let line = CTLineCreateWithAttributedString(attributed)
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return false }
+        let emojiName = CTFontCopyPostScriptName(ctFont) as String
+        for run in runs {
+            let attributes = CTRunGetAttributes(run) as NSDictionary
+            if let runFont = attributes[kCTFontAttributeName] {
+                let name = CTFontCopyPostScriptName(runFont as! CTFont) as String
+                if name != emojiName { return true }
+            }
+            let count = CTRunGetGlyphCount(run)
+            guard count > 0 else { continue }
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
+            if glyphs.contains(0) { return true }
+        }
+        return false
+    }
+
+    /// The emoji this iOS version cannot draw, worked out once per system version and kept (the check is slow).
+    private static let cacheKey = "emojiUnsupported." + ProcessInfo.processInfo.operatingSystemVersionString
+    private static var known: Set<String>? = {
+        guard let list = UserDefaults.standard.array(forKey: cacheKey) as? [String] else { return nil }
+        return Set(list)
+    }()
+    private static var found: Set<String> = []
+
+    /// `isSupported`, answered from the saved list when there is one.
+    static func isSupportedCached(_ emoji: String) -> Bool {
+        if let known = known { return !known.contains(emoji) }
+        let supported = autoreleasepool { isSupported(emoji) }
+        if !supported { found.insert(emoji) }
+        return supported
+    }
+
+    /// Saves what this run found, for the next time the picker loads.
+    static func saveCache() {
+        guard known == nil else { return }
+        UserDefaults.standard.set(Array(found), forKey: cacheKey)
+        known = found
     }
 
     /// For a single new character without a font-table glyph: it counts as drawn when the system renders
@@ -102,14 +186,111 @@ enum EmojiSupport {
     }
 }
 
-/// Emoji suggestions for typed words.
+/// Emoji picker data, emoji suggestions for typed words, and emoji search.
 final class EmojiStore {
     static let shared = EmojiStore()
 
-    /// language -> keyword -> emoji; loaded on demand, one language at a time.
-    private var keywords: [Language: [String: [String]]] = [:]
+    private(set) var categories: [EmojiCategory] = []
+    private(set) var isReady = false
+    private(set) var unicodeVersion = ""
+    private(set) var totalCount = 0
+    private(set) var shownCount = 0
+
+    private var keywords: [Language: [String: [String]]] = [:]   // loaded on demand, one language at a time
+    private var isLoading = false
+    private var waiting: [() -> Void] = []
+
+    // Search index (loaded the first time search is used)
+    private var searchIndex: [(emoji: String, keywords: [String], order: Int)] = []
+    private var orderIndex: [String: Int] = [:]
+    private(set) var searchReady = false
+    private var searchLanguages: Set<Language> = []
+    private var searchLoading = false
+    private var searchWaiting: [() -> Void] = []
 
     private init() {}
+
+    // MARK: Loading
+
+    /// Loads (once) in the background. `completion` runs on the main thread when data is ready.
+    func loadIfNeeded(completion: (() -> Void)? = nil) {
+        if isReady {
+            completion?()
+            return
+        }
+        if let completion = completion { waiting.append(completion) }
+        if isLoading { return }
+        isLoading = true
+
+        DispatchQueue.global(qos: .utility).async {
+            let loaded = EmojiStore.loadCategories()
+            DispatchQueue.main.async {
+                self.categories = loaded.categories
+                self.unicodeVersion = loaded.version
+                self.totalCount = loaded.total
+                self.shownCount = loaded.shown
+
+                var order = 0
+                for category in loaded.categories {
+                    for item in category.items {
+                        self.orderIndex[item.base] = order
+                        order += 1
+                    }
+                }
+
+                self.isReady = true
+                self.isLoading = false
+                let callbacks = self.waiting
+                self.waiting = []
+                callbacks.forEach { $0() }
+            }
+        }
+    }
+
+    /// Loads the search words for the given languages (the enabled languages and English).
+    /// Calls back on the main thread.
+    func loadSearchIfNeeded(languages: [Language], completion: @escaping () -> Void) {
+        let wanted = Set(languages)
+        if searchReady && searchLanguages == wanted {
+            completion()
+            return
+        }
+        searchWaiting.append(completion)
+        if searchLoading { return }
+        searchLoading = true
+        searchReady = false
+
+        loadIfNeeded { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.global(qos: .userInitiated).async {
+                var merged: [String: [String]] = [:]
+                for language in wanted {
+                    let table = EmojiStore.loadSearchWords(language)
+                    for (emoji, words) in table {
+                        var list = merged[emoji] ?? []
+                        for word in words where !list.contains(word) { list.append(word) }
+                        merged[emoji] = list
+                    }
+                }
+                DispatchQueue.main.async {
+                    var index: [(emoji: String, keywords: [String], order: Int)] = []
+                    index.reserveCapacity(merged.count)
+                    for (emoji, words) in merged {
+                        index.append((emoji: emoji, keywords: words, order: self.orderIndex[emoji] ?? Int.max))
+                    }
+                    self.searchIndex = index
+                    self.searchLanguages = wanted
+                    self.searchReady = true
+                    self.searchLoading = false
+                    let callbacks = self.searchWaiting
+                    self.searchWaiting = []
+                    callbacks.forEach { $0() }
+                }
+            }
+        }
+    }
+
+    // MARK: Suggestions and search
 
     /// Up to `limit` emoji that match a complete word, e.g. "smile" -> 😀.
     func suggestions(for word: String, language: Language, limit: Int) -> [String] {
@@ -118,7 +299,16 @@ final class EmojiStore {
         if keywords[language] == nil {
             keywords[language] = EmojiStore.loadKeywords(language)   // small file, loaded once per language
         }
-        guard let matches = keywords[language]?[key] else { return [] }
+        var found = keywords[language]?[key]
+        if found == nil, key.count > 3, key.hasSuffix("s") {
+            found = keywords[language]?[String(key.dropLast())]   // "hearts" -> "heart"
+        }
+        guard var matches = found else { return [] }
+        // Among the emoji for one word, the ones people use most come first (stable: the rest keep their order).
+        let ranked = matches.enumerated().map { (index: $0.offset, emoji: $0.element, rank: EmojiStore.rank(of: $0.element)) }
+        if ranked.contains(where: { $0.rank != Int.max }) {
+            matches = ranked.sorted { $0.rank != $1.rank ? $0.rank < $1.rank : $0.index < $1.index }.map { $0.emoji }
+        }
         var result: [String] = []
         for emoji in matches where EmojiSupport.isSupported(emoji) {
             result.append(emoji)
@@ -139,6 +329,19 @@ final class EmojiStore {
         return result
     }
 
+    /// An emoji suggested in the bar, in the skin tone chosen in the app (1 light ... 5 dark) when it can have one
+    /// (a single person or hand; sequences of several keep their own tones).
+    static func inSkinTone(_ emoji: String, tone: Int) -> String {
+        guard tone >= 1, tone <= 5 else { return emoji }
+        let scalars = Array(emoji.unicodeScalars).filter { $0.value != 0xFE0F }
+        guard scalars.count == 1, scalars[0].properties.isEmojiModifierBase,
+              let modifier = Unicode.Scalar(0x1F3FA + UInt32(tone)) else { return emoji }
+        var text = String.UnicodeScalarView()
+        text.append(scalars[0])
+        text.append(modifier)
+        return String(text)
+    }
+
     /// An emoji whose name is the last two to five words typed ("red heart" -> ❤️, "thumbs up" -> 👍), and how many
     /// characters before the cursor it takes the place of (the words and a space after them). The longest name wins.
     func phraseSuggestion(before: String, languages: [Language]) -> (emoji: String, length: Int)? {
@@ -156,8 +359,13 @@ final class EmojiStore {
             // The first word must start there (not be the end of a longer word cut off by the 80 characters).
             if count == words.count && before.count > 80 { continue }
             let phrase = tail.joined(separator: " ")
+            let folded = tail.map { TextFolding.fold(String($0)) }
             for language in languages {
-                if let emoji = suggestions(for: phrase, language: language, limit: 1).first {
+                // The names and words the emoji search uses first (it finds "piros szív" -> ❤️), then the suggestion
+                // keywords, then the same words in any order.
+                if let emoji = namedPhrase(folded, language: language)
+                    ?? suggestions(for: phrase, language: language, limit: 1).first
+                    ?? fuzzyPhrase(folded, language: language) {
                     return (emoji, phrase.count + trailing)
                 }
             }
@@ -165,8 +373,303 @@ final class EmojiStore {
         return nil
     }
 
+    private struct NameEntry {
+        let emoji: String
+        let name: [String]          // the full name, word by word
+        let keywords: Set<String>   // every other search word
+    }
+    private var nameIndex: [Language: [NameEntry]] = [:]
+
+    /// The emoji of a language by name and search words (the data the emoji search box reads), kept per language.
+    private func nameEntries(_ language: Language) -> [NameEntry] {
+        if let cached = nameIndex[language] { return cached }
+        var entries: [NameEntry] = []
+        for (emoji, words) in EmojiStore.loadSearchWords(language) {
+            guard let name = words.first else { continue }
+            entries.append(NameEntry(emoji: emoji, name: name.split(separator: " ").map { String($0) },
+                                     keywords: Set(words.dropFirst())))
+        }
+        nameIndex[language] = entries
+        return entries
+    }
+
+    /// The emoji whose name has typed words in it (any order; the others of its name may be left out), the rest of
+    /// the typed words being its search words: "red heart", "piros szív" -> ❤️. At least one word must be one of
+    /// the name's own. Short words ("with", "de", "mit") may be left out of what was typed. Names that are
+    /// exactly what was typed win, then the shorter and the more used emoji.
+    private func namedPhrase(_ typed: [String], language: Language) -> String? {
+        var variants = [typed]
+        let longer = typed.filter { $0.count > 3 }
+        if longer.count >= 2 && longer.count < typed.count { variants.append(longer) }
+        let entries = nameEntries(language)
+        for tokens in variants {
+            var best: (score: Int, order: Int, emoji: String)?
+            for entry in entries {
+                var total = 0
+                var nameHits = 0
+                var matched = true
+                for token in tokens {
+                    if entry.name.contains(token) {
+                        total += 6
+                        nameHits += 1
+                    } else if entry.keywords.contains(token) {
+                        total += 3
+                    } else {
+                        matched = false
+                        break
+                    }
+                }
+                guard matched, nameHits > 0 else { continue }
+                var score = total * 10 - max(0, entry.name.count - nameHits) * 3
+                if entry.name == tokens { score += 1000 }
+                if EmojiStore.rank(of: entry.emoji) != Int.max { score += 25 }
+                let order = orderIndex[entry.emoji] ?? Int.max
+                if let current = best, current.score > score || (current.score == score && current.order <= order) { continue }
+                guard EmojiSupport.isSupported(entry.emoji) else { continue }
+                best = (score, order, entry.emoji)
+            }
+            if let found = best { return found.emoji }
+        }
+        return nil
+    }
+
+    private static let fillerWords: Set<String> = ["with", "of", "the", "a", "an", "and", "in", "on", "to", "for", "at", "by", "from"]
+
+    private struct PhraseEntry {
+        let content: Set<String>
+        let emoji: String
+        let rank: Int
+    }
+    private var phraseIndex: [Language: [PhraseEntry]] = [:]
+
+    private func phraseEntries(_ language: Language) -> [PhraseEntry] {
+        if let cached = phraseIndex[language] { return cached }
+        if keywords[language] == nil { keywords[language] = EmojiStore.loadKeywords(language) }
+        var entries: [PhraseEntry] = []
+        for (key, emojis) in keywords[language] ?? [:] where key.contains(" ") {
+            let words = Set(key.split(separator: " ").map { String($0) })
+            let content = words.subtracting(EmojiStore.fillerWords)
+            for (position, emoji) in emojis.enumerated() {
+                entries.append(PhraseEntry(content: content.isEmpty ? words : content, emoji: emoji, rank: position))
+            }
+        }
+        phraseIndex[language] = entries
+        return entries
+    }
+
+    /// Name words typed in any order, with or without "with / of / the ...": "tears joy face" -> 😂.
+    /// The same words as a name match best; typed words that are only part of a longer name match too.
+    private func fuzzyPhrase(_ typed: [String], language: Language) -> String? {
+        let words = Set(typed).subtracting(EmojiStore.fillerWords)
+        guard words.count >= 2 else { return nil }
+        var best: (score: Int, emoji: String)?
+        for entry in phraseEntries(language) {
+            var score: Int
+            if entry.content == words {
+                score = 1000
+            } else if words.isSubset(of: entry.content), entry.content.count <= words.count + 2 {
+                score = 500 - (entry.content.count - words.count) * 10
+            } else {
+                continue
+            }
+            score -= entry.rank
+            if EmojiStore.rank(of: entry.emoji) != Int.max { score += 5 }
+            if let current = best, current.score >= score { continue }
+            guard EmojiSupport.isSupported(entry.emoji) else { continue }
+            best = (score, entry.emoji)
+        }
+        return best?.emoji
+    }
+
+    private static func rank(of emoji: String) -> Int {
+        popularity[emoji.replacingOccurrences(of: "\u{FE0F}", with: "")] ?? Int.max
+    }
+
+    /// The most used emoji, most used first (rank by emoji -> index; variation selectors removed).
+    private static let popularity: [String: Int] = {
+        let list = (
+        "😂 ❤️ 🤣 👍 😭 🙏 😘 🥰 😍 😊 🎉 😁 💕 🥺 😅 🔥 ☺️ 🤦 🤷 🙄 " +
+        "😆 🤗 😉 🎂 🤔 👏 🙂 😳 🥳 😎 👌 💜 😔 💪 ✨ 💖 👀 😋 😏 😢 " +
+        "👉 💗 😩 💯 🌹 💞 🎈 💙 😃 😡 💐 😜 🙈 🤞 😄 🤤 🙌 🤪 😀 💋 " +
+        "💀 👇 💔 😌 💓 🤩 🙃 😬 😱 😴 🤭 😐 🌞 😒 😇 🌸 😈 🎶 ✌️ 🎊 " +
+        "🥵 😞 💚 ☀️ 🖤 💰 😚 👑 🎁 💥 🙋 ☹️ 😑 🥴 👈 💩 ✅ 🐶 🐱 ☕ " +
+        "🍕 🎄 😥 😓 😪 😠 🤬 😤 😮 😲 🤯 🥶 😷 🤒 🤢 🤮 🥱 👋 🤝 💃 " +
+        "🕺 🌈 ⭐ 🌙 ❄️ 🍀 🍷 🎵 ⚽ 🏆 🚗 ✈️ 🏠 📱 💻 📷 ⏰ 💡 🎮"
+        ).split(separator: " ")
+        var ranks: [String: Int] = [:]
+        for (index, emoji) in list.enumerated() {
+            let key = emoji.replacingOccurrences(of: "\u{FE0F}", with: "")
+            if ranks[key] == nil { ranks[key] = index }
+        }
+        return ranks
+    }()
+
+    /// Emoji whose names / keywords start with every word of `query` (in the languages loaded for search).
+    /// Every emoji (and each of its skin tones) to the picker item it belongs to; built once the data is ready.
+    private var itemsByEmoji: [String: EmojiItem]?
+
+    /// The picker item an emoji belongs to (found by its plain form or any of its skin tones).
+    func item(for emoji: String) -> EmojiItem? {
+        if itemsByEmoji == nil, isReady {
+            var map: [String: EmojiItem] = [:]
+            for category in categories {
+                for item in category.items {
+                    map[item.base] = item
+                    for variant in item.variants where map[variant] == nil { map[variant] = item }
+                }
+            }
+            itemsByEmoji = map
+        }
+        return itemsByEmoji?[emoji]
+    }
+
+    /// An emoji as the picker shows it: in the skin tone chosen in the app (1 light ... 5 dark, 0 none) when given
+    /// its plain form, or as it is when it already is a tone (a recent one), with its other forms to hold for.
+    func toned(_ emoji: String, tone: Int) -> EmojiItem {
+        guard let item = item(for: emoji) else { return EmojiItem(base: emoji, variants: []) }
+        if emoji == item.base { return EmojiPanel.toned(item, tone) }
+        return EmojiItem(base: emoji, variants: [item.base] + item.variants.filter { $0 != emoji })
+    }
+
+    func search(_ query: String, limit: Int = 80) -> [String] {
+        guard searchReady else { return [] }
+        let tokens = TextFolding.fold(query)
+            .split(separator: " ")
+            .map { String($0) }
+        guard !tokens.isEmpty else { return [] }
+
+        // The first search word of every emoji is its full name ("eyes", "smiling face with heart eyes"): a word of
+        // the name counts more than a keyword, the whole name typed counts most, and among equals the emoji with the
+        // shorter name (the more specific one) comes first: "eyes" finds the eyes emoji before the faces with eyes.
+        // Emoji people use most also come first among equal matches ("heart" -> the red heart).
+        let query = tokens.joined(separator: " ")
+        var scored: [(emoji: String, score: Int, popularity: Int, nameLength: Int, order: Int)] = []
+        for entry in searchIndex {
+            let name = entry.keywords.first ?? ""
+            let nameWords = name.split(separator: " ").map { String($0) }
+            var total = 0
+            var matchesAll = true
+            for token in tokens {
+                var best = 0
+                for word in nameWords {
+                    if word == token {
+                        best = 6
+                        break
+                    }
+                    if word.hasPrefix(token) { best = max(best, 4) }
+                }
+                if best < 6 {
+                    for keyword in entry.keywords.dropFirst() {
+                        if keyword == token {
+                            best = max(best, 3)
+                        } else if keyword.hasPrefix(token) {
+                            best = max(best, 2)
+                        }
+                    }
+                }
+                if best == 0 {
+                    matchesAll = false
+                    break
+                }
+                total += best
+            }
+            guard matchesAll else { continue }
+            if name == query {
+                total += 100
+            } else if name.hasPrefix(query) {
+                total += 20
+            }
+            let popularity = EmojiStore.popularity[entry.emoji.replacingOccurrences(of: "\u{FE0F}", with: "")]
+            if popularity != nil { total += 25 }
+            scored.append((emoji: entry.emoji, score: total, popularity: popularity ?? Int.max,
+                           nameLength: nameWords.count, order: entry.order))
+        }
+
+        scored.sort { left, right in
+            if left.score != right.score { return left.score > right.score }
+            if left.popularity != right.popularity { return left.popularity < right.popularity }
+            if left.nameLength != right.nameLength { return left.nameLength < right.nameLength }
+            return left.order < right.order
+        }
+
+        var result: [String] = []
+        for item in scored {
+            if EmojiSupport.isSupported(item.emoji) { result.append(item.emoji) }
+            if result.count >= limit { break }
+        }
+        return result
+    }
+
+    // MARK: Background loading
+
+    private static func loadCategories() -> (categories: [EmojiCategory], version: String, total: Int, shown: Int) {
+        guard let url = LanguageData.url(forResource: "emoji", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(EmojiFile.self, from: data) else {
+            return ([], "", 0, 0)
+        }
+
+        // Unicode groups -> the picker's tabs (one tab per Unicode group).
+        let tabForGroup: [String: String] = [
+            "Smileys & Emotion": "smileys",
+            "People & Body": "smileys",
+            "Animals & Nature": "animals",
+            "Food & Drink": "food",
+            "Activities": "activity",
+            "Travel & Places": "travel",
+            "Objects": "objects",
+            "Symbols": "symbols",
+            "Flags": "flags"
+        ]
+
+        var total = 0
+        var shown = 0
+        var supported: [String: [EmojiItem]] = [:]
+        var everything: [String: [EmojiItem]] = [:]
+
+        for group in file.groups {
+            guard let tab = tabForGroup[group.name] else { continue }
+            for raw in group.items {
+                guard let base = raw.first else { continue }
+                let variants = Array(raw.dropFirst())
+                everything[tab, default: []].append(EmojiItem(base: base, variants: variants))
+                total += 1
+                if EmojiSupport.isSupportedCached(base) {
+                    shown += 1
+                    let usable = variants.filter { EmojiSupport.isSupportedCached($0) }
+                    supported[tab, default: []].append(EmojiItem(base: base, variants: usable))
+                }
+            }
+        }
+
+        // Safety net: if the support check somehow rejects most emoji, trust the data instead.
+        let useAll = total > 0 && shown * 2 < total
+        if !useAll { EmojiSupport.saveCache() }
+        if useAll { shown = total }
+        let source = useAll ? everything : supported
+
+        var categories: [EmojiCategory] = []
+        for entry in EmojiCategory.layout {
+            guard let items = source[entry.key], !items.isEmpty else { continue }
+            categories.append(EmojiCategory(key: entry.key,
+                                            symbol: entry.symbol,
+                                            fallbackIcon: entry.fallback,
+                                            items: items))
+        }
+        return (categories, file.version, total, shown)
+    }
+
     private static func loadKeywords(_ language: Language) -> [String: [String]] {
         guard let url = LanguageData.url(forResource: "emoji_keywords_\(language.rawValue)", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let table = try? JSONDecoder().decode([String: [String]].self, from: data) else {
+            return [:]
+        }
+        return table
+    }
+
+    private static func loadSearchWords(_ language: Language) -> [String: [String]] {
+        guard let url = LanguageData.url(forResource: "emoji_search_\(language.rawValue)", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let table = try? JSONDecoder().decode([String: [String]].self, from: data) else {
             return [:]

@@ -39,6 +39,10 @@ final class KeyView: UIView {
     private let face = CALayer()
     private let faceLight = CAGradientLayer()
 
+    /// The press effects wait (KeyboardView plays them a moment later, or cancels them if a swipe begins).
+    var defersEffects = false
+    private var effectsWaiting = false
+
     var isPressed = false {
         didSet {
             guard oldValue != isPressed else { return }
@@ -48,8 +52,25 @@ final class KeyView: UIView {
                 setNeedsLayout()
                 layoutIfNeeded()
             }
-            playPressEffects(pressed: isPressed)
+            if isPressed && defersEffects {
+                effectsWaiting = true
+            } else if !(effectsWaiting && !isPressed) {
+                playPressEffects(pressed: isPressed)
+            }
+            if !isPressed { effectsWaiting = false }
         }
+    }
+
+    /// Plays the press effects that were waiting.
+    func playDeferredEffects() {
+        guard effectsWaiting, isPressed else { return }
+        effectsWaiting = false
+        playPressEffects(pressed: true)
+    }
+
+    /// Drops the press effects that were waiting (a swipe began).
+    func cancelDeferredEffects() {
+        effectsWaiting = false
     }
     var isActive = false { didSet { refreshAppearance() } }
     var isProminent = false { didSet { refreshAppearance() } }

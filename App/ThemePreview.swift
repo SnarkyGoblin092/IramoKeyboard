@@ -8,6 +8,13 @@ struct ThemePreview: View {
     let accent: Color
     var showsStrip = true
     var cornerRadius: CGFloat = 14
+    /// Extra room (in the keyboard's points) between the keys and the edge, for small previews whose rounded corners
+    /// would cut the keys off.
+    var contentInset: CGFloat = 0
+    /// Clear Liquid Glass behind the keys (in the keys' light or dark mode) instead of the theme's keyboard backdrop.
+    var glassBackdrop = false
+    /// Nothing behind the keys at all (the card they are drawn on shows through).
+    var noBackdrop = false
     @AppStorage(SettingKey.keyRoundness, store: SharedStore.defaults) private var roundness = SettingDefault.keyRoundness
     @AppStorage(SettingKey.keySurface, store: SharedStore.defaults) private var keySurface = SettingDefault.keySurface
     @AppStorage(SettingKey.keyBorderStyle, store: SharedStore.defaults) private var keyBorderStyle = SettingDefault.keyBorderStyle
@@ -25,7 +32,6 @@ struct ThemePreview: View {
     @AppStorage(SettingKey.spaceTextSize, store: SharedStore.defaults) private var spaceTextSize = SettingDefault.spaceTextSize
     @AppStorage(SettingKey.spaceLanguageCode, store: SharedStore.defaults) private var spaceLanguageCode = SettingDefault.spaceLanguageCode
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var suggestionHeight = SettingDefault.suggestionHeight
-    @AppStorage(SettingKey.suggestionStyle, store: SharedStore.defaults) private var suggestionStyle = SettingDefault.suggestionStyle
     @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separatorStyle = SettingDefault.separatorStyle
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     // What the keyboard shows when it opens: the number row, shift on at the start of a sentence (with
@@ -287,6 +293,9 @@ struct ThemePreview: View {
     /// The real keyboard's width over its height in keys only (440pt wide), for the preview's proportions.
     static var aspectKeysOnly: CGFloat { return 440 / keysHeight }
 
+    /// The same with the suggestion bar above the keys.
+    static var aspectWithStrip: CGFloat { return 440 / (keysHeight + CGFloat(stored(SettingKey.suggestionHeight))) }
+
     /// The rows of keys (the number row adds one) at the key height and row gap, and the padding.
     private static var keysHeight: CGFloat {
         let rows = (SharedStore.defaults.bool(forKey: SettingKey.numberRow) ? 5.0 : 4.0) + Double(extraLetterRows)
@@ -318,7 +327,12 @@ struct ThemePreview: View {
             let shift = (width - 2 * s - rowWidth) / 2 * side
 
             ZStack(alignment: .top) {
-                look.backdrop(scale: s)
+                if glassBackdrop {
+                    ClearGlassCard(cornerRadius: cornerRadius)
+                        .environment(\.colorScheme, look.dark ? .dark : .light)
+                } else if !noBackdrop {
+                    look.backdrop(scale: s)
+                }
                 VStack(spacing: 0) {
                     if showsStrip { strip(height: stripHeight, scale: s) }
                     VStack(spacing: 0) {
@@ -331,10 +345,15 @@ struct ThemePreview: View {
                     .glassKeyGroup(theme.kind == .liquidGlass, spacing: 2 * s)
                     .padding(.vertical, verticalPadding)
                 }
+                // Small previews: the whole set of keys is shrunk evenly toward the middle, so there is room around
+                // the edge and the spacing between the keys stays as it was.
+                .scaleEffect(max(0.5, 1 - 2 * contentInset * s / max(width, 1)), anchor: .center)
             }
             .frame(width: width, height: height)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        // A new accent fades in with the backdrop's.
+        .animation(AccentTint.fade, value: accentName + accentHex)
         // The keyboard is laid out left to right, also when the app reads right to left.
         .environment(\.layoutDirection, .leftToRight)
         .allowsHitTesting(false)
@@ -366,14 +385,12 @@ struct ThemePreview: View {
         .frame(width: rowWidth)
     }
 
-    /// The suggestion strip: three slots with dividers (or on segments, as the Suggestions screen sets it) and
+    /// The suggestion strip: three slots with dividers and
     /// the accent-coloured hide-keyboard button. Mirrors Keyboard/SuggestionBar.swift.
     private func strip(height: CGFloat, scale s: CGFloat) -> some View {
         let words = shownLanguage == .hungarian ? ["A", "Én", "Nem"] : ["I", "The", "It"]   // l10n: keep
-        let segments = suggestionStyle == "segments"
-        let radius = CGFloat(min(1, max(0, keyRoundness))) * (height - 13 * s) / 2
         // The word space would write sits on the accent pill (SuggestionBar.bestPill), hugging it with the keys'
-        // corner style; on segments the whole middle segment takes the accent.
+        // corner style;
         let pillHeight = max(1, height - 18 * s)
         let pillRadius = min(pillHeight / 2, CGFloat(min(1, max(0, keyRoundness))) * pillHeight / 2 * 1.6)
         return HStack(spacing: 0) {
@@ -381,31 +398,17 @@ struct ThemePreview: View {
                 let best = i == 1
                 Text(words[i])
                     .font(keyFont(17 * s, weight: best ? .semibold : .regular))
-                    .foregroundColor(best ? look.onPill : look.suggestionText(onSegments: segments && followTheme))
+                    .foregroundColor(best ? look.onPill : look.suggestionText(onSegments: false))
                     .lineLimit(1)
-                    .padding(.horizontal, best && !segments ? 14 * s : 0)
-                    .frame(minWidth: best && !segments ? pillHeight * 1.6 : 0)
-                    .frame(height: best && !segments ? pillHeight : nil)
+                    .padding(.horizontal, best ? 14 * s : 0)
+                    .frame(minWidth: best ? pillHeight * 1.6 : 0)
+                    .frame(height: best ? pillHeight : nil)
                     .background {
-                        if best && !segments { bestPill(radius: pillRadius) }
+                        if best { bestPill(radius: pillRadius) }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background {
-                        if segments {
-                            Group {
-                                if best {
-                                    bestPill(radius: radius)
-                                } else {
-                                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                                        .fill(followTheme ? keyFill : pick(Color.black.opacity(0.06), Color.white.opacity(0.12)))
-                                }
-                            }
-                            .padding(.horizontal, 2.5 * s)
-                            .padding(.vertical, 3 * s)
-                        }
-                    }
                     .overlay(alignment: .trailing) {
-                        if i < words.count - 1 && !segments && separatorStyle != "none" {
+                        if i < words.count - 1 && separatorStyle != "none" {
                             Rectangle()
                                 .fill(Color.clear)
                                 .frame(width: max(1, s), height: height * 0.5)
@@ -528,46 +531,16 @@ struct ThemePreview: View {
     }
 }
 
-private struct StaticGlassKey: EnvironmentKey { static let defaultValue = false }
-
-extension EnvironmentValues {
-    /// Draw Liquid Glass as a flat look, for pictures (the theme cards).
-    var staticGlass: Bool {
-        get { self[StaticGlassKey.self] }
-        set { self[StaticGlassKey.self] = newValue }
-    }
-}
-
 /// A key of the Liquid Glass theme: real Liquid Glass on iOS 26 and later; before that a frosted pane with the
 /// glass's bright rim and sheen, as the keyboard's fallback blur looks.
 private struct GlassKeyShape: View {
     let radius: CGFloat
     let tint: Color?
     let dark: Bool
-    @Environment(\.staticGlass) private var staticGlass
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        if staticGlass {
-            // For a picture (ImageRenderer can't draw live glass or blur): a clear pane with the glass's look, drawn
-            // once: a body of light, a specular highlight at the top left, light gathering at the lower rim, and a
-            // rim that is bright where the light hits it.
-            shape
-                .fill((tint ?? Color.clear).opacity(0.5))
-                .overlay(shape.fill(Color.white.opacity(dark ? 0.10 : 0.42)))
-                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(dark ? 0.30 : 0.65), Color.white.opacity(0)],
-                                                   startPoint: .topLeading, endPoint: UnitPoint(x: 0.7, y: 0.55))))
-                .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(0), Color.white.opacity(dark ? 0.12 : 0.25)],
-                                                   startPoint: UnitPoint(x: 0.5, y: 0.6), endPoint: .bottom)))
-                .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(dark ? 0.65 : 0.95),
-                                                                    Color.white.opacity(dark ? 0.08 : 0.25),
-                                                                    Color.white.opacity(dark ? 0.35 : 0.7)],
-                                                           startPoint: .topLeading, endPoint: .bottomTrailing),
-                                            lineWidth: 1))
-                .shadow(color: Color.black.opacity(dark ? 0.35 : 0.18), radius: 3, x: 0, y: 1.5)
-        } else {
-            live(shape)
-        }
+        live(shape)
     }
 
     @ViewBuilder private func live(_ shape: RoundedRectangle) -> some View {
@@ -681,7 +654,7 @@ struct ThemeLook {
 
     /// A key's label colour (KeyView.refreshAppearance).
     func labelColor(_ kind: KeyKind, letter: String? = nil) -> Color {
-        if let role = ownRole(kind), let tones = tones { return Color(tones.label(role)) }
+        if let role = ownRole(kind), let tones = tones { return readable(tones.label(role), on: tones.fill(role)) }
         if let tint = letterTint(kind, letter) { return tint }
         switch kind {
         case .returnKey, .accent, .shiftOn: return onAccent
@@ -692,7 +665,72 @@ struct ThemeLook {
     var hintColor: Color { return textColor.opacity(0.55) }
     var pillColor: Color { return accentColor }
     var onPill: Color { return onAccent }
-    var barIcons: Color { return accentColor }
+    /// The accent where it stands on the backdrop (Theme.barIcons): darker or lighter just enough to be seen.
+    /// Worked out on plain numbers (no UIColor round trips), so the same look always gives the same, equal colours:
+    /// colours made anew from UIColors on every redraw counted as changed and made the screen redraw and flicker.
+    var barIcons: Color {
+        let accent = accentRGB
+        let nudged = ThemeLook.nudged(accent, awayFrom: backdropRGB, minimum: 2.6)
+        return nudged == accent ? accentColor : Color(.sRGB, red: nudged.r, green: nudged.g, blue: nudged.b, opacity: 1)
+    }
+
+    /// Roughly what the keyboard stands on (Theme.backdrop).
+    private var backdropRGB: ThemeRGBA {
+        switch theme.kind {
+        case .native, .keycap: return dark ? ThemeRGBA(0.17, 0.17, 0.17) : ThemeRGBA(0.82, 0.84, 0.86)
+        case .transparent: return dark ? ThemeRGBA(0.10, 0.10, 0.10) : ThemeRGBA(0.92, 0.92, 0.92)
+        case .liquidGlass: return dark ? ThemeRGBA(0.08, 0.08, 0.08) : ThemeRGBA(0.96, 0.96, 0.96)
+        }
+    }
+
+    /// The accent as numbers: a keycap theme's return key colour, else the user's (Color.currentAccent).
+    private var accentRGB: ThemeRGBA {
+        if let tones = tones { return tones.ret }
+        let rgb = HexColor.parse(accentHex) ?? (AccentChoice(rawValue: accentName) ?? .blue).rgb
+        return ThemeRGBA(rgb.red, rgb.green, rgb.blue)
+    }
+
+    private static func luminance(_ c: ThemeRGBA) -> Double {
+        func linear(_ v: Double) -> Double {
+            let x = min(1, max(0, v))
+            return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
+    }
+
+    private static func ratio(_ a: ThemeRGBA, _ b: ThemeRGBA) -> Double {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    /// `top` laid over an opaque `bottom`.
+    private static func over(_ top: ThemeRGBA, _ bottom: ThemeRGBA) -> ThemeRGBA {
+        func mix(_ x: Double, _ y: Double) -> Double { return x * top.a + y * (1 - top.a) }
+        return ThemeRGBA(mix(top.r, bottom.r), mix(top.g, bottom.g), mix(top.b, bottom.b))
+    }
+
+    /// `preferred` where it reads on `fill` (3 : 1), else near-black or white (Theme's Contrast.readable).
+    private func readable(_ preferred: ThemeRGBA, on fill: ThemeRGBA) -> Color {
+        let solid = ThemeLook.over(fill, ThemeRGBA(0.5, 0.5, 0.5))
+        if ThemeLook.ratio(ThemeLook.over(preferred, solid), solid) >= 3 { return Color(preferred) }
+        let black = ThemeRGBA(0.08, 0.08, 0.08), white = ThemeRGBA(1, 1, 1)
+        return ThemeLook.ratio(black, solid) >= ThemeLook.ratio(white, solid)
+            ? Color(white: 0.08).opacity(preferred.a) : Color.white.opacity(preferred.a)
+    }
+
+    /// `color` darkened or lightened (away from `backdrop`) just enough to reach `minimum` contrast with it.
+    private static func nudged(_ color: ThemeRGBA, awayFrom backdrop: ThemeRGBA, minimum: Double) -> ThemeRGBA {
+        let target: Double = luminance(backdrop) < 0.3 ? 1 : 0
+        var step = 0.0
+        while step <= 0.9 {
+            let mixed = ThemeRGBA(color.r + (target - color.r) * step, color.g + (target - color.g) * step,
+                                  color.b + (target - color.b) * step)
+            if ratio(mixed, backdrop) >= minimum { return step == 0 ? color : mixed }
+            step += 0.05
+        }
+        return ThemeRGBA(target, target, target)
+    }
+
     /// The suggestion bar's words (Theme.suggestionText).
     func suggestionText(onSegments: Bool) -> Color {
         return onSegments ? textColor : stripText
@@ -705,9 +743,11 @@ struct ThemeLook {
     private var tones: ThemeTones? { return theme.colors?.tones(dark: dark) }
 
     /// Labels on the keys.
-    var textColor: Color { return tones.map { Color($0.text) } ?? pick(.black, .white) }
+    var textColor: Color { return tones.map { readable($0.text, on: $0.key) } ?? pick(.black, .white) }
     /// Text on the background (the suggestion bar), not on a key.
-    var stripText: Color { return tones.map { Color($0.stripText) } ?? pick(Color(white: 0.08), .white) }
+    var stripText: Color {
+        return tones.map { readable($0.stripText, on: backdropRGB) } ?? pick(Color(white: 0.08), .white)
+    }
 
     /// The letter keys' fill with the theme's own solidity, if it has one.
     var keyFill: Color {
@@ -749,7 +789,7 @@ struct ThemeLook {
 
     /// The user's accent; a keycap theme's return key colour.
     var accentColor: Color { return tones.map { Color($0.ret) } ?? accent }
-    var onAccent: Color { return tones.map { Color($0.label(.ret)) } ?? .white }
+    var onAccent: Color { return readable(tones.map { $0.label(.ret) } ?? ThemeRGBA(1, 1, 1), on: accentRGB) }
 
     /// Theme.keyCornerRadius: the roundness share of half the key's shorter side.
     func radius(width: CGFloat, height: CGFloat) -> CGFloat {
@@ -765,9 +805,8 @@ struct ThemeLook {
             // The keyboard's frosted panel over the app (Theme.panelBackground).
             Rectangle().fill(pick(Color(white: 0.93), Color(white: 0.12)))
         } else {
-            // Liquid Glass has no panel of its own; the preview shows it over the plain light or dark keyboard
-            // backdrop of the system.
-            Rectangle().fill(pick(Color(red: 0.82, green: 0.84, blue: 0.86), Color(white: 0.17)))
+            // Liquid Glass has no panel of its own: nothing is drawn behind it.
+            Color.clear
         }
     }
 

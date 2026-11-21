@@ -36,9 +36,9 @@ enum AppTab: String, Hashable, CaseIterable {
     static func owning(_ screen: Screen) -> AppTab {
         switch screen {
         case .tab(let name): return AppTab(rawValue: name) ?? .typing
-        case .languages, .languageLayout, .suggestions, .smartTyping, .shortcuts, .learnedWords: return .typing
+        case .languages, .languageLayout, .suggestions, .smartTyping, .shortcuts, .learnedWords, .emoji: return .typing
         case .themes, .themeEditor, .keys, .effects: return .look
-        case .gestures, .haptics, .longPress, .functions: return .touch
+        case .gestures, .haptics, .longPress, .functions, .tapAccuracy: return .touch
         case .stats, .appLanguage, .licences: return .more
         }
     }
@@ -142,6 +142,8 @@ struct ContentView: View {
                 Feedback.prepare()
                 // The enabled languages' data is unpacked now, so the keyboard finds it ready.
                 LanguageData.prepareInBackground(enabled: Settings.shared.enabledLanguages)
+                // Every theme's card, light and dark, is drawn in the background so the Themes screen finds them ready.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { ThemeCardPrewarm.run() }
             }
     }
 
@@ -308,7 +310,7 @@ private struct TabRoot: View {
 /// The screens the tabs open.
 enum Screen: Hashable {
     case languages, appLanguage, suggestions, gestures, shortcuts, functions, themes, themeEditor, keys, effects, haptics, learnedWords, licences
-    case smartTyping, stats, longPress
+    case smartTyping, stats, longPress, tapAccuracy, emoji
     /// The letter layout of one language (its code).
     case languageLayout(String)
     /// A tab's own list (AppTab's name): not a screen that is opened, but a place the search can point at.
@@ -324,6 +326,8 @@ enum Screen: Hashable {
         case .smartTyping: SmartTypingView()
         case .stats: StatsView()
         case .longPress: LongPressCharactersView()
+        case .tapAccuracy: TapAccuracyView()
+        case .emoji: EmojiView()
         case .languageLayout(let code): LanguageLayoutView(language: Language(rawValue: code) ?? .english)
         case .languages: LanguagesView()
         case .appLanguage: AppLanguageView()
@@ -495,7 +499,17 @@ final class TabSlide: NSObject, UITabBarControllerDelegate, UIViewControllerAnim
     static var towardsEnd = true
     private weak var original: UITabBarControllerDelegate?
 
+    private static func clearBackgrounds(of controller: UIViewController) {
+        controller.view.backgroundColor = .clear
+        if let navigation = controller as? UINavigationController {
+            for page in navigation.viewControllers { page.view.backgroundColor = .clear }
+        }
+        for child in controller.children { clearBackgrounds(of: child) }
+    }
+
     static func install(on controller: UITabBarController) {
+        // The backdrop is behind the whole tab view: nothing of the controller paints over it.
+        clearBackgrounds(of: controller)
         if controller.delegate is TabSlide { return }
         let slide = TabSlide()
         slide.original = controller.delegate

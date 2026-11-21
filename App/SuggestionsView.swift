@@ -8,7 +8,6 @@ struct SuggestionsView: View {
     @AppStorage(SettingKey.suggestionFit, store: SharedStore.defaults) private var fit = SettingDefault.suggestionFit
     @AppStorage(SettingKey.suggestionScroll, store: SharedStore.defaults) private var scroll = SettingDefault.suggestionScroll
     @AppStorage(SettingKey.suggestionScrollThree, store: SharedStore.defaults) private var scrollThree = SettingDefault.suggestionScrollThree
-    @AppStorage(SettingKey.suggestionStyle,store: SharedStore.defaults) private var style = SettingDefault.suggestionStyle
     @AppStorage(SettingKey.separatorStyle, store: SharedStore.defaults) private var separator = SettingDefault.separatorStyle
     @AppStorage(SettingKey.suggestionFollowTheme, store: SharedStore.defaults) private var followTheme = SettingDefault.suggestionFollowTheme
     @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var height = SettingDefault.suggestionHeight
@@ -29,9 +28,19 @@ struct SuggestionsView: View {
     /// Three equal words, words sized to fit (more of them), or a strip that scrolls.
     private var countIndex: Int { return scroll ? 2 : (fit ? 1 : 0) }
 
+    /// The preview's pane: the bar (with its 9 pt of room) at the scale that fits the keyboard's width into the pane's,
+    /// and 9 pt above and below it.
+    private var previewPaneHeight: CGFloat {
+        let width = CGFloat(DeviceMetrics.keyboardWidth)
+        let scale = max(0.5, (width - 32) / width)
+        return (CGFloat(height) + 9) * scale + 18
+    }
+
     // The preview stays pinned above the settings (PinnedPreview).
     var body: some View {
-        PinnedPreview(height: 110, fills: true, minimumHeight: 90, balanced: true) {
+        // The bar alone, as wide as the pane (16 pt in from the sides), and as tall as the real bar is for that width:
+        // scaled down together, so its proportions are the real ones.
+        PinnedPreview(height: previewPaneHeight, fills: true, minimumHeight: previewPaneHeight, balanced: true) {
             LiveKeyboard(barOnly: true)
         } content: {
         GlassList {
@@ -69,15 +78,11 @@ struct SuggestionsView: View {
                 .glassRows()
 
                 Section {
-                    SegmentedChoice(title: tr("Between words"), names: [tr("Lines"), tr("Tiles")],
-                                    selected: style == "segments" ? 1 : 0) { style = $0 == 1 ? "segments" : "separators" }
+                    SegmentedChoice(title: tr("Line between words"), names: [tr("Solid"), tr("Dashed"), tr("Dotted"), tr("None")],
+                                    selected: separators.firstIndex(of: separator)) { separator = separators[$0] }
                         .searchAnchor("suggestions.look")
-                    if style != "segments" {
-                        SegmentedChoice(title: tr("Line"), names: [tr("Solid"), tr("Dashed"), tr("Dotted"), tr("None")],
-                                        selected: separators.firstIndex(of: separator)) { separator = separators[$0] }
-                    }
                     GlassToggle(title: tr("Theme colours"),
-                                subtitle: tr("Lines and tiles take the colours of the theme's keys."),
+                                subtitle: tr("The lines take the colours of the theme's keys."),
                                 isOn: $followTheme)
                     GlassSlider(title: tr("Bar height"), symbol: "arrow.up.and.down", value: $height,
                                 range: Settings.suggestionHeightRange, step: 1) { "\(Int($0.rounded())) pt" }

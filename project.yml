@@ -21,6 +21,13 @@ targets:
     platform: iOS
     sources:
       - path: App
+        excludes:
+          - AppIcon.icon                     # added below as one file, not as a folder of images
+      # The home screen icon, made in Icon Composer's format by scripts/make_icon.py: layers that iOS 26 and later
+      # render as Liquid Glass (and clear or tinted). Xcode makes flat icons from it for older iOS.
+      - path: App/AppIcon.icon
+        type: file
+        buildPhase: resources
       - path: Shared
       - path: Keyboard                       # the Effects screen shows the keyboard's own keys (LiveKeyboard)
         excludes:

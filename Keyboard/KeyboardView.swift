@@ -92,6 +92,8 @@ final class KeyboardView: UIView {
         var visited = Set<ObjectIdentifier>()
         /// The key the swiping finger is over, whose effects played as it arrived.
         var effectKey: KeyView?
+        /// The letter key's press effects wait for this: a swipe may begin first, and swiped keys play none.
+        var effectTimer: Timer?
         var startedOnSpace = false
         var isSwiping = false
         var popupActive = false
@@ -104,14 +106,21 @@ final class KeyboardView: UIView {
         var languageSwiped = false
         var cursorMoved = false
         var cursorLastX: CGFloat = 0
+        /// Where the slide on the space bar started (the edge scroll only starts on the side the finger slid to).
+        var cursorStartX: CGFloat = 0
         var cursorRemainder: CGFloat = 0
-        /// Selecting with the finger at the keyboard's edge: the cursor keeps going that way (-1 left, 1 right).
+        /// The finger held at an end of the space bar: the cursor keeps going that way (-1 left, 1 right).
         var edgeDirection = 0
         var edgeTimer: Timer?
         var isWordDeleting = false
         /// Backspace was held long enough to repeat: it has deleted already, so lifting deletes nothing more.
         var backspaceRepeated = false
+        /// Words deleted by this slide so far (restored ones taken off).
         var wordSteps = 0
+        /// Words the slide's distance asks for, and the ones added (or, negative, taken back) by holding the finger at
+        /// an end of the stretched backspace: the words deleted are their sum.
+        var wordSlideSteps = 0
+        var wordEdgeSteps = 0
         /// A flick on a letter: 1 = up (capital), -1 = down (first accent), 0 = none.
         var flick = 0
         /// Another thumb took this swipe over: this finger no longer adds to it.
@@ -591,6 +600,36 @@ final class KeyboardView: UIView {
         }
     }
 
+    /// The aim over the letter keys as they are now: each key's learned aim at its place, over the average of its half.
+    /// Nil when there is nothing to go by (the keys are not laid out).
+    private func aimField() -> TapAimField? {
+        guard hitRects.count == rows.count, bounds.width > 1, bounds.height > 1 else { return nil }
+        let wide = bounds.width > 500
+        var anchors: [TapAimField.Anchor] = []
+        for (r, rects) in hitRects.enumerated() where r < rows.count {
+            for (c, rect) in rects.enumerated() where c < rows[r].count {
+                guard let typed = letter(of: rows[r][c]),
+                      let aim = TapAccuracy.shared.aim(of: String(typed), landscape: wide) else { continue }
+                anchors.append(TapAimField.Anchor(cx: Double((rect.midX - bounds.minX) / bounds.width),
+                                                  cy: Double((rect.midY - bounds.minY) / bounds.height),
+                                                  w: Double(rect.width / bounds.width), h: Double(rect.height / bounds.height),
+                                                  ox: aim.x, oy: aim.y, confidence: TapAimField.confidence(taps: aim.taps)))
+            }
+        }
+        let size = letterKeySize()
+        let prior = TapBias.shared.prior(landscape: wide)
+        return TapAimField(anchors: anchors, unitW: Double(size.width / bounds.width), unitH: Double(size.height / bounds.height),
+                           priorLeft: prior.left, priorRight: prior.right)
+    }
+
+    /// `point` moved by what is known of this user's aim at that place on the keyboard.
+    private func aimedPoint(_ point: CGPoint) -> CGPoint {
+        guard let field = aimField() else { return point }
+        let share = CGPoint(x: (point.x - bounds.minX) / bounds.width, y: (point.y - bounds.minY) / bounds.height)
+        let shift = field.offset(at: share)
+        return CGPoint(x: point.x - shift.x * bounds.width, y: point.y - shift.y * bounds.height)
+    }
+
     /// The key under (or nearest to) a point. Rows and keys tile the whole area, so there are no dead gaps.
     private func keyIndex(at point: CGPoint) -> (row: Int, col: Int)? {
         if hitRects.count != rows.count, !rows.isEmpty, bounds.width > 0 { layoutIfNeeded() }
@@ -700,11 +739,18 @@ final class KeyboardView: UIView {
                 continue
             }
             // The key is chosen from where this user's thumbs tend to land (TapBias), not from the raw point.
-            let aimed = page == .letters ? TapBias.shared.corrected(point, in: bounds, keySize: letterKeySize()) : point
+            let aimed = page == .letters && Prefs.tapAdaptive ? aimedPoint(point) : point
             guard let index = keyIndex(at: aimed) else { continue }
             let key = keyViews[index.row][index.col]
-            if page == .letters, letter(of: key.spec) != nil, let rect = hitRect(of: key) {
-                TapBias.shared.learn(point, keyCenter: CGPoint(x: rect.midX, y: rect.midY), in: bounds, keySize: letterKeySize())
+            if page == .letters, let typed = letter(of: key.spec), let rect = hitRect(of: key) {
+                if Prefs.tapAdaptive {
+                    TapBias.shared.learn(point, keyCenter: CGPoint(x: rect.midX, y: rect.midY), in: bounds, keySize: letterKeySize())
+                }
+                if Prefs.tapRecord || Prefs.tapAdaptive {
+                    TapAccuracy.shared.press(letter: String(typed), point: point, cell: rect, in: bounds,
+                                             record: Prefs.tapRecord, learn: Prefs.tapAdaptive, speed: Prefs.tapLearnSpeed,
+                                             full: !KeyboardLayoutMode.split && KeyboardLayoutMode.oneHandedSide == 0)
+                }
             }
             // Two thumbs: a letter touched while the other thumb swipes (or right after it lifted) goes on with
             // that same word.
@@ -810,7 +856,15 @@ final class KeyboardView: UIView {
     private func press(_ state: TouchState, key: KeyView) {
         state.key = key
         state.startKey = key
+        // A letter key's press effects wait until it is clear the finger is pressing it, not setting off on a swipe
+        // (watchDeferredEffects); if a swipe begins, the key plays none.
+        let swipeMayBegin = Prefs.swipe && swipeAllowed && page == .letters && letter(of: key.spec) != nil
+        key.defersEffects = swipeMayBegin
         key.isPressed = true
+        if swipeMayBegin {
+            state.effectTimer?.invalidate()
+            watchDeferredEffects(state, key: key, travelled: 0, still: 0)
+        }
         Haptics.shared.keyPress()
         showPreview(for: key)
 
@@ -860,7 +914,16 @@ final class KeyboardView: UIView {
         state.key?.isPressed = false
 
         state.key = newKey
+        // A finger sliding from letter to letter may be the start of a swipe that has not been recognized yet: the
+        // new key's effects wait as the first one's do.
+        let swipeMayBegin = Prefs.swipe && swipeAllowed && page == .letters && state.startedOnLetter
+            && letter(of: newKey.spec) != nil
+        newKey.defersEffects = swipeMayBegin
         newKey.isPressed = true
+        if swipeMayBegin {
+            state.effectTimer?.invalidate()
+            watchDeferredEffects(state, key: newKey, travelled: travel(of: state), still: 0)
+        }
         showPreview(for: newKey)
         if !newKey.spec.alternates.isEmpty {
             startHoldTimer(state, delay: popupDelay)
@@ -868,6 +931,27 @@ final class KeyboardView: UIView {
             startHoldTimer(state, delay: max(0.5, Prefs.holdDelay))
         }
     }
+
+    /// A letter's press effects play when the finger lifts without swiping (finish), or once it has rested on the key
+    /// for `effectsHold` without moving: a finger that lands and pauses a moment before it sets off on a swipe must
+    /// not have played them already (a swipe plays no key's effects, not even the first one's).
+    private func watchDeferredEffects(_ state: TouchState, key: KeyView, travelled: CGFloat, still: TimeInterval) {
+        let tick: TimeInterval = 0.06
+        state.effectTimer = makeTimer(after: tick, repeats: false) { [weak self, weak key, weak state] in
+            guard let self = self, let state = state, let key = key, !state.isSwiping else { return }
+            state.effectTimer = nil
+            let now = self.travel(of: state)
+            let resting = now - travelled <= 2 ? still + tick : 0
+            if resting >= KeyboardView.effectsHold {
+                key.playDeferredEffects()
+            } else {
+                self.watchDeferredEffects(state, key: key, travelled: now, still: resting)
+            }
+        }
+    }
+
+    /// How long a finger rests on a letter, still, before its press effects play while it is still down (a held key).
+    private static let effectsHold: TimeInterval = 0.35
 
     /// Long-press delay for accent popups: never so short that a slow, careful tap opens one.
     private var popupDelay: TimeInterval { return max(0.30, Prefs.holdDelay) }
@@ -943,6 +1027,10 @@ final class KeyboardView: UIView {
         if state.isSelectionFinger { return }
         state.holdTimer?.invalidate()
         state.repeatTimer?.invalidate()
+        // A tap lifted before its effects started plays them now (a swipe plays none).
+        state.effectTimer?.invalidate()
+        state.effectTimer = nil
+        if !state.isSwiping { (state.key ?? state.startKey)?.playDeferredEffects() }
         state.key?.isPressed = false
         hidePreview()
         // Another finger may still be holding a key (two-thumb typing): keep its preview.
@@ -951,6 +1039,7 @@ final class KeyboardView: UIView {
         }
 
         if state.isWordDeleting {
+            stopEdgeScroll(state)
             setWordDeleteAppearance(nil)
             delegate?.keyboardViewDidEndWordDelete(self)
             return
@@ -1068,6 +1157,7 @@ final class KeyboardView: UIView {
         state.holdTimer?.invalidate()
         state.holdTimer = nil
         state.cursorLastX = point.x
+        state.cursorStartX = point.x
         state.cursorRemainder = 0
         hidePreview()
         setCursorAppearance(true)
@@ -1086,10 +1176,29 @@ final class KeyboardView: UIView {
             state.cursorRemainder -= CGFloat(steps) * step
             delegate?.keyboardView(self, didMoveCursorBy: steps)   // which ticks, when that is switched on
         }
-        // Selecting with the finger at either edge: the cursor goes on by itself, so the selection keeps growing.
-        let margin: CGFloat = 28
-        let direction = !state.isSelecting ? 0 : (point.x <= margin ? -1 : (point.x >= bounds.width - margin ? 1 : 0))
+        // The finger slid to an end of the space bar (or past it) and stays there: the cursor goes on by itself
+        // that way, moving or selecting, until the finger comes back or lifts. Only on the side it slid to, so a
+        // hold that starts near an end does not set the cursor off.
+        let ends = spaceBarEnds()
+        let margin: CGFloat = 20
+        let slid = point.x - state.cursorStartX
+        var direction = 0
+        if point.x <= ends.left + margin && slid < -margin {
+            direction = -1
+        } else if point.x >= ends.right - margin && slid > margin {
+            direction = 1
+        }
         startEdgeScroll(state, direction: direction)
+    }
+
+    /// The space bar's left and right ends (the keyboard's edges when there is none).
+    private func spaceBarEnds() -> (left: CGFloat, right: CGFloat) {
+        for row in keyViews {
+            if let space = row.first(where: { $0.spec.action == .space && $0.superview != nil }) {
+                return (space.frame.minX, space.frame.maxX)
+            }
+        }
+        return (bounds.minX, bounds.maxX)
     }
 
     private func startEdgeScroll(_ state: TouchState, direction: Int) {
@@ -1101,7 +1210,7 @@ final class KeyboardView: UIView {
         // The Cursor speed setting again: about ten characters a second at the middle speed.
         let interval = 1 / (10 * max(0.2, Prefs.cursorSpeed))
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self, weak state] _ in
-            guard let self = self, let state = state, state.isCursorMode, state.isSelecting else { return }
+            guard let self = self, let state = state, state.isCursorMode else { return }
             state.cursorMoved = true
             self.delegate?.keyboardView(self, didMoveCursorBy: direction)
         }
@@ -1156,7 +1265,27 @@ final class KeyboardView: UIView {
             delegate?.keyboardViewDidBeginWordDelete(self)
             setWordDeleteAppearance(state.key)
         }
-        let steps = dx < -activation ? Int((-dx - activation) / 38) + 1 : 0
+        state.wordSlideSteps = dx < -activation ? Int((-dx - activation) / 38) + 1 : 0
+        syncWordSteps(state)
+
+        // Held at the left end of the stretched key: words keep going, one after another; held at its right end
+        // while words are gone: they come back the same way, until none is left to restore.
+        let ends = wordDeleteEnds(state)
+        let margin: CGFloat = 24
+        var direction = 0
+        if point.x <= ends.left + margin {
+            direction = -1
+        } else if point.x >= ends.right - margin && state.wordSteps > 0 {
+            direction = 1
+        }
+        startWordEdgeRepeat(state, direction: direction)
+    }
+
+    /// Deletes or restores words until as many are gone as the slide and the held ends ask for.
+    private func syncWordSteps(_ state: TouchState) {
+        let steps = max(0, state.wordSlideSteps + state.wordEdgeSteps)
+        // Restoring past where the slide began brings back nothing more: the held steps never go below that.
+        state.wordEdgeSteps = steps - state.wordSlideSteps
         while state.wordSteps < steps {
             state.wordSteps += 1
             delegate?.keyboardViewDidRequestDeleteWord(self)
@@ -1167,6 +1296,33 @@ final class KeyboardView: UIView {
             delegate?.keyboardViewDidRequestRestoreWord(self)
             Haptics.shared.tick()
         }
+    }
+
+    /// The left and right ends of the backspace while it is stretched across its row (the keyboard's edges when it
+    /// is not known).
+    private func wordDeleteEnds(_ state: TouchState) -> (left: CGFloat, right: CGFloat) {
+        if let key = wordDeleteKey ?? state.key, key.superview != nil { return (key.frame.minX, key.frame.maxX) }
+        return (bounds.minX, bounds.maxX)
+    }
+
+    /// Repeats a word step every moment while the finger is held at an end (-1 left: delete, 1 right: restore).
+    private func startWordEdgeRepeat(_ state: TouchState, direction: Int) {
+        guard direction != state.edgeDirection else { return }
+        stopEdgeScroll(state)
+        guard direction != 0 else { return }
+        state.edgeDirection = direction
+        let timer = Timer(timeInterval: 0.22, repeats: true) { [weak self, weak state] timer in
+            guard let self = self, let state = state, state.isWordDeleting else {
+                timer.invalidate()
+                return
+            }
+            state.wordEdgeSteps += direction < 0 ? 1 : -1
+            self.syncWordSteps(state)
+            // Everything restored: nothing more to bring back.
+            if direction > 0 && state.wordSteps == 0 { self.stopEdgeScroll(state) }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        state.edgeTimer = timer
     }
 
     /// Fades every key's glyphs but `key`'s and stretches `key` across its row (nil puts everything back).
@@ -1236,7 +1392,10 @@ final class KeyboardView: UIView {
 
     private func beginSwipe(_ state: TouchState) {
         state.isSwiping = true
-        state.effectKey = state.startKey   // its effects played when the finger went down
+        // A swipe plays no key effects, not even the first key's.
+        state.effectTimer?.invalidate()
+        state.effectTimer = nil
+        state.startKey?.cancelDeferredEffects()
         state.holdTimer?.invalidate()
         state.holdTimer = nil
         state.key?.isPressed = false
@@ -1258,7 +1417,7 @@ final class KeyboardView: UIView {
         } else if effects.trail {
             base = KeyView.effectColor(traits: traitCollection)
         } else {
-            base = Theme.swipeTrail
+            base = Theme.swipeTrail.resolvedColor(with: traitCollection)
         }
         trailLayer.isHidden = !Prefs.swipeTrailShown
         if effects.trail {
@@ -1316,18 +1475,7 @@ final class KeyboardView: UIView {
             trailLayer.opacity = 1
         }
         updateTrail(state.path)
-        playSwipeEffects(state, at: point)
         delegate?.keyboardView(self, didUpdateSwipe: state.path)
-    }
-
-    /// A swiping finger moved onto a letter key it was not on a moment ago: that key's press effects play, so
-    /// they follow the finger along the swipe.
-    private func playSwipeEffects(_ state: TouchState, at point: CGPoint) {
-        guard let index = keyIndex(at: point) else { return }
-        let key = keyViews[index.row][index.col]
-        guard key !== state.effectKey else { return }
-        state.effectKey = key
-        if letter(of: key.spec) != nil { key.playSwipeEffects() }
     }
 
     /// The path of the word just swiped, without the glide to or from the space bar: the decoder would read the
@@ -1580,13 +1728,35 @@ final class TapBias {
     private struct Offset { var x = 0.0, y = 0.0 }   // in key widths and heights
     private var offsets: [Offset]
     private var samples = 0
-    private static let key = "hunkeys.tapBias"
-    private static let limit = 0.2
-    private static let rate = 0.01
+    private var stamp = SharedStore.defaults.string(forKey: TapAccuracy.resetKey) ?? ""
+    static let savedKey = "hunkeys.tapBias"
+    static let limit = 0.2
+    /// How fast the average follows the taps: the Tap accuracy screen's learning speed (slow, normal, fast).
+    private static var rate: Double { return [0.004, 0.01, 0.025][min(2, max(0, Prefs.tapLearnSpeed))] }
 
     private init() {
-        let saved = SharedStore.defaults.array(forKey: TapBias.key) as? [Double] ?? []
-        offsets = (0..<4).map { i in i * 2 + 1 < saved.count ? Offset(x: saved[i * 2], y: saved[i * 2 + 1]) : Offset() }
+        offsets = TapBias.savedOffsets().map { Offset(x: $0.x, y: $0.y) }
+    }
+
+    /// The learned aim as saved: left and right half in portrait, then in landscape (in key widths and heights).
+    static func savedOffsets() -> [(x: Double, y: Double)] {
+        let saved = SharedStore.defaults.array(forKey: savedKey) as? [Double] ?? []
+        return (0..<4).map { i in i * 2 + 1 < saved.count ? (saved[i * 2], saved[i * 2 + 1]) : (0, 0) }
+    }
+
+    /// Drops what is in memory when the app wiped the learned aim meanwhile.
+    func syncWithApp() {
+        let current = SharedStore.defaults.string(forKey: TapAccuracy.resetKey) ?? ""
+        guard current != stamp else { return }
+        stamp = current
+        offsets = TapBias.savedOffsets().map { Offset(x: $0.x, y: $0.y) }
+        samples = 0
+    }
+
+    /// Writes the learned aim now.
+    func flush() {
+        guard TapAccuracy.isKeyboard else { return }
+        SharedStore.defaults.set(offsets.flatMap { [$0.x, $0.y] }, forKey: TapBias.savedKey)
     }
 
     private func slot(for point: CGPoint, in bounds: CGRect) -> Int {
@@ -1595,16 +1765,17 @@ final class TapBias {
         return landscape + right
     }
 
-    /// `point` moved by what is known of this user's aim.
-    func corrected(_ point: CGPoint, in bounds: CGRect, keySize: CGSize) -> CGPoint {
-        guard keySize.width > 1, keySize.height > 1 else { return point }
-        let offset = offsets[slot(for: point, in: bounds)]
-        return CGPoint(x: point.x - CGFloat(offset.x) * keySize.width, y: point.y - CGFloat(offset.y) * keySize.height)
+    /// The average aim of the left and right half (key sizes), for the keys that have not learned their own yet.
+    func prior(landscape wide: Bool) -> (left: (x: Double, y: Double), right: (x: Double, y: Double)) {
+        let base = wide ? 2 : 0
+        let left = (x: offsets[base].x, y: offsets[base].y)
+        let right = (x: offsets[base + 1].x, y: offsets[base + 1].y)
+        return (left: left, right: right)
     }
 
     /// A press at `point` was resolved to the key centred at `keyCenter`.
     func learn(_ point: CGPoint, keyCenter: CGPoint, in bounds: CGRect, keySize: CGSize) {
-        guard keySize.width > 1, keySize.height > 1 else { return }
+        guard TapAccuracy.isKeyboard, keySize.width > 1, keySize.height > 1 else { return }
         let dx = Double((point.x - keyCenter.x) / keySize.width)
         let dy = Double((point.y - keyCenter.y) / keySize.height)
         // Presses near a key's edge are as likely the neighbour's: only the middle of a key teaches.
@@ -1614,8 +1785,6 @@ final class TapBias {
         offsets[i].x = max(-limit, min(limit, offsets[i].x + (dx - offsets[i].x) * TapBias.rate))
         offsets[i].y = max(-limit, min(limit, offsets[i].y + (dy - offsets[i].y) * TapBias.rate))
         samples += 1
-        if samples % 60 == 0 {
-            SharedStore.defaults.set(offsets.flatMap { [$0.x, $0.y] }, forKey: TapBias.key)
-        }
+        if samples % 40 == 0 { flush() }
     }
 }

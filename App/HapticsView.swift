@@ -36,13 +36,8 @@ struct HapticsView: View {
                     feelIt()
                 } label: {
                     Label(tr("Feel it"), systemImage: "hand.tap.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .foregroundColor(.white)
-                        .glassTile(Capsule(), isOn: true)
-                        .contentShape(Capsule())
                 }
-                .buttonStyle(PressableStyle())
+                .buttonStyle(ActionButtonStyle())
             }
             .glassRows()
 

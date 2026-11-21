@@ -135,11 +135,13 @@ final class FlatPanel: UIView {
 
     /// Panels are flat by default (one fill, no second outline). `allowGlass` is only for key-like buttons and pop-ups.
     /// `keyLike` gives the panel the same hairline outline as a key when the theme draws key borders.
-    init(background: UIColor? = nil, cornerRadius: CGFloat = 0, allowGlass: Bool = false, followsKeyRoundness: Bool = false, keyLike: Bool = false) {
+    /// `forceGlass`: real Liquid Glass whatever the theme (the emoji search fields), where it exists.
+    init(background: UIColor? = nil, cornerRadius: CGFloat = 0, allowGlass: Bool = false, followsKeyRoundness: Bool = false,
+         keyLike: Bool = false, forceGlass: Bool = false) {
         self.drawsKeyBorder = keyLike && Theme.drawsKeyBorder
         self.fixedRadius = cornerRadius
         self.followsKeyRoundness = followsKeyRoundness
-        if allowGlass && Theme.usesRealGlass {
+        if (allowGlass && Theme.usesRealGlass) || (forceGlass && GlassSupport.isAvailable) {
             effectView = GlassSupport.makeEffectView(clear: false)
         } else {
             effectView = nil

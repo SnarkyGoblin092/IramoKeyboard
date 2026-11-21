@@ -14,32 +14,58 @@ import UIKit
 struct TypingTab: View {
     var body: some View {
         GlassList(eager: true) {
-            StageSection().glassRows()
+            TryFieldSection().glassRows()
             KeyboardSection().glassRows()
             CorrectionsSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .scrollDismissesKeyboard(.interactively)
         .environment(\.searchScope, AppTab.typing.scope)
-        .navigationTitle(tr("Iramo"))
+        .navigationTitle(AppTab.typing.title)
         .navigationBarTitleDisplayMode(.inline)
         .quietNavBar()
     }
 }
 
-/// The app's mark, whether the keyboard is ready, and a field to type in: the keyboard is one tap away from the
-/// moment the app opens. While something still needs setting up, what it is and the way to Settings.
-private struct StageSection: View {
-    @State private var status = KeyboardStatus.read()
+/// A field to type in: the keyboard is one tap away from the moment the app opens.
+private struct TryFieldSection: View {
     @State private var text = ""
+
+    var body: some View {
+        Section {
+            tryField
+                .searchAnchor("main.test")
+        }
+    }
+
+    private var tryField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "character.cursor.ibeam")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            TextField(tr("Tap here and type to try it"), text: $text, axis: .vertical)
+                .lineLimit(1...4)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tr("Clear"))
+            }
+        }
+    }
+}
+
+/// The app's mark and slogan on a glass card, whether the keyboard is ready, and while something still needs
+/// setting up, what it is and the way to Settings.
+private struct BrandSection: View {
+    @State private var status = KeyboardStatus.read()
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Section {
             brand
-            tryField
-                .searchAnchor("main.test")
             if !status.isReady {
                 setup
             }
@@ -61,8 +87,10 @@ private struct StageSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
+                Text(tr("Iramo")).font(.title3.weight(.bold))
                 Text(tr("Your words, your keyboard"))
-                    .font(.headline)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if status.isReady {
                     StatusChip(text: tr("Ready to type"), symbol: "checkmark.circle.fill", color: .green)
@@ -82,24 +110,6 @@ private struct StageSection: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
-    }
-
-    private var tryField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "character.cursor.ibeam")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-            TextField(tr("Tap here and type to try it"), text: $text, axis: .vertical)
-                .lineLimit(1...4)
-            if !text.isEmpty {
-                Button { text = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tr("Clear"))
-            }
-        }
     }
 
     /// What is still to do, and the way there.
@@ -193,6 +203,9 @@ private struct KeyboardSection: View {
             ScreenRow(.smartTyping) {
                 SettingsRow(title: tr("Calculator & units"), symbol: "function", color: .cyan, value: smartSummary)
             }
+            ScreenRow(.emoji) {
+                SettingsRow(title: tr("Emoji"), symbol: "face.smiling.fill", color: .yellow)
+            }
             ScreenRow(.learnedWords) {
                 SettingsRow(title: tr("Learned words"), symbol: "character.book.closed", color: .brown,
                             value: learnedCount > 0 ? "\(learnedCount)" : nil)
@@ -203,8 +216,9 @@ private struct KeyboardSection: View {
         .onAppear {
             languages = Settings.shared.enabledLanguages
             shortcutCount = Settings.shared.shortcuts.count
-            // Counted without putting them in order (this runs every time the tab is shown).
-            learnedCount = Settings.shared.learnedWords().filter { $0.value >= 2 }.count
+            // The same words the Learned words list shows (counted without putting them in order: this runs every
+            // time the tab is shown).
+            learnedCount = Settings.shared.learnedWordCount()
         }
     }
 }
@@ -234,6 +248,26 @@ private struct CorrectionsSection: View {
                           subtitle: tr("A space goes after . , ! ? ; : by itself"),
                           symbol: "space", color: .mint)
                 .searchAnchor("main.spaceAfter")
+            SettingToggle(tr("Space after suggestions"), key: SettingKey.spaceAfterSuggestion,
+                          defaultValue: SettingDefault.spaceAfterSuggestion,
+                          subtitle: tr("A space goes after a word picked in the suggestion bar"),
+                          symbol: "space", color: .cyan)
+                .searchAnchor("main.spaceAfterSuggestion")
+            SettingToggle(tr("Space after emoji suggestions"), key: SettingKey.spaceAfterEmoji,
+                          defaultValue: SettingDefault.spaceAfterEmoji,
+                          subtitle: tr("A space goes after an emoji picked in the suggestion bar"),
+                          symbol: "face.smiling", color: .yellow)
+                .searchAnchor("main.spaceAfterEmoji")
+            SettingToggle(tr("Space after the answer"), key: SettingKey.spaceAfterResult,
+                          defaultValue: SettingDefault.spaceAfterResult,
+                          subtitle: tr("A space goes after the answer written in place of a calculation"),
+                          symbol: "plus.forwardslash.minus", color: .orange)
+                .searchAnchor("main.spaceAfterResult")
+            SettingToggle(tr("Space after the conversion"), key: SettingKey.spaceAfterConversion,
+                          defaultValue: SettingDefault.spaceAfterConversion,
+                          subtitle: tr("A space goes after the converted measurement written in place of the original"),
+                          symbol: "ruler", color: .teal)
+                .searchAnchor("main.spaceAfterConversion")
         } header: {
             SectionHeader(tr("Typing"), symbol: "character.cursor.ibeam", color: .green)
         }
@@ -250,7 +284,7 @@ struct LookTab: View {
             KeysAndEffectsSection().glassRows()
             AccentSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .environment(\.searchScope, AppTab.look.scope)
         .navigationTitle(AppTab.look.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -266,6 +300,11 @@ private struct ThemeSection: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @Environment(\.openScreen) private var openScreen
+    // Read so the preview follows the keyboard's size as it is set.
+    @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
 
     private var accent: Color { return Color.currentAccent(name: accentName, hex: accentHex) }
 
@@ -278,23 +317,13 @@ private struct ThemeSection: View {
     var body: some View {
         let shown = theme
         Section {
-            // The keyboard as the theme draws it, standing on the backdrop: the Liquid Glass theme's keys are real
-            // glass here too, as on the keyboard. A new accent fades in on it.
-            Button {
-                Feedback.tap()
-                openScreen(.themes)
-            } label: {
-                ZStack {
-                    ThemePreview(theme: shown, accent: accent, showsStrip: false, cornerRadius: 20)
-                        .aspectRatio(ThemePreview.aspectKeysOnly, contentMode: .fit)
-                        .animation(AccentTint.fade, value: accentName + accentHex)
-                        .allowsHitTesting(false)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableStyle())
-            .accessibilityLabel(tr("Themes"))
-            .glassOutsideCard()
+            // The keyboard itself, in the same card as the Effects and Keys screens' (the pinned pane there is 260 pt
+            // with 12 above and 6 below the keyboard, 16 at the sides).
+            LiveKeyboard()
+                .frame(height: LiveKeyboard.cardHeight(width: CGFloat(DeviceMetrics.keyboardWidth) - 32))
+                .environment(\.layoutDirection, .leftToRight)
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
+                .glassOutsideCard()
             AppearanceSwitch()
             ScreenRow(.themes) {
                 SettingsRow(title: tr("Themes"), symbol: "paintbrush.fill", color: .purple, value: shown.name)
@@ -342,8 +371,12 @@ private struct AppearanceSwitch: View {
         let source = touches.point ?? CGPoint(x: window.bounds.midX, y: window.bounds.midY)
         let oldScheme = scheme
         let theme = themeID
-        // Once the switch has played its little slide to the new choice.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        // Once the switch has played its slide to the new choice to the end (the Liquid Glass switch of iOS 26 takes
+        // longer): the picture of the old window must not catch it half way.
+        let slide: TimeInterval
+        if #available(iOS 26.0, *) { slide = 0.75 } else { slide = 0.45 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + slide) {
+            let picture = WindowWave.snapshot()   // before the wave's clock starts
             ModeWave.count += 1
             let id = ModeWave.count
             let frame = window.bounds
@@ -351,12 +384,20 @@ private struct AppearanceSwitch: View {
                                 newTheme: theme, source: source, minX: frame.minX, minY: frame.minY,
                                 width: frame.width, height: frame.height, started: CACurrentMediaTime(), startedDate: Date())
             running = true
-            WindowWave.start(for: wave)
+            WindowWave.start(for: wave, old: picture)
             ModeWave.running.append(wave)
-            mode = new
-            pending = nil
+            // The new look at once, with nothing animating into it: the picture of it the wave takes is then the
+            // finished look, and nothing changes when the wave ends and the live window shows again.
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            UIView.performWithoutAnimation {
+                withTransaction(instant) {
+                    mode = new
+                    pending = nil
+                }
+            }
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(wave.lifetime * 1_000_000_000))
+                await wave.waitUntilDone()
                 ModeWave.running.removeAll { $0.id == id }
                 running = false
             }
@@ -409,7 +450,7 @@ struct TouchTab: View {
             GesturesSection().glassRows()
             HoldsSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .environment(\.searchScope, AppTab.touch.scope)
         .navigationTitle(AppTab.touch.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -423,6 +464,7 @@ private struct GesturesSection: View {
     @AppStorage(SettingKey.swipe, store: SharedStore.defaults) private var swipe = SettingDefault.swipe
     @AppStorage(SettingKey.vibration, store: SharedStore.defaults) private var vibration = SettingDefault.vibration
     @AppStorage(SettingKey.hapticSharpness, store: SharedStore.defaults) private var sharpness = SettingDefault.hapticSharpness
+    @AppStorage(SettingKey.tapAdaptive, store: SharedStore.defaults) private var adaptive = SettingDefault.tapAdaptive
 
     private var hapticSummary: String {
         if vibration < 0.01 { return tr("Off") }
@@ -441,6 +483,9 @@ private struct GesturesSection: View {
             }
             ScreenRow(.haptics) {
                 SettingsRow(title: tr("Haptics & sound"), symbol: "iphone.radiowaves.left.and.right", color: .pink, value: hapticSummary)
+            }
+            ScreenRow(.tapAccuracy) {
+                SettingsRow(title: tr("Tap accuracy"), symbol: "scope", color: .orange, value: adaptive ? tr("Adaptive") : tr("Off"))
             }
         } header: {
             SectionHeader(tr("Touch & gestures"), symbol: "hand.tap.fill", color: .teal)
@@ -483,12 +528,13 @@ private struct HoldsSection: View {
 struct MoreTab: View {
     var body: some View {
         GlassList(eager: true) {
+            BrandSection().glassRows()
             StatsSection().glassRows()
             AppLanguageSection().glassRows()
             DataSection().glassRows()
             AboutSection().glassRows()
         }
-        .glassScreen()
+        .tabScreen()
         .environment(\.searchScope, AppTab.more.scope)
         .navigationTitle(AppTab.more.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -634,12 +680,7 @@ private struct DataSection: View {
 private struct AboutSection: View {
     @AppStorage(SettingKey.welcomeSeen, store: SharedStore.defaults) private var welcomeSeen = false
 
-    private var version: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? ""
-        let build = info?["CFBundleVersion"] as? String ?? ""
-        return build.isEmpty ? short : "\(short) (\(build))"
-    }
+    private let version = "v0.1-TestFlight"
 
     var body: some View {
         Section {

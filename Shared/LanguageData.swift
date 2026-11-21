@@ -29,7 +29,9 @@ enum LanguageData {
 
     /// Unpacks every file of the `enabled` languages and removes the unpacked files of every other language (the
     /// app, when it opens and when the languages change). Slow: call it off the main thread.
-    static func prepare(enabled: [String]) {
+    /// `removeOthers` off: the files of other languages stay (the keyboard may be using them right now; they go the
+    /// next time the app or the keyboard starts).
+    static func prepare(enabled: [String], removeOthers: Bool = true) {
         let wanted = Set(enabled)
         for packed in packedFiles() where wanted.contains(languageCode(of: packed.lastPathComponent)) {
             let file = String(packed.lastPathComponent.dropLast(".lzma".count))
@@ -37,14 +39,14 @@ enum LanguageData {
             guard parts.count == 2 else { continue }
             _ = url(forResource: parts[0], withExtension: parts[1])
         }
-        removeUnpacked(keeping: wanted)
+        if removeOthers { removeUnpacked(keeping: wanted) }
     }
 
     private static let queue = DispatchQueue(label: "LanguageData", qos: .utility)
 
     /// `prepare` on a background queue, one run after another.
-    static func prepareInBackground(enabled: [String]) {
-        queue.async { prepare(enabled: enabled) }
+    static func prepareInBackground(enabled: [String], removeOthers: Bool = true) {
+        queue.async { prepare(enabled: enabled, removeOthers: removeOthers) }
     }
 
     /// `removeUnpacked` on a background queue.
@@ -152,8 +154,12 @@ enum LanguageData {
             try? output.close()
         }
         do {
+            // (FileHandle.write(_:) raises an Objective-C exception when the disk is full or the file is gone,
+            // which cannot be caught and ends the process; write(contentsOf:) throws.)
+            var writeFailed = false
             let filter = try OutputFilter(.decompress, using: .lzma) { data in
-                if let data = data { output.write(data) }
+                guard let data = data, !writeFailed else { return }
+                do { try output.write(contentsOf: data) } catch { writeFailed = true }
             }
             while true {
                 let chunk = input.readData(ofLength: 256 * 1024)
@@ -161,7 +167,7 @@ enum LanguageData {
                 try filter.write(chunk)
             }
             try filter.finalize()
-            return true
+            return !writeFailed
         } catch {
             return false
         }

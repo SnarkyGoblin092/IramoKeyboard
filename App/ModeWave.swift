@@ -26,25 +26,109 @@ struct ModeWave: Equatable, Identifiable {
     let startedDate: Date
     /// How long this wave takes to cross (the theme switch's is `duration`; a screen change's is shorter).
     var length: TimeInterval = ModeWave.duration
+    /// This wave's own edge, made up afresh for it: no two waves are alike.
+    var crests: [Crest] = ModeWave.makeCrests()
+    /// Where this wave's rainbow starts to swell and narrow round the rim.
+    var shift: Double = Double.random(in: 0..<(2 * .pi))
+    /// When the wave really sets off: not when it is made, but once the window's new look has been drawn and
+    /// photographed (WindowWave). That work stalls the screen for a moment; done before the front moves, it no longer
+    /// makes the front stutter as it starts. Shared by every copy of this wave.
+    let clock = Clock()
+
+    final class Clock {
+        private(set) var date: Date?
+        private(set) var media: CFTimeInterval = 0
+        var hasBegun: Bool { return date != nil }
+        func begin() {
+            guard date == nil else { return }
+            date = Date()
+            media = CACurrentMediaTime()
+        }
+    }
+
+    static func == (a: ModeWave, b: ModeWave) -> Bool { return a.id == b.id }
+
+    /// Waits until the wave has crossed (its clock started, then its lifetime). Starts the clock if nothing has
+    /// after a moment (no window to cover), so nothing waits for ever.
+    @MainActor
+    func waitUntilDone() async {
+        var waited: TimeInterval = 0
+        while !clock.hasBegun {
+            if waited > 0.6 { clock.begin(); break }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+            waited += 0.01
+        }
+        let remaining = clock.media + lifetime - CACurrentMediaTime()
+        if remaining > 0 { try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+    }
 
     static let duration: TimeInterval = 1.4
     /// The ring's thickness.
     static let band: CGFloat = 21
     /// The longest the wave's drawings wait between frames (60 a second).
     static let frame: TimeInterval = 1.0 / 60
-    private static let steps = 80
+    /// Points round the edge: enough for its finest ripples to stay smooth.
+    private static let steps = 200
 
     /// The waves now crossing the screen, for the code that learns of the new mode outside SwiftUI's updates (the
     /// keyboard's rebuild, a card's picture arriving from the queue).
     static var running: [ModeWave] = []
     static var count = 0
 
-    /// The crests of the edge: how many around, how high (as a share of the radius), where they start and how far
-    /// they travel round as the wave spreads. No two are alike, so the edge never repeats itself.
-    private static let crests: [(count: Double, height: CGFloat, phase: Double, drift: Double)] = [
-        (2, 0.110, 0.4, 1.7), (3, 0.090, 2.1, -2.3), (5, 0.060, 4.0, 3.1), (7, 0.035, 1.1, -4.2), (11, 0.020, 5.3, 5.0)
-    ]
+    /// One crest of the edge: how many times it goes round, how high it is at most (a share of the radius), where it
+    /// starts, how far it travels round as the wave spreads, and how its height swells and ebbs on the way.
+    struct Crest: Equatable {
+        let count: Double
+        let height: Double
+        let phase: Double
+        let drift: Double
+        let pulse: Double
+        let pulsePhase: Double
+    }
+
+    /// The most all the crests together can move the edge (a share of the radius); WaveLens.metal counts on it.
     private static let reach: CGFloat = 0.315
+
+    /// A new edge, a shape of its own for every wave: not a circle with spikes, but a soft, flowing blob. A few big,
+    /// smooth lobes give the wave its shape (stretched like an ellipse, lopsided like an egg or a drop, three- or
+    /// four-cornered and rounded, or anything between, by how strong each one happens to be), and they slowly turn and
+    /// swell so the shape keeps changing as it spreads. Over them run a couple of low, gentle ripples that travel
+    /// round the edge like waves along a shore. The heights add up to at most `reach`.
+    static func makeCrests() -> [Crest] {
+        func turn() -> Double { return Double.random(in: 0..<(2 * .pi)) }
+        func either() -> Double { return Bool.random() ? 1 : -1 }
+        var lobes: [Crest] = []
+        // The shape: lobes once to four times round, each as strong as chance has it (squared, so one or two of them
+        // usually lead and the shapes differ a lot from wave to wave).
+        for count in 1...4 {
+            let weight = pow(Double.random(in: 0.05...1), 2) / pow(Double(count), 0.6)
+            lobes.append(Crest(count: Double(count), height: weight, phase: turn(),
+                               drift: Double.random(in: 0.3...1.4) * either(),
+                               pulse: Double.random(in: 1.2...3.2), pulsePhase: turn()))
+        }
+        let lobeTotal = lobes.reduce(0) { $0 + $1.height }
+        let lobeShare = Double(reach) * Double.random(in: 0.72...0.86)
+        lobes = lobes.map { Crest(count: $0.count, height: $0.height * lobeShare / max(lobeTotal, 0.0001), phase: $0.phase,
+                                  drift: $0.drift, pulse: $0.pulse, pulsePhase: $0.pulsePhase) }
+        // The ripples: low and smooth, travelling round the edge (a fast drift for their count).
+        var ripples: [Crest] = []
+        let rippleShare = Double(reach) - lobes.reduce(0) { $0 + $1.height }
+        var counts = Set<Int>()
+        let wanted = Int.random(in: 2...3)
+        while counts.count < wanted { counts.insert(Int.random(in: 5...9)) }
+        for count in counts.sorted() {
+            ripples.append(Crest(count: Double(count), height: rippleShare / Double(wanted) * Double.random(in: 0.6...1),
+                                 phase: turn(), drift: Double(count) * Double.random(in: 0.5...1.0) * either(),
+                                 pulse: Double.random(in: 2...5), pulsePhase: turn()))
+        }
+        return lobes + ripples
+    }
+
+    /// The crests as the lens shader reads them: six numbers each.
+    var crestFloats: [Float] {
+        return crests.flatMap { [Float($0.count), Float($0.height), Float($0.phase), Float($0.drift),
+                                 Float($0.pulse), Float($0.pulsePhase)] }
+    }
 
     /// The share of the way at which the whole ring has left the frame (the radius runs 15% past what that takes).
     static let doneShare: CGFloat = 1 / 1.15
@@ -92,16 +176,15 @@ struct ModeWave: Equatable, Identifiable {
 
     var center: CGPoint { return source }
 
-    /// Each wave has its own edge.
-    var shift: Double { return Double(id) * 1.618 }
-
     /// The share of the wave's way it has gone at `date`, on the animation's curve.
     func progress(at date: Date) -> CGFloat {
-        return ModeWave.ease(CGFloat(date.timeIntervalSince(startedDate) / length))
+        guard let start = clock.date else { return 0 }
+        return ModeWave.ease(CGFloat(date.timeIntervalSince(start) / length))
     }
 
     func progress(atMediaTime time: CFTimeInterval) -> CGFloat {
-        return ModeWave.ease(CGFloat((time - started) / length))
+        guard clock.hasBegun else { return 0 }
+        return ModeWave.ease(CGFloat((time - clock.media) / length))
     }
 
     /// The radius the cut has at the end, when the ring's inner edge has passed the screen's farthest corner.
@@ -115,11 +198,15 @@ struct ModeWave: Equatable, Identifiable {
 
     /// The radius of the cut at `angle`.
     private func radius(_ progress: CGFloat, angle: Double) -> CGFloat {
-        var swell: CGFloat = 1
-        for crest in ModeWave.crests {
-            swell += crest.height * CGFloat(sin(crest.count * angle + crest.phase + shift + crest.drift * Double(progress)))
+        var swell: Double = 1
+        let p = Double(progress)
+        for crest in crests {
+            // Each crest's height swells and ebbs as the wave spreads (never above its most), so the edge keeps
+            // changing its shape on the way out.
+            let height = crest.height * (0.65 + 0.35 * sin(crest.pulse * p + crest.pulsePhase))
+            swell += height * sin(crest.count * angle + crest.phase + crest.drift * p)
         }
-        return progress * endRadius * swell
+        return progress * endRadius * CGFloat(swell)
     }
 
     /// The ring's half thickness: the same all round, so the cut never shows outside the ring.
@@ -363,7 +450,7 @@ enum WindowWave {
     /// How long after the setting changes the new picture is taken: long enough for everything to have been drawn
     /// anew (the keyboard rebuilds a couple of run-loop turns after the setting changes). The front has barely set off
     /// by then (the curve eases in).
-    private static let settle: TimeInterval = 0.1
+    private static let settle: TimeInterval = 0.15
 
     static var window: UIWindow? {
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
@@ -371,10 +458,22 @@ enum WindowWave {
     }
 
     /// Called as the wave sets off, before the setting changes.
-    static func start(for wave: ModeWave) {
+    /// The picture of the window as it is now. Taken BEFORE the wave is made (its clock starts when it is made), so the
+    /// time this takes is not counted as the wave's and it does not set off already on its way. Drawn afresh
+    /// (afterScreenUpdates): live Liquid Glass (the Liquid Glass theme card's keys on their glass card) taken from the
+    /// last frame came out with a broken reflection, which showed for as long as the wave's pictures were up.
+    static func snapshot() -> UIImage? {
+        guard let root = window?.rootViewController?.view else { return nil }
+        return picture(of: root, afterScreenUpdates: true)
+    }
+
+    static func start(for wave: ModeWave, old taken: UIImage? = nil) {
         end()
         guard let window = window, let root = window.rootViewController?.view,
-              let old = picture(of: root, afterScreenUpdates: true) else { return }
+              let old = taken ?? picture(of: root, afterScreenUpdates: true) else {
+            wave.clock.begin()
+            return
+        }
         let model = WindowWaveModel(wave: wave, old: old)
         let host = UIHostingController(rootView: WindowWaveView(model: model))
         host.view.backgroundColor = .clear
@@ -386,7 +485,10 @@ enum WindowWave {
         let lifetime = wave.lifetime
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(settle * 1_000_000_000))
-            guard current?.model === model else { return }
+            guard current?.model === model else {
+                wave.clock.begin()
+                return
+            }
             // Of the app alone (the root view), not of this cover over it.
             model.new = picture(of: root, afterScreenUpdates: true)
             // Both pictures cover the window now: the live app under them (its glass above all) need not be drawn
@@ -395,18 +497,34 @@ enum WindowWave {
                 root.alpha = 0
                 hiddenRoot = root
             }
-            try? await Task.sleep(nanoseconds: UInt64(max(0, lifetime - settle) * 1_000_000_000))
-            if current?.model === model { end() }
+            // Everything slow is done: the front sets off now, and runs smoothly from its first frame.
+            wave.clock.begin()
+            try? await Task.sleep(nanoseconds: UInt64(lifetime * 1_000_000_000))
+            if current?.model === model { end(fading: true) }
         }
     }
 
     private static weak var hiddenRoot: UIView?
 
-    private static func end() {
+    /// Takes the cover away. `fading`: at the end of a wave, the cover (by then the new picture, all of it) fades
+    /// out over the live window instead of vanishing, so anything that still differs from the picture (a control
+    /// that was still settling when it was taken) eases into place instead of snapping.
+    private static func end(fading: Bool = false) {
         hiddenRoot?.alpha = 1
         hiddenRoot = nil
-        current?.host.view.removeFromSuperview()
+        guard let view = current?.host.view else {
+            current = nil
+            return
+        }
         current = nil
+        guard fading else {
+            view.removeFromSuperview()
+            return
+        }
+        view.isUserInteractionEnabled = false   // the app answers again at once
+        UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseInOut, .beginFromCurrentState],
+                       animations: { view.alpha = 0 },
+                       completion: { _ in view.removeFromSuperview() })
     }
 
     private static func picture(of view: UIView, afterScreenUpdates: Bool) -> UIImage? {
@@ -474,7 +592,7 @@ private struct WindowLens: ViewModifier {
             if #available(iOS 17.0, *) {
                 content.layerEffect(
                     ShaderLibrary.waveLens(.float2(wave.center), .float(Float(progress)), .float(Float(wave.endRadius)),
-                                           .float(Float(wave.shift)), .float(Float(ModeWave.band * 2.0)), .float(24)),
+                                           .float(Float(ModeWave.band * 2.0)), .float(24), .floatArray(wave.crestFloats)),
                     maxSampleOffset: CGSize(width: 24, height: 24),
                     isEnabled: isOn && progress > 0 && progress < ModeWave.doneShare)
             } else {

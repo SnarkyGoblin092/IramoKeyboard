@@ -17,7 +17,7 @@ struct PreviewCard<Content: View>: View {
             VStack(spacing: 10) {
                 content()
                     .padding(10)
-                    .background(look.backdrop())
+                    .background(ClearGlassCard(cornerRadius: 16))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     // The keyboard is laid out left to right, also when the app reads right to left.
                     .environment(\.layoutDirection, .leftToRight)
@@ -31,6 +31,46 @@ struct PreviewCard<Content: View>: View {
             .padding(.vertical, 4)
             .accessibilityElement(children: .combine)
         }
+    }
+}
+
+// MARK: - What was typed, and what the bar offers
+
+/// A word typed, then what the bar offers for it, in the app's own look instead of the keyboard theme: the typed
+/// text on clear glass, the offer on glass in the accent colour. Used by the calculator, units and shortcut previews.
+struct AccentOfferPreview: View {
+    let typed: String
+    let offer: String?
+    @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
+    @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
+
+    var body: some View {
+        let accent = Color.currentAccent(name: accentName, hex: accentHex)
+        HStack(spacing: 10) {
+            Text(typed)
+                .font(.system(size: 15, design: .rounded))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .glassShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Image(systemName: "arrow.right")
+                .foregroundColor(.secondary)
+            Text(offer ?? "\u{2014}")
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .foregroundColor(offer == nil ? .secondary : accent.readableText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassShape(Capsule(), tint: offer == nil ? nil : accent)
+                .id(offer ?? "")
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer)
+        .animation(AccentTint.fade, value: accentName + accentHex)
     }
 }
 
@@ -48,7 +88,8 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     let aspect: CGFloat?
     /// The height the pane has.
     let startHeight: CGFloat
-    /// The scrolling content runs down to the screen's bottom edge, under the home indicator.
+    /// The scrolling content runs down to the screen's bottom edge, under the home indicator (it keeps clear of it
+    /// when scrolled to the end).
     let edgeToEdge: Bool
 
     /// The card preview's own height, measured (0 until it has been laid out once).
@@ -60,14 +101,30 @@ struct PinnedPreview<Preview: View, Content: View>: View {
     private let minimumFills: CGFloat
     /// The preview has the same room above and below it (a bar centred in its pane).
     private let balanced: Bool
+    /// The room at the sides of the preview.
+    private let horizontalPadding: CGFloat
+    /// The preview is the full keyboard (LiveKeyboard): the pane is as tall as the keyboard is at the width of the
+    /// settings below it, plus `keyboardExtra` for what else is in the pane.
+    private let keyboard: Bool
+    private let keyboardExtra: CGFloat
+    // Read so the pane follows the keyboard's size as it is set.
+    @AppStorage(SettingKey.keyHeight, store: SharedStore.defaults) private var keyHeight = SettingDefault.keyHeight
+    @AppStorage(SettingKey.rowGap, store: SharedStore.defaults) private var rowGap = SettingDefault.rowGap
+    @AppStorage(SettingKey.numberRow, store: SharedStore.defaults) private var numberRow = SettingDefault.numberRow
+    @AppStorage(SettingKey.suggestionHeight, store: SharedStore.defaults) private var barHeight = SettingDefault.suggestionHeight
+    @AppStorage(SettingKey.language, store: SharedStore.defaults) private var languageCode = SettingDefault.language
 
     /// `height` is the pane's height (`fills` panes only; a card preview keeps its own).
-    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = false,
-         minimumHeight: CGFloat = 150, balanced: Bool = false,
+    init(height: CGFloat, fills: Bool = false, aspect: CGFloat? = nil, edgeToEdge: Bool = true,
+         minimumHeight: CGFloat = 150, balanced: Bool = false, horizontalPadding: CGFloat = 16,
+         keyboard: Bool = false, keyboardExtra: CGFloat = 0,
          @ViewBuilder preview: @escaping () -> Preview,
          @ViewBuilder content: @escaping () -> Content) {
         self.minimumFills = minimumHeight
         self.balanced = balanced
+        self.horizontalPadding = horizontalPadding
+        self.keyboard = keyboard
+        self.keyboardExtra = keyboardExtra
         self.edgeToEdge = edgeToEdge
         self.preview = preview
         self.content = content
@@ -85,6 +142,11 @@ struct PinnedPreview<Preview: View, Content: View>: View {
 
     /// The pane's height: the one it starts at, or what `aspect` makes of the full width.
     private func wantedHeight(width: CGFloat) -> CGFloat {
+        if keyboard {
+            _ = (keyHeight, rowGap, numberRow, barHeight, languageCode)
+            return LiveKeyboard.cardHeight(width: width - 2 * horizontalPadding)
+                + PinnedPreview.topPadding + PinnedPreview.bottomPadding + keyboardExtra
+        }
         guard let aspect = aspect, aspect > 0 else { return startHeight }
         return (width - 32) / aspect + PinnedPreview.topPadding + PinnedPreview.bottomPadding
     }
@@ -111,15 +173,16 @@ struct PinnedPreview<Preview: View, Content: View>: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, horizontalPadding)
                 .padding(.top, balanced ? 9 : PinnedPreview.topPadding)
                 .padding(.bottom, balanced ? 9 : PinnedPreview.bottomPadding)
                 .frame(height: height)
-                .clipped()
                 .zIndex(1)
-                Divider().opacity(0.6)
                 // The list scrolls under the preview, never over it (also while a menu is still closing).
                 content()
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear.frame(height: edgeToEdge ? DeviceMetrics.bottomInset : 0)
+                    }
                     .frame(maxHeight: .infinity)
                     .clipped()
             }

@@ -68,7 +68,8 @@ struct LanguagesView: View {
         if ordered.count > enabled.count { Feedback.success() } else { Feedback.delete() }
         withAnimation(.easeOut(duration: 0.2)) { enabled = ordered }
         Settings.shared.enabledLanguages = ordered
-        LanguageData.prepareInBackground(enabled: ordered)
+        // (A removed language's files are left for now: the keyboard may be reading them as they are removed.)
+        LanguageData.prepareInBackground(enabled: ordered, removeOthers: false)
     }
 }
 
@@ -115,12 +116,17 @@ private struct LanguageRow: View {
     }
 }
 
-/// The languages that are not enabled yet, with a search field; picking one adds it and goes back.
+/// The languages that are not enabled yet, with a search field; picking one adds it and stays, to add more.
 private struct AddLanguageView: View {
-    let enabled: [String]
     let add: (Language) -> Void
+    /// The languages enabled so far, this visit's additions included (picking one leaves the list open for more).
+    @State private var enabled: [String]
     @State private var query = ""
-    @Environment(\.dismiss) private var dismiss
+
+    init(enabled: [String], add: @escaping (Language) -> Void) {
+        self._enabled = State(initialValue: enabled)
+        self.add = add
+    }
 
     /// The languages left, by name; with something typed, the ones whose name (in the app's language or their
     /// own) or code has it.
@@ -145,7 +151,7 @@ private struct AddLanguageView: View {
                     ForEach(matches, id: \.rawValue) { language in
                         Button {
                             add(language)
-                            dismiss()
+                            withAnimation(.easeOut(duration: 0.2)) { enabled.append(language.rawValue) }
                         } label: {
                             HStack {
                                 LanguageName(language: language)
@@ -173,18 +179,25 @@ private struct AddLanguageView: View {
 
 // MARK: - Learned words
 
-/// Words the keyboard learned (ones no dictionary has, used at least twice), one list for every language, with a
-/// search field and swipe to remove.
+/// Words the keyboard learned (ones no dictionary has, used at least three times), one list for every language, with a
+/// field to add words of the user's own, a search field and swipe to remove. Added and kept words (the pin) are
+/// never forgotten; the others fade when they go unused.
 struct LearnedWordsView: View {
     /// The stored (lower-case) word, and how it is written.
     @State private var words: [(word: String, shown: String)] = []
+    /// The words kept for good (added here, or pinned).
+    @State private var kept: Set<String> = []
     @State private var query = ""
+    @State private var newWord = ""
+    @State private var problem: String?
+    @FocusState private var adding: Bool
 
-    /// The words that match the search.
+    /// The words that match the search, kept ones first.
     private var matches: [(word: String, shown: String)] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return words }
-        return words.filter { $0.shown.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        let found = trimmed.isEmpty ? words
+            : words.filter { $0.shown.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        return found.filter { kept.contains($0.word) } + found.filter { !kept.contains($0.word) }
     }
 
     /// How many words there are (and, while searching, how many of them match).
@@ -196,11 +209,34 @@ struct LearnedWordsView: View {
     var body: some View {
         GlassList {
             Section {
+                HStack(spacing: 10) {
+                    TextField(tr("Add a word"), text: $newWord)
+                        .focused($adding)
+                        .submitLabel(.done)
+                        .onSubmit(add)
+                        .onChange(of: newWord) { _ in problem = nil }
+                    Button(tr("Add"), action: add)
+                        .buttonStyle(ActionButtonStyle(compact: true))
+                        .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .searchAnchor("learned.add")
+            } header: {
+                SectionHeader(tr("Your words"), symbol: "plus.circle.fill", color: .green)
+            } footer: {
+                if let problem = problem {
+                    Text(problem).foregroundColor(.orange)
+                } else {
+                    Text(tr("Names, slang, anything: an added word is suggested in every language, written as you typed it, never corrected away and never forgotten."))
+                }
+            }
+            .glassRows()
+
+            Section {
                 if words.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         IconTile(symbol: "character.book.closed", color: .brown)
                         Text(tr("No learned words yet")).font(.headline)
-                        Text(tr("A word that isn't in the dictionary is learned once you have typed it twice, or when you tap it in the suggestion bar. Learned words work in every language."))
+                        Text(tr("A word that isn't in the dictionary is learned once you have typed it three times, or when you tap it in the suggestion bar. Learned words work in every language."))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -210,17 +246,21 @@ struct LearnedWordsView: View {
                     Text(tr("No matching words")).foregroundColor(.secondary)
                 } else {
                     ForEach(matches, id: \.word) { entry in
-                        Text(entry.shown)
+                        LearnedWordRow(shown: entry.shown, kept: kept.contains(entry.word)) { toggleKept(entry.word) }
                             .swipeToDelete { remove(entry.word) }
                     }
                 }
             } header: {
                 if !words.isEmpty {
-                    Text(verbatim: countText).monospacedDigit()
+                    HStack {
+                        SectionHeader(tr("Learned words"), symbol: "character.book.closed.fill", color: .brown)
+                        Spacer()
+                        Text(verbatim: countText).monospacedDigit()
+                    }
                 }
             } footer: {
                 if !words.isEmpty && !matches.isEmpty {
-                    Text(tr("Learned words work in every language. Swipe a word left to remove it."))
+                    Text(tr("Pinned words are never forgotten; the others fade after a few weeks without use. Swipe a word left to remove it."))
                 }
             }
             .glassRows()
@@ -232,12 +272,67 @@ struct LearnedWordsView: View {
         .navigationTitle(tr("Learned words"))
         .navigationBarTitleDisplayMode(.inline)
         // Reloaded on every visit: a NavigationLink builds this view's initial state only once.
-        .onAppear { words = Settings.shared.learnedWordEntries() }
+        .onAppear(perform: reload)
+    }
+
+    private func reload() {
+        words = Settings.shared.learnedWordEntries()
+        kept = Settings.shared.learnedPinned()
+    }
+
+    private func add() {
+        switch Settings.customWordProblem(newWord) {
+        case .notAWord?:
+            problem = tr("Only letters and apostrophes, as one word.")
+            Feedback.warning()
+        case nil:
+            guard Settings.shared.addCustomWord(newWord) != nil else { return }
+            Feedback.success()
+            newWord = ""
+            withAnimation(.easeOut(duration: 0.2)) { reload() }
+        }
+    }
+
+    private func toggleKept(_ word: String) {
+        let keep = !kept.contains(word)
+        Settings.shared.setLearnedWordKept(word, kept: keep)
+        Feedback.tick()
+        withAnimation(.easeOut(duration: 0.2)) {
+            if keep { kept.insert(word) } else { kept.remove(word) }
+        }
     }
 
     private func remove(_ word: String) {
         Settings.shared.removeLearnedWord(word)
         Feedback.delete()
-        withAnimation(.easeOut(duration: 0.2)) { words.removeAll { $0.word == word } }
+        withAnimation(.easeOut(duration: 0.2)) {
+            words.removeAll { $0.word == word }
+            kept.remove(word)
+        }
+    }
+}
+
+/// A learned word, and the pin that keeps it for good.
+private struct LearnedWordRow: View {
+    let shown: String
+    let kept: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(shown)
+            Spacer(minLength: 8)
+            Button(action: toggle) {
+                Image(systemName: kept ? "pin.fill" : "pin")
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(kept ? .accentColor : .secondary)
+                    .rotationEffect(.degrees(kept ? 0 : 45))
+                    .frame(width: 44, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(kept ? tr("Pinned") : tr("Pin"))
+            .accessibilityAddTraits(kept ? .isSelected : [])
+        }
     }
 }

@@ -2,95 +2,42 @@ import SwiftUI
 
 // MARK: - Liquid Glass look
 //
-// Every screen sits on the keybed (a field of faint keys in the accent colour), and its cards and controls are the
+// Every screen sits on one backdrop (soft, glowing washes of the accent colour), and its cards and controls are the
 // system's own Liquid Glass on top of it (`glassEffect`, iOS 26 and later; a frosted material before that). Nothing
 // is painted over the glass: its rim, its light and how clear or tinted it is are the system's, so it follows the
 // Liquid Glass setting of the phone (iOS 27's slider) like every system control.
 
-/// What the glass has behind it: the grouped background, a wash of the accent from the top, and the keybed. Glass
-/// bends what is under it, so it needs edges to bend: over the keys its rims show the refraction that a plain blur
-/// of colour never does.
+/// What the glass has behind it: the grouped background and a few large, soft glows of the accent (and of colours
+/// a little round the wheel from it) that spill in from the corners. Glass bends what is under it, so the glows
+/// give its rims light and colour to bend. A new accent fades in over the old one.
 struct GlassBackdrop: View {
     @AppStorage(SettingKey.accent, store: SharedStore.defaults) private var accentName = SettingDefault.accent
     @AppStorage(SettingKey.accentHex, store: SharedStore.defaults) private var accentHex = SettingDefault.accentHex
     @Environment(\.colorScheme) private var scheme
 
+    /// One glow: the colour at its middle, fading to nothing over `radius`.
+    private func glow(_ color: Color, _ strength: Double, at center: UnitPoint, radius: CGFloat) -> some View {
+        RadialGradient(colors: [color.opacity(strength), color.opacity(strength * 0.5), color.opacity(0)],
+                       center: center, startRadius: 0, endRadius: radius)
+    }
+
     var body: some View {
         let accent = Color.currentAccent(name: accentName, hex: accentHex)
-        let dark = scheme == .dark
-        return ZStack {
-            Color(.systemGroupedBackground)
-            LinearGradient(colors: [accent.opacity(dark ? 0.34 : 0.22),
-                                    accent.hueShifted(by: 0.07).opacity(dark ? 0.12 : 0.08),
-                                    Color.clear],
-                           startPoint: .topLeading, endPoint: .bottom)
-            Keybed(accent: accent, dark: dark)
+        let level: Double = scheme == .dark ? 1 : 0.72
+        return GeometryReader { proxy in
+            let reach = max(proxy.size.width, proxy.size.height)
+            ZStack {
+                Color(.systemGroupedBackground)
+                glow(accent, 0.46 * level, at: UnitPoint(x: 0.05, y: 0.0), radius: reach * 0.85)
+                glow(accent.hueShifted(by: 0.17), 0.38 * level, at: UnitPoint(x: 1.0, y: 0.28), radius: reach * 0.7)
+                glow(accent.hueShifted(by: -0.15), 0.34 * level, at: UnitPoint(x: 0.0, y: 0.72), radius: reach * 0.75)
+                glow(accent.hueShifted(by: 0.09), 0.28 * level, at: UnitPoint(x: 0.95, y: 1.0), radius: reach * 0.6)
+            }
         }
         // A new accent fades in over the old one.
         .animation(AccentTint.fade, value: accentName + accentHex)
         .ignoresSafeArea()
         .accessibilityHidden(true)
-    }
-}
-
-/// Rows of large, faint keys, staggered like a keyboard's and tilted a little, fading out down the screen.
-private struct Keybed: View, Animatable {
-    // The accent as numbers, so a new accent is eased in by the same animation as the wash above the keys (a Canvas
-    // would otherwise take the new colour at once).
-    var red: Double
-    var green: Double
-    var blue: Double
-    let dark: Bool
-
-    init(accent: Color, dark: Bool) {
-        let resolved = UIColor(accent).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light))
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
-        self.red = Double(r)
-        self.green = Double(g)
-        self.blue = Double(b)
-        self.dark = dark
-    }
-
-    var animatableData: AnimatablePair<AnimatablePair<Double, Double>, Double> {
-        get { return AnimatablePair(AnimatablePair(red, green), blue) }
-        set {
-            red = newValue.first.first
-            green = newValue.first.second
-            blue = newValue.second
-        }
-    }
-
-    var body: some View {
-        let accent = Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
-        return Canvas { context, size in
-            guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return }
-            let key: CGFloat = 60
-            let pitch: CGFloat = key + 11
-            let stagger: [CGFloat] = [0, 0.5, 0.25, 0.75]
-            // Turned about the middle; the rows reach past the edges so the corners stay covered.
-            let reach: CGFloat = max(size.width, size.height) * 0.7
-            context.translateBy(x: size.width / 2, y: size.height / 2)
-            context.rotate(by: .degrees(-11))
-            context.translateBy(x: -size.width / 2, y: -size.height / 2)
-            let rows = Int((size.height + reach) / pitch) + 2
-            let columns = Int((size.width + reach) / pitch) + 2
-            let base: Double = dark ? 0.10 : 0.07
-            for row in 0..<rows {
-                let y: CGFloat = CGFloat(row) * pitch - reach / 2
-                let depth: Double = Double(min(1, max(0, y / max(size.height, 1))))
-                let strength: Double = base * (1 - 0.85 * depth)
-                if strength < 0.004 { continue }
-                let shift: CGFloat = stagger[row % 4] * pitch
-                for column in 0..<columns {
-                    let x: CGFloat = CGFloat(column) * pitch - reach / 2 + shift
-                    let path = Path(roundedRect: CGRect(x: x, y: y, width: key, height: key), cornerRadius: 15,
-                                    style: .continuous)
-                    context.fill(path, with: .color(accent.opacity(strength)))
-                    context.stroke(path, with: .color(Color.white.opacity(strength * (dark ? 0.8 : 1.8))), lineWidth: 1)
-                }
-            }
-        }
     }
 }
 
@@ -110,7 +57,35 @@ struct GlassRowFill: View {
     }
 }
 
+/// A card of translucent Liquid Glass, light in light mode and dark in dark mode (a thin frosted material before
+/// iOS 26): the backdrop of the previews, which show the keys over whatever is behind them, as the keyboard does.
+struct ClearGlassCard: View {
+    var cornerRadius: CGFloat = 16
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(Glass.regular, in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial)
+        }
+        #else
+        shape.fill(.ultraThinMaterial)
+        #endif
+    }
+}
+
 extension Color {
+    /// Near-black or white, whichever reads on this colour (as the keyboard picks the text on its accent).
+    var readableText: Color {
+        let resolved = UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return .white }
+        let luminance = 0.299 * Double(red) + 0.587 * Double(green) + 0.114 * Double(blue)
+        return luminance > 0.62 ? Color(white: 0.08) : .white
+    }
+
     /// The same colour turned round the colour wheel (a share of a full turn).
     func hueShifted(by turn: Double) -> Color {
         var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
@@ -203,6 +178,19 @@ extension View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    /// A tab's own list: clear, so the one backdrop behind the whole tab view shows and stays put when tabs change.
+    /// (The navigation stack's own background is cleared too; before iOS 18 it can't be, so the list draws the backdrop
+    /// itself.)
+    @ViewBuilder
+    func tabScreen() -> some View {
+        if #available(iOS 18.0, *) {
+            self.scrollContentBackground(.hidden)
+                .containerBackground(for: .navigation) { Color.clear }
+        } else {
+            self.scrollContentBackground(.hidden).background(GlassBackdrop())
+        }
     }
 
     /// A screen of the app: its list or scroll view on the glass backdrop.
@@ -314,6 +302,16 @@ enum GlassMetrics {
 
 // MARK: - Controls on glass screens
 
+/// The colour of the small icon in front of a setting's name (a slider's, a choice row's). In the accent they melted into
+/// the accent-tinted backdrop; these are bright colours that stand out on light and dark, a fixed one for each symbol so
+/// it is always the same colour.
+func rowIconColor(_ symbol: String) -> Color {
+    let palette: [Color] = [.orange, .teal, .pink, .green, .cyan, .red]
+    var hash = 0
+    for byte in symbol.utf8 { hash = (hash &* 31 &+ Int(byte)) & 0xFFFF }
+    return palette[hash % palette.count]
+}
+
 /// A slider bound straight to a stored value: it follows the value when something else changes it (a preset), and
 /// saves as the finger moves, so the previews above it change while dragging.
 struct GlassSlider: View {
@@ -386,7 +384,7 @@ struct ValueBar: View {
     private var header: some View {
         HStack(spacing: 8) {
             if let symbol = symbol {
-                Image(systemName: symbol).foregroundStyle(.tint)
+                Image(systemName: symbol).foregroundColor(rowIconColor(symbol))
             }
             Text(title).font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
                 .foregroundColor(isEnabled ? .primary : .secondary)
@@ -539,6 +537,13 @@ enum DeviceMetrics {
     static var portraitWidth: Double {
         let bounds = UIScreen.main.bounds
         return Double(min(bounds.width, bounds.height))
+    }
+
+    /// The room the home indicator takes at the bottom of the window (0 on a phone with a home button).
+    static var bottomInset: CGFloat {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first
+        return window?.safeAreaInsets.bottom ?? 0
     }
 
     /// The previews' keyboard width: the screen's short side (the previews are always upright).
@@ -1014,7 +1019,11 @@ struct GlassChoiceLink<Value: Hashable>: View {
             GlassChoiceScreen(title: title, options: options, selected: selected, choose: choose)
         } label: {
             HStack {
-                Label(title, systemImage: symbol)
+                Label {
+                    Text(title)
+                } icon: {
+                    Image(systemName: symbol).foregroundColor(rowIconColor(symbol))
+                }
                 Spacer()
                 Text(currentName).foregroundColor(.secondary)
                 DisclosureChevron()
@@ -1115,7 +1124,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
             }
             // A UIKit pan that only begins on a sideways swipe: a SwiftUI drag here takes the vertical drags from
             // the scroll view too (iOS 18 and later), and the list would not scroll.
-            .gesture(SidewaysPan(enabled: canDelete, changed: changed, ended: ended))
+            .gesture(SidewaysPan(enabled: canDelete && !deleting, open: offset < 0, changed: changed, ended: ended))
     }
 
     private func changed(_ dx: CGFloat) {
@@ -1154,15 +1163,18 @@ private struct SwipeToDeleteRow<Content: View>: View {
         deleting = true
         offset = 0
         settled = 0
-        DispatchQueue.main.async { onDelete() }
+        // A moment later, so the pan has finished and the row is not taken out from under a live gesture.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { onDelete() }
     }
 }
 
 /// A pan for SwipeToDeleteRow that begins only when the drag starts out sideways, leaving vertical drags to the
-/// scroll view. It runs alongside the scroll view's own pan, so the row follows the finger from the first point.
+/// scroll view. The scroll view waits for it to fail, so a sideways swipe never scrolls the list.
 @available(iOS 26.0, *)
 private struct SidewaysPan: UIGestureRecognizerRepresentable {
     let enabled: Bool
+    /// The row's Delete button is out: a swipe right closes it, and must not also take the screen back.
+    let open: Bool
     /// The sideways distance moved so far.
     let changed: (CGFloat) -> Void
     /// The distance moved and the speed at the end.
@@ -1181,6 +1193,7 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         recognizer.isEnabled = enabled
+        context.coordinator.isOpen = open
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
@@ -1193,15 +1206,34 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var isOpen = false
+
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
             return abs(velocity.x) > abs(velocity.y)
         }
 
+        /// The pan of a scroll view (the list the row is in).
+        private func isScrollPan(_ other: UIGestureRecognizer) -> Bool {
+            guard let scroll = other.view as? UIScrollView else { return false }
+            return other === scroll.panGestureRecognizer
+        }
+
+        /// The list waits for this pan to fail before it scrolls: a sideways swipe on a row never scrolls the list,
+        /// and a vertical drag (which this pan refuses at once) scrolls it as usual.
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            if isScrollPan(other) { return true }
+            // With the Delete button out, the swipe that puts it away must not also be the swipe back (the edge
+            // swipe, or the whole-screen one of iOS 26): they wait for this one to fail.
+            return isOpen && other.view !== recognizer.view && (other is UIScreenEdgePanGestureRecognizer
+                || (other is UIPanGestureRecognizer && !(other.view is UIScrollView)))
+        }
+
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            return true
+            return !isScrollPan(other) && !(isOpen && other is UIPanGestureRecognizer)
         }
     }
 }
